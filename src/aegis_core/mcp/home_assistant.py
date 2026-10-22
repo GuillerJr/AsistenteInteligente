@@ -14,6 +14,7 @@ from typing import Any
 
 import httpx
 
+from aegis_core import __version__
 from aegis_core.mcp.client import (
     MAX_MCP_MESSAGE_BYTES,
     MCP_PROTOCOL_VERSION,
@@ -24,7 +25,7 @@ from aegis_core.mcp.client import (
     _sanitize_call_result,
 )
 from aegis_core.mcp.integrations import guard_integration
-from aegis_core.secrets import MacOSGenericSecret
+from aegis_core.secrets import InvalidGenericSecretError, MacOSGenericSecret, SecretNotFoundError
 
 
 class HomeAssistantMcpClient(StdioMcpClient):
@@ -56,7 +57,7 @@ class HomeAssistantMcpClient(StdioMcpClient):
                     account=endpoint.credential_account,
                 ).get
             )
-        except Exception as error:
+        except (OSError, InvalidGenericSecretError, SecretNotFoundError) as error:
             raise McpConfigurationError("Home Assistant credential is unavailable") from error
         self._http = httpx.AsyncClient(
             follow_redirects=False,
@@ -76,7 +77,7 @@ class HomeAssistantMcpClient(StdioMcpClient):
                     {
                         "protocolVersion": MCP_PROTOCOL_VERSION,
                         "capabilities": {},
-                        "clientInfo": {"name": "Jarvis", "version": "0.1.0"},
+                        "clientInfo": {"name": "Jarvis", "version": __version__},
                     },
                 )
                 self._validate_initialize(result)

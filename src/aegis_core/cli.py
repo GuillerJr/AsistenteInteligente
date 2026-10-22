@@ -103,6 +103,7 @@ from aegis_core.secrets import (
 from aegis_core.secure_update import (
     SecureUpdateError,
     create_signed_update_manifest,
+    default_installed_app_path,
     default_secure_update_installer,
     initialize_update_signing_key,
     read_installed_identity,
@@ -1519,7 +1520,7 @@ async def pilot_release_qualification() -> int:
             PilotReleaseQualificationGate(
                 project_root=project_root,
                 installed_info_path=(
-                    Path.home() / "Applications/Jarvis.app/Contents/Info.plist"
+                    default_installed_app_path() / "Contents/Info.plist"
                 ),
                 **resolved,
             ).run
@@ -1672,7 +1673,7 @@ def secure_update_verify(
     release_manifest_path: Path,
     public_key_path: Path,
 ) -> int:
-    installed_app = Path.home() / "Applications/Jarvis.app"
+    installed_app = default_installed_app_path()
     try:
         identity = read_installed_identity(installed_app)
         verified = verify_signed_update(
@@ -1823,6 +1824,21 @@ _DAEMON_SUPERVISOR_LABELS = (
 )
 
 
+def _bundled_supervisor_running() -> bool:
+    import psutil
+
+    from aegis_core.bundle_paths import installed_app_path
+
+    executable = str(installed_app_path() / "Contents/MacOS/Jarvis")
+    for process in psutil.process_iter(("exe", "uids")):
+        try:
+            if process.info.get("exe") == executable and process.uids().real == os.getuid():
+                return True
+        except (psutil.AccessDenied, psutil.NoSuchProcess):
+            continue
+    return False
+
+
 def _daemon_supervisor_loaded() -> bool:
     """Accept the current bundled supervisor and the legacy development service.
 
@@ -1833,6 +1849,8 @@ def _daemon_supervisor_loaded() -> bool:
     path.
     """
 
+    if _bundled_supervisor_running():
+        return True
     domain = f"gui/{os.getuid()}"
     for label in _DAEMON_SUPERVISOR_LABELS:
         try:

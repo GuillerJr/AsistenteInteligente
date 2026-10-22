@@ -650,3 +650,87 @@ async def test_selection_cannot_cancel_or_replace_an_active_telegram_job(service
     assert not selected.ok and selected.error_code == "telegram_conversation_busy"
     assert service._config.conversation_id == current
     assert not service._jobs.cancel.called
+
+
+async def scheduled_review(service):
+    service._save(enabled=True, owner_id=OWNER)
+    job_id = uuid4()
+    expires = datetime.now(UTC) + timedelta(minutes=2)
+    confirmation = PendingToolConfirmation(
+        tool_name="mail_send_message", call_digest="a" * 64,
+        summary="Enviar correo de prueba", expires_at=expires,
+    )
+    service._jobs.snapshots[job_id] = SimpleNamespace(
+        status=JobStatus.AWAITING_CONFIRMATION, confirmation=confirmation)
+    assert await service.deliver_review("Necesita aprobación", job_id, expires)
+    nonce, review = next(iter(service._scheduled_reviews.items()))
+    return nonce, review, {
+        "id": "scheduled-review", "data": f"sr:{nonce}",
+        "from": {"id": OWNER, "is_bot": False},
+        "message": {"message_id": review.message_id,
+                    "chat": {"id": OWNER, "type": "private"}},
+    }
+
+
+async def test_scheduled_review_does_not_approve_until_owner_reviews_then_decides(service):
+    nonce, review, callback = await scheduled_review(service)
+    service._jobs.approve_from_telegram.assert_not_called()
+    await service._callback(callback)
+    service._jobs.approve_from_telegram.assert_not_called()
+    updated = service._scheduled_reviews[nonce]
+    assert updated.reviewed and updated.message_id != review.message_id
+    callback["data"] = f"sa:{nonce}"
+    await service._callback(callback)  # Old notification cannot authorize the action.
+    service._jobs.approve_from_telegram.assert_not_called()
+    callback["message"]["message_id"] = updated.message_id
+    await service._callback(callback)
+    await service._callback(callback)
+    service._jobs.approve_from_telegram.assert_awaited_once_with(
+        review.job_id, review.digest, owner_id=OWNER)
+
+
+@pytest.mark.parametrize("mutation", ["actor", "group", "message", "digest", "expired", "blocked"])
+async def test_scheduled_review_rejects_stale_or_untrusted_callbacks(service, mutation):
+    _nonce, review, callback = await scheduled_review(service)
+    if mutation == "actor":
+        callback["from"]["id"] += 1
+    elif mutation == "group":
+        callback["message"]["chat"]["type"] = "group"
+    elif mutation == "message":
+        callback["message"]["message_id"] += 1
+    elif mutation == "blocked":
+        service._blocked = lambda: True
+    else:
+        snapshot = service._jobs.snapshots[review.job_id]
+        change = ({"call_digest": "b" * 64} if mutation == "digest" else
+                  {"expires_at": datetime.now(UTC) - timedelta(seconds=1)})
+        snapshot.confirmation = snapshot.confirmation.model_copy(update=change)
+    sent = len(service._client.sent)
+    await service._callback(callback)
+    assert len(service._client.sent) == sent
+    service._jobs.approve_from_telegram.assert_not_called()
+
+
+async def test_scheduled_review_cannot_skip_preview_and_rejection_consumes_once(service):
+    nonce, review, callback = await scheduled_review(service)
+    callback["data"] = f"sa:{nonce}"
+    await service._callback(callback)
+    service._jobs.approve_from_telegram.assert_not_called()
+    callback["data"] = f"sr:{nonce}"
+    await service._callback(callback)
+    callback["data"] = f"sx:{nonce}"
+    callback["message"]["message_id"] = service._scheduled_reviews[nonce].message_id
+    await service._callback(callback)
+    await service._callback(callback)
+    service._jobs.cancel.assert_awaited_once_with(review.job_id)
+
+
+@pytest.mark.parametrize("prefix", ["v:", "s:", "c:", "a:", "A:", "r:", "x:"])
+async def test_scheduled_callbacks_leave_existing_controls_to_their_owner(service, prefix):
+    nonce, _review, callback = await scheduled_review(service)
+    # Even a matching nonce/message must not turn another feature's button into
+    # a scheduled-job decision or swallow audio cancellation / job controls.
+    callback["data"] = prefix + nonce
+    assert await service._scheduled_callback(callback) is False
+    service._jobs.approve_from_telegram.assert_not_called()
+    service._jobs.cancel.assert_not_called()

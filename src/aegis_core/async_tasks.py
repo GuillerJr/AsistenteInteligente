@@ -5,6 +5,8 @@ import threading
 from collections.abc import Awaitable, Callable
 from typing import Any, ParamSpec, TypeVar
 
+from aegis_core.failure_boundary import record_boundary_error
+
 P = ParamSpec("P")
 T = TypeVar("T")
 
@@ -38,7 +40,8 @@ async def run_blocking_owned(
                 await asyncio.shield(worker)
             except asyncio.CancelledError:
                 continue
-            except Exception:
+            except Exception as error:
+                record_boundary_error(error)
                 break
         if not worker.cancelled():
             worker.exception()  # Retrieve late failures without replacing cancellation.

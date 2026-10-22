@@ -17,6 +17,7 @@ import psutil
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from aegis_core.build_info import is_build_revision
+from aegis_core.bundle_paths import installed_app_path
 from aegis_core.ipc.client import IpcClient
 
 QUALIFICATION_SCHEMA_VERSION = "1.0"
@@ -675,7 +676,7 @@ def _load_private_model(path: Path, model: type[ModelT]) -> ModelT:
 
 def _jarvis_process_is_running() -> bool:
     current_uid = os.getuid()
-    expected_path = Path.home() / "Applications/Jarvis.app/Contents/MacOS/Jarvis"
+    expected_path = installed_app_path() / "Contents/MacOS/Jarvis"
     try:
         expected_metadata = expected_path.stat(follow_symlinks=False)
         expected_resolved = expected_path.resolve(strict=True)

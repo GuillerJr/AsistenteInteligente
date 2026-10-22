@@ -16,6 +16,20 @@ final class JarvisChatStore {
     var showHistory = true
     var historyQuery = ""
     var showTrash = false
+    var showArchived = false
+    var searchFocusPending = false
+    var browserPending = false
+    var deletePending = false
+    var searchFocusRequest = UUID()
+    var browserRequest = UUID()
+    var deleteRequest = UUID()
+    var composerDraft: String?
+    var feedbackUpdating: Set<UUID> = []
+    var completedTurnPersisted = false
+    var activeSubmission: ChatSubmission?
+    var retrySubmission: ChatSubmission?
+    var retryConversationID: UUID?
+    var retryAvailable: Bool { retrySubmission != nil && retryConversationID == conversationID && !isEditing }
     var conversations: [ChatConversationSummary] = []
     var nextOffset: Int?
     var nextBeforeSequence: Int?
@@ -63,7 +77,7 @@ final class JarvisChatStore {
     var currentTitle: String {
         currentConversation?.title
             ?? transcript.messages.first(where: { $0.role == .user }).map { String($0.text.prefix(128)) }
-            ?? "Chat con Jarvis"
+            ?? String(localized: "Chat con Jarvis", bundle: .module)
     }
 
     func newConversation(inProject projectID: String? = nil) {
@@ -99,6 +113,12 @@ final class JarvisChatStore {
         inputJobID = nil
         nextBeforeSequence = nil
         attachments = []
+        composerDraft = nil
+        feedbackUpdating = []
+        activeSubmission = nil
+        completedTurnPersisted = false
+        retrySubmission = nil
+        retryConversationID = nil
         planReplies = []
         implementedPlans = []
         error = nil
@@ -133,8 +153,8 @@ final class JarvisChatStore {
         let method = entry.action == "run_task" ? "schedules.run_now" : "goals.resume"
         let key = entry.action == "run_task" ? "task_id" : "goal_id"
         _ = await model.performChatIPC(method, payload: [key: parts[1]])
-        notice = entry.action == "run_task" ? "Reintentando «\(entry.title)»."
-                                            : "Jarvis retomó «\(entry.title)»."
+        notice = entry.action == "run_task" ? String(localized: "Reintentando «\(entry.title)».", bundle: .module)
+                                            : String(localized: "Jarvis retomó «\(entry.title)».", bundle: .module)
         await refreshAttention(model: model)
     }
 
@@ -178,6 +198,6 @@ final class JarvisChatStore {
             transcript.restore(page.messages)
             nextBeforeSequence = page.nextBeforeSequence
             await refreshHistory(model: model)
-        } catch { self.error = "No pude actualizar la conversación de voz." }
+        } catch { self.error = String(localized: "No pude actualizar la conversación de voz.", bundle: .module) }
     }
 }

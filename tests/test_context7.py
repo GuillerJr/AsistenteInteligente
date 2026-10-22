@@ -330,8 +330,9 @@ def test_http_tool_error_is_not_reported_as_success(tmp_path):
 
 @pytest.mark.parametrize("policy", ["offline", "public_web", None])
 def test_context7_cannot_override_engineering_network_policy(tmp_path, policy):
+    from historical.orchestration.graph import _effective_tool_names
+
     from aegis_core.contracts import UserRequest
-    from aegis_core.orchestration.graph import _effective_tool_names
 
     active = PluginRuntime((context7_package(),))
     registry = SkillRegistry(build_default_tool_broker(active.tool_definitions()),

@@ -21,6 +21,7 @@ from pydantic import ValidationError
 
 from aegis_core.brain.router import browser_name, decide_browser_target
 from aegis_core.contracts import PolicyDecision, ToolAuthorization, ToolExecutionResult
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.tools.audit import AuditSink, NullAuditSink
@@ -512,7 +513,8 @@ class ChromeCDPController:
                             await asyncio.shield(creation)
                         except asyncio.CancelledError:
                             continue
-                        except Exception:
+                        except Exception as error:
+                            record_boundary_error(error)
                             break
                     if not creation.cancelled():
                         creation.exception()

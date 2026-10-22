@@ -15,6 +15,7 @@ from urllib.parse import quote, urlencode
 import httpx
 from aiohttp import web
 
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.mcp.client import McpServerConfiguration
 from aegis_core.mcp.google_workspace import (
     GOOGLE_WORKSPACE_OAUTH_PORT,
@@ -112,7 +113,8 @@ class GoogleAccountAuthorization:
         except asyncio.CancelledError:
             self.progress.update(state="cancelled")
             raise
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             self.progress.update(state="error", reason="google_authorization_failed")
         finally:
             self.progress.pop("url", None)
@@ -185,7 +187,8 @@ class GoogleAccountAuthorization:
                 "Cuenta conectada. Regresa a Jarvis y aplica los cambios "
                 "para reiniciar el servicio."
             )
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             self.progress.update(
                 state="error", reason=self.progress.get("reason", "google_authorization_failed")
             )

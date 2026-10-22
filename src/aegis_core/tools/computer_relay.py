@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.tools.computer import ComputerUseError, NativeComputerBridge
@@ -110,6 +111,7 @@ class ComputerCommandRelay:
         except ComputerUseError:
             raise
         except Exception as error:
+            record_boundary_error(error)
             raise ComputerUseError("computer_helper_unavailable") from error
 
     async def _request(

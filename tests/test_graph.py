@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from historical.orchestration.graph import build_swarm_graph
 
 from aegis_core.activity import SwarmActivityTracker
 from aegis_core.capability_learning import CapabilityLearningCoordinator, CapabilityLearningStore
@@ -49,7 +50,6 @@ from aegis_core.orchestration.direct_actions import (
     PUBLIC_SOURCE_STATUS_METADATA,
     PUBLIC_SOURCE_URL_METADATA,
 )
-from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.providers.base import IncompleteModelResponseError
 from aegis_core.skills.registry import SkillRegistry, SkillStore
 from aegis_core.tools.audit import HashChainAuditLog

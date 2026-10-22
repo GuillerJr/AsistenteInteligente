@@ -7,8 +7,10 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 import pytest
+from historical.orchestration.graph import build_swarm_graph
 from pydantic import ValidationError
 
+from aegis_core import __version__
 from aegis_core.contracts import (
     AgentResult,
     AgentRole,
@@ -20,7 +22,6 @@ from aegis_core.contracts import (
 )
 from aegis_core.ipc.protocol import IpcAuthenticator
 from aegis_core.job_tool_presenter import JobToolPresenter
-from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.plugins import (
     McpConnectorManifest,
     McpToolManifest,
@@ -457,7 +458,7 @@ def test_mcp_client_uses_latest_stateless_headers_and_self_describing_request(
     assert payload["params"]["_meta"]["io.modelcontextprotocol/clientCapabilities"] == {}
     assert payload["params"]["_meta"]["io.modelcontextprotocol/clientInfo"] == {
         "name": "Jarvis",
-        "version": "0.1.0",
+        "version": __version__,
     }
 
 

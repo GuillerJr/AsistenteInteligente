@@ -124,3 +124,26 @@ def test_v1_evaluation_rows_migrate_as_legacy_without_polluting_current_metrics(
         ).fetchone()[0]
     assert version == SCHEMA_VERSION
     assert migrated_revision == "legacy"
+
+
+def test_answer_feedback_is_bound_to_request_and_survives_restart(tmp_path: Path) -> None:
+    from aegis_core.feedback import OwnerFeedback
+
+    path = tmp_path / "feedback.sqlite3"
+    store = SQLiteEvaluationStore(path)
+    store.initialize()
+    request_id, other_id = uuid4(), uuid4()
+    target, other, legacy = uuid4(), uuid4(), uuid4()
+    now = datetime.now(UTC)
+    for job_id, identifier in ((target, request_id), (other, other_id), (legacy, None)):
+        store.append(job_id, _evaluation().model_copy(update={"request_id": identifier}), now)
+    store.record_owner_feedback(request_id, OwnerFeedback.HELPFUL)
+    restored = SQLiteEvaluationStore(path)
+    restored.initialize()
+    records = {item.job_id: item for item in restored.load_recent()}
+    assert records[target].evaluation.owner_feedback is OwnerFeedback.HELPFUL
+    assert records[other].evaluation.owner_feedback is None
+    assert records[legacy].evaluation.owner_feedback is None
+    restored.record_owner_feedback(request_id, None)
+    assert all(item.evaluation.owner_feedback is None for item in restored.load_recent())
+    assert all(item.recorded_at == now for item in restored.load_recent())

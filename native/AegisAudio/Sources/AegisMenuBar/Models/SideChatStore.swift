@@ -33,7 +33,7 @@ final class SideChatStore {
 
         if conversationID == nil {
             let created = Self.object(await ipc("conversations.create", [
-                "title": "Chat lateral", "temporary": true,
+                "title": String(localized: "Chat lateral", bundle: .module), "temporary": true,
             ]))
             let raw = created?["conversation_id"] as? String
             let createdID = raw.flatMap(UUID.init(uuidString:))?.uuidString.lowercased()
@@ -44,7 +44,7 @@ final class SideChatStore {
             conversationID = createdID
         }
         guard let conversation = conversationID else {
-            update(reply.id, turn: turn, text: "No pude enviar la pregunta. Inténtalo de nuevo.")
+            update(reply.id, turn: turn, text: String(localized: "No pude enviar la pregunta. Inténtalo de nuevo.", bundle: .module))
             return
         }
         let submitted = Self.object(await ipc("swarm.submit", [
@@ -57,7 +57,7 @@ final class SideChatStore {
             return
         }
         guard var snapshot = submitted, let submittedID else {
-            update(reply.id, turn: turn, text: "No pude enviar la pregunta. Inténtalo de nuevo.")
+            update(reply.id, turn: turn, text: String(localized: "No pude enviar la pregunta. Inténtalo de nuevo.", bundle: .module))
             return
         }
         jobID = submittedID
@@ -72,13 +72,13 @@ final class SideChatStore {
                     update(reply.id, turn: turn, text: result)
                 } else if status != "completed" {
                     update(reply.id, turn: turn, text:
-                        "No pude completar la pregunta (\(snapshot["error_code"] as? String ?? status)).")
+                        String(localized: "No pude completar la pregunta (\(snapshot["error_code"] as? String ?? status)).", bundle: .module))
                 }
                 return
             }
             if status == "awaiting_confirmation" {
                 await Self.cancel(submittedID, using: ipc)
-                update(reply.id, turn: turn, text: "Eso necesita tu aprobación: pídelo en el chat principal.")
+                update(reply.id, turn: turn, text: String(localized: "Eso necesita tu aprobación: pídelo en el chat principal.", bundle: .module))
                 return
             }
             let next = Self.object(await ipc("jobs.wait", [
@@ -89,13 +89,13 @@ final class SideChatStore {
             guard generation == turn else { return }
             guard let next else {
                 await Self.cancel(submittedID, using: ipc)
-                update(reply.id, turn: turn, text: "Perdí la conexión con Jarvis.")
+                update(reply.id, turn: turn, text: String(localized: "Perdí la conexión con Jarvis.", bundle: .module))
                 return
             }
             snapshot = next
         }
         await Self.cancel(submittedID, using: ipc)
-        update(reply.id, turn: turn, text: "La respuesta tardó demasiado.")
+        update(reply.id, turn: turn, text: String(localized: "La respuesta tardó demasiado.", bundle: .module))
     }
 
     func close(using ipc: IPC) async {

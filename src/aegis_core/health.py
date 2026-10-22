@@ -19,6 +19,8 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
+from aegis_core.failure_boundary import record_boundary_error
+
 WINDOW = timedelta(hours=24)
 TAIL_BYTES = 1_500_000
 MAX_FAILURES = 8
@@ -142,15 +144,18 @@ class HealthIpcService:
         events = await asyncio.to_thread(_tail_events, self._audit_path)
         try:
             credential = await self._credential()
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             credential = None
         try:
             mcp = self._mcp_status() if self._mcp_status is not None else None
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             mcp = None
         try:
             cooldown = float(self._cooldown())
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             cooldown = 0.0
         return IpcHandlerResult(ok=True, payload=health_report(
             events, now=self._clock(), mcp_status=mcp,

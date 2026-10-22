@@ -53,32 +53,32 @@ extension JarvisHealthReport {
         }
         let ai = nvidia
         add("NVIDIA", "", .heading)
-        add("Clave", ai.credential == "configured" ? "Configurada" : "No disponible",
+        add(String(localized: "Clave", bundle: .module), ai.credential == "configured" ? String(localized: "Configurada", bundle: .module) : String(localized: "No disponible", bundle: .module),
             ai.credential == "configured" ? .good : .warning)
-        add("Respuestas (últimas \(window_hours) h)",
-            ai.calls == 0 ? "Sin llamadas" : "\(ai.answered) de \(ai.calls)",
+        add(String(localized: "Respuestas (últimas \(window_hours) h)", bundle: .module),
+            ai.calls == 0 ? String(localized: "Sin llamadas", bundle: .module) : String(localized: "\(ai.answered) de \(ai.calls)", bundle: .module),
             ai.calls == 0 || ai.answered * 10 >= ai.calls * 9 ? .good : .warning)
         if ai.rate_limited > 0 {
-            add("Límite de frecuencia", "\(ai.rate_limited) veces",
+            add(String(localized: "Límite de frecuencia", bundle: .module), String(localized: "\(ai.rate_limited) veces", bundle: .module),
                 ai.rate_limited * 20 < max(ai.calls, 1) ? .good : .warning)
         }
-        if ai.failed > 0 { add("Fallos", "\(ai.failed)", .warning) }
+        if ai.failed > 0 { add(String(localized: "Fallos", bundle: .module), "\(ai.failed)", .warning) }
         if let latency = ai.median_latency_ms {
-            add("Tiempo típico de respuesta", String(format: "%.1f s", Double(latency) / 1_000),
+            add(String(localized: "Tiempo típico de respuesta", bundle: .module), String(format: "%.1f s", Double(latency) / 1_000),
                 latency < 15_000 ? .good : .warning)
         }
         if ai.cooldown_seconds > 0 {
-            add("Pausa por límite", String(format: "%.0f s", ai.cooldown_seconds), .warning)
+            add(String(localized: "Pausa por límite", bundle: .module), String(format: "%.0f s", ai.cooldown_seconds), .warning)
         }
-        if let last = ai.last_success_at { add("Última respuesta", Self.relative(last), .good) }
-        add("Integraciones", "", .heading)
-        if mcp.isEmpty { add("No hay integraciones configuradas.", "", .note) }
+        if let last = ai.last_success_at { add(String(localized: "Última respuesta", bundle: .module), Self.relative(last), .good) }
+        add(String(localized: "Integraciones", bundle: .module), "", .heading)
+        if mcp.isEmpty { add(String(localized: "No hay integraciones configuradas.", bundle: .module), "", .note) }
         for server in mcp {
             add(Self.serverName(server.server_id), Self.serverState(server),
                 server.state == "active" && server.available_tools > 0 ? .good : .warning)
         }
-        add("Fallos recientes", "", .heading)
-        if failures.isEmpty { add("Ninguno en las últimas 24 horas.", "", .note) }
+        add(String(localized: "Fallos recientes", bundle: .module), "", .heading)
+        if failures.isEmpty { add(String(localized: "Ninguno en las últimas 24 horas.", bundle: .module), "", .note) }
         for failure in failures {
             add("\(Self.relative(failure.at)) · \(failure.title)", "", .note)
             if let detail = failure.detail { add(detail, "", .detail) }
@@ -88,9 +88,9 @@ extension JarvisHealthReport {
 
     static func serverName(_ id: String) -> String {
         switch id {
-        case "google-workspace": "Google Workspace"
-        case "home-assistant": "Home Assistant"
-        case "playwright": "Navegador"
+        case "google-workspace": String(localized: "Google Workspace", bundle: .module)
+        case "home-assistant": String(localized: "Home Assistant", bundle: .module)
+        case "playwright": String(localized: "Navegador", bundle: .module)
         default: id.replacingOccurrences(of: "-", with: " ").capitalized
         }
     }
@@ -98,9 +98,9 @@ extension JarvisHealthReport {
     static func serverState(_ server: Server) -> String {
         switch server.state {
         case "active":
-            server.available_tools > 0 ? "Conectada · \(server.available_tools) herramientas" : "Sin herramientas disponibles"
-        case "disabled": server.reason_code == "settings_change" ? "En pausa por un cambio de ajustes" : "Desactivada"
-        case "quarantined": "Desconectada (\(server.reason_code ?? "sin detalle"))"
+            server.available_tools > 0 ? String(localized: "Conectada · \(server.available_tools) herramientas", bundle: .module) : String(localized: "Sin herramientas disponibles", bundle: .module)
+        case "disabled": server.reason_code == "settings_change" ? String(localized: "En pausa por un cambio de ajustes", bundle: .module) : "Desactivada"
+        case "quarantined": String(localized: "Desconectada (\(server.reason_code ?? "sin detalle"))", bundle: .module)
         default: server.state
         }
     }
@@ -127,7 +127,7 @@ struct JarvisHealthView: View {
     @State private var busy = false
 
     var body: some View {
-        JarvisSettingsCard(title: "Salud de Jarvis") {
+        JarvisSettingsCard(title: String(localized: "Salud de Jarvis", bundle: .module)) {
             ForEach(lines) { line in
                 HStack(spacing: 6) {
                     Circle().fill(line.tone == .good ? JarvisTheme.success : JarvisTheme.warning).frame(width: 6, height: 6)
@@ -144,13 +144,13 @@ struct JarvisHealthView: View {
                 .textSelection(.enabled)
             }
             HStack {
-                Button("Actualizar", systemImage: "arrow.clockwise") { Task { await load() } }
+                Button(String(localized: "Actualizar", bundle: .module), systemImage: "arrow.clockwise") { Task { await load() } }
                 Spacer()
-                Button("Reconectar integraciones", systemImage: "arrow.triangle.2.circlepath") {
+                Button(String(localized: "Reconectar integraciones", bundle: .module), systemImage: "arrow.triangle.2.circlepath") {
                     Task { await reconnect() }
                 }
                 .disabled(model.pendingApproval != nil || model.chat.isBusy || model.voiceState.isBusy)
-                .help("Reinicia el servicio de Jarvis para volver a conectar las integraciones; no reinstala nada.")
+                .help(String(localized: "Reinicia el servicio de Jarvis para volver a conectar las integraciones; no reinstala nada.", bundle: .module))
             }
             .disabled(busy)
             if let status { Text(status).font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary) }
@@ -165,7 +165,7 @@ struct JarvisHealthView: View {
             lines = report.lines
         } else {
             lines = []
-            status = "No pude leer el estado. Comprueba que el servicio esté conectado."
+            status = String(localized: "No pude leer el estado. Comprueba que el servicio esté conectado.", bundle: .module)
         }
     }
 
@@ -175,9 +175,9 @@ struct JarvisHealthView: View {
         do {
             try await restart()
             await model.refreshDaemon()
-            status = "Servicio reiniciado; las integraciones se volvieron a conectar."
+            status = String(localized: "Servicio reiniciado; las integraciones se volvieron a conectar.", bundle: .module)
         } catch {
-            status = "No se pudo reiniciar el servicio. Inténtalo de nuevo."
+            status = String(localized: "No se pudo reiniciar el servicio. Inténtalo de nuevo.", bundle: .module)
         }
         busy = false
         await load()

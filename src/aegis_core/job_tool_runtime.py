@@ -12,6 +12,7 @@ from aegis_core.contracts import (
     ToolExecutionResult,
     UserRequest,
 )
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.job_contracts import JobConfirmationError
 from aegis_core.job_tool_presenter import JobToolPresenter
 from aegis_core.tools.audit import AuditSink
@@ -125,6 +126,7 @@ class JobToolRuntime:
                 raise ConfirmationConsumptionError("confirmation could not be consumed")
             return authorization
         except Exception as error:
+            record_boundary_error(error)
             raise ConfirmationConsumptionError("confirmation could not be consumed") from error
         finally:
             # A policy denial, exception or cancellation must leave no live grant behind.

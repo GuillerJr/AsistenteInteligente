@@ -14,6 +14,7 @@ import json
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 
+from aegis_core.completion_boundary import optional_completion
 from aegis_core.memory.contracts import ConversationRole, ConversationTurn
 from aegis_core.privacy import redact_secrets_for_remote
 
@@ -129,7 +130,7 @@ async def select_tools(
         return frozenset()
     names = {name for name, _ in entries}
     try:
-        content = await complete([
+        content = await optional_completion(complete, [
             {"role": "system", "content": _INSTRUCTION + (
                 (_SCHEDULING_EXAMPLES if "jarvis_schedule_create" in names else "")
                 + (_GOAL_EXAMPLES if "jarvis_goal_create" in names else "")
@@ -147,7 +148,7 @@ async def select_tools(
             }, ensure_ascii=False)},
         ])
         payload = json.loads(content) if len(content.encode()) <= 2_048 else None
-    except Exception:
+    except (RecursionError, TypeError, ValueError):
         return frozenset()
     if (not isinstance(payload, dict) or set(payload) != {"intent", "tools"}
             or payload["intent"] not in {"datos", "accion"}):

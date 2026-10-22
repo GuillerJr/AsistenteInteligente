@@ -6,6 +6,8 @@ from pathlib import Path
 from pydantic import AnyHttpUrl, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from aegis_core.bundle_paths import installed_app_path
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -81,13 +83,13 @@ class Settings(BaseSettings):
     )
     thermal_cloud_token_threshold: int = Field(default=50, ge=16, le=4_096)
     local_brain_executable_path: Path = (
-        Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-local-brain"
+        installed_app_path() / "Contents/Helpers/jarvis-local-brain"
     )
     local_brain_timeout_seconds: float = Field(default=20.0, ge=1.0, le=60.0)
     local_brain_first_event_timeout_seconds: float = Field(default=8.0, ge=0.1, le=30.0)
     mlx_enabled: bool = True
     mlx_executable_path: Path = (
-        Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-mlx-engine"
+        installed_app_path() / "Contents/Helpers/jarvis-mlx-engine"
     )
     mlx_model_id: str = Field(
         default="mlx-community/Qwen2.5-3B-Instruct-4bit",
@@ -113,7 +115,7 @@ class Settings(BaseSettings):
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}/[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
     )
     mlx_vlm_executable_path: Path = (
-        Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-mlx-vlm"
+        installed_app_path() / "Contents/Helpers/jarvis-mlx-vlm"
     )
     mlx_vlm_model_directory: Path = (
         Path.home() / "Library/Application Support/Aegis/Models/Qwen2-VL-2B-Instruct-4bit"
@@ -131,7 +133,7 @@ class Settings(BaseSettings):
     mlx_distributed_keychain_account: str = "default"
     mlx_distributed_timeout_seconds: float = Field(default=120.0, ge=5, le=300)
     local_embedding_executable_path: Path = (
-        Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-local-embedding"
+        installed_app_path() / "Contents/Helpers/jarvis-local-embedding"
     )
     local_embedding_timeout_seconds: float = Field(default=5.0, ge=0.5, le=20.0)
     biometric_training_enabled: bool = True
@@ -145,10 +147,10 @@ class Settings(BaseSettings):
         Path.home() / "Library/Application Support/Aegis/Models/JarvisSpeakerIdentity.mlmodelc"
     )
     biometric_trainer_executable_path: Path = (
-        Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-speaker-trainer"
+        installed_app_path() / "Contents/Helpers/jarvis-speaker-trainer"
     )
     biometric_calibrator_executable_path: Path = (
-        Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-biometric-calibrator"
+        installed_app_path() / "Contents/Helpers/jarvis-biometric-calibrator"
     )
     biometric_keychain_service: str = "ai.aegis.biometric-training"
     biometric_keychain_account: str = "default"
@@ -209,7 +211,7 @@ class Settings(BaseSettings):
         Path.home() / "Library/Application Support/Aegis/devices/ios_shortcuts.json"
     )
     ios_bridge_executable_path: Path = (
-        Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-ios-bridge"
+        installed_app_path() / "Contents/Helpers/jarvis-ios-bridge"
     )
     ios_shortcut_timeout_seconds: float = Field(default=30.0, ge=2.0, le=60.0)
     capability_learning_directory: Path = (
@@ -221,7 +223,7 @@ class Settings(BaseSettings):
     memory_embedding_backfill_limit: int = Field(default=500, ge=0, le=2_000)
     spotlight_graph_index_enabled: bool = False
     spotlight_indexer_executable_path: Path = (
-        Path.home() / "Applications/Jarvis.app/Contents/Helpers/jarvis-spotlight-indexer"
+        installed_app_path() / "Contents/Helpers/jarvis-spotlight-indexer"
     )
     memory_rag_namespace: str = Field(
         default="user.default",

@@ -38,7 +38,7 @@ struct JarvisCommandPalette: View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass").foregroundStyle(JarvisTheme.inkSecondary)
-                TextField("Busca una acción…", text: $query)
+                TextField(String(localized: "Busca una acción…", bundle: .module), text: $query)
                     .textFieldStyle(.plain).font(.system(size: 15))
                     .focused($focused)
                     .onSubmit(runSelected)
@@ -52,7 +52,7 @@ struct JarvisCommandPalette: View {
                 ScrollView {
                     VStack(spacing: 2) {
                         if visible.isEmpty {
-                            Text("Ninguna acción coincide.").font(.system(size: 12))
+                            Text(String(localized: "Ninguna acción coincide.", bundle: .module)).font(.system(size: 12))
                                 .foregroundStyle(JarvisTheme.inkSecondary).padding(16)
                         }
                         ForEach(Array(visible.enumerated()), id: \.element.id) { index, command in

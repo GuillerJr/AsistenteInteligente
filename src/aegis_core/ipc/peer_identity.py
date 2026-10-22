@@ -61,7 +61,6 @@ UNSIGNED_PEER_METHODS = frozenset(
 JARVIS_CLIENT_METHODS: Mapping[str, frozenset[str] | None] = {
     "ai.aegis.menubar": None,
     "ai.aegis.menubar.computer": frozenset({"vision.localized.analyze"}),
-    "jarvis-local-brain": frozenset({"swarm.submit"}),
 }
 
 

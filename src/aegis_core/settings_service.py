@@ -19,6 +19,7 @@ from aegis_core.browser_preferences import (
     save_browser_automation_preferences,
 )
 from aegis_core.config import Settings
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.google_account_settings import (
     GoogleAccountAuthorization,
     probe_google_account,
@@ -147,7 +148,8 @@ class SettingsIpcService:
         try:
             configured = await asyncio.to_thread(self.keychain.is_configured)
             credential = "configured" if configured else "missing"
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             credential = "unavailable"
         runtime = self.host.status()
         states = {s["server_id"]: s for s in runtime.get("servers", [])}
@@ -200,7 +202,8 @@ class SettingsIpcService:
             except asyncio.CancelledError:
                 operation.update(state="cancelled")
                 raise
-            except Exception:
+            except Exception as error:
+                record_boundary_error(error)
                 operation.update(state="error", reason="settings_operation_failed")
 
         self.task = asyncio.create_task(run())
@@ -396,7 +399,8 @@ class SettingsIpcService:
                 raise ValueError("Unsupported settings action")
         except (ValueError, OSError, StopIteration, KeyError):
             return IpcHandlerResult(ok=False, error_code="settings_invalid_change")
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             return IpcHandlerResult(ok=False, error_code="settings_unavailable")
         return IpcHandlerResult(ok=True, payload=result)
 

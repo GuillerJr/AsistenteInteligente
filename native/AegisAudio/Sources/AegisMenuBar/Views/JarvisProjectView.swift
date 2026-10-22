@@ -61,7 +61,7 @@ extension JarvisChatStore {
     func projectCall(_ method: String, _ payload: [String: Any] = [:], model: MenuBarModel) async -> String? {
         guard let data = await model.performChatIPC(method, payload: payload),
               let listing = try? JSONDecoder().decode(JarvisProjectListing.self, from: data) else {
-            return "No se pudo actualizar el proyecto."
+            return String(localized: "No se pudo actualizar el proyecto.", bundle: .module)
         }
         projects = listing.projects
         return listing.error
@@ -87,17 +87,17 @@ struct JarvisProjectView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                MenuBarIconButton(symbol: "sidebar.left", title: chat.showHistory ? "Ocultar historial" : "Mostrar historial") {
+                MenuBarIconButton(symbol: "sidebar.left", title: chat.showHistory ? String(localized: "Ocultar historial", bundle: .module) : String(localized: "Mostrar historial", bundle: .module)) {
                     chat.showHistory.toggle()
                 }
                 Image(systemName: project?.symbol ?? "folder").foregroundStyle(project?.tint ?? JarvisTheme.clay)
-                Text(project?.name ?? "Proyecto").font(.system(size: 14, weight: .semibold))
+                Text(project?.name ?? String(localized: "Proyecto", bundle: .module)).font(.system(size: 14, weight: .semibold))
                 Spacer()
-                Button("Editar", systemImage: "pencil") { editing = true }
-                    .buttonStyle(JarvisIconButtonStyle()).labelStyle(.iconOnly).help("Cambiar nombre, icono y color")
+                Button(String(localized: "Editar", bundle: .module), systemImage: "pencil") { editing = true }
+                    .buttonStyle(JarvisIconButtonStyle()).labelStyle(.iconOnly).help(String(localized: "Cambiar nombre, icono y color", bundle: .module))
                 Button(role: .destructive) { confirmingDelete = true } label: { Image(systemName: "trash") }
-                    .buttonStyle(JarvisIconButtonStyle()).help("Borrar proyecto (sus chats se conservan)")
-                Button("Nuevo chat", systemImage: "square.and.pencil") {
+                    .buttonStyle(JarvisIconButtonStyle()).help(String(localized: "Borrar proyecto (sus chats se conservan)", bundle: .module))
+                Button(String(localized: "Nuevo chat", bundle: .module), systemImage: "square.and.pencil") {
                     chat.newConversation(inProject: projectID)
                 }
                 .buttonStyle(JarvisButtonStyle(prominent: true, compact: true))
@@ -124,28 +124,28 @@ struct JarvisProjectView: View {
                                                          "icon": icon, "instructions": instructions], model: model)
             }
         }
-        .confirmationDialog("¿Borrar «\(project?.name ?? "")»?", isPresented: $confirmingDelete, titleVisibility: .visible) {
-            Button("Borrar proyecto", role: .destructive) {
+        .confirmationDialog(String(localized: "¿Borrar «\(project?.name ?? "")»?", bundle: .module), isPresented: $confirmingDelete, titleVisibility: .visible) {
+            Button(String(localized: "Borrar proyecto", bundle: .module), role: .destructive) {
                 Task {
                     await chat.projectCall("projects.delete", ["project_id": projectID], model: model)
                     chat.pane = .chat
                 }
             }
-        } message: { Text("Se borran sus instrucciones y archivos. Sus chats siguen en Recientes.") }
+        } message: { Text(String(localized: "Se borran sus instrucciones y archivos. Sus chats siguen en Recientes.", bundle: .module)) }
     }
 
     private func content(_ project: JarvisProject) -> some View {
         VStack(alignment: .leading, spacing: 22) {
             if let notice { Text(notice).font(.system(size: 12)).foregroundStyle(JarvisTheme.warning) }
-            card("Instrucciones", detail: "Jarvis las sigue en cada chat de este proyecto.") {
+            card(String(localized: "Instrucciones", bundle: .module), detail: String(localized: "Jarvis las sigue en cada chat de este proyecto.", bundle: .module)) {
                 TextEditor(text: $instructions).font(.system(size: 13)).scrollContentBackground(.hidden)
                     .frame(minHeight: 80, maxHeight: 180)
                     .padding(6).background(JarvisTheme.canvas, in: RoundedRectangle(cornerRadius: JarvisTheme.radiusControl))
-                    .accessibilityLabel("Instrucciones del proyecto")
+                    .accessibilityLabel(String(localized: "Instrucciones del proyecto", bundle: .module))
                 HStack {
-                    Text("\(instructions.count)/4000").font(.system(size: 11)).foregroundStyle(JarvisTheme.inkMuted)
+                    Text(String(localized: "\(instructions.count)/4000", bundle: .module)).font(.system(size: 11)).foregroundStyle(JarvisTheme.inkMuted)
                     Spacer()
-                    Button("Guardar") {
+                    Button(String(localized: "Guardar", bundle: .module)) {
                         Task {
                             notice = await chat.projectCall("projects.save", [
                                 "project_id": projectID, "name": project.name, "color": project.color,
@@ -156,7 +156,7 @@ struct JarvisProjectView: View {
                     .disabled(instructions == project.instructions || instructions.count > 4_000)
                 }
             }
-            card("Archivos", detail: "Conocimiento de referencia para los chats del proyecto: texto, código, CSV o PDF.") {
+            card(String(localized: "Archivos", bundle: .module), detail: String(localized: "Conocimiento de referencia para los chats del proyecto: texto, código, CSV o PDF.", bundle: .module)) {
                 ForEach(project.files) { file in
                     HStack {
                         Label(file.name, systemImage: "doc.text").font(.system(size: 13))
@@ -166,15 +166,15 @@ struct JarvisProjectView: View {
                         Button { Task { notice = await chat.projectCall("projects.file.remove", [
                             "project_id": projectID, "file_id": file.file_id], model: model) } } label: {
                             Image(systemName: "xmark")
-                        }.buttonStyle(JarvisIconButtonStyle()).help("Quitar archivo")
+                        }.buttonStyle(JarvisIconButtonStyle()).help(String(localized: "Quitar archivo", bundle: .module))
                     }
                 }
-                Button("Agregar archivos…", systemImage: "plus") { importing = true }
+                Button(String(localized: "Agregar archivos…", bundle: .module), systemImage: "plus") { importing = true }
                     .buttonStyle(JarvisButtonStyle(compact: true)).disabled(project.files.count >= 8)
             }
-            card("Chats", detail: nil) {
+            card(String(localized: "Chats", bundle: .module), detail: nil) {
                 if chats.isEmpty {
-                    Text("Aún no hay chats. Empieza uno con «Nuevo chat» o mueve uno desde Recientes.")
+                    Text(String(localized: "Aún no hay chats. Empieza uno con «Nuevo chat» o mueve uno desde Recientes.", bundle: .module))
                         .font(.system(size: 12.5)).foregroundStyle(JarvisTheme.inkMuted)
                 }
                 ForEach(chats) { entry in
@@ -213,7 +213,7 @@ struct JarvisProjectView: View {
             let accessed = url.startAccessingSecurityScopedResource()
             defer { if accessed { url.stopAccessingSecurityScopedResource() } }
             guard let document = (try? ChatAttachmentLoader.load(url))?.document else {
-                notice = "No pude leer «\(url.lastPathComponent)» como texto."
+                notice = String(localized: "No pude leer «\(url.lastPathComponent)» como texto.", bundle: .module)
                 continue
             }
             notice = await chat.projectCall("projects.file.add", [
@@ -233,14 +233,14 @@ struct JarvisProjectEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(project == nil ? "Nuevo proyecto" : "Editar proyecto").font(.system(size: 15, weight: .semibold))
-            TextField("Nombre del proyecto", text: $name).jarvisInput(focused: false)
+            Text(project == nil ? String(localized: "Nuevo proyecto", bundle: .module) : String(localized: "Editar proyecto", bundle: .module)).font(.system(size: 15, weight: .semibold))
+            TextField(String(localized: "Nombre del proyecto", bundle: .module), text: $name).jarvisInput(focused: false)
             HStack(spacing: 8) {
                 ForEach(JarvisProject.colors, id: \.self) { value in
                     Button { color = value } label: {
                         Circle().fill(JarvisProject.tint(value)).frame(width: 20, height: 20)
                             .overlay(Circle().strokeBorder(JarvisTheme.ink, lineWidth: color == value ? 2 : 0).padding(-3))
-                    }.buttonStyle(.plain).accessibilityLabel("Color \(value)")
+                    }.buttonStyle(.plain).accessibilityLabel(String(localized: "Color \(value)", bundle: .module))
                 }
             }
             HStack(spacing: 4) {
@@ -249,14 +249,14 @@ struct JarvisProjectEditor: View {
                         Image(systemName: JarvisProject.symbol(value)).frame(width: 30, height: 28)
                             .foregroundStyle(icon == value ? JarvisProject.tint(color) : JarvisTheme.inkSecondary)
                             .background(icon == value ? JarvisTheme.fillSelected : .clear, in: RoundedRectangle(cornerRadius: 7))
-                    }.buttonStyle(.plain).accessibilityLabel("Icono \(value)")
+                    }.buttonStyle(.plain).accessibilityLabel(String(localized: "Icono \(value)", bundle: .module))
                 }
             }
             if let error { Text(error).font(.system(size: 12)).foregroundStyle(JarvisTheme.failure) }
             HStack {
                 Spacer()
-                Button("Cancelar") { dismiss() }.buttonStyle(JarvisButtonStyle()).keyboardShortcut(.cancelAction)
-                Button(project == nil ? "Crear" : "Guardar") {
+                Button(String(localized: "Cancelar", bundle: .module)) { dismiss() }.buttonStyle(JarvisButtonStyle()).keyboardShortcut(.cancelAction)
+                Button(project == nil ? String(localized: "Crear", bundle: .module) : String(localized: "Guardar", bundle: .module)) {
                     Task {
                         error = await save(name, color, icon)
                         if error == nil { dismiss() }

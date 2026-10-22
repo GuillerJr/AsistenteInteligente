@@ -7,15 +7,15 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from historical.hybrid_client import HybridBrainClient
+from historical.orchestration.graph import build_swarm_graph
 
 from aegis_core.brain.errors import RemoteAuthenticationError, RemoteRateLimitedError
-from aegis_core.brain.hybrid_client import HybridBrainClient
 from aegis_core.config import Settings
 from aegis_core.contracts import AgentRole, UserRequest
 from aegis_core.engineering import _repository_manifest
 from aegis_core.memory.contracts import ConversationRole, ConversationTurn
 from aegis_core.orchestration.engineering_dialogue import remote_engineering_messages
-from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.providers.nvidia import NvidiaGlobalCooldown, NvidiaNimClient
 from aegis_core.settings_store import (
     RoleSelection,

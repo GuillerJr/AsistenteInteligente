@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable, Mapping
 
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.memory.errors import MemoryStoreError
 
 SCHEMA_VERSION = 10
@@ -190,7 +191,8 @@ def create_current_schema(
             (key_identifier,),
         )
         connection.commit()
-    except Exception:
+    except Exception as error:
+        record_boundary_error(error)
         if connection.in_transaction:
             connection.rollback()
         raise
@@ -265,7 +267,8 @@ def migrate_v3_to_v4(connection: sqlite3.Connection) -> None:
                 connection.execute(statement)
         connection.execute("PRAGMA user_version = 4")
         connection.commit()
-    except Exception:
+    except Exception as error:
+        record_boundary_error(error)
         connection.rollback()
         raise
 

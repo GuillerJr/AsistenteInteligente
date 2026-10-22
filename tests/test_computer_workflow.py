@@ -6,6 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from historical.orchestration.graph import build_swarm_graph
 from pydantic import ValidationError
 
 from aegis_core.contracts import (
@@ -25,7 +26,6 @@ from aegis_core.mcp.client import McpArguments
 from aegis_core.memory.conversations import ConversationCoordinator
 from aegis_core.memory.sqlite import SQLiteMemoryStore
 from aegis_core.memory.task_checkpoint import TaskRecovery
-from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.tools.broker import PolicyContext, ToolDefinition
 from aegis_core.tools.computer import ComputerUseReport
 from aegis_core.tools.computer_postconditions import ComputerPostconditionCheck

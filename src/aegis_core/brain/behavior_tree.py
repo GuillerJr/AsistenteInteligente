@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from aegis_core.failure_boundary import record_boundary_error
+
 
 class BehaviorStatus(StrEnum):
     SUCCESS = "success"
@@ -104,7 +106,8 @@ class Condition(BehaviorNode):
     async def tick(self, context: BehaviorContext) -> BehaviorResult:
         try:
             matched = self._predicate(context)
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             matched = False
         return self._record(
             context,
@@ -147,7 +150,8 @@ class Action(BehaviorNode):
                 )
         try:
             raw = await self._handler(context)
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             raw = BehaviorStatus.FAILURE
         if isinstance(raw, bool):
             status = BehaviorStatus.SUCCESS if raw else BehaviorStatus.FAILURE

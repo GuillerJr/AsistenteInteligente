@@ -9,7 +9,7 @@ extension JarvisChatStore {
         historyLoading = true
         defer { if historyGeneration == generation { historyLoading = false } }
         let offset = append ? nextOffset ?? 0 : 0
-        let payload: [String: Any] = ["query": historyQuery, "archived": showTrash,
+        let payload: [String: Any] = ["query": historyQuery, "archived": showTrash, "filed": showArchived,
                                       "offset": offset, "limit": 30]
         guard let data = await model.performChatIPC("conversations.list", payload: payload),
               generation == historyGeneration, !Task.isCancelled else { return }
@@ -22,7 +22,7 @@ extension JarvisChatStore {
                 selectedConversation = current
             }
             nextOffset = next
-        } catch { self.error = "No pude leer el historial. Inténtalo de nuevo." }
+        } catch { self.error = String(localized: "No pude leer el historial. Inténtalo de nuevo.", bundle: .module) }
     }
 
     func open(_ conversation: ChatConversationSummary, model: MenuBarModel) async {
@@ -42,7 +42,7 @@ extension JarvisChatStore {
             selectedConversation = conversation
             transcript.restore(page.messages)
             nextBeforeSequence = page.nextBeforeSequence
-        } catch { self.error = "No pude abrir esa conversación. Inténtalo de nuevo." }
+        } catch { self.error = String(localized: "No pude abrir esa conversación. Inténtalo de nuevo.", bundle: .module) }
     }
 
     func loadOlder(model: MenuBarModel) async {
@@ -58,7 +58,7 @@ extension JarvisChatStore {
             guard page.conversationID == id, conversationID == id else { return }
             transcript.prepend(page.messages)
             nextBeforeSequence = page.nextBeforeSequence
-        } catch { self.error = "No pude cargar los mensajes anteriores." }
+        } catch { self.error = String(localized: "No pude cargar los mensajes anteriores.", bundle: .module) }
     }
 
     @discardableResult
@@ -73,11 +73,16 @@ extension JarvisChatStore {
         do {
             let page = try ChatHistoryPage(data)
             guard page.conversationID == id else { throw LocalIPCError.malformedResponse }
+            // Replace provisional IDs with persisted turn IDs, carrying the plan markers.
+            let wasPlan = transcript.messages.last.map { planReplies.contains($0.id) } ?? false
+            let wasImplemented = transcript.messages.last.map { implementedPlans.contains($0.id) } ?? false
             transcript.restore(page.messages)
+            if wasPlan, let reply = page.messages.last?.id { planReplies.insert(reply) }
+            if wasImplemented, let reply = page.messages.last?.id { implementedPlans.insert(reply) }
             nextBeforeSequence = page.nextBeforeSequence
             return true
         } catch {
-            self.error = "No pude volver a los mensajes recientes. Inténtalo de nuevo."
+            self.error = String(localized: "No pude volver a los mensajes recientes. Inténtalo de nuevo.", bundle: .module)
             return false
         }
     }
@@ -109,7 +114,7 @@ extension JarvisChatStore {
             } catch { return (nil, error.localizedDescription) }
         }.value
         if let files = result.0 { attachments = files }
-        else { error = result.1 ?? "No pude adjuntar esos archivos." }
+        else { error = result.1 ?? String(localized: "No pude adjuntar esos archivos.", bundle: .module) }
     }
 
     func rename(_ entry: ChatConversationSummary, title: String, model: MenuBarModel) async {
@@ -125,7 +130,7 @@ extension JarvisChatStore {
             guard updated.id == entry.id else { throw LocalIPCError.malformedResponse }
             if conversationID == entry.id { selectedConversation = updated }
             await refreshHistory(model: model)
-        } catch { self.error = "No pude renombrar esa conversación." }
+        } catch { self.error = String(localized: "No pude renombrar esa conversación.", bundle: .module) }
     }
 
     func fork(_ entry: ChatConversationSummary, model: MenuBarModel) async {
@@ -144,7 +149,7 @@ extension JarvisChatStore {
             await refreshHistory(model: model)
         } catch {
             selectionLoading = false
-            self.error = "No pude crear la bifurcación. Inténtalo de nuevo."
+            self.error = String(localized: "No pude crear la bifurcación. Inténtalo de nuevo.", bundle: .module)
         }
     }
 
@@ -157,7 +162,7 @@ extension JarvisChatStore {
         selectionLoading = false
         error = nil
         await open(entry, model: model)
-        notice = "Telegram continuará este chat con tu siguiente mensaje."
+        notice = String(localized: "Telegram continuará este chat con tu siguiente mensaje.", bundle: .module)
     }
 
     func emptyTrash(model: MenuBarModel) async {

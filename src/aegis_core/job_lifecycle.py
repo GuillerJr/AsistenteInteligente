@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 
 from aegis_core.build_info import runtime_build_revision
 from aegis_core.contracts import ToolAuthorization, ToolCall
+from aegis_core.feedback import OwnerFeedback
 from aegis_core.job_admission import (
     JobAdmissionCoordinator,
     PreparedJobAdmission,
@@ -290,6 +291,15 @@ class JobLifecycleCoordinator:
             if job.evaluation is not None
         )
 
+    def record_owner_feedback(self, request_id: UUID, feedback: OwnerFeedback | None) -> None:
+        """Event-loop-only UI feedback, sharing the persisted request identity."""
+        if feedback is not None:
+            feedback = OwnerFeedback(feedback)
+        for job in self._registry.values():
+            if (job.request_id == request_id and job.evaluation is not None
+                    and job.evaluation.succeeded):
+                job.evaluation = job.evaluation.model_copy(update={"owner_feedback": feedback})
+
     def build_metrics(
         self,
         current: tuple[StoredJobEvaluation, ...],
@@ -298,8 +308,8 @@ class JobLifecycleCoordinator:
         if self._evaluation_store is not None:
             try:
                 stored = self._evaluation_store.load_recent()
-            except Exception:
-                LOGGER.warning("evaluation_history_read_failed")
+            except Exception as error:  # Pluggable evaluation storage boundary.
+                LOGGER.warning("evaluation_history_read_failed error_type=%s", type(error).__name__)
         by_job_id = {item.job_id: item.evaluation for item in stored}
         by_job_id.update({item.job_id: item.evaluation for item in current})
         return {
@@ -358,5 +368,5 @@ class JobLifecycleCoordinator:
             return
         try:
             self._evaluation_store.append(job.job_id, evaluation, job.updated_at)
-        except Exception:
-            LOGGER.warning("evaluation_history_write_failed")
+        except Exception as error:  # Pluggable evaluation storage boundary.
+            LOGGER.warning("evaluation_history_write_failed error_type=%s", type(error).__name__)

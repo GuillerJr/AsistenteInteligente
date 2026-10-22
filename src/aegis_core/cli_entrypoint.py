@@ -9,6 +9,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, NoReturn
 
+from aegis_core.bundle_paths import installed_app_path
 from aegis_core.engineering import (
     EngineeringDomain,
     EngineeringInferencePolicy,
@@ -138,7 +139,7 @@ def build_parser(*, program_name: str | None = None) -> argparse.ArgumentParser:
         "--public-key",
         type=Path,
         default=(
-            Path.home() / "Applications/Jarvis.app/Contents/Resources/JarvisUpdatePublicKey.ed25519"
+            installed_app_path() / "Contents/Resources/JarvisUpdatePublicKey.ed25519"
         ),
     )
     administration.add_argument("--confirm-install")

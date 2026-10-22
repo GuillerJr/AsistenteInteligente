@@ -9,6 +9,7 @@ from pathlib import Path
 from uuid import UUID
 
 from aegis_core.build_info import is_build_revision, runtime_build_revision
+from aegis_core.feedback import OwnerFeedback
 from aegis_core.job_contracts import JobEvaluation, StoredJobEvaluation
 
 SCHEMA_VERSION = 2
@@ -143,6 +144,28 @@ class SQLiteEvaluationStore:
                 """,
                 (self._max_entries,),
             )
+        self._secure_database_file()
+
+    def record_owner_feedback(self, request_id: UUID, feedback: OwnerFeedback | None) -> None:
+        """Update only the matching evaluated answer, including after daemon restart."""
+        self._require_initialized()
+        if feedback is not None:
+            feedback = OwnerFeedback(feedback)
+        with self._lock, self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            rows = connection.execute(
+                "SELECT job_id, payload_json FROM job_evaluations "
+                "WHERE json_extract(payload_json, '$.request_id') = ?", (str(request_id),),
+            ).fetchall()
+            for row in rows:
+                evaluation = JobEvaluation.model_validate_json(row["payload_json"])
+                if not evaluation.succeeded:
+                    continue
+                evaluation = evaluation.model_copy(update={"owner_feedback": feedback})
+                connection.execute(
+                    "UPDATE job_evaluations SET payload_json = ? WHERE job_id = ?",
+                    (evaluation.model_dump_json(), row["job_id"]),
+                )
         self._secure_database_file()
 
     def load_recent(self) -> tuple[StoredJobEvaluation, ...]:

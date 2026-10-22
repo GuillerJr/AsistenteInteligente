@@ -17,6 +17,7 @@ from typing import Any
 from urllib.parse import urlsplit
 from uuid import uuid4
 
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.mcp.integrations import (
     BROWSER_CONTEXT_FIELDS,
     BrowserSessionConfiguration,
@@ -564,7 +565,8 @@ class ReviewedBrowserSession:
                                     outcome="verified" if verified else "action_performed",
                                     before_sha256=before.digest,
                                     verification_scope=verification_scope)
-            except Exception:
+            except Exception as error:
+                record_boundary_error(error)
                 if dispatched:
                     self.invalidate()
                     return self._result(before, verified=False, executed=True,

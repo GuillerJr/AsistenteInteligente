@@ -23,6 +23,7 @@ from jsonschema.exceptions import SchemaError
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from aegis_core import __version__
 from aegis_core.contracts import (
     AgentRole,
     Capability,
@@ -788,7 +789,11 @@ class StdioMcpClient:
             **self.configuration.environment,
         }
         if self.configuration.secret_environment:
-            from aegis_core.secrets import MacOSGenericSecret
+            from aegis_core.secrets import (
+                InvalidGenericSecretError,
+                MacOSGenericSecret,
+                SecretNotFoundError,
+            )
 
             try:
                 for name, account in self.configuration.secret_environment.items():
@@ -796,7 +801,7 @@ class StdioMcpClient:
                         service=f"ai.aegis.mcp.{self.configuration.server_id}", account=account,
                     )
                     environment[name] = await asyncio.to_thread(store.get)
-            except Exception as error:
+            except (OSError, InvalidGenericSecretError, SecretNotFoundError) as error:
                 raise McpConfigurationError("MCP scoped credential is unavailable") from error
         try:
             self._process = await asyncio.create_subprocess_exec(
@@ -821,7 +826,7 @@ class StdioMcpClient:
                     {
                         "protocolVersion": MCP_PROTOCOL_VERSION,
                         "capabilities": {},
-                        "clientInfo": {"name": "Jarvis", "version": "0.1.0"},
+                        "clientInfo": {"name": "Jarvis", "version": __version__},
                     },
                 )
                 self._validate_initialize(initialized)

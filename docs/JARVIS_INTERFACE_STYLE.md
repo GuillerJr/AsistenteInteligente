@@ -1,7 +1,8 @@
 # Interfaces de Jarvis
 
-La interfaz mantiene el fondo oscuro, los acentos azul grisáceo y los colores
-de estado del HUD. `JarvisInterfaceStyle.swift` reúne la cabecera de sección,
+La interfaz usa la paleta «Cálido»: fondo hueso en modo claro, carbón en oscuro,
+tinta de alto contraste y acento arcilla. Los colores adaptativos viven en
+`JarvisTheme.swift`. `JarvisInterfaceStyle.swift` reúne la cabecera de sección,
 las superficies interiores, los botones y la disposición de interruptores.
 
 ## Convenciones

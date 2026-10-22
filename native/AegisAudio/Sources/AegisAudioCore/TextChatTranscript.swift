@@ -11,11 +11,15 @@ public struct TextChatTranscript: Sendable {
         public var interrupted: Bool
         public var attachmentNames: [String]
         public var truncated: Bool
+        public var sequence: Int?
+        public var feedback: String?
 
         public init(id: UUID = UUID(), role: Role, text: String, interrupted: Bool = false,
-                    attachmentNames: [String] = [], truncated: Bool = false) {
+                    attachmentNames: [String] = [], truncated: Bool = false,
+                    sequence: Int? = nil, feedback: String? = nil) {
             self.id = id; self.role = role; self.text = text; self.interrupted = interrupted
             self.attachmentNames = attachmentNames; self.truncated = truncated
+            self.sequence = sequence; self.feedback = feedback
         }
     }
 
@@ -76,6 +80,11 @@ public struct TextChatTranscript: Sendable {
         self.jobID = nil
         assistantID = nil
         partial = ""
+    }
+
+    public mutating func setFeedback(_ value: String?, messageID: UUID) {
+        guard let index = messages.firstIndex(where: { $0.id == messageID && $0.role == .assistant }) else { return }
+        messages[index].feedback = value
     }
 
     private var assistantIndex: Int? {

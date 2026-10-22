@@ -3,12 +3,12 @@ set -euo pipefail
 umask 077
 
 AEGIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-AEGIS_INSTALLED_APP="$HOME/Applications/Jarvis.app"
+AEGIS_RELOCATABLE_APP="$("$AEGIS_PROJECT_ROOT/script/resolve_installed_bundle.sh")"
+AEGIS_INSTALLED_APP="$AEGIS_RELOCATABLE_APP"
 AEGIS_INSTALLED_INFO="$AEGIS_INSTALLED_APP/Contents/Info.plist"
 AEGIS_REPORT="$AEGIS_PROJECT_ROOT/dist/Jarvis.rc3-rc8.json"
 AEGIS_MAX_BUNDLE_KIB="${AEGIS_MAX_BUNDLE_KIB:-450560}"
-# 25 MiB per stripped executable. ONNX Runtime (Silero VAD) is a fixed ~20 MB of
-# the app; the rest is Jarvis's own code, which grows with each window it gains.
+# 25 MiB per stripped executable; ONNX is isolated in the VAD helper.
 AEGIS_MAX_SWIFT_EXECUTABLE_BYTES="${AEGIS_MAX_SWIFT_EXECUTABLE_BYTES:-26214400}"
 AEGIS_TEMPORARY_REPORT=""
 

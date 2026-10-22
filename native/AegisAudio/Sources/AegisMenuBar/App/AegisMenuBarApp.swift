@@ -14,6 +14,27 @@ private final class AegisAppDelegate: NSObject, NSApplicationDelegate {
     private var terminationSignal: DispatchSourceSignal?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
+        // Diagnose the installed signed VAD with synthetic silence, before any
+        // daemon, microphone, login-item migration or normal UI starts.
+        if ProcessInfo.processInfo.arguments.contains("--vad-self-test") {
+            do {
+                let detector = try SileroVADDetector(bundle: .main)
+                for _ in 0..<2 {
+                    let observations = try detector.append(samples: [Float](repeating: 0, count: 512))
+                    guard observations.count == 1,
+                          observations[0].speechProbability.isFinite,
+                          (0...1).contains(observations[0].speechProbability) else {
+                        throw SileroVADError.inferenceFailed
+                    }
+                    detector.reset()
+                }
+                print("vad_self_test=passed frames=2 synthetic=true")
+                exit(EXIT_SUCCESS)
+            } catch {
+                FileHandle.standardError.write(Data("vad_self_test=failed\n".utf8))
+                exit(EXIT_FAILURE)
+            }
+        }
         JarvisAppearanceController.shared.start(application: .shared)
         // The build script uses SIGTERM. Route it through AppKit termination
         // so the bundled daemon drains and seals its audit before the app exits.
@@ -26,6 +47,14 @@ private final class AegisAppDelegate: NSObject, NSApplicationDelegate {
         // Visual fixtures must never start the daemon, microphone or monitoring.
         if NotchPreviewMode(arguments: ProcessInfo.processInfo.arguments) != nil { return }
 #endif
+        if ProcessInfo.processInfo.arguments.contains("--disable-login-item") {
+            do { _ = try JarvisLoginItemController.shared.setEnabled(false) }
+            catch { return }
+            terminationReady = true
+            NSApplication.shared.terminate(nil)
+            return
+        }
+        Task { await JarvisLoginItemController.shared.migrateLegacyIfNeeded() }
         do {
             let applicationSupport = try FileManager.default.url(
                 for: .applicationSupportDirectory,
@@ -137,10 +166,18 @@ struct AegisMenuBarApp: App {
         MenuBarExtra {
             MenuBarView(model: model, interactive: interactive)
         } label: {
-            MenuBarLabel(model: model)
+            MenuBarLabel(model: model, settingsStore: appDelegate.settingsStore)
         }
         .menuBarExtraStyle(.window)
-        .commands { JarvisSettingsCommands(interactive: interactive) }
+        .commands { JarvisSettingsCommands(model: model, interactive: interactive) }
+
+        Window("Bienvenido a Jarvis", id: "welcome") {
+            JarvisWelcomeView(model: model, store: appDelegate.settingsStore,
+                              restart: { try await appDelegate.restartDaemon() }, interactive: interactive)
+                .background(RequestedWindowRegistration(id: "welcome"))
+        }
+        .defaultSize(width: 650, height: 620)
+        .windowResizability(.contentMinSize)
 
         Window("Chat con Jarvis", id: "chat") {
             JarvisChatView(model: model)
@@ -182,6 +219,7 @@ struct AegisMenuBarApp: App {
 
 private struct MenuBarLabel: View {
     let model: MenuBarModel
+    let settingsStore: JarvisSettingsStore
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
 
@@ -212,6 +250,13 @@ private struct MenuBarLabel: View {
                     return
                 }
 #endif
+                await settingsStore.refresh()
+                if JarvisWelcomeState.shouldPresent(
+                    completedVersion: UserDefaults.standard.integer(forKey: JarvisWelcomeState.completionKey),
+                    credential: settingsStore.snapshot?.credential
+                ) {
+                    RequestedWindowFocus.open("welcome") { openWindow(id: "welcome") }
+                }
                 await model.initializeOperationalEvidence()
                 await model.initializeProactiveAlerts()
                 model.startPrivacyChangeMonitoring()

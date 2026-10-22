@@ -317,6 +317,7 @@ public struct IPCJobStatusEvent: Equatable, Sendable {
     public static let maximumResultBytes = 24_576
 
     public let jobID: UUID
+    public let conversationPersisted: Bool?
     public let state: IPCJobState
     public let result: String?
     public let errorCode: String?
@@ -343,6 +344,14 @@ public struct IPCJobStatusEvent: Equatable, Sendable {
                 || response.payload["error_code"] is String
         else {
             return nil
+        }
+        let persisted = response.payload["conversation_persisted"]
+        if persisted == nil || persisted is NSNull {
+            conversationPersisted = nil
+        } else {
+            guard let number = persisted as? NSNumber,
+                  CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
+            conversationPersisted = number.boolValue
         }
         let result = response.payload["result"] as? String
         let errorCode = response.payload["error_code"] as? String

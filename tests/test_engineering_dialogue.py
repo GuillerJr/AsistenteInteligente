@@ -1,11 +1,11 @@
 import json
 
 import pytest
+from historical.orchestration.graph import build_swarm_graph
 
 from aegis_core.contracts import AgentResult, AgentRole, UserRequest
 from aegis_core.engineering import ENGINEERING_SURFACE_METADATA
 from aegis_core.orchestration.engineering_dialogue import engineering_messages
-from aegis_core.orchestration.graph import build_swarm_graph
 
 
 @pytest.mark.parametrize(

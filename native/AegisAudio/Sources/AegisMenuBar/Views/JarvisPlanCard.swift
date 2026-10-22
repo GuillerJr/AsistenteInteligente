@@ -30,11 +30,11 @@ struct JarvisPlanCard: View {
         let steps = Self.steps(in: text)
         if steps.count >= 2 {
             VStack(alignment: .leading, spacing: 8) {
-                Label("Plan · \(steps.count) pasos", systemImage: "list.bullet.clipboard")
+                Label(String(localized: "Plan · \(steps.count) pasos", bundle: .module), systemImage: "list.bullet.clipboard")
                     .font(.system(size: 12.5, weight: .semibold)).foregroundStyle(JarvisTheme.ink)
                 ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text("\(index + 1)").font(.system(size: 11, design: .monospaced))
+                        Text(String(localized: "\(index + 1)", bundle: .module)).font(.system(size: 11, design: .monospaced))
                             .foregroundStyle(JarvisTheme.inkMuted).frame(width: 14, alignment: .trailing)
                         Text(step).font(.system(size: 13)).foregroundStyle(JarvisTheme.ink)
                             .fixedSize(horizontal: false, vertical: true)
@@ -42,12 +42,12 @@ struct JarvisPlanCard: View {
                 }
                 HStack(spacing: 10) {
                     if implemented {
-                        Label("Enviado para implementar", systemImage: "checkmark")
+                        Label(String(localized: "Enviado para implementar", bundle: .module), systemImage: "checkmark")
                             .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
                     } else {
-                        Button("Implementar plan") { implement(steps) }
+                        Button(String(localized: "Implementar plan", bundle: .module)) { implement(steps) }
                             .buttonStyle(JarvisButtonStyle(prominent: true, compact: true))
-                        Text("o escribe para ajustarlo").font(.system(size: 11.5))
+                        Text(String(localized: "o escribe para ajustarlo", bundle: .module)).font(.system(size: 11.5))
                             .foregroundStyle(JarvisTheme.inkMuted)
                     }
                 }

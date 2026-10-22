@@ -8,8 +8,8 @@ struct TaskInputDialog: View {
     @FocusState private var answerFocused: Bool
 
     var body: some View {
-        JarvisDialogShell(title: "Necesito un dato más", symbol: "questionmark.bubble",
-                          detail: "Completa la información para que Jarvis pueda continuar.",
+        JarvisDialogShell(title: String(localized: "Necesito un dato más", bundle: .module), symbol: "questionmark.bubble",
+                          detail: String(localized: "Completa la información para que Jarvis pueda continuar.", bundle: .module),
                           height: input.request.options.isEmpty ? 440 : 440 + CGFloat(input.request.options.count) * 44) {
             Text(input.request.question).font(.system(size: 15, weight: .medium))
                 .fixedSize(horizontal: false, vertical: true)
@@ -21,7 +21,7 @@ struct TaskInputDialog: View {
                             Task { await model.answerPendingInput(option, expectedID: input.id) }
                         } label: {
                             HStack(spacing: 8) {
-                                Text("\(index + 1)").font(.system(size: 12, weight: .semibold))
+                                Text(String(localized: "\(index + 1)", bundle: .module)).font(.system(size: 12, weight: .semibold))
                                     .monospacedDigit().frame(width: 18)
                                 Text(option).font(.system(size: 14)).multilineTextAlignment(.leading)
                                 Spacer(minLength: 0)
@@ -31,28 +31,28 @@ struct TaskInputDialog: View {
                         .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: false))
                         .disabled(!interactive || model.interactionSubmissionInProgress
                                   || Date() >= input.request.expiresAt)
-                        .accessibilityLabel("Opción \(index + 1): \(option)")
+                        .accessibilityLabel(String(localized: "Opción \(index + 1): \(option)", bundle: .module))
                     }
                 }
             }
-            TextField(input.request.options.isEmpty ? "Escribe tu respuesta…" : "U otra respuesta…",
+            TextField(input.request.options.isEmpty ? String(localized: "Escribe tu respuesta…", bundle: .module) : String(localized: "U otra respuesta…", bundle: .module),
                       text: $answer, axis: .vertical)
                 .lineLimit(3...6).focused($answerFocused).jarvisInput(focused: answerFocused, fontSize: 14)
-                .accessibilityLabel("Respuesta para Jarvis")
+                .accessibilityLabel(String(localized: "Respuesta para Jarvis", bundle: .module))
                 .disabled(!interactive)
-            Text("La respuesta se evaluará como una nueva solicitud. Las acciones que requieran aprobación volverán a pedirla. No escribas contraseñas ni claves aquí.")
+            Text(String(localized: "La respuesta se evaluará como una nueva solicitud. Las acciones que requieran aprobación volverán a pedirla. No escribas contraseñas ni claves aquí.", bundle: .module))
                 .font(.system(size: 12)).foregroundStyle(JarvisInterfaceStyle.secondaryText)
             TimelineView(.periodic(from: .now, by: 1)) { context in
-                Text("Disponible durante \(max(0, Int(input.request.expiresAt.timeIntervalSince(context.date)))) s")
+                Text(String(localized: "Disponible durante \(max(0, Int(input.request.expiresAt.timeIntervalSince(context.date)))) s", bundle: .module))
                     .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkMuted).monospacedDigit()
             }
         } footer: {
             HStack {
-                Button("Cancelar", role: .cancel) { Task { await model.cancelInteraction() } }
+                Button(String(localized: "Cancelar", bundle: .module), role: .cancel) { Task { await model.cancelInteraction() } }
                     .keyboardShortcut(.cancelAction)
                     .disabled(!interactive)
                 Spacer()
-                Button("Continuar") { Task { await model.answerPendingInput(answer, expectedID: input.id) } }
+                Button(String(localized: "Continuar", bundle: .module)) { Task { await model.answerPendingInput(answer, expectedID: input.id) } }
                     .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: true))
                     .keyboardShortcut(.return, modifiers: .command)
                     .disabled(!interactive || answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

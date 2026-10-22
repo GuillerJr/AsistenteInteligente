@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
+from historical.orchestration.graph import build_swarm_graph
 from test_graph import FakeProvider
 from test_plugins import _package
 
@@ -20,7 +21,6 @@ from aegis_core.engineering import ENGINEERING_SURFACE_METADATA, EngineeringIpcS
 from aegis_core.ipc.server import ipc_peer_signed
 from aegis_core.jobs import JobSnapshot, JobStatus
 from aegis_core.memory.profile import OwnerProfile
-from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.plugins.store import PluginStore
 from aegis_core.tools.defaults import default_policy_context
 

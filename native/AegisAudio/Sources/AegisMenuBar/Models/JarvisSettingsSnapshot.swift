@@ -33,20 +33,20 @@ struct JarvisIntegrationSettings: Decodable, Identifiable, Sendable {
     var id: String { server_id }
     var title: String {
         switch provider {
-        case "google-workspace": "Google Workspace"
+        case "google-workspace": String(localized: "Google Workspace", bundle: .module)
         case "github": "GitHub"
-        case "filesystem": "Archivos locales"
-        case "playwright": "Navegador"
-        case "home-assistant": "Home Assistant"
+        case "filesystem": String(localized: "Archivos locales", bundle: .module)
+        case "playwright": String(localized: "Navegador", bundle: .module)
+        case "home-assistant": String(localized: "Home Assistant", bundle: .module)
         default: server_id
         }
     }
     var statusTitle: String {
         switch state {
-        case "active": "Conectado · \(available_tools) herramientas"
-        case "quarantined", "blocked": "Requiere revisión"
-        case "disabled": enabled ? "Pendiente de aplicar" : "Desactivado"
-        default: "Sin conexión"
+        case "active": String(localized: "Conectado · \(available_tools) herramientas", bundle: .module)
+        case "quarantined", "blocked": String(localized: "Requiere revisión", bundle: .module)
+        case "disabled": enabled ? String(localized: "Pendiente de aplicar", bundle: .module) : String(localized: "Desactivado", bundle: .module)
+        default: String(localized: "Sin conexión", bundle: .module)
         }
     }
 }
@@ -68,9 +68,9 @@ struct JarvisBrowserAutomationSettings: Decodable, Sendable {
 
     var modeTitle: String {
         switch mode {
-        case "chrome": "Chrome directo"
-        case "isolated": "Navegador separado"
-        default: "Con extensión"
+        case "chrome": String(localized: "Chrome directo", bundle: .module)
+        case "isolated": String(localized: "Navegador separado", bundle: .module)
+        default: String(localized: "Con extensión", bundle: .module)
         }
     }
 }
@@ -181,15 +181,15 @@ enum JarvisSettingsSection: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .general: "General"
-        case .accounts: "Cuentas e integraciones"
-        case .telegram: "Telegram"
-        case .models: "Modelos de IA"
-        case .extensions: "Extensiones"
-        case .voice: "Voz"
-        case .privacy: "Memoria y privacidad"
-        case .devices: "Dispositivos"
-        case .diagnostics: "Diagnóstico"
+        case .general: String(localized: "General", bundle: .module)
+        case .accounts: String(localized: "Cuentas e integraciones", bundle: .module)
+        case .telegram: String(localized: "Telegram", bundle: .module)
+        case .models: String(localized: "Modelos de IA", bundle: .module)
+        case .extensions: String(localized: "Extensiones", bundle: .module)
+        case .voice: String(localized: "Voz", bundle: .module)
+        case .privacy: String(localized: "Memoria y privacidad", bundle: .module)
+        case .devices: String(localized: "Dispositivos", bundle: .module)
+        case .diagnostics: String(localized: "Diagnóstico", bundle: .module)
         }
     }
     var symbol: String {
@@ -207,15 +207,15 @@ enum JarvisSettingsSection: String, CaseIterable, Identifiable {
     }
     var detail: String {
         switch self {
-        case .general: "Preferencias de Jarvis en este Mac."
-        case .accounts: "Administra las conexiones y la cuenta que utiliza Jarvis."
-        case .telegram: "Conversa con Jarvis desde tu móvil."
-        case .models: "Elige un modelo principal y una alternativa para cada tarea."
-        case .extensions: "Revisa y administra las skills y los plugins que utiliza Jarvis."
-        case .voice: "Identidad y activación local con la voz actual de Jarvis."
-        case .privacy: "Revisa los permisos y consulta los recuerdos guardados."
-        case .devices: "Conexiones para tus dispositivos y tu hogar."
-        case .diagnostics: "Estado del servicio y de sus componentes."
+        case .general: String(localized: "Preferencias de Jarvis en este Mac.", bundle: .module)
+        case .accounts: String(localized: "Administra las conexiones y la cuenta que utiliza Jarvis.", bundle: .module)
+        case .telegram: String(localized: "Conversa con Jarvis desde tu móvil.", bundle: .module)
+        case .models: String(localized: "Elige un modelo principal y una alternativa para cada tarea.", bundle: .module)
+        case .extensions: String(localized: "Revisa y administra las skills y los plugins que utiliza Jarvis.", bundle: .module)
+        case .voice: String(localized: "Identidad y activación local con la voz actual de Jarvis.", bundle: .module)
+        case .privacy: String(localized: "Revisa los permisos y consulta los recuerdos guardados.", bundle: .module)
+        case .devices: String(localized: "Conexiones para tus dispositivos y tu hogar.", bundle: .module)
+        case .diagnostics: String(localized: "Estado del servicio y de sus componentes.", bundle: .module)
         }
     }
 }
@@ -225,13 +225,13 @@ enum JarvisModelTask {
                         "vision", "omni", "synthesizer"]
     static func title(_ role: String) -> String {
         switch role {
-        case "router": "Selección de tareas"
-        case "planner": "Planificación y herramientas"
-        case "critical_reasoner": "Razonamiento complejo"
-        case "code_security": "Código y revisión"
-        case "vision": "Análisis de imágenes"
-        case "omni": "Análisis multimodal"
-        default: "Redacción de respuestas"
+        case "router": String(localized: "Selección de tareas", bundle: .module)
+        case "planner": String(localized: "Planificación y herramientas", bundle: .module)
+        case "critical_reasoner": String(localized: "Razonamiento complejo", bundle: .module)
+        case "code_security": String(localized: "Código y revisión", bundle: .module)
+        case "vision": String(localized: "Análisis de imágenes", bundle: .module)
+        case "omni": String(localized: "Análisis multimodal", bundle: .module)
+        default: String(localized: "Redacción de respuestas", bundle: .module)
         }
     }
     static func compatible(_ model: JarvisSelectableModel, role: String) -> Bool {

@@ -14,17 +14,17 @@ struct MenuBarPermissionsView: View {
     var body: some View {
         DisclosureGroup(isExpanded: $expanded) {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                MenuBarPermissionItem(title: "Micrófono", symbol: "mic",
+                MenuBarPermissionItem(title: String(localized: "Micrófono", bundle: .module), symbol: "mic",
                     state: permissionTitle(model.microphonePermission), color: microphoneColor,
                     action: microphoneAction)
-                MenuBarPermissionItem(title: "Reconocimiento", symbol: "quote.bubble",
+                MenuBarPermissionItem(title: String(localized: "Reconocimiento", bundle: .module), symbol: "quote.bubble",
                     state: permissionTitle(model.speechPermission), color: speechColor,
                     action: speechAction)
-                MenuBarPermissionItem(title: "Pantalla", symbol: "rectangle.inset.filled",
-                    state: model.screenCaptureAuthorized ? "Listo" : "Permitir",
+                MenuBarPermissionItem(title: String(localized: "Pantalla", bundle: .module), symbol: "rectangle.inset.filled",
+                    state: model.screenCaptureAuthorized ? String(localized: "Listo", bundle: .module) : String(localized: "Permitir", bundle: .module),
                     color: HUDStyle.accent(for: model.screenCaptureAuthorized ? .active : .warning),
                     action: model.screenCaptureAuthorized ? nil : { model.requestScreenCapture() })
-                MenuBarPermissionItem(title: "Control del Mac", symbol: "cursorarrow.motionlines",
+                MenuBarPermissionItem(title: String(localized: "Control del Mac", bundle: .module), symbol: "cursorarrow.motionlines",
                     state: computerControlState, color: computerControlColor,
                     action: model.computerControlCapability == .ready
                         ? nil : { Task { await model.requestComputerControlAccess() } })
@@ -33,11 +33,11 @@ struct MenuBarPermissionsView: View {
             .disabled(!interactive)
         } label: {
             HStack {
-                Label("Permisos", systemImage: "lock.shield")
+                Label(String(localized: "Permisos", bundle: .module), systemImage: "lock.shield")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(JarvisTheme.ink)
                 Spacer()
-                Text(ready ? "Todos listos" : "Revisar accesos")
+                Text(ready ? String(localized: "Todos listos", bundle: .module) : String(localized: "Revisar accesos", bundle: .module))
                     .font(.system(size: 11))
                     .foregroundStyle(ready ? JarvisTheme.inkMuted : HUDStyle.accent(for: .warning))
             }
@@ -82,26 +82,26 @@ struct MenuBarPermissionsView: View {
 
     private var computerControlState: String {
         switch model.computerControlCapability {
-        case .ready: "Listo"
-        case .screenCaptureMissing: "Pantalla pendiente"
-        case .accessibilityMissing: "Control pendiente"
-        case .permissionsMissing: "Permitir"
-        case .helperUnavailable: "No disponible"
+        case .ready: String(localized: "Listo", bundle: .module)
+        case .screenCaptureMissing: String(localized: "Pantalla pendiente", bundle: .module)
+        case .accessibilityMissing: String(localized: "Control pendiente", bundle: .module)
+        case .permissionsMissing: String(localized: "Permitir", bundle: .module)
+        case .helperUnavailable: String(localized: "No disponible", bundle: .module)
         }
     }
 
     private var computerControlHelp: String {
         switch model.computerControlCapability {
         case .ready:
-            "JarvisComputerHelper puede observar y controlar aplicaciones compatibles"
+            String(localized: "JarvisComputerHelper puede observar y controlar aplicaciones compatibles", bundle: .module)
         case .screenCaptureMissing:
-            "Falta permitir la pantalla a JarvisComputerHelper en Privacidad y seguridad"
+            String(localized: "Falta permitir la pantalla a JarvisComputerHelper en Privacidad y seguridad", bundle: .module)
         case .accessibilityMissing:
-            "Activa Jarvis y JarvisComputerHelper en Control de dispositivos; Jarvis se reinicia al salir de Ajustes"
+            String(localized: "Activa Jarvis y JarvisComputerHelper en Control de dispositivos; Jarvis se reinicia al salir de Ajustes", bundle: .module)
         case .permissionsMissing:
-            "Jarvis solicitará primero pantalla y después control, sin superponer paneles de macOS"
+            String(localized: "Jarvis solicitará primero pantalla y después control, sin superponer paneles de macOS", bundle: .module)
         case .helperUnavailable:
-            "El componente local JarvisComputerHelper no está disponible"
+            String(localized: "El componente local JarvisComputerHelper no está disponible", bundle: .module)
         }
     }
 
@@ -123,19 +123,19 @@ struct MenuBarPermissionsView: View {
 
     private func permissionTitle(_ permission: MicrophonePermission) -> String {
         switch permission {
-        case .authorized: "Listo"
-        case .denied, .restricted: "Abrir ajustes"
-        case .notDetermined: "Permitir"
-        case .unknown: "Revisar"
+        case .authorized: String(localized: "Listo", bundle: .module)
+        case .denied, .restricted: String(localized: "Abrir ajustes", bundle: .module)
+        case .notDetermined: String(localized: "Permitir", bundle: .module)
+        case .unknown: String(localized: "Revisar", bundle: .module)
         }
     }
 
     private func permissionTitle(_ permission: SpeechRecognitionPermission) -> String {
         switch permission {
-        case .authorized: "Listo"
-        case .denied, .restricted: "Abrir ajustes"
-        case .notDetermined: "Permitir"
-        case .unknown: "Revisar"
+        case .authorized: String(localized: "Listo", bundle: .module)
+        case .denied, .restricted: String(localized: "Abrir ajustes", bundle: .module)
+        case .notDetermined: String(localized: "Permitir", bundle: .module)
+        case .unknown: String(localized: "Revisar", bundle: .module)
         }
     }
 

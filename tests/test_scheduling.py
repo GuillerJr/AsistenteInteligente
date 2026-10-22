@@ -181,24 +181,87 @@ async def test_due_task_runs_as_owner_job_and_delivers(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_pending_approval_is_cancelled_never_approved(tmp_path):
+async def test_pending_approval_waits_notifies_once_and_expires_without_approval(tmp_path):
     store = _store(tmp_path)
-    store.add(_task())
-    confirmation = SimpleNamespace(tool_name="mcp_google_workspace__search_gmail_messages",
-                                   standing_grant_available=True)
+    task = store.add(_task())
+    now = [datetime.now(UTC)]
+    confirmation = SimpleNamespace(tool_name="mail_send_message", call_digest="a" * 64,
+                                   expires_at=now[0] + timedelta(seconds=30))
+    jobs = FakeJobs(_snapshot(JobStatus.AWAITING_CONFIRMATION, confirmation=confirmation))
+    deliveries = []
+
+    async def wait(job_id, **kwargs):
+        assert jobs.cancelled == []
+        assert store.get(task.task_id).last_status == "awaiting_approval"
+        now[0] += timedelta(seconds=10)
+        return jobs.outcome
+
+    async def deliver(task, text):
+        deliveries.append((text, task.pending_job_id, task.approval_expires_at))
+
+    jobs.wait_for_change = wait
+    scheduler = TaskScheduler(store, jobs=jobs, conversations=None, deliver=(deliver,),
+                              clock=lambda: now[0])
+    await scheduler.run_now(task.task_id)
+    assert jobs.cancelled == [jobs.outcome.job_id]
+    assert len(deliveries) == 2
+    assert "Revisar" in deliveries[0][0]
+    assert deliveries[0][1:] == (jobs.outcome.job_id, confirmation.expires_at)
+    assert "caducó" in deliveries[1][0] and deliveries[1][1] is None
+    assert store.get(task.task_id).last_status == "approval_expired"
+    assert store.get(task.task_id).pending_job_id is None
+
+
+@pytest.mark.asyncio
+async def test_scheduled_owner_approval_continues_existing_job_and_excludes_wait_budget(tmp_path):
+    store = _store(tmp_path)
+    task = store.add(_task())
+    now = [datetime.now(UTC)]
+    confirmation = SimpleNamespace(tool_name="mail_send_message", call_digest="a" * 64,
+                                   expires_at=now[0] + timedelta(minutes=2))
     jobs = FakeJobs(_snapshot(JobStatus.AWAITING_CONFIRMATION, confirmation=confirmation))
     delivered = []
+
+    async def wait(job_id, **kwargs):
+        # Simulate an owner decision through the job manager, never through the scheduler.
+        now[0] += timedelta(seconds=90)
+        return _snapshot(JobStatus.COMPLETED, result="Listo")
 
     async def deliver(task, text):
         delivered.append(text)
 
-    scheduler = TaskScheduler(store, jobs=jobs, conversations=None, deliver=(deliver,))
-    await scheduler.run_due()
-    await asyncio.gather(*scheduler._running.values())
+    jobs.wait_for_change = wait
+    scheduler = TaskScheduler(store, jobs=jobs, conversations=None, deliver=(deliver,),
+                              clock=lambda: now[0])
+    await scheduler.run_now(task.task_id)
+    assert len(jobs.submitted) == 1 and jobs.cancelled == []
+    assert store.get(task.task_id).last_status == "completed"
+    assert len(delivered) == 2 and "Listo" in delivered[-1]
 
-    assert len(jobs.cancelled) == 1
-    assert "Aprobar siempre" in delivered[0]
-    assert store.tasks()[0].last_status == "needs_approval"
+
+@pytest.mark.asyncio
+async def test_scheduler_close_cancels_pending_job_and_run_now_cannot_overlap(tmp_path):
+    store = _store(tmp_path)
+    task = store.add(_task())
+    confirmation = SimpleNamespace(tool_name="mail_send_message", call_digest="a" * 64,
+                                   expires_at=datetime.now(UTC) + timedelta(minutes=2))
+    jobs = FakeJobs(_snapshot(JobStatus.AWAITING_CONFIRMATION, confirmation=confirmation))
+    entered = asyncio.Event()
+
+    async def wait(job_id, **kwargs):
+        entered.set()
+        await asyncio.Event().wait()
+
+    jobs.wait_for_change = wait
+    scheduler = TaskScheduler(store, jobs=jobs, conversations=None, deliver=())
+    runner = asyncio.create_task(scheduler.run_now(task.task_id))
+    await entered.wait()
+    await scheduler.run_now(task.task_id)
+    await scheduler.run_due()
+    assert len(jobs.submitted) == 1
+    await scheduler.close()
+    await asyncio.gather(runner, return_exceptions=True)
+    assert jobs.cancelled == [jobs.outcome.job_id]
 
 
 @pytest.mark.asyncio

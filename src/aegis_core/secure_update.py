@@ -32,6 +32,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from aegis_core.audit_anchor import DurableAuditAnchor
 from aegis_core.config import Settings
 from aegis_core.distribution_archive import validate_archive_namespace
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.ipc.client import IpcClient
 from aegis_core.ipc.protocol import IpcAuthenticator, ProtocolError
 from aegis_core.secrets import (
@@ -449,17 +450,14 @@ def read_installed_identity(app_path: Path) -> InstalledIdentity:
     )
 
 
-def verify_signed_update(
+def verify_update_manifest(
     manifest_path: Path,
-    archive_path: Path,
-    release_manifest_path: Path,
     public_key_path: Path,
     *,
     current_build: int,
     now: datetime | None = None,
-) -> VerifiedUpdate:
+) -> SignedUpdateManifest:
     _require_regular_file(manifest_path, maximum_bytes=MAX_MANIFEST_BYTES)
-    _require_regular_file(release_manifest_path, maximum_bytes=MAX_RELEASE_MANIFEST_BYTES)
     if current_build < 0:
         raise ValueError("current build cannot be negative")
     try:
@@ -486,6 +484,23 @@ def verify_signed_update(
         raise UpdateSignatureError("update manifest is not currently valid")
     if envelope.payload.build <= current_build:
         raise UpdateRollbackError("update build is not newer than the installed build")
+    return envelope
+
+
+def verify_signed_update(
+    manifest_path: Path,
+    archive_path: Path,
+    release_manifest_path: Path,
+    public_key_path: Path,
+    *,
+    current_build: int,
+    now: datetime | None = None,
+) -> VerifiedUpdate:
+    envelope = verify_update_manifest(
+        manifest_path, public_key_path, current_build=current_build, now=now
+    )
+    _require_regular_file(release_manifest_path, maximum_bytes=MAX_RELEASE_MANIFEST_BYTES)
+    public_key = read_public_key(public_key_path)
     release_bytes = release_manifest_path.read_bytes()
     if (
         hashlib.sha256(release_bytes).hexdigest()
@@ -702,6 +717,18 @@ class AppLifecycle(Protocol):
     async def wait_healthy(self, expected_revision: str) -> bool: ...
 
 
+async def _wait_update_child(
+    process: asyncio.subprocess.Process, *, timeout: float
+) -> int:
+    try:
+        return await asyncio.wait_for(process.wait(), timeout=timeout)
+    except TimeoutError as error:
+        if process.returncode is None:
+            process.kill()
+        await process.wait()
+        raise SecureUpdateError("update child exceeded its deadline") from error
+
+
 class MacOSAppLifecycle:
     def __init__(self, settings: Settings, *, attempts: int = 80, interval: float = 0.25) -> None:
         self._settings = settings
@@ -723,10 +750,11 @@ class MacOSAppLifecycle:
 
     async def require_idle(self, expected_revision: str) -> None:
         client = self._client()
-        health, security, activity = await asyncio.gather(
-            client.call("health"),
-            client.call("security.status"),
-            client.call("swarm.activity"),
+        health, security, activity = await asyncio.wait_for(
+            asyncio.gather(
+                client.call("health"), client.call("security.status"),
+                client.call("swarm.activity"),
+            ), timeout=10,
         )
         agents = activity.payload.get("agents") if activity.ok else None
         if (
@@ -778,18 +806,24 @@ class MacOSAppLifecycle:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        if await process.wait() != 0:
+        if await _wait_update_child(process, timeout=20) != 0:
             raise SecureUpdateError("LaunchServices rejected the updated application")
 
     async def wait_healthy(self, expected_revision: str) -> bool:
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + max(1.0, self._attempts * self._interval)
         for _ in range(self._attempts):
             await asyncio.sleep(self._interval)
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                return False
             try:
                 client = self._client()
-                health, security = await asyncio.gather(
-                    client.call("health"), client.call("security.status")
+                health, security = await asyncio.wait_for(
+                    asyncio.gather(client.call("health"), client.call("security.status")),
+                    timeout=min(remaining, 2.0),
                 )
-            except (OSError, ProtocolError, TimeoutError):
+            except (OSError, ProtocolError, TimeoutError, SecretNotFoundError):
                 continue
             if (
                 health.ok
@@ -1054,9 +1088,12 @@ class SecureUpdateInstaller:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        if await extracted.wait() != 0:
+        try:
+            if await _wait_update_child(extracted, timeout=120) != 0:
+                raise SecureUpdateError("update archive extraction failed")
+        except SecureUpdateError:
             self._transaction._remove_transaction_tree(root)
-            raise SecureUpdateError("update archive extraction failed")
+            raise
         candidate = incoming / "Jarvis.app"
         final_candidate = root / "Jarvis.app"
         if candidate.is_symlink() or not candidate.is_dir():
@@ -1072,6 +1109,9 @@ class SecureUpdateInstaller:
                 expected=target,
                 pinned_public_key=current.public_key,
             )
+            # Extraction and platform trust checks can take time. Recheck activity
+            # immediately before preparing the transaction and stopping the app.
+            await self._lifecycle.require_idle(current.revision)
             record = self._transaction.prepare(
                 final_candidate,
                 previous_revision=current.revision,
@@ -1089,10 +1129,12 @@ class SecureUpdateInstaller:
                 await self._lifecycle.start(self._installed_app, record.transaction_id)
                 if not await self._lifecycle.wait_healthy(target.build_revision):
                     raise SecureUpdateError("updated Jarvis failed its health deadline")
-            except Exception:
+            except Exception as error:
+                record_boundary_error(error)
                 try:
                     await self._lifecycle.stop(self._installed_app)
-                except Exception:
+                except Exception as error:
+                    record_boundary_error(error)
                     pass
                 self._transaction.rollback(record)
                 await asyncio.to_thread(
@@ -1111,7 +1153,8 @@ class SecureUpdateInstaller:
             if self._transaction.recover() != "cleaned":
                 raise UpdateTransactionError("committed update cleanup failed")
             return verified
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             if self._transaction.journal_path.exists():
                 pending = self._transaction.read_record()
                 if pending.state == "prepared":
@@ -1140,10 +1183,18 @@ class SecureUpdateInstaller:
         return result
 
 
+def default_installed_app_path() -> Path:
+    if getattr(os.sys, "frozen", False):
+        return default_update_paths_from_frozen_executable()[0]
+    from aegis_core.bundle_paths import installed_app_path
+
+    return installed_app_path()
+
+
 def default_secure_update_installer() -> SecureUpdateInstaller:
     settings = Settings()
     return SecureUpdateInstaller(
-        installed_app=Path.home() / "Applications/Jarvis.app",
+        installed_app=default_installed_app_path(),
         state_directory=settings.ipc_socket_path.parent,
         trust=MacOSBundleTrustVerifier(),
         lifecycle=MacOSAppLifecycle(settings),

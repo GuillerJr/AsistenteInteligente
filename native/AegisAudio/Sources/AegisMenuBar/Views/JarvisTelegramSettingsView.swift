@@ -9,27 +9,27 @@ struct JarvisTelegramSettingsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            JarvisSettingsCard(title: "Jarvis en tu móvil",
-                              detail: "Conversa y aprueba acciones desde tu chat privado de Telegram. Tu Mac debe estar encendido, conectado y con Jarvis activo.") {
+            JarvisSettingsCard(title: String(localized: "Jarvis en tu móvil", bundle: .module),
+                              detail: String(localized: "Conversa y aprueba acciones desde tu chat privado de Telegram. Tu Mac debe estar encendido, conectado y con Jarvis activo.", bundle: .module)) {
                 HStack {
                     Label(store.snapshot?.statusTitle ?? "Cargando…", systemImage: "paperplane")
                         .foregroundStyle(store.snapshot?.error == nil ? JarvisInterfaceStyle.secondaryText : HUDStyle.accent(for: .warning))
                     Spacer()
                     if store.busy { ProgressView().controlSize(.small) }
-                    Button("Actualizar", systemImage: "arrow.clockwise") { Task { await store.refresh() } }
+                    Button(String(localized: "Actualizar", bundle: .module), systemImage: "arrow.clockwise") { Task { await store.refresh() } }
                 }
                 if let username = store.snapshot?.bot_username {
-                    Text("Bot: @\(username)").textSelection(.enabled)
+                    Text(String(localized: "Bot: @\(username)", bundle: .module)).textSelection(.enabled)
                 }
                 if store.snapshot?.error == "telegram_journal_invalid" {
-                    Text("El canal se detuvo para evitar repetir operaciones. Puedes conservar el archivo dañado y restablecer únicamente su cola de transporte.")
+                    Text(String(localized: "El canal se detuvo para evitar repetir operaciones. Puedes conservar el archivo dañado y restablecer únicamente su cola de transporte.", bundle: .module))
                         .foregroundStyle(JarvisInterfaceStyle.secondaryText)
-                    Button("Restablecer recuperación de Telegram…") { confirmation = .resetJournal }
+                    Button(String(localized: "Restablecer recuperación de Telegram…", bundle: .module)) { confirmation = .resetJournal }
                         .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .warning)))
                 }
                 if let name = store.snapshot?.owner_name, let id = store.snapshot?.owner_id {
-                    Text("Cuenta autorizada: \(name) · ID \(String(id))").textSelection(.enabled)
-                    Toggle("Acceso desde Telegram", isOn: Binding(
+                    Text(String(localized: "Cuenta autorizada: \(name) · ID \(String(id))", bundle: .module)).textSelection(.enabled)
+                    Toggle(String(localized: "Acceso desde Telegram", bundle: .module), isOn: Binding(
                         get: { store.snapshot?.enabled == true },
                         set: { value in
                             if value { confirmation = .enable }
@@ -37,47 +37,47 @@ struct JarvisTelegramSettingsView: View {
                         }
                     )).toggleStyle(JarvisToggleControlStyle())
                     HStack {
-                        Button("Vincular otra cuenta…") { confirmation = .pair }
-                        Button("Desvincular…", role: .destructive) { confirmation = .unlink }
+                        Button(String(localized: "Vincular otra cuenta…", bundle: .module)) { confirmation = .pair }
+                        Button(String(localized: "Desvincular…", bundle: .module), role: .destructive) { confirmation = .unlink }
                     }
                 }
             }
-            JarvisSettingsCard(title: store.snapshot?.configured == true ? "Cambiar bot" : "Conectar tu bot",
-                              detail: "Copia el token de tu bot desde @BotFather. Se guardará en el llavero de macOS; no lo compartas en conversaciones.") {
-                SecureField(store.snapshot?.configured == true ? "Token guardado en el llavero (oculto)" : "Token de Telegram", text: $token)
+            JarvisSettingsCard(title: store.snapshot?.configured == true ? String(localized: "Cambiar bot", bundle: .module) : String(localized: "Conectar tu bot", bundle: .module),
+                              detail: String(localized: "Copia el token de tu bot desde @BotFather. Se guardará en el llavero de macOS; no lo compartas en conversaciones.", bundle: .module)) {
+                SecureField(store.snapshot?.configured == true ? String(localized: "Token guardado en el llavero (oculto)", bundle: .module) : String(localized: "Token de Telegram", bundle: .module), text: $token)
                     .focused($tokenFocused).jarvisInput(focused: tokenFocused)
-                    .accessibilityLabel("Token del bot de Telegram")
+                    .accessibilityLabel(String(localized: "Token del bot de Telegram", bundle: .module))
                     .onSubmit { if validToken { confirmation = .configure } }
                 HStack {
-                    Button("Abrir BotFather", systemImage: "arrow.up.right") { open("https://t.me/BotFather") }
+                    Button(String(localized: "Abrir BotFather", bundle: .module), systemImage: "arrow.up.right") { open("https://t.me/BotFather") }
                     Spacer()
-                    Button("Guardar y verificar") { confirmation = .configure }
+                    Button(String(localized: "Guardar y verificar", bundle: .module)) { confirmation = .configure }
                         .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: true))
                         .disabled(!validToken)
                 }
             }
             if store.snapshot?.configured == true {
-                JarvisSettingsCard(title: "Vincular tu cuenta",
-                                  detail: "Abre el bot con el enlace de vinculación, pulsa Iniciar y vuelve aquí para autorizar tu cuenta. El enlace caduca en cinco minutos.") {
+                JarvisSettingsCard(title: String(localized: "Vincular tu cuenta", bundle: .module),
+                                  detail: String(localized: "Abre el bot con el enlace de vinculación, pulsa Iniciar y vuelve aquí para autorizar tu cuenta. El enlace caduca en cinco minutos.", bundle: .module)) {
                     if let candidate = store.snapshot?.candidate {
-                        Label("\(candidate.name) · ID \(String(candidate.id))", systemImage: "person.crop.circle")
-                        Text("Comprueba que este ID corresponde a tu cuenta de Telegram antes de autorizar.")
+                        Label(String(localized: "\(candidate.name) · ID \(String(candidate.id))", bundle: .module), systemImage: "person.crop.circle")
+                        Text(String(localized: "Comprueba que este ID corresponde a tu cuenta de Telegram antes de autorizar.", bundle: .module))
                             .foregroundStyle(JarvisInterfaceStyle.secondaryText)
-                        Button("Autorizar esta cuenta…") { confirmation = .authorize(candidate) }
+                        Button(String(localized: "Autorizar esta cuenta…", bundle: .module)) { confirmation = .authorize(candidate) }
                             .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: true))
                     } else if let url = store.snapshot?.pair_url {
-                        Button("Abrir bot y vincular", systemImage: "arrow.up.right") { open(url) }
-                        Text("Esperando a que pulses Iniciar en Telegram…").foregroundStyle(JarvisInterfaceStyle.secondaryText)
+                        Button(String(localized: "Abrir bot y vincular", bundle: .module), systemImage: "arrow.up.right") { open(url) }
+                        Text(String(localized: "Esperando a que pulses Iniciar en Telegram…", bundle: .module)).foregroundStyle(JarvisInterfaceStyle.secondaryText)
                     } else {
-                        Button(store.snapshot?.owner_id == nil ? "Vincular móvil" : "Volver a vincular…") { confirmation = .pair }
+                        Button(store.snapshot?.owner_id == nil ? String(localized: "Vincular móvil", bundle: .module) : String(localized: "Volver a vincular…", bundle: .module)) { confirmation = .pair }
                     }
                 }
             }
-            JarvisSettingsCard(title: "Cómo usarlo",
-                              detail: "Envía texto, notas de voz, imágenes o documentos. Puedes responder a un mensaje concreto y usar sus botones. Jarvis comparte el contexto de tus chats del Mac.") {
-                Text("/nuevo · empezar otra conversación\n/cancelar · cancelar la tarea actual\n/estado · comprobar la conexión\n/ayuda · ver los comandos")
+            JarvisSettingsCard(title: String(localized: "Cómo usarlo", bundle: .module),
+                              detail: String(localized: "Envía texto, notas de voz, imágenes o documentos. Puedes responder a un mensaje concreto y usar sus botones. Jarvis comparte el contexto de tus chats del Mac.", bundle: .module)) {
+                Text(String(localized: "/nuevo · empezar otra conversación\n/cancelar · cancelar la tarea actual\n/estado · comprobar la conexión\n/ayuda · ver los comandos", bundle: .module))
                     .lineSpacing(5).textSelection(.enabled)
-                Text("Notas de voz: hasta 2 minutos. Archivos: hasta 10 MB; PDF con texto o imágenes. Los botones permiten cancelar, resumir, escuchar y trabajar con correos. Las acciones conservan sus permisos y aprobaciones; las que necesitan presencia local o voz verificada pueden requerir volver al Mac.")
+                Text(String(localized: "Notas de voz: hasta 2 minutos. Archivos: hasta 10 MB; PDF con texto o imágenes. Los botones permiten cancelar, resumir, escuchar y trabajar con correos. Las acciones conservan sus permisos y aprobaciones; las que necesitan presencia local o voz verificada pueden requerir volver al Mac.", bundle: .module))
                     .foregroundStyle(JarvisInterfaceStyle.secondaryText)
             }
             if let message = store.message {
@@ -94,7 +94,7 @@ struct JarvisTelegramSettingsView: View {
             }
         }
         .onDisappear { token = "" }
-        .alert(confirmation?.title ?? "Telegram", isPresented: Binding(
+        .alert(confirmation?.title ?? String(localized: "Telegram", bundle: .module), isPresented: Binding(
             get: { confirmation != nil }, set: { if !$0 { confirmation = nil } }
         ), presenting: confirmation) { action in
             Button(action.actionTitle, role: action.isDestructive ? .destructive : nil) {
@@ -111,7 +111,7 @@ struct JarvisTelegramSettingsView: View {
                     }
                 }
             }
-            Button("Cancelar", role: .cancel) { }
+            Button(String(localized: "Cancelar", bundle: .module), role: .cancel) { }
         } message: { action in Text(action.detail) }
     }
 
@@ -136,32 +136,32 @@ private enum TelegramConfirmation {
     }
     var title: String {
         switch self {
-        case .configure: "¿Conectar este bot a Jarvis?"
-        case .pair: "¿Iniciar la vinculación?"
-        case .authorize: "¿Autorizar esta cuenta de Telegram?"
-        case .enable: "¿Activar el acceso desde Telegram?"
-        case .unlink: "¿Desvincular tu cuenta?"
-        case .resetJournal: "¿Restablecer la recuperación de Telegram?"
+        case .configure: String(localized: "¿Conectar este bot a Jarvis?", bundle: .module)
+        case .pair: String(localized: "¿Iniciar la vinculación?", bundle: .module)
+        case .authorize: String(localized: "¿Autorizar esta cuenta de Telegram?", bundle: .module)
+        case .enable: String(localized: "¿Activar el acceso desde Telegram?", bundle: .module)
+        case .unlink: String(localized: "¿Desvincular tu cuenta?", bundle: .module)
+        case .resetJournal: String(localized: "¿Restablecer la recuperación de Telegram?", bundle: .module)
         }
     }
     var actionTitle: String {
         switch self {
-        case .configure: "Conectar bot"
-        case .pair: "Vincular"
-        case .authorize: "Autorizar cuenta"
-        case .enable: "Activar"
-        case .unlink: "Desvincular"
-        case .resetJournal: "Restablecer"
+        case .configure: String(localized: "Conectar bot", bundle: .module)
+        case .pair: String(localized: "Vincular", bundle: .module)
+        case .authorize: String(localized: "Autorizar cuenta", bundle: .module)
+        case .enable: String(localized: "Activar", bundle: .module)
+        case .unlink: String(localized: "Desvincular", bundle: .module)
+        case .resetJournal: String(localized: "Restablecer", bundle: .module)
         }
     }
     var detail: String {
         switch self {
-        case .configure: "Jarvis verificará el bot y guardará su token en el llavero. Al cambiarlo se cancelará la tarea de Telegram y se retirará la vinculación anterior. Usa un bot exclusivo para Jarvis."
-        case .pair: "Se pausará el acceso actual y se cancelará su tarea. El nuevo enlace permitirá solicitar acceso; solo se concederá cuando autorices la cuenta en este Mac."
-        case .authorize(let candidate): "Autorizarás a \(candidate.name), ID \(String(candidate.id)), para enviar instrucciones y aprobar acciones. Las instrucciones, notas de voz, imágenes, documentos, contexto y resultados solicitados se procesarán con NVIDIA; las respuestas se enviarán por Telegram. El acceso funcionará también con la pantalla bloqueada mientras Jarvis siga activo."
-        case .enable: "Tu cuenta vinculada podrá enviar instrucciones, recibir resultados y aprobar acciones desde Telegram, incluso con la pantalla del Mac bloqueada."
-        case .unlink: "Se cancelará la tarea de Telegram y se retirará el acceso de tu cuenta. El token permanece en el llavero y tus conversaciones en el historial."
-        case .resetJournal: "Se conservará un respaldo privado del archivo dañado. Se descartarán las entradas y respuestas pendientes de Telegram para evitar repetir acciones. El acceso quedará desactivado hasta que lo actives nuevamente. Tu token, cuenta autorizada y conversaciones se conservarán."
+        case .configure: String(localized: "Jarvis verificará el bot y guardará su token en el llavero. Al cambiarlo se cancelará la tarea de Telegram y se retirará la vinculación anterior. Usa un bot exclusivo para Jarvis.", bundle: .module)
+        case .pair: String(localized: "Se pausará el acceso actual y se cancelará su tarea. El nuevo enlace permitirá solicitar acceso; solo se concederá cuando autorices la cuenta en este Mac.", bundle: .module)
+        case .authorize(let candidate): String(localized: "Autorizarás a \(candidate.name), ID \(String(candidate.id)), para enviar instrucciones y aprobar acciones. Las instrucciones, notas de voz, imágenes, documentos, contexto y resultados solicitados se procesarán con NVIDIA; las respuestas se enviarán por Telegram. El acceso funcionará también con la pantalla bloqueada mientras Jarvis siga activo.", bundle: .module)
+        case .enable: String(localized: "Tu cuenta vinculada podrá enviar instrucciones, recibir resultados y aprobar acciones desde Telegram, incluso con la pantalla del Mac bloqueada.", bundle: .module)
+        case .unlink: String(localized: "Se cancelará la tarea de Telegram y se retirará el acceso de tu cuenta. El token permanece en el llavero y tus conversaciones en el historial.", bundle: .module)
+        case .resetJournal: String(localized: "Se conservará un respaldo privado del archivo dañado. Se descartarán las entradas y respuestas pendientes de Telegram para evitar repetir acciones. El acceso quedará desactivado hasta que lo actives nuevamente. Tu token, cuenta autorizada y conversaciones se conservarán.", bundle: .module)
         }
     }
 }

@@ -9,6 +9,11 @@ from uuid import uuid4
 
 import pytest
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from historical.mlx_distributed import (
+    DistributedMLXProvider,
+    ThunderboltPeer,
+    ThunderboltPeerDiscovery,
+)
 
 from aegis_core.biometric_training_service import BiometricTrainingService
 from aegis_core.brain.behavior_tree import (
@@ -18,11 +23,6 @@ from aegis_core.brain.behavior_tree import (
 from aegis_core.brain.vision_fallback import LocalizedVisionAnalyzer, LocalizedVisionError
 from aegis_core.memory.contracts import MemoryKind
 from aegis_core.memory.sqlite import SQLiteMemoryStore
-from aegis_core.providers.mlx_distributed import (
-    DistributedMLXProvider,
-    ThunderboltPeer,
-    ThunderboltPeerDiscovery,
-)
 
 
 @pytest.mark.asyncio

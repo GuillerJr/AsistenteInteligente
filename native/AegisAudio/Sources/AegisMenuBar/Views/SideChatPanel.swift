@@ -11,15 +11,15 @@ struct SideChatPanel: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Chat lateral").font(.system(size: 13, weight: .semibold)).foregroundStyle(JarvisTheme.ink)
+                Text(String(localized: "Chat lateral", bundle: .module)).font(.system(size: 13, weight: .semibold)).foregroundStyle(JarvisTheme.ink)
                 Spacer()
                 Button {
                     Task { await store.close { await model.performChatIPC($0, payload: $1) }; close() }
                 } label: { Image(systemName: "xmark") }
-                    .buttonStyle(.plain).accessibilityLabel("Cerrar chat lateral")
+                    .buttonStyle(.plain).accessibilityLabel(String(localized: "Cerrar chat lateral", bundle: .module))
             }
             .padding(14)
-            Text("Pregunta algo rápido sin interrumpir el chat principal. No se guarda.")
+            Text(String(localized: "Pregunta algo rápido sin interrumpir el chat principal. No se guarda.", bundle: .module))
                 .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkMuted)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 14)
             ScrollViewReader { proxy in
@@ -43,7 +43,7 @@ struct SideChatPanel: View {
             }
             Divider()
             HStack(spacing: 8) {
-                TextField("Pregunta rápida…", text: $draft).jarvisInput(focused: focused, fontSize: 12.5)
+                TextField(String(localized: "Pregunta rápida…", bundle: .module), text: $draft).jarvisInput(focused: focused, fontSize: 12.5)
                     .focused($focused).onSubmit(send).disabled(store.busy)
                 if store.busy { ProgressView().controlSize(.small) }
             }

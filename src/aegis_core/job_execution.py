@@ -18,6 +18,7 @@ from aegis_core.contracts import (
     ToolExecutionResult,
     UserRequest,
 )
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.job_contracts import MAX_JOB_RESULT_BYTES, EmptyAgentResponseError, JobError
 from aegis_core.job_graph import GraphInvocation, JobGraphInvoker, SwarmGraph
 from aegis_core.memory.contracts import MAX_MEMORY_CONTENT_BYTES, ConversationTurn
@@ -387,7 +388,8 @@ class JobExecutionPipeline:
                     await asyncio.shield(persistence)
                 except asyncio.CancelledError:
                     continue
-                except Exception:
+                except Exception as error:
+                    record_boundary_error(error)
                     break
             if not persistence.cancelled():
                 persistence.exception()  # Retrieve late failures; preserve cancellation.

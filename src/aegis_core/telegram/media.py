@@ -12,6 +12,7 @@ import tempfile
 from pathlib import Path
 
 from aegis_core.contracts import DocumentInput, ImageInput
+from aegis_core.failure_boundary import record_boundary_error
 
 MAX_DOWNLOAD = 10_000_000
 TEXT_EXTENSIONS = frozenset(
@@ -128,7 +129,8 @@ def worker() -> int:
         )
         print(json.dumps({"result": result}, ensure_ascii=True))
         return 0
-    except Exception:
+    except Exception as error:
+        record_boundary_error(error)
         print('{"error":"media_invalid"}')
         return 2
 

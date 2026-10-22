@@ -1,14 +1,20 @@
 """Source-boundary guards complement the executable Swift SpeechOutput tests."""
 
+import re
 from pathlib import Path
 
 SOURCES = Path(__file__).resolve().parents[1] / "native/AegisAudio/Sources"
 
 
 def _model_method(name: str) -> str:
-    model = (SOURCES / "AegisMenuBar/Models/MenuBarModel.swift").read_text(encoding="utf-8")
-    body = model.split(f"    private func {name}(", 1)[1]
-    return body.split("\n    private func ", 1)[0]
+    methods = []
+    for path in (SOURCES / "AegisMenuBar/Models").glob("MenuBarModel*.swift"):
+        source = path.read_text(encoding="utf-8")
+        match = re.search(rf"^    (?:private )?func {name}\(", source, re.MULTILINE)
+        if match:
+            methods.append(source[match.end():].split("\n    }", 1)[0])
+    assert len(methods) == 1, f"Expected one implementation of {name}"
+    return methods[0]
 
 
 def test_application_has_no_second_speech_synthesizer() -> None:

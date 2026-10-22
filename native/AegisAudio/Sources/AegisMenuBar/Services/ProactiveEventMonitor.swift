@@ -105,8 +105,8 @@ final class ProactiveEventMonitor {
         emit(
             key: satisfied ? "network-restored" : "network-offline",
             body: satisfied
-                ? "La conexión de red volvió a estar disponible."
-                : "El Mac perdió la conexión de red.",
+                ? String(localized: "La conexión de red volvió a estar disponible.", bundle: .module)
+                : String(localized: "El Mac perdió la conexión de red.", bundle: .module),
             cooldown: 300
         )
     }
@@ -134,13 +134,13 @@ final class ProactiveEventMonitor {
         if state.percent <= 10 {
             emit(
                 key: "battery-critical",
-                body: "Batería crítica: queda \(state.percent) %. Conecta el cargador.",
+                body: String(localized: "Batería crítica: queda \(state.percent) %. Conecta el cargador.", bundle: .module),
                 cooldown: 7_200
             )
         } else if state.percent <= 20 {
             emit(
                 key: "battery-low",
-                body: "Batería baja: queda \(state.percent) %.",
+                body: String(localized: "Batería baja: queda \(state.percent) %.", bundle: .module),
                 cooldown: 14_400
             )
         }
@@ -198,13 +198,13 @@ final class ProactiveEventMonitor {
         if event.contains(.critical) {
             emit(
                 key: "memory-critical",
-                body: "La presión de memoria es crítica. Conviene cerrar tareas pesadas.",
+                body: String(localized: "La presión de memoria es crítica. Conviene cerrar tareas pesadas.", bundle: .module),
                 cooldown: 1_800
             )
         } else if event.contains(.warning) {
             emit(
                 key: "memory-warning",
-                body: "El Mac está bajo presión de memoria.",
+                body: String(localized: "El Mac está bajo presión de memoria.", bundle: .module),
                 cooldown: 1_800
             )
         }
@@ -216,13 +216,13 @@ final class ProactiveEventMonitor {
         case .serious:
             emit(
                 key: "thermal-serious",
-                body: "El Mac está bajo presión térmica; Jarvis reducirá el trabajo en segundo plano.",
+                body: String(localized: "El Mac está bajo presión térmica; Jarvis reducirá el trabajo en segundo plano.", bundle: .module),
                 cooldown: 1_800
             )
         case .critical:
             emit(
                 key: "thermal-critical",
-                body: "La presión térmica es crítica. Pausa las cargas intensivas.",
+                body: String(localized: "La presión térmica es crítica. Pausa las cargas intensivas.", bundle: .module),
                 cooldown: 1_800
             )
         case .nominal, .fair:
@@ -292,7 +292,7 @@ final class ProactiveEventMonitor {
                 self.calendarAlertedEventKeys.insert(eventKey)
                 self.emit(
                     key: eventKey,
-                    body: "Tienes un evento próximo en el calendario.",
+                    body: String(localized: "Tienes un evento próximo en el calendario.", bundle: .module),
                     cooldown: 43_200
                 )
                 self.scheduleNextCalendarAlert()
@@ -306,7 +306,7 @@ final class ProactiveEventMonitor {
         guard enabled, gate.shouldEmit(key: key, cooldown: cooldown) else { return }
         onAlert?(body)
         let content = UNMutableNotificationContent()
-        content.title = "Jarvis"
+        content.title = String(localized: "Jarvis", bundle: .module)
         content.body = body
         content.sound = .default
         content.threadIdentifier = "ai.aegis.proactive"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.memory.codec import MemoryRowCodec
 from aegis_core.memory.conversation_codec import ConversationRowCodec
 from aegis_core.memory.errors import MemoryStoreError
@@ -111,7 +112,8 @@ class EncryptedMemoryMigrator:
             )
             connection.execute("PRAGMA user_version = 5")
             connection.execute("COMMIT")
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             connection.execute("ROLLBACK")
             raise
 
@@ -189,7 +191,8 @@ class EncryptedMemoryMigrator:
             connection.execute("DROP TABLE memory_embeddings")
             connection.execute("PRAGMA user_version = 6")
             connection.commit()
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             if connection.in_transaction:
                 connection.rollback()
             raise
@@ -244,7 +247,8 @@ class EncryptedMemoryMigrator:
                 )
             connection.execute("PRAGMA user_version = 10")
             connection.commit()
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             if connection.in_transaction:
                 connection.rollback()
             raise
@@ -335,7 +339,8 @@ class EncryptedMemoryMigrator:
                 COMMIT;
                 """
             )
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             if connection.in_transaction:
                 connection.rollback()
             raise
@@ -361,7 +366,8 @@ class EncryptedMemoryMigrator:
                     properties=node.properties,
                 )
             connection.commit()
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             if connection.in_transaction:
                 connection.rollback()
             raise

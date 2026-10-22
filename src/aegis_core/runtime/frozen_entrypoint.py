@@ -10,6 +10,8 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from aegis_core.failure_boundary import record_boundary_error
+
 
 def _self_test() -> int:
     """Validate the frozen runtime without opening sockets or persistent stores."""
@@ -28,7 +30,8 @@ def _self_test() -> int:
         from aegis_core.runtime.daemon import run_daemon
 
         checks["daemon_importable"] = callable(run_daemon)
-    except Exception:
+    except Exception as error:
+        record_boundary_error(error)
         pass
     try:
         import grpc
@@ -40,7 +43,8 @@ def _self_test() -> int:
             callable(grpc.aio.secure_channel), callable(Image.open), callable(PdfReader),
             callable(riva_asr_pb2_grpc.RivaSpeechRecognitionStub),
         ))
-    except Exception:
+    except Exception as error:
+        record_boundary_error(error)
         pass
     try:
         import sqlite_vec
@@ -100,6 +104,12 @@ def main(arguments: Sequence[str] | None = None) -> int:
         from aegis_core.telegram.media import worker
 
         return worker()
+    if selected and selected[0] in {
+        "secure-update-check", "secure-update-prepare", "secure-update-apply",
+    }:
+        from aegis_core.secure_update_feed import run
+
+        return asyncio.run(run(selected))
     if selected and selected[0] == "--cli":
         from aegis_core.cli_entrypoint import run
 

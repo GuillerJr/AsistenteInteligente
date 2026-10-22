@@ -16,25 +16,25 @@ struct JarvisAccountsGoogleView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Label("Cuenta de Google", systemImage: "person.crop.circle")
+            Label(String(localized: "Cuenta de Google", bundle: .module), systemImage: "person.crop.circle")
                 .font(.system(size: 20, weight: .semibold))
-            Text("Escribe la cuenta que quieres usar. Google solicitará autorización en tu navegador; Jarvis verificará que el correo coincida antes de guardar el cambio.")
+            Text(String(localized: "Escribe la cuenta que quieres usar. Google solicitará autorización en tu navegador; Jarvis verificará que el correo coincida antes de guardar el cambio.", bundle: .module))
                 .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
-            TextField("Correo de Google", text: $email)
+            TextField(String(localized: "Correo de Google", bundle: .module), text: $email)
                 .focused($emailFocused).jarvisInput(focused: emailFocused)
-                .accessibilityLabel("Correo de la cuenta de Google")
-            Text("La conexión actual se pausará durante la autorización. Después podrás aplicar los cambios para reiniciar el servicio.")
+                .accessibilityLabel(String(localized: "Correo de la cuenta de Google", bundle: .module))
+            Text(String(localized: "La conexión actual se pausará durante la autorización. Después podrás aplicar los cambios para reiniciar el servicio.", bundle: .module))
                 .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
             HStack {
-                Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(String(localized: "Cancelar", bundle: .module)) { dismiss() }.keyboardShortcut(.cancelAction)
                 Spacer()
-                Button("Autorizar en Google") {
+                Button(String(localized: "Autorizar en Google", bundle: .module)) {
                     let account = email.trimmingCharacters(in: .whitespacesAndNewlines)
                     dismiss()
                     Task {
                         await store.perform("settings.google.connect", payload: [
                             "server_id": server.id, "email": account, "confirm": true,
-                        ], success: "Cuenta conectada. Aplica los cambios para reiniciar el servicio.")
+                        ], success: String(localized: "Cuenta conectada. Aplica los cambios para reiniciar el servicio.", bundle: .module))
                     }
                 }
                 .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: true))

@@ -18,18 +18,18 @@ struct JarvisAddModelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Añadir modelo de NVIDIA").font(.system(size: 20, weight: .semibold))
-            TextField("proveedor/modelo", text: $modelID)
+            Text(String(localized: "Añadir modelo de NVIDIA", bundle: .module)).font(.system(size: 20, weight: .semibold))
+            TextField(String(localized: "proveedor/modelo", bundle: .module), text: $modelID)
                 .focused($identifierFocused).jarvisInput(focused: identifierFocused)
-                .accessibilityLabel("Identificador del modelo de NVIDIA")
-            Text("Usa el ID del catálogo de NVIDIA e indica las capacidades documentadas del modelo.")
+                .accessibilityLabel(String(localized: "Identificador del modelo de NVIDIA", bundle: .module))
+            Text(String(localized: "Usa el ID del catálogo de NVIDIA e indica las capacidades documentadas del modelo.", bundle: .module))
                 .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
-            Toggle("Admite herramientas", isOn: $tools).font(.system(size: 12))
-            Toggle("Admite imágenes", isOn: $images).font(.system(size: 12))
+            Toggle(String(localized: "Admite herramientas", bundle: .module), isOn: $tools).font(.system(size: 12))
+            Toggle(String(localized: "Admite imágenes", bundle: .module), isOn: $images).font(.system(size: 12))
             HStack {
-                Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(String(localized: "Cancelar", bundle: .module)) { dismiss() }.keyboardShortcut(.cancelAction)
                 Spacer()
-                Button("Añadir") {
+                Button(String(localized: "Añadir", bundle: .module)) {
                     guard validModelID, !store.busy else { return }
                     store.modelDraft?.models.append(.init(model_id: modelID, images: images, tools: tools))
                     dismiss()

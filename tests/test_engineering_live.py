@@ -11,8 +11,10 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from historical.apple import AppleLocalModelClient
+from historical.hybrid_client import HybridBrainClient, LocalFoundationCascadeClient
+from historical.orchestration.graph import build_swarm_graph
 
-from aegis_core.brain.hybrid_client import HybridBrainClient, LocalFoundationCascadeClient
 from aegis_core.contracts import UserRequest
 from aegis_core.engineering import (
     ENGINEERING_DOMAIN_METADATA,
@@ -24,8 +26,6 @@ from aegis_core.engineering import (
     _repository_manifest,
 )
 from aegis_core.memory.contracts import ConversationRole, ConversationTurn
-from aegis_core.orchestration.graph import build_swarm_graph
-from aegis_core.providers.apple import AppleLocalModelClient
 from aegis_core.tools.defaults import default_policy_context
 
 pytestmark = pytest.mark.skipif(

@@ -63,6 +63,7 @@ def evaluate_job(
         else None
     )
     return JobEvaluation(
+        request_id=job.request_id,
         brain=brain_target(model_id, job.tool_name),
         model_id=model_id,
         total_latency_ms=max(0, wall_latency - job.confirmation_wait_ms),

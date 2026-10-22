@@ -3,8 +3,9 @@ set -euo pipefail
 
 AEGIS_ACTION="${1:-daily}"
 AEGIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+AEGIS_RELOCATABLE_APP="$("$AEGIS_PROJECT_ROOT/script/resolve_installed_bundle.sh")"
 AEGIS_SOURCE_REVISION="$(/usr/bin/git -C "$AEGIS_PROJECT_ROOT" rev-parse HEAD 2>/dev/null || true)"
-AEGIS_APP="$HOME/Applications/Jarvis.app"
+AEGIS_APP="$AEGIS_RELOCATABLE_APP"
 AEGIS_APP_BINARY="$AEGIS_APP/Contents/MacOS/Jarvis"
 AEGIS_APP_DAEMON="$AEGIS_APP/Contents/Resources/Daemon/jarvis-daemon"
 AEGIS_APP_INFO="$AEGIS_APP/Contents/Info.plist"
@@ -190,8 +191,8 @@ if value["screen_capture_authorized"] is not True:
 # La activación es una preferencia efímera de sesión, no una capacidad del
 # build. P10 la habilita justo antes del flujo físico; P7 solo exige que el
 # modelo de wake word esté instalado y listo.
-if value["provider"] != "configured" and value["local_brain_available"] is not True:
-    failures.append("hybrid_brain=unavailable")
+if value["provider"] != "configured":
+    failures.append("nvidia=unavailable")
 if failures:
     print(" ".join(failures))
     raise SystemExit(1)
@@ -248,7 +249,7 @@ check_installation() {
         check_entitlements
     fi
 
-    run_check "LaunchAgent de Menu Bar" "$AEGIS_PROJECT_ROOT/script/menu_bar_service.sh" status
+    run_check "App de barra de menús" "$AEGIS_PROJECT_ROOT/script/menu_bar_service.sh" status
     run_check "Daemon empaquetado supervisado" check_bundled_daemon
     check_private_path "Socket IPC privado" "$AEGIS_SOCKET" socket
     run_check "Diagnóstico local" "$AEGIS_PROJECT_ROOT/script/aegis.sh" doctor

@@ -147,9 +147,12 @@ private func processPlan(executable: URL, directory: URL) -> BundledDaemonLaunch
     #expect(plan.workingDirectoryURL.path.hasSuffix("/Aegis/Workspace"))
     #expect(plan.environment["AEGIS_BUNDLED_RUNTIME"] == "1")
     #expect(plan.environment["AEGIS_WORKSPACE_ROOT"] == plan.workingDirectoryURL.path)
+    #expect(plan.environment["AEGIS_LOCAL_BRAIN_EXECUTABLE_PATH"] == nil)
+    #expect(plan.environment["AEGIS_MLX_EXECUTABLE_PATH"] == nil)
+    #expect(plan.environment["AEGIS_MLX_VLM_EXECUTABLE_PATH"] == nil)
     #expect(
-        plan.environment["AEGIS_LOCAL_BRAIN_EXECUTABLE_PATH"]
-            == bundle.appending(path: "Contents/Helpers/jarvis-local-brain").path
+        plan.environment["AEGIS_LOCAL_EMBEDDING_EXECUTABLE_PATH"]
+            == bundle.appending(path: "Contents/Helpers/jarvis-local-embedding").path
     )
     #expect(plan.environment["PYTHONPATH"] == nil)
     #expect(plan.environment["PYTHONHOME"] == nil)

@@ -38,6 +38,7 @@ from aegis_core.conversation_quality import (
     ConversationQualityFlag,
 )
 from aegis_core.dialogue import DialogueKernel, DialogueMode
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.ipc.framing import HEADER, encode_stream, read_message
 from aegis_core.ipc.protocol import IpcAuthenticator, ProtocolError
 from aegis_core.memory.contracts import MemoryKind
@@ -531,7 +532,8 @@ class JarvisProductionWorkflowBenchmark:
                         failure_code = "expectation_failed"
                     except TimeoutError:
                         failure_code = "timeout"
-                    except Exception:
+                    except Exception as error:
+                        record_boundary_error(error)
                         failure_code = "internal_error"
                     elapsed = max(0, (time.monotonic_ns() - workflow_started) // 1_000_000)
                     results.append(

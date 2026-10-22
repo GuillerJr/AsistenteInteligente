@@ -276,7 +276,7 @@ async def run_daemon() -> int:
 
 
 async def _run_daemon(shutdown: asyncio.Event) -> int:
-    from aegis_core.orchestration.graph import build_swarm_graph
+    from aegis_core.orchestration.graph import build_nvidia_swarm_graph
 
     settings = Settings()
     mcp_host: McpHostManager | None = None
@@ -608,7 +608,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             )
             capability_learning = CapabilityLearningCoordinator(capability_store)
             capability_service = CapabilityLearningIpcService(capability_store)
-            graph = build_swarm_graph(
+            graph = build_nvidia_swarm_graph(
                 nvidia_brain,
                 inference_nvidia_only=True,
                 tool_broker=tool_broker,
@@ -714,7 +714,9 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 retriever=memory_retriever,
                 graph_service=graph_service,
             )
-            conversation_service = ConversationIpcService(memory_store, conversations)
+            conversation_service = ConversationIpcService(
+                memory_store, conversations, on_feedback=jobs.record_owner_feedback,
+            )
             project_store = ProjectStore(settings.projects_path)
             conversations.project_context = project_store.context
             project_service = ProjectIpcService(project_store, conversations)
@@ -752,10 +754,17 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     task_id=getattr(task, "task_id", None) or task.goal_id, title=task.title,
                     text=text[:4_000], conversation_id=task.conversation_id,
                     delivered_at=datetime.now(UTC),
+                    job_id=getattr(task, "pending_job_id", None),
+                    review_expires_at=getattr(task, "approval_expires_at", None),
                 ))
 
             async def deliver_to_telegram(task, text: str) -> None:
-                await telegram_service.deliver(text)
+                job_id = getattr(task, "pending_job_id", None)
+                expires = getattr(task, "approval_expires_at", None)
+                if job_id is not None and expires is not None:
+                    await telegram_service.deliver_review(text, job_id, expires)
+                else:
+                    await telegram_service.deliver(text)
 
             dot_pause = DotPause(settings.dot_path)
             scheduler = TaskScheduler(

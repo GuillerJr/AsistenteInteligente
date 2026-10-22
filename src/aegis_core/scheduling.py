@@ -4,9 +4,9 @@ Like Codex's scheduled tasks and its "new email" subscriptions, the owner asks i
 free words; the planner turns that into a ``jarvis_schedule_create`` call, which the
 owner approves like any other action. At each due time the scheduler submits the
 task's own words as an ordinary owner job, so it passes the same broker, approvals
-and memory as a typed request. Nobody is there to approve at 08:00: a run only
-proceeds through tools the owner has always allowed (read-only "Aprobar siempre");
-any other confirmation is cancelled and the owner is told which tool to allow.
+and memory as a typed request. When approval is needed the job stays pending for
+the existing confirmation TTL and sends a review notice. Only the owner can approve;
+expired confirmations are cancelled and never silently retried or approved.
 Results land in the task's own conversation (follow-ups like "detállame el 2" work
 there) and are delivered to Telegram and the app. A subscription ("avísame si...")
 only delivers when the router judges the result has something new.
@@ -30,6 +30,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from aegis_core.completion_boundary import optional_completion
 from aegis_core.contracts import (
     AgentRole,
     Capability,
@@ -175,6 +176,8 @@ class ScheduledTask(BaseModel):
     last_delivered_digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     last_delivered_excerpt: str | None = Field(default=None, max_length=2_000)
     conversation_id: UUID | None = None
+    pending_job_id: UUID | None = None
+    approval_expires_at: datetime | None = None
     retries: int = Field(default=0, ge=0, le=MAX_TRANSIENT_RETRIES)
     # A plain reminder is delivered as is at its time; nothing needs to run.
     reminder: bool = False
@@ -511,6 +514,8 @@ class ScheduledDelivery(BaseModel):
     text: str = Field(max_length=4_000)
     conversation_id: UUID | None
     delivered_at: datetime
+    job_id: UUID | None = None
+    review_expires_at: datetime | None = None
 
 
 class DeliveryInbox:
@@ -534,36 +539,66 @@ async def run_unattended(
     title: str,
     clock: Callable[[], datetime],
     timeout_seconds: float = RUN_TIMEOUT_SECONDS,
+    on_approval: Callable[[Any, datetime], Awaitable[None]] | None = None,
 ) -> tuple[str, str]:
-    """Run an owner job nobody is watching; returns (text for the owner, status)."""
+    """Wait for an owner job; the scheduler can notify, never grant approval.
+
+    Approval waiting does not consume the execution budget. Its separate deadline
+    cannot outlive the job's existing signed confirmation, even if a notification
+    transport is slow or the owner leaves the notice unanswered.
+    """
+    from aegis_core.job_contracts import PENDING_CONFIRMATION_TTL
+
     snapshot = await jobs.submit(
         request, conversation_id=conversation_id,
         persist_conversation=conversation_id is not None,
     )
-    deadline = clock() + timedelta(seconds=timeout_seconds)
-    while snapshot.status not in TERMINAL_STATUSES:
-        if snapshot.status is JobStatus.AWAITING_CONFIRMATION:
-            # Nobody is there to approve; never approve on the owner's behalf.
-            tool = snapshot.confirmation.tool_name if snapshot.confirmation else "?"
-            await jobs.cancel(snapshot.job_id)
-            readable = bool(snapshot.confirmation
-                            and snapshot.confirmation.standing_grant_available)
-            return ((
-                f"No pude completar «{title}» sola: necesita tu aprobación para «{tool}». "
-                + ("Apruébala con «Aprobar siempre» la próxima vez que la uses y funcionará "
-                   "sin ti." if readable else
-                   "Esa acción no es de solo lectura, así que siempre te pediré aprobarla "
-                   "en persona.")
-            ), "needs_approval")
-        if clock() > deadline:
-            await jobs.cancel(snapshot.job_id)
-            return f"«{title}» tardó demasiado y la cancelé.", "timeout"
-        snapshot = await jobs.wait_for_change(
-            snapshot.job_id, after_stream_version=snapshot.stream_version, timeout_seconds=10,
-        )
+    remaining = timeout_seconds
+    tick = clock()
+    approval_key = None
+    approval_deadline = None
+    try:
+        while snapshot.status not in TERMINAL_STATUSES:
+            now = clock()
+            waiting = snapshot.status is JobStatus.AWAITING_CONFIRMATION
+            if waiting:
+                confirmation = snapshot.confirmation
+                if confirmation is None or on_approval is None:
+                    await jobs.cancel(snapshot.job_id)
+                    return (f"«{title}» necesita tu aprobación. Revisa la acción en Jarvis.",
+                            "needs_approval")
+                key = confirmation.call_digest
+                if key != approval_key:
+                    approval_key = key
+                    approval_deadline = min(confirmation.expires_at,
+                                            now + PENDING_CONFIRMATION_TTL)
+                    if approval_deadline > now:
+                        await on_approval(snapshot, approval_deadline)
+                if clock() >= approval_deadline:
+                    await jobs.cancel(snapshot.job_id)
+                    return (f"La aprobación de «{title}» caducó. No ejecuté la acción. "
+                            "Puedes volver a iniciar la tarea cuando quieras revisarla.",
+                            "approval_expired")
+            elif remaining <= 0:
+                await jobs.cancel(snapshot.job_id)
+                return f"«{title}» tardó demasiado y la cancelé.", "timeout"
+            tick = clock()
+            snapshot = await jobs.wait_for_change(
+                snapshot.job_id, after_stream_version=snapshot.stream_version,
+                timeout_seconds=min(10, max(0.01, (approval_deadline - tick).total_seconds()))
+                if waiting else min(10, max(0.01, remaining)),
+            )
+            if not waiting:
+                remaining -= max(0, (clock() - tick).total_seconds())
+    except asyncio.CancelledError:
+        # A daemon shutdown must not leave an unattended action pending elsewhere.
+        await jobs.cancel(snapshot.job_id)
+        raise
     if snapshot.status is JobStatus.COMPLETED and snapshot.result:
         return snapshot.result, "completed"
     code = snapshot.error_code or snapshot.status.value
+    if approval_key is not None and code == "confirmation_expired":
+        return (f"La aprobación de «{title}» caducó. No ejecuté la acción.", "approval_expired")
     return (f"«{title}» no se pudo completar esta vez ({code})."), (
         code if code in _TRANSIENT_ERRORS else "failed")
 
@@ -626,7 +661,12 @@ class TaskScheduler:
     async def run_now(self, task_id: UUID) -> None:
         task = self._store.get(task_id)
         if task is not None and task_id not in self._running:
-            await self._run(task)
+            runner = asyncio.create_task(self._run(task), name=f"aegis-schedule-{task_id}")
+            self._running[task_id] = runner
+            try:
+                await runner
+            finally:
+                self._running.pop(task_id, None)
 
     async def close(self) -> None:
         for runner in tuple(self._running.values()):
@@ -655,6 +695,8 @@ class TaskScheduler:
             if current is not None:
                 current.last_run_at = started
                 current.last_status = status
+                current.pending_job_id = None
+                current.approval_expires_at = None
                 current.last_delivered_digest = task.last_delivered_digest
                 current.last_delivered_excerpt = task.last_delivered_excerpt
                 current.conversation_id = task.conversation_id
@@ -687,8 +729,26 @@ class TaskScheduler:
         )
         return await run_unattended(
             self._jobs, request, conversation_id=task.conversation_id, title=task.title,
-            clock=self._clock,
+            clock=self._clock, on_approval=lambda snapshot, expires: self._notify_approval(
+                task, snapshot, expires),
         )
+
+    async def _notify_approval(self, task: ScheduledTask, snapshot: Any,
+                               expires: datetime) -> None:
+        task.pending_job_id = snapshot.job_id
+        task.approval_expires_at = expires
+        current = self._store.get(task.task_id)
+        if current is not None:
+            current.last_status = "awaiting_approval"
+            current.pending_job_id = snapshot.job_id
+            current.approval_expires_at = expires
+            current.conversation_id = task.conversation_id
+            await asyncio.to_thread(self._store.update, current)
+        await self._send(task, "Necesita tu aprobación. Pulsa Revisar para ver la acción. "
+                         "Si no la apruebas antes de dos minutos, caducará sin ejecutarse.")
+        # Subsequent result notifications are ordinary deliveries.
+        task.pending_job_id = None
+        task.approval_expires_at = None
 
     async def _should_deliver(self, task: ScheduledTask, text: str) -> bool:
         if task.notify is NotifyPolicy.ALWAYS:
@@ -700,8 +760,8 @@ class TaskScheduler:
             return True
         try:
             return await self._judge_new(task.last_delivered_excerpt, text)
-        except Exception:
-            # When the judge is unavailable, deliver rather than silently miss news.
+        except Exception as error:  # External inference boundary; never lose a new result.
+            LOGGER.warning("schedule_judge_failed error_type=%s", type(error).__name__)
             return True
 
     async def _send(self, task: ScheduledTask, text: str) -> None:
@@ -952,7 +1012,7 @@ async def interpret_schedule_request(
 
     local = now.astimezone()
     try:
-        content = await complete([
+        content = await optional_completion(complete, [
             {"role": "system", "content": _INTERPRETER_INSTRUCTION},
             {"role": "user", "content": json.dumps({
                 "ahora": f"{_WEEKDAY_NAMES[local.weekday()]} {local:%d/%m/%Y %H:%M}",
@@ -967,5 +1027,5 @@ async def interpret_schedule_request(
             if arguments[optional] is None:
                 arguments.pop(optional)
         return ScheduleCreateArguments.model_validate(arguments).model_dump(mode="json")
-    except Exception:
+    except (RecursionError, TypeError, ValueError):
         return None

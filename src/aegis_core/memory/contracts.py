@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from aegis_core.contracts import DocumentInput
+from aegis_core.feedback import OwnerFeedback
 from aegis_core.memory.task_checkpoint import TaskCheckpoint, TaskRecovery
 
 MAX_MEMORY_CONTENT_BYTES = 16_384
@@ -72,6 +73,7 @@ class ConversationTurn(BaseModel):
     content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     documents: tuple[DocumentInput, ...] = Field(default=(), max_length=4)
     image_name: str | None = Field(default=None, min_length=1, max_length=255)
+    owner_feedback: OwnerFeedback | None = None
 
     @field_validator("content")
     @classmethod

@@ -19,13 +19,13 @@ struct ActionReviewView: View {
 
     var body: some View {
         JarvisDialogShell(title: presentation.title, symbol: presentation.icon,
-                          detail: "Revisa la acción antes de autorizarla. La aprobación vale una sola vez.") {
+                          detail: String(localized: "Revisa la acción antes de autorizarla. La aprobación vale una sola vez.", bundle: .module)) {
             Text(approval.confirmation.summary).font(.system(size: 13, weight: .medium))
                 .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
                 .padding(14).frame(maxWidth: .infinity, alignment: .leading).voiceEnrollmentCard()
             if let preview = approval.confirmation.preview {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("Detalles de la acción").font(.system(size: 13, weight: .semibold))
+                    Text(String(localized: "Detalles de la acción", bundle: .module)).font(.system(size: 13, weight: .semibold))
                     ForEach(Array(preview.fields.enumerated()), id: \.offset) { _, field in
                         VStack(alignment: .leading, spacing: 5) {
                             Text(field.label).font(.system(size: 11, weight: .medium))
@@ -34,7 +34,7 @@ struct ActionReviewView: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
-                    if preview.fields.isEmpty { Text("Esta acción no tiene datos adicionales.") }
+                    if preview.fields.isEmpty { Text(String(localized: "Esta acción no tiene datos adicionales.", bundle: .module)) }
                 }.padding(14).frame(maxWidth: .infinity, alignment: .leading).voiceEnrollmentCard()
             }
             Text(presentation.warning).font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
@@ -44,20 +44,20 @@ struct ActionReviewView: View {
                     .font(.system(size: 12)).foregroundStyle(JarvisTheme.warning)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Label("Puedes usar Touch ID o decir «Aprobado».", systemImage: "touchid")
+            Label(String(localized: "Puedes usar Touch ID o decir «Aprobado».", bundle: .module), systemImage: "touchid")
                 .font(.system(size: 12)).foregroundStyle(JarvisTheme.warning)
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 Text(context.date < approval.confirmation.expiresAt
-                     ? "Disponible durante \(max(0, Int(approval.confirmation.expiresAt.timeIntervalSince(context.date)))) s"
-                     : "La aprobación caducó")
+                     ? String(localized: "Disponible durante \(max(0, Int(approval.confirmation.expiresAt.timeIntervalSince(context.date)))) s", bundle: .module)
+                     : String(localized: "La aprobación caducó", bundle: .module))
                     .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkMuted).monospacedDigit()
             }
         } footer: {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 HStack(spacing: 10) {
-                    Button("Rechazar", role: .cancel) { Task { await model.denyPending(expected: approval) } }
+                    Button(String(localized: "Rechazar", bundle: .module), role: .cancel) { Task { await model.denyPending(expected: approval) } }
                         .keyboardShortcut(.cancelAction)
-                    Button("Corregir…") {
+                    Button(String(localized: "Corregir…", bundle: .module)) {
                         model.pauseApprovalForCorrection()
                         correction = ""
                         showCorrection = true
@@ -65,24 +65,24 @@ struct ActionReviewView: View {
                     Spacer()
                     if let bundle = approval.confirmation.appGrantBundle {
                         // Codex's per-app approval: keep working in this app without asking.
-                        Menu("Permitir \(Self.appName(bundle))") {
-                            Button("En esta conversación") {
+                        Menu(String(localized: "Permitir \(Self.appName(bundle))", bundle: .module)) {
+                            Button(String(localized: "En esta conversación", bundle: .module)) {
                                 Task { await model.approvePending(expected: approval, appScope: "conversation") }
                             }
-                            Button("Siempre") {
+                            Button(String(localized: "Siempre", bundle: .module)) {
                                 Task { await model.approvePending(expected: approval, appScope: "always") }
                             }
                         }
                         .fixedSize()
-                        .help("Jarvis podrá seguir usando esta app sin volver a preguntar. Puedes revocarlo en Ajustes › Memoria y privacidad.")
+                        .help(String(localized: "Jarvis podrá seguir usando esta app sin volver a preguntar. Puedes revocarlo en Ajustes › Memoria y privacidad.", bundle: .module))
                         .disabled(showCorrection || context.date >= approval.confirmation.expiresAt)
                     }
                     if approval.confirmation.standingGrantAvailable {
                         // Only read-only tools: writes and sends keep asking every time.
-                        Button("Aprobar siempre") {
+                        Button(String(localized: "Aprobar siempre", bundle: .module)) {
                             Task { await model.approvePending(expected: approval, always: true) }
                         }
-                        .help("Solo lee datos. Puedes revocarlo en Ajustes › Permisos.")
+                        .help(String(localized: "Solo lee datos. Puedes revocarlo en Ajustes › Permisos.", bundle: .module))
                         .disabled(showCorrection || context.date >= approval.confirmation.expiresAt)
                     }
                     Button(actionTitle) { Task { await model.approvePending(expected: approval) } }
@@ -96,17 +96,17 @@ struct ActionReviewView: View {
             model.resumeApprovalAfterCorrection(approval)
         }) {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Corregir la solicitud").font(.headline)
-                Text("Escribe la solicitud completa. Jarvis cancelará la acción anterior y evaluará esta petición de nuevo.")
+                Text(String(localized: "Corregir la solicitud", bundle: .module)).font(.headline)
+                Text(String(localized: "Escribe la solicitud completa. Jarvis cancelará la acción anterior y evaluará esta petición de nuevo.", bundle: .module))
                     .font(.callout).foregroundStyle(JarvisTheme.inkSecondary)
                 TextEditor(text: $correction).scrollContentBackground(.hidden).frame(height: 140)
                     .padding(10).jarvisCard()
-                    .accessibilityLabel("Solicitud corregida")
+                    .accessibilityLabel(String(localized: "Solicitud corregida", bundle: .module))
                 HStack {
-                    Button("Cancelar", role: .cancel) { showCorrection = false }
+                    Button(String(localized: "Cancelar", bundle: .module), role: .cancel) { showCorrection = false }
                         .disabled(model.approvalActionInProgress || model.interactionSubmissionInProgress)
                     Spacer()
-                    Button("Evaluar nueva solicitud") {
+                    Button(String(localized: "Evaluar nueva solicitud", bundle: .module)) {
                         let text = correction
                         Task {
                             await model.correctPendingRequest(text, expectedApproval: approval)

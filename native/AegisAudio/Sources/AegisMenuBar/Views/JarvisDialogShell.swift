@@ -16,9 +16,9 @@ struct JarvisDialogShell<Content: View, Footer: View>: View {
                 HStack(spacing: 10) {
                     Image(systemName: "waveform").frame(width: 30, height: 30)
                         .background(JarvisTheme.fill, in: RoundedRectangle(cornerRadius: 10))
-                    Text("Jarvis").font(.system(size: 15, weight: .semibold))
+                    Text(String(localized: "Jarvis", bundle: .module)).font(.system(size: 15, weight: .semibold))
                     Spacer()
-                    Text("TU DECISIÓN").font(.system(size: 9, weight: .medium, design: .monospaced))
+                    Text(String(localized: "TU DECISIÓN", bundle: .module)).font(.system(size: 9, weight: .medium, design: .monospaced))
                         .tracking(1.5).foregroundStyle(JarvisTheme.inkMuted)
                 }
                 JarvisSectionHeader(title: title, detail: detail, symbol: symbol)

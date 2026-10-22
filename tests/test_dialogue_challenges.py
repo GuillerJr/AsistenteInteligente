@@ -3,13 +3,13 @@ import json
 
 import httpx
 import pytest
+from historical.orchestration.graph import _tool_names_for_request
 
 from aegis_core.brain.nvidia_client import NvidiaBrainClient
 from aegis_core.brain.nvidia_dialogue_guard import review_dialogue
 from aegis_core.config import Settings
 from aegis_core.contracts import AgentResult, AgentRole, DocumentInput, ToolCall, UserRequest
 from aegis_core.dialogue_challenges import challenge_cases
-from aegis_core.orchestration.graph import _tool_names_for_request
 from aegis_core.providers.base import IncompleteModelResponseError
 from aegis_core.providers.nvidia import NvidiaNimClient
 

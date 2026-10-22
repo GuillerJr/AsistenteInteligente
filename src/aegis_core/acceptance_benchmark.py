@@ -27,6 +27,7 @@ from aegis_core.conversation_quality import (
     ConversationQualityFlag,
 )
 from aegis_core.dialogue import DialogueKernel, DialogueMode
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.memory.contracts import MemoryKind
 from aegis_core.memory.errors import MemoryNotFoundError
 from aegis_core.memory.graph_service import GraphRAGService
@@ -198,7 +199,8 @@ class JarvisAcceptanceBenchmark:
                     await case.runner(context)
                 except AcceptanceExpectationError:
                     failure_code = "expectation_failed"
-                except Exception:
+                except Exception as error:
+                    record_boundary_error(error)
                     failure_code = "internal_error"
                 latency_ms = max(0, (time.monotonic_ns() - case_started) // 1_000_000)
                 results.append(

@@ -2,7 +2,8 @@
 set -euo pipefail
 
 AEGIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-AEGIS_INSTALLED_APP="$HOME/Applications/Jarvis.app"
+AEGIS_RELOCATABLE_APP="$("$AEGIS_PROJECT_ROOT/script/resolve_installed_bundle.sh")"
+AEGIS_INSTALLED_APP="$AEGIS_RELOCATABLE_APP"
 AEGIS_INSTALLED_INFO="$AEGIS_INSTALLED_APP/Contents/Info.plist"
 AEGIS_SOAK_CYCLES="${AEGIS_P7_SOAK_CYCLES:-100}"
 cd "$AEGIS_PROJECT_ROOT"

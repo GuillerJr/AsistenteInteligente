@@ -13,16 +13,16 @@ struct JarvisScheduledView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                MenuBarIconButton(symbol: "sidebar.left", title: chat.showHistory ? "Ocultar historial" : "Mostrar historial") {
+                MenuBarIconButton(symbol: "sidebar.left", title: chat.showHistory ? String(localized: "Ocultar historial", bundle: .module) : String(localized: "Mostrar historial", bundle: .module)) {
                     chat.showHistory.toggle()
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Tareas programadas").font(.system(size: 14, weight: .semibold))
-                    Text("Jarvis las ejecuta solo y te avisa aquí y por Telegram").font(.system(size: 11))
+                    Text(String(localized: "Tareas programadas", bundle: .module)).font(.system(size: 14, weight: .semibold))
+                    Text(String(localized: "Jarvis las ejecuta solo y te avisa aquí y por Telegram", bundle: .module)).font(.system(size: 11))
                         .foregroundStyle(JarvisInterfaceStyle.secondaryText)
                 }
                 Spacer()
-                Button("Nueva tarea", systemImage: "plus") { editing = JarvisScheduleDraft() }
+                Button(String(localized: "Nueva tarea", bundle: .module), systemImage: "plus") { editing = JarvisScheduleDraft() }
                     .buttonStyle(JarvisButtonStyle(prominent: true, compact: true))
             }.padding(.horizontal, 14).frame(height: 52)
             JarvisSeparator()
@@ -32,8 +32,8 @@ struct JarvisScheduledView: View {
                         if tasks.isEmpty {
                             VStack(spacing: 10) {
                                 Image(systemName: "clock.badge").font(.system(size: 26)).foregroundStyle(JarvisTheme.inkMuted)
-                                Text("Sin tareas programadas").font(JarvisTheme.voice(20))
-                                Text("Crea una aquí o pídesela a Jarvis: «cada mañana a las 8 resúmeme mis correos», «avísame cuando me escriba Ana».")
+                                Text(String(localized: "Sin tareas programadas", bundle: .module)).font(JarvisTheme.voice(20))
+                                Text(String(localized: "Crea una aquí o pídesela a Jarvis: «cada mañana a las 8 resúmeme mis correos», «avísame cuando me escriba Ana».", bundle: .module))
                                     .font(.system(size: 12.5)).foregroundStyle(JarvisTheme.inkSecondary)
                                     .multilineTextAlignment(.center)
                             }.frame(maxWidth: .infinity).padding(.top, 60)
@@ -60,13 +60,13 @@ struct JarvisScheduledView: View {
                 return true
             }
         }
-        .confirmationDialog("¿Borrar «\(deleting?.title ?? "")»?", isPresented: Binding(
+        .confirmationDialog(String(localized: "¿Borrar «\(deleting?.title ?? "")»?", bundle: .module), isPresented: Binding(
             get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
-            Button("Borrar tarea", role: .destructive) {
+            Button(String(localized: "Borrar tarea", bundle: .module), role: .destructive) {
                 guard let task = deleting else { return }
                 Task { await act("schedules.delete", task) }
             }
-        } message: { Text("Dejará de ejecutarse. Su chat con los resultados se conserva.") }
+        } message: { Text(String(localized: "Dejará de ejecutarse. Su chat con los resultados se conserva.", bundle: .module)) }
     }
 
     private func load() async {
@@ -83,9 +83,9 @@ struct JarvisScheduledView: View {
     private func status(_ task: JarvisScheduledTask) -> (String, Color)? {
         switch task.last_status {
         case nil: return nil
-        case "completed": return ("Última ejecución correcta", JarvisTheme.success)
-        case "needs_approval": return ("Necesita tu aprobación para correr sola", JarvisTheme.warning)
-        default: return ("La última ejecución falló", JarvisTheme.failure)
+        case "completed": return (String(localized: "Última ejecución correcta", bundle: .module), JarvisTheme.success)
+        case "needs_approval": return (String(localized: "Necesita tu aprobación para correr sola", bundle: .module), JarvisTheme.warning)
+        default: return (String(localized: "La última ejecución falló", bundle: .module), JarvisTheme.failure)
         }
     }
 
@@ -93,16 +93,16 @@ struct JarvisScheduledView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 Text(task.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(task.enabled ? JarvisTheme.ink : JarvisTheme.inkMuted)
-                if task.notify == "when_new" { tag("Monitoreando") }
-                if task.reminder == true { tag("Recordatorio") }
+                if task.notify == "when_new" { tag(String(localized: "Monitoreando", bundle: .module)) }
+                if task.reminder == true { tag(String(localized: "Recordatorio", bundle: .module)) }
                 Spacer()
-                if !task.enabled { Text("En pausa").font(.system(size: 11.5)).foregroundStyle(JarvisTheme.inkMuted) }
+                if !task.enabled { Text(String(localized: "En pausa", bundle: .module)).font(.system(size: 11.5)).foregroundStyle(JarvisTheme.inkMuted) }
                 else if let next = task.next_run_at.flatMap(Date.init(jarvisISO:)) {
-                    (Text("Próxima ") + Text(next, format: .relative(presentation: .named)))
+                    (Text(String(localized: "Próxima ", bundle: .module)) + Text(next, format: .relative(presentation: .named)))
                         .font(.system(size: 11.5)).foregroundStyle(JarvisTheme.inkSecondary)
                 }
             }
-            Text("\(task.schedule.prefix(1).uppercased())\(task.schedule.dropFirst()) · \(task.prompt)")
+            Text(String(localized: "\(task.schedule.prefix(1).uppercased())\(task.schedule.dropFirst()) · \(task.prompt)", bundle: .module))
                 .font(.system(size: 12.5)).foregroundStyle(JarvisTheme.inkSecondary).lineLimit(2)
             if let (label, color) = status(task) {
                 Label(label, systemImage: "circle.fill").font(.system(size: 11.5)).foregroundStyle(color)
@@ -112,20 +112,20 @@ struct JarvisScheduledView: View {
                 Text(result).font(JarvisTheme.voice(12.5)).foregroundStyle(JarvisTheme.inkSecondary).lineLimit(3)
             }
             HStack(spacing: 6) {
-                Button("Ejecutar ahora", systemImage: "play") { Task { await act("schedules.run_now", task) } }
-                Button(task.enabled ? "Pausar" : "Reanudar", systemImage: task.enabled ? "pause" : "arrow.clockwise") {
+                Button(String(localized: "Ejecutar ahora", bundle: .module), systemImage: "play") { Task { await act("schedules.run_now", task) } }
+                Button(task.enabled ? String(localized: "Pausar", bundle: .module) : String(localized: "Reanudar", bundle: .module), systemImage: task.enabled ? "pause" : "arrow.clockwise") {
                     Task { await act("schedules.set_enabled", task, ["enabled": !task.enabled]) }
                 }
-                Button("Editar", systemImage: "pencil") { editing = JarvisScheduleDraft(task) }
+                Button(String(localized: "Editar", bundle: .module), systemImage: "pencil") { editing = JarvisScheduleDraft(task) }
                 if let raw = task.conversation_id, let id = UUID(uuidString: raw) {
-                    Button("Ver resultados", systemImage: "bubble.left") {
+                    Button(String(localized: "Ver resultados", bundle: .module), systemImage: "bubble.left") {
                         Task { await chat.openAttention(.init(id: raw, title: task.title, reason: "", action: "",
                                                               conversationID: id), model: model) }
                     }
                 }
                 Spacer()
                 Button(role: .destructive) { deleting = task } label: { Image(systemName: "trash") }
-                    .help("Borrar tarea").accessibilityLabel("Borrar \(task.title)")
+                    .help(String(localized: "Borrar tarea", bundle: .module)).accessibilityLabel(String(localized: "Borrar \(task.title)", bundle: .module))
             }
             .buttonStyle(MenuBarSmallButtonStyle()).font(.system(size: 11.5))
             .disabled(!model.canManageChatHistory)
@@ -149,7 +149,7 @@ private struct StatusDotLabelStyle: LabelStyle {
 
 /// The editor's fields, from a task or empty for a new one.
 struct JarvisScheduleDraft: Identifiable {
-    static let weekdays = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
+    static let weekdays = ["lunes", "martes", String(localized: "miércoles", bundle: .module), "jueves", "viernes", String(localized: "sábado", bundle: .module), "domingo"]
     let id = UUID()
     var taskID: String?
     var title = ""
@@ -219,21 +219,21 @@ struct JarvisScheduleEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(draft.taskID == nil ? "Nueva tarea programada" : "Editar tarea").font(.system(size: 15, weight: .semibold))
-            TextField("Nombre, p. ej. «Resumen de correos»", text: $draft.title).jarvisInput(focused: false)
-            TextField("Qué hará Jarvis en cada ejecución", text: $draft.prompt, axis: .vertical)
+            Text(draft.taskID == nil ? String(localized: "Nueva tarea programada", bundle: .module) : String(localized: "Editar tarea", bundle: .module)).font(.system(size: 15, weight: .semibold))
+            TextField(String(localized: "Nombre, p. ej. «Resumen de correos»", bundle: .module), text: $draft.title).jarvisInput(focused: false)
+            TextField(String(localized: "Qué hará Jarvis en cada ejecución", bundle: .module), text: $draft.prompt, axis: .vertical)
                 .lineLimit(3...6).jarvisInput(focused: false)
-            JarvisSegmentedPicker(title: "Frecuencia", selection: $draft.kind, options: [
-                .init(value: "daily", title: "A una hora"), .init(value: "interval", title: "Cada cierto tiempo"),
-                .init(value: "once", title: "Una vez"),
+            JarvisSegmentedPicker(title: String(localized: "Frecuencia", bundle: .module), selection: $draft.kind, options: [
+                .init(value: "daily", title: String(localized: "A una hora", bundle: .module)), .init(value: "interval", title: String(localized: "Cada cierto tiempo", bundle: .module)),
+                .init(value: "once", title: String(localized: "Una vez", bundle: .module)),
             ])
             switch draft.kind {
             case "interval":
-                Stepper("Cada \(draft.everyMinutes) minutos", value: $draft.everyMinutes, in: 15...10_080)
+                Stepper(String(localized: "Cada \(draft.everyMinutes) minutos", bundle: .module), value: $draft.everyMinutes, in: 15...10_080)
             case "once":
-                DatePicker("Fecha y hora", selection: $draft.at, in: Date.now...)
+                DatePicker(String(localized: "Fecha y hora", bundle: .module), selection: $draft.at, in: Date.now...)
             default:
-                DatePicker("Hora", selection: $draft.time, displayedComponents: .hourAndMinute)
+                DatePicker(String(localized: "Hora", bundle: .module), selection: $draft.time, displayedComponents: .hourAndMinute)
                 HStack(spacing: 4) {
                     ForEach(JarvisScheduleDraft.weekdays, id: \.self) { day in
                         let on = draft.days.contains(day)
@@ -244,22 +244,22 @@ struct JarvisScheduleEditor: View {
                         .frame(width: 34, height: 28)
                         .foregroundStyle(on ? JarvisTheme.canvas : JarvisTheme.inkSecondary)
                         .background(on ? JarvisTheme.ink : JarvisTheme.fill, in: RoundedRectangle(cornerRadius: 7))
-                        .accessibilityLabel(day).accessibilityValue(on ? "Incluido" : "No incluido")
+                        .accessibilityLabel(day).accessibilityValue(on ? String(localized: "Incluido", bundle: .module) : String(localized: "No incluido", bundle: .module))
                     }
                 }
             }
-            switchRow("Avisarme solo si hay algo nuevo", $draft.onlyWhenNew)
-            switchRow("Es solo un recordatorio (no ejecuta nada)", $draft.reminder)
+            switchRow(String(localized: "Avisarme solo si hay algo nuevo", bundle: .module), $draft.onlyWhenNew)
+            switchRow(String(localized: "Es solo un recordatorio (no ejecuta nada)", bundle: .module), $draft.reminder)
             if failed {
-                Text("No se pudo guardar. Revisa la hora y que Jarvis esté conectado.")
+                Text(String(localized: "No se pudo guardar. Revisa la hora y que Jarvis esté conectado.", bundle: .module))
                     .font(.system(size: 12)).foregroundStyle(JarvisTheme.failure)
             }
             HStack {
                 Spacer()
-                Button("Cancelar") { dismiss() }.buttonStyle(JarvisButtonStyle()).keyboardShortcut(.cancelAction)
-                Button("Guardar y ejecutar ahora") { submit(runNow: true) }
+                Button(String(localized: "Cancelar", bundle: .module)) { dismiss() }.buttonStyle(JarvisButtonStyle()).keyboardShortcut(.cancelAction)
+                Button(String(localized: "Guardar y ejecutar ahora", bundle: .module)) { submit(runNow: true) }
                     .buttonStyle(JarvisButtonStyle()).disabled(!draft.valid || saving || draft.reminder)
-                Button("Guardar") { submit(runNow: false) }
+                Button(String(localized: "Guardar", bundle: .module)) { submit(runNow: false) }
                     .buttonStyle(JarvisButtonStyle(prominent: true)).keyboardShortcut(.defaultAction)
                     .disabled(!draft.valid || saving)
             }

@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from aegis_core.contracts import DocumentInput, ToolExecutionResult
+from aegis_core.feedback import OwnerFeedback
 from aegis_core.memory.contracts import (
     ConversationRecord,
     ConversationRole,
@@ -96,7 +97,7 @@ class ConversationRepository:
 
     def list_records(
         self, connection: sqlite3.Connection, *, namespace: str, archived: bool,
-        query: str, offset: int, limit: int,
+        query: str, offset: int, limit: int, filed: bool | None = None,
     ) -> tuple[tuple[ConversationRecord, ...], bool]:
         if not 1 <= limit <= 50 or not 0 <= offset <= 100_000:
             raise MemoryQueryError("conversation page is out of range")
@@ -110,6 +111,9 @@ class ConversationRepository:
             record = self._row_codec.conversation_from_row(row)
             if record.archived != archived:
                 continue
+            if not archived and filed is not None:
+                if (record.context_checkpoints.get("filed_chat") is True) != filed:
+                    continue
             if record.title in (None, "Chat de Jarvis"):
                 first = connection.execute(
                     "SELECT * FROM conversation_turns WHERE conversation_id = ? AND sequence = 1",
@@ -211,7 +215,8 @@ class ConversationRepository:
         return record
 
     def fork(self, connection: sqlite3.Connection, *, namespace: str,
-             conversation_id: UUID, max_conversations: int) -> ConversationRecord:
+             conversation_id: UUID, max_conversations: int,
+             before_turn_id: UUID | None = None) -> ConversationRecord:
         # create acquires the write transaction before reading the source snapshot.
         record = self.create(connection, namespace=namespace, title=None,
                              max_conversations=max_conversations)
@@ -223,12 +228,24 @@ class ConversationRepository:
         turns = [self._row_codec.turn_from_row(row, namespace=namespace) for row in rows]
         if [turn.sequence for turn in turns] != list(range(1, count + 1)):
             self._row_codec.fail("conversation_history_sequence_mismatch")
+        replaying = before_turn_id is not None
+        if replaying:
+            target = next((turn for turn in turns if turn.turn_id == before_turn_id), None)
+            if target is None or target.role is not ConversationRole.USER:
+                raise MemoryQueryError("replay requires a user turn in this conversation")
+            turns = [turn for turn in turns if turn.sequence < target.sequence]
+            count = len(turns)
         title = source.title
         if title in (None, "Chat de Jarvis") and turns:
             title = " ".join(turns[0].content.split())[:128]
         record = record.model_copy(update={"title": (title or "Conversación")[:120] + " · fork",
-                                          "task_checkpoint": source.task_checkpoint,
-                                          "context_checkpoints": source.context_checkpoints})
+                                          "task_checkpoint": (None if replaying
+                                                              else source.task_checkpoint),
+                                          "context_checkpoints": (
+                                              {key: value for key, value in
+                                               source.context_checkpoints.items()
+                                               if key in {"temporary_chat", "project_id"}}
+                                              if replaying else source.context_checkpoints)})
         for turn in turns:
             cloned = turn.model_copy(update={"turn_id": uuid4(),
                                              "conversation_id": record.conversation_id})
@@ -244,6 +261,39 @@ class ConversationRepository:
                            "WHERE conversation_id = ?",
                            (count, sealed.nonce, sealed.ciphertext, str(record.conversation_id)))
         return record
+
+    def turn(self, connection: sqlite3.Connection, *, namespace: str,
+             conversation_id: UUID, turn_id: UUID) -> ConversationTurn:
+        connection.execute("BEGIN")
+        self.get(connection, namespace=namespace, conversation_id=conversation_id)
+        row = connection.execute(
+            "SELECT * FROM conversation_turns WHERE conversation_id = ? AND turn_id = ?",
+            (str(conversation_id), str(turn_id)),
+        ).fetchone()
+        if row is None:
+            raise MemoryNotFoundError("message does not exist")
+        return self._row_codec.turn_from_row(row, namespace=namespace)
+
+    def feedback(self, connection: sqlite3.Connection, *, namespace: str,
+                 conversation_id: UUID, turn_id: UUID,
+                 value: OwnerFeedback | None) -> ConversationTurn:
+        connection.execute("BEGIN IMMEDIATE")
+        self.get(connection, namespace=namespace, conversation_id=conversation_id)
+        row = connection.execute(
+            "SELECT * FROM conversation_turns WHERE conversation_id = ? AND turn_id = ?",
+            (str(conversation_id), str(turn_id)),
+        ).fetchone()
+        if row is None:
+            raise MemoryNotFoundError("response does not exist")
+        turn = self._row_codec.turn_from_row(row, namespace=namespace)
+        if turn.role is not ConversationRole.ASSISTANT:
+            raise MemoryQueryError("only assistant responses accept feedback")
+        turn = turn.model_copy(update={"owner_feedback": value})
+        sealed = self._row_codec.seal_turn(turn, namespace=namespace)
+        connection.execute("UPDATE conversation_turns SET nonce = ?, ciphertext = ? "
+                           "WHERE conversation_id = ? AND turn_id = ?",
+                           (sealed.nonce, sealed.ciphertext, str(conversation_id), str(turn_id)))
+        return turn
 
     def empty_trash(self, connection: sqlite3.Connection, *, namespace: str) -> int:
         connection.execute("BEGIN IMMEDIATE")

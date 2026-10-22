@@ -722,3 +722,65 @@ def test_p14_pipeline_chains_p13_and_publishes_private_evidence() -> None:
     assert "AEGIS_RELEASE_BUILD_NUMBER" in release
     assert 'AEGIS_BUILD_NUMBER="$AEGIS_RELEASE_BUILD_NUMBER"' in release
     assert "JarvisUpdatePublicKey.ed25519" in build
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("valid_release_clock")
+async def test_installer_rechecks_activity_after_candidate_verification(tmp_path: Path) -> None:
+    private, _, public = _key_pair(tmp_path)
+    installed = tmp_path / "Applications/Jarvis.app"
+    _private(installed / "Contents/Info.plist", _app_info(build=1, revision=OLD_REVISION))
+    _private(installed / "Contents/MacOS/Jarvis", b"old-app")
+    _private(installed / f"Contents/Resources/{UPDATE_PUBLIC_KEY_NAME}", public.read_bytes())
+    manifest, archive, release, _, _ = _signed_fixture(tmp_path / "release", signing_key=private)
+
+    class BusyDuringVerification(_Lifecycle):
+        checks = 0
+
+        async def require_idle(self, expected_revision: str) -> None:
+            self.checks += 1
+            if self.checks == 2:
+                raise SecureUpdateError("new work is active")
+
+        async def stop(self, app_path: Path) -> None:
+            pytest.fail("active work must not be stopped")
+
+    installer = SecureUpdateInstaller(
+        installed_app=installed, state_directory=tmp_path / "state", trust=_Trust(),
+        lifecycle=BusyDuringVerification(), audit=_Audit(),
+        clock=lambda: PUBLISHED + timedelta(hours=1),
+    )
+    with pytest.raises(SecureUpdateError, match="active"):
+        await installer.install(manifest, archive, release, public,
+                                confirmation_revision=NEW_REVISION)
+    assert (installed / "Contents/MacOS/Jarvis").read_bytes() == b"old-app"
+    assert not list(installed.parent.glob(".aegis-update-*"))
+
+
+@pytest.mark.asyncio
+async def test_update_subprocess_deadline_kills_only_owned_child() -> None:
+    import asyncio
+
+    from aegis_core.secure_update import _wait_update_child
+
+    process = await asyncio.create_subprocess_exec("/bin/sleep", "10")
+    with pytest.raises(SecureUpdateError, match="deadline"):
+        await _wait_update_child(process, timeout=0.02)
+    assert process.returncode is not None
+
+
+@pytest.mark.asyncio
+async def test_update_health_wait_has_a_real_deadline(monkeypatch) -> None:
+    import asyncio
+
+    from aegis_core.config import Settings
+    from aegis_core.secure_update import MacOSAppLifecycle
+
+    class StalledClient:
+        async def call(self, _method):
+            await asyncio.sleep(10)
+
+    lifecycle = MacOSAppLifecycle(Settings(), attempts=2, interval=0.01)
+    monkeypatch.setattr(lifecycle, "_client", lambda: StalledClient())
+    async with asyncio.timeout(2):
+        assert await lifecycle.wait_healthy(NEW_REVISION) is False

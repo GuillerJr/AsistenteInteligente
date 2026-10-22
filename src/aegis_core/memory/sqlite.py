@@ -18,6 +18,8 @@ except ImportError:  # pragma: no cover - supported deployment installs the acce
     sqlite_vec = None
 
 from aegis_core.contracts import DocumentInput, ToolExecutionResult
+from aegis_core.failure_boundary import record_boundary_error
+from aegis_core.feedback import OwnerFeedback
 from aegis_core.memory.capacity import MemoryCapacityManager
 from aegis_core.memory.codec import MemoryRowCodec
 from aegis_core.memory.contracts import (
@@ -956,14 +958,14 @@ class SQLiteMemoryStore:
 
     def list_conversations(
         self, *, namespace: str, archived: bool = False, query: str = "",
-        offset: int = 0, limit: int = 30,
+        offset: int = 0, limit: int = 30, filed: bool | None = None,
     ) -> tuple[tuple[ConversationRecord, ...], bool]:
         self._require_initialized()
         self._validate_namespace(namespace)
         with self._lock, self._connect(read_only=True) as connection:
             return self._conversation_repository.list_records(
                 connection, namespace=namespace, archived=archived,
-                query=query, offset=offset, limit=limit,
+                query=query, offset=offset, limit=limit, filed=filed,
             )
 
     def shared_conversation_context(
@@ -1025,15 +1027,37 @@ class SQLiteMemoryStore:
         return record
 
     def fork_conversation(self, *, namespace: str, conversation_id: UUID,
-                          max_conversations: int = 1_000) -> ConversationRecord:
+                          max_conversations: int = 1_000,
+                          before_turn_id: UUID | None = None) -> ConversationRecord:
         self._require_initialized()
         self._validate_namespace(namespace)
         with self._lock, self._connect() as connection:
             record = self._conversation_repository.fork(
                 connection, namespace=namespace, conversation_id=conversation_id,
-                max_conversations=max_conversations)
+                max_conversations=max_conversations, before_turn_id=before_turn_id)
         self._secure_database_files()
         return record
+
+    def conversation_turn(self, *, namespace: str, conversation_id: UUID,
+                          turn_id: UUID) -> ConversationTurn:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        with self._lock, self._connect(read_only=True) as connection:
+            return self._conversation_repository.turn(
+                connection, namespace=namespace, conversation_id=conversation_id, turn_id=turn_id)
+
+    def set_conversation_feedback(
+        self, *, namespace: str, conversation_id: UUID, turn_id: UUID,
+        value: OwnerFeedback | None,
+    ) -> ConversationTurn:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        with self._lock, self._connect() as connection:
+            turn = self._conversation_repository.feedback(
+                connection, namespace=namespace, conversation_id=conversation_id,
+                turn_id=turn_id, value=value)
+        self._secure_database_files()
+        return turn
 
     def empty_conversation_trash(self, *, namespace: str) -> int:
         self._require_initialized()
@@ -1127,7 +1151,7 @@ class SQLiteMemoryStore:
         connection.enable_load_extension(True)
         try:
             sqlite_vec.load(connection)
-        except Exception as error:
+        except (OSError, sqlite3.Error) as error:
             raise _VectorAccelerationUnavailable(
                 "sqlite vector acceleration could not be loaded"
             ) from error
@@ -1162,8 +1186,9 @@ class SQLiteMemoryStore:
             return
         try:
             listener(namespace)
-        except Exception:
+        except Exception as error:
             # A secondary native index must not invalidate a committed encrypted record.
+            record_boundary_error(error)
             return
 
     @staticmethod
@@ -1186,7 +1211,8 @@ class SQLiteMemoryStore:
         if self._on_auth_failure is not None:
             try:
                 self._on_auth_failure(reason)
-            except Exception:
+            except Exception as error:
+                record_boundary_error(error)
                 pass
         error = DecryptionAuthError("memory authentication failed; subsystem locked")
         if cause is not None:

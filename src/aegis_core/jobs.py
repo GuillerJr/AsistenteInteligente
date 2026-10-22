@@ -9,10 +9,12 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
+from aegis_core.async_tasks import run_blocking_owned
 from aegis_core.capability_learning import CapabilityLearningCoordinator
 from aegis_core.computer_app_grants import AppGrant, AppGrantError, ComputerAppGrantStore
 from aegis_core.computer_app_grants import grantable as app_grantable
 from aegis_core.contracts import PolicyDecision, ToolAuthorization, ToolCall, UserRequest
+from aegis_core.feedback import OwnerFeedback
 from aegis_core.job_admission import JobAdmissionCoordinator
 from aegis_core.job_authorization import (
     ApprovalGrant,
@@ -107,6 +109,7 @@ class SwarmJobManager:
         self._workflow_broker = tool_broker
         self._workflow_policy_context = policy_context
         self._admission = JobAdmissionCoordinator(conversations)
+        self._evaluation_store = evaluation_store
         self._lifecycle = JobLifecycleCoordinator(
             registry,
             admission=self._admission,
@@ -250,6 +253,16 @@ class SwarmJobManager:
         async with self._lock:
             current = self._lifecycle.current_evaluations()
         return self._lifecycle.build_metrics(current)
+
+    async def record_owner_feedback(self, request_id: UUID, feedback: OwnerFeedback | None) -> None:
+        async with self._lock:
+            self._lifecycle.record_owner_feedback(request_id, feedback)
+        record = getattr(self._evaluation_store, "record_owner_feedback", None)
+        if callable(record):
+            try:
+                await run_blocking_owned(record, request_id, feedback)
+            except Exception as error:  # Pluggable evaluation storage boundary.
+                LOGGER.warning("owner_feedback_write_failed error_type=%s", type(error).__name__)
 
     async def approve(self, job_id: UUID, call_digest: str) -> JobSnapshot:
         return await self._approve(

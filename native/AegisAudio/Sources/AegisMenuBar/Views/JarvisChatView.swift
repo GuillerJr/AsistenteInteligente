@@ -4,58 +4,101 @@ import SwiftUI
 
 struct JarvisChatView: View {
     let model: MenuBarModel
+    var interactive = true
+    var previewBrowser = false
     @State private var draft = ""
     @State private var selectingFiles = false
     @State private var attachmentDropTarget = false
     @State private var renameEntry: ChatConversationSummary?
+    @State private var confirmingDelete = false
     @State private var showSideChat = false
     @State private var sideChat = SideChatStore()
     @State private var showPalette = false
     @State private var showBrowser = false
-    @State private var browser = JarvisBrowserStore()
+    @State private var browser: JarvisBrowserStore
     @FocusState private var composerFocused: Bool
     @Environment(\.openWindow) private var openWindow
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
     private var chat: JarvisChatStore { model.chat }
+    private var browserVisible: Bool { (showBrowser || previewBrowser) && chat.pane == .chat }
+    private var sideChatVisible: Bool { showSideChat && chat.pane == .chat }
     private var accent: Color { HUDStyle.accent(for: .active) }
     private var validDraft: Bool {
         (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !chat.attachments.isEmpty)
             && draft.utf8.count <= 4_096
     }
 
+    init(model: MenuBarModel, interactive: Bool = true, previewBrowser: Bool = false) {
+        self.model = model
+        self.interactive = interactive
+        self.previewBrowser = previewBrowser
+        _browser = State(initialValue: JarvisBrowserStore(persistent: interactive))
+    }
+
     var body: some View {
+        GeometryReader { geometry in
+        let sidebarVisible = chat.showHistory
+            && (!browserVisible || geometry.size.width >= 1_120)
+            && (!sideChatVisible || geometry.size.width >= 992)
         HStack(spacing: 0) {
-            if chat.showHistory {
-                JarvisChatHistoryView(model: model).frame(minWidth: 250, idealWidth: 270, maxWidth: 290)
+            if sidebarVisible {
+                JarvisChatHistoryView(model: model, interactive: interactive).frame(minWidth: 250, idealWidth: 270, maxWidth: 290)
                     .layoutPriority(1)
                 Divider()
             }
             switch chat.pane {
-            case .chat: chatPanel
+            case .chat: chatPanel(sidebarVisible: sidebarVisible)
             case .dot: JarvisDotView(model: model)
             case .scheduled: JarvisScheduledView(model: model)
             case .project(let id): JarvisProjectView(model: model, projectID: id)
             }
-            if showBrowser && chat.pane == .chat {
+            if browserVisible {
                 Divider()
                 JarvisBrowserPanel(store: browser, chat: chat) { showBrowser = false }
             }
-            if showSideChat && chat.pane == .chat {
+            if sideChatVisible {
                 Divider()
                 SideChatPanel(model: model, store: sideChat) { showSideChat = false }
             }
         }
-        .frame(minWidth: chat.showHistory ? 740 : 480, idealWidth: 940, minHeight: 460, idealHeight: 720)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(minWidth: browserVisible ? 800 : sideChatVisible ? 742 : chat.showHistory ? 740 : 480,
+               idealWidth: 940, minHeight: 460, idealHeight: 720)
         .background(HUDSurface(opaque: reduceTransparency || contrast == .increased))
         .foregroundStyle(JarvisTheme.ink)
         .tint(accent)
-        .onChange(of: chat.conversationID) { _, _ in draft = ""; composerFocused = true }
+        .onAppear {
+            if chat.browserPending { showBrowser = true; chat.browserPending = false }
+            if chat.deletePending { confirmingDelete = true; chat.deletePending = false }
+        }
+        .onChange(of: chat.conversationID) { _, _ in
+            draft = chat.composerDraft ?? ""; composerFocused = true
+        }
+        .onChange(of: chat.composerDraft) { _, text in
+            if let text { draft = text; composerFocused = true }
+            else if chat.transcript.messages.isEmpty { draft = "" }
+        }
+        .onChange(of: chat.browserRequest) { _, _ in showBrowser = true; chat.browserPending = false }
+        .onChange(of: chat.searchFocusRequest) { _, _ in showBrowser = false; showSideChat = false }
+        .onChange(of: showBrowser) { _, value in if value { showSideChat = false } }
+        .onChange(of: showSideChat) { _, value in if value { showBrowser = false } }
+        .onChange(of: chat.deleteRequest) { _, _ in confirmingDelete = true; chat.deletePending = false }
+        .confirmationDialog(String(localized: "¿Eliminar este chat?", bundle: .module), isPresented: $confirmingDelete, titleVisibility: .visible) {
+            if let entry = chat.currentConversation {
+                Button(String(localized: "Mover a la papelera", bundle: .module), role: .destructive) {
+                    Task { await chat.setTrashed(entry, model: model, trashed: true) }
+                }
+            }
+            Button(String(localized: "Cancelar", bundle: .module), role: .cancel) {}
+        } message: { Text(String(localized: "Podrás restaurarlo desde la papelera del historial.", bundle: .module)) }
         .onChange(of: chat.abandonedTemporaryChats) { _, pending in
-            guard !pending.isEmpty else { return }
+            guard interactive, !pending.isEmpty else { return }
             Task { await chat.deleteAbandonedTemporaryChats(model: model) }
         }
         .task {
+            guard interactive else { return }
             await model.refreshDaemon()
             await chat.refreshHistory(model: model)
             composerFocused = true
@@ -73,7 +116,7 @@ struct JarvisChatView: View {
             JarvisCommandPalette(commands: paletteCommands) { showPalette = false }
         }
         .background {
-            Button("Paleta de comandos") { showPalette.toggle() }
+            Button(String(localized: "Paleta de comandos", bundle: .module)) { showPalette.toggle() }
                 .keyboardShortcut("k", modifiers: .command).hidden().accessibilityHidden(true)
         }
     }
@@ -81,72 +124,72 @@ struct JarvisChatView: View {
     private var paletteCommands: [JarvisPaletteCommand] {
         let manage = model.canManageChatHistory
         var commands = [
-            JarvisPaletteCommand(id: "new", title: "Nueva conversación", symbol: "square.and.pencil",
+            JarvisPaletteCommand(id: "new", title: String(localized: "Nueva conversación", bundle: .module), symbol: "square.and.pencil",
                                  shortcut: "⌘N", keywords: ["chat", "nuevo"], enabled: manage) {
                 chat.newConversation(); draft = ""; composerFocused = true
             },
-            JarvisPaletteCommand(id: "temporary", title: "Chat temporal", symbol: "eye.slash",
-                                 keywords: ["privado", "incognito", "sin memoria"],
+            JarvisPaletteCommand(id: "temporary", title: String(localized: "Chat temporal", bundle: .module), symbol: "eye.slash",
+                                 keywords: ["privado", "incognito", String(localized: "sin memoria", bundle: .module)],
                                  enabled: manage && !chat.temporary) {
                 chat.newTemporaryConversation(); draft = ""; composerFocused = true
             },
-            JarvisPaletteCommand(id: "browser", title: showBrowser ? "Cerrar navegador" : "Abrir navegador",
+            JarvisPaletteCommand(id: "browser", title: showBrowser ? String(localized: "Cerrar navegador", bundle: .module) : String(localized: "Abrir navegador", bundle: .module),
                                  symbol: "globe", keywords: ["web", "pagina", "internet", "url"],
                                  enabled: true) { showBrowser.toggle(); chat.pane = .chat },
-            JarvisPaletteCommand(id: "dot", title: "Abrir Dot", symbol: "circle.fill",
+            JarvisPaletteCommand(id: "dot", title: String(localized: "Abrir Dot", bundle: .module), symbol: "circle.fill",
                                  keywords: ["autonomo", "actividad", "24/7", "pausar"],
                                  enabled: true) { chat.pane = .dot },
-            JarvisPaletteCommand(id: "scheduled", title: "Tareas programadas", symbol: "clock",
+            JarvisPaletteCommand(id: "scheduled", title: String(localized: "Tareas programadas", bundle: .module), symbol: "clock",
                                  keywords: ["programar", "automatizacion", "recordatorio"],
                                  enabled: true) { chat.pane = .scheduled },
-            JarvisPaletteCommand(id: "plan", title: chat.planMode ? "Salir del modo plan" : "Modo plan",
+            JarvisPaletteCommand(id: "plan", title: chat.planMode ? String(localized: "Salir del modo plan", bundle: .module) : String(localized: "Modo plan", bundle: .module),
                                  symbol: "list.bullet.clipboard", keywords: ["planear", "pasos", "plan"],
                                  enabled: true) { chat.planMode.toggle(); composerFocused = true },
-            JarvisPaletteCommand(id: "side", title: showSideChat ? "Cerrar chat lateral" : "Chat lateral",
+            JarvisPaletteCommand(id: "side", title: showSideChat ? String(localized: "Cerrar chat lateral", bundle: .module) : String(localized: "Chat lateral", bundle: .module),
                                  symbol: "sidebar.right", keywords: ["pregunta", "rapida", "lado"],
                                  enabled: manage) { showSideChat.toggle() },
-            JarvisPaletteCommand(id: "history", title: chat.showHistory ? "Ocultar historial" : "Mostrar historial",
+            JarvisPaletteCommand(id: "history", title: chat.showHistory ? String(localized: "Ocultar historial", bundle: .module) : String(localized: "Mostrar historial", bundle: .module),
                                  symbol: "sidebar.left", keywords: ["conversaciones", "buscar"]) {
                 chat.showHistory.toggle()
             },
-            JarvisPaletteCommand(id: "pending", title: "Ver lo que requiere tu atención",
+            JarvisPaletteCommand(id: "pending", title: String(localized: "Ver lo que requiere tu atención", bundle: .module),
                                  symbol: "exclamationmark.bubble",
-                                 keywords: ["pendientes", "aprobaciones", "atencion"]) {
+                                 keywords: [String(localized: "pendientes", bundle: .module), "aprobaciones", "atencion"]) {
                 chat.showHistory = true
                 Task { await chat.refreshAttention(model: model) }
             },
             JarvisPaletteCommand(id: "meeting",
-                                 title: model.meetingRecording ? "Terminar notas de reunión" : "Tomar notas de una reunión",
+                                 title: model.meetingRecording ? String(localized: "Terminar notas de reunión", bundle: .module) : String(localized: "Tomar notas de una reunión", bundle: .module),
                                  symbol: model.meetingRecording ? "stop.circle" : "record.circle",
                                  keywords: ["grabar", "reunion", "transcribir"],
                                  enabled: model.meetingRecording || (manage && !chat.isBusy)) {
                 Task { await model.toggleMeetingNotes() }
             },
-            JarvisPaletteCommand(id: "voice", title: "Hablar con Jarvis", symbol: "mic",
+            JarvisPaletteCommand(id: "voice", title: String(localized: "Hablar con Jarvis", bundle: .module), symbol: "mic",
                                  keywords: ["voz", "escuchar", "dictar"]) {
                 Task { await model.startVoiceTurn() }
             },
-            JarvisPaletteCommand(id: "attach", title: "Adjuntar archivos", symbol: "paperclip",
+            JarvisPaletteCommand(id: "attach", title: String(localized: "Adjuntar archivos", bundle: .module), symbol: "paperclip",
                                  keywords: ["documento", "pdf", "imagen"], enabled: !chat.isBusy) {
                 selectingFiles = true
             },
-            JarvisPaletteCommand(id: "quick", title: "Pregunta rápida desde cualquier app", symbol: "sparkles",
+            JarvisPaletteCommand(id: "quick", title: String(localized: "Pregunta rápida desde cualquier app", bundle: .module), symbol: "sparkles",
                                  shortcut: "⌃⇧J", keywords: ["mini", "flotante"]) {
                 QuickEntryPanelController.shared.toggle(model: model)
             },
-            JarvisPaletteCommand(id: "settings", title: "Abrir ajustes", symbol: "gearshape", shortcut: "⌘,",
+            JarvisPaletteCommand(id: "settings", title: String(localized: "Abrir ajustes", bundle: .module), symbol: "gearshape", shortcut: "⌘,",
                                  keywords: ["configuracion", "salud", "diagnostico", "integraciones"]) {
                 RequestedWindowFocus.open("settings") { openWindow(id: "settings") }
             },
         ]
         if let entry = chat.currentConversation {
-            commands.insert(JarvisPaletteCommand(id: "rename", title: "Renombrar este chat", symbol: "pencil",
+            commands.insert(JarvisPaletteCommand(id: "rename", title: String(localized: "Renombrar este chat", bundle: .module), symbol: "pencil",
                                                  keywords: ["titulo", "nombre"], enabled: manage) {
                 renameEntry = entry
             }, at: 2)
         }
         if chat.isBusy {
-            commands.insert(JarvisPaletteCommand(id: "cancel", title: "Detener la respuesta", symbol: "stop.fill",
+            commands.insert(JarvisPaletteCommand(id: "cancel", title: String(localized: "Detener la respuesta", bundle: .module), symbol: "stop.fill",
                                                  keywords: ["cancelar", "parar"]) {
                 Task { await model.cancelChatResponse() }
             }, at: 0)
@@ -154,16 +197,16 @@ struct JarvisChatView: View {
         return commands
     }
 
-    private var chatPanel: some View {
+    private func chatPanel(sidebarVisible: Bool) -> some View {
         VStack(spacing: 0) {
-            header
+            header(sidebarVisible: sidebarVisible)
             JarvisSeparator()
             transcript
             if model.interactionID != nil {
                 Button {
                     RequestedWindowFocus.open("approval") { openWindow(id: "approval") }
                 } label: {
-                    Label(model.pendingApproval != nil ? "Revisar acción pendiente" : "Revisar solicitud",
+                    Label(model.pendingApproval != nil ? String(localized: "Revisar acción pendiente", bundle: .module) : String(localized: "Revisar solicitud", bundle: .module),
                           systemImage: "exclamationmark.bubble")
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -172,10 +215,10 @@ struct JarvisChatView: View {
             }
             if chat.transcript.hasNewerHistory {
                 HStack(spacing: 12) {
-                    Label("Viendo mensajes anteriores", systemImage: "clock.arrow.circlepath")
+                    Label(String(localized: "Viendo mensajes anteriores", bundle: .module), systemImage: "clock.arrow.circlepath")
                         .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
                     Spacer()
-                    Button("Volver a recientes") { Task { await chat.loadRecent(model: model) } }
+                    Button(String(localized: "Volver a recientes", bundle: .module)) { Task { await chat.loadRecent(model: model) } }
                         .buttonStyle(MenuBarSmallButtonStyle()).disabled(!model.canManageChatHistory)
                 }.padding(.horizontal, 20).padding(.top, 12)
             }
@@ -184,20 +227,30 @@ struct JarvisChatView: View {
                     Label(notice, systemImage: "checkmark.circle").font(.system(size: 12))
                     Spacer()
                     Button { chat.notice = nil } label: { Image(systemName: "xmark") }
-                        .buttonStyle(.plain).accessibilityLabel("Cerrar confirmación")
+                        .buttonStyle(.plain).accessibilityLabel(String(localized: "Cerrar confirmación", bundle: .module))
                 }.foregroundStyle(accent).padding(.horizontal, 20).padding(.top, 12)
+            }
+            if model.daemonState != .online {
+                Label(String(localized: "Jarvis está sin conexión. Tu borrador se conserva mientras se restablece el servicio.", bundle: .module),
+                      systemImage: "wifi.slash")
+                    .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
+                    .padding(.horizontal, 20).padding(.top, 10)
             }
             if let error = chat.error {
                 HStack(alignment: .top, spacing: 8) {
                     Label(error, systemImage: "exclamationmark.triangle").font(.system(size: 12))
                     Spacer()
+                    if chat.retryAvailable {
+                        Button(String(localized: "Reintentar", bundle: .module)) { Task { await model.retryChatMessage() } }
+                            .buttonStyle(MenuBarSmallButtonStyle()).disabled(!interactive)
+                    }
                     Button { chat.error = nil } label: { Image(systemName: "xmark") }
-                        .buttonStyle(.plain).accessibilityLabel("Cerrar aviso")
+                        .buttonStyle(.plain).accessibilityLabel(String(localized: "Cerrar aviso", bundle: .module))
                 }.foregroundStyle(HUDStyle.accent(for: .warning)).padding(.horizontal, 20).padding(.top, 12)
             }
             composer
         }
-        .frame(minWidth: 480)
+        .frame(minWidth: (showBrowser || previewBrowser) ? 360 : 480)
         // Like Codex, web links in replies open in the built-in browser.
         .environment(\.openURL, OpenURLAction { url in
             guard ["http", "https"].contains(url.scheme?.lowercased()) else { return .systemAction }
@@ -207,10 +260,11 @@ struct JarvisChatView: View {
         })
     }
 
-    private var header: some View {
+    private func header(sidebarVisible: Bool) -> some View {
         HStack(spacing: 12) {
-            MenuBarIconButton(symbol: "sidebar.left", title: chat.showHistory ? "Ocultar historial" : "Mostrar historial") {
-                chat.showHistory.toggle()
+            MenuBarIconButton(symbol: "sidebar.left", title: sidebarVisible ? String(localized: "Ocultar historial", bundle: .module) : String(localized: "Mostrar historial", bundle: .module)) {
+                if sidebarVisible { chat.showHistory = false }
+                else { showBrowser = false; showSideChat = false; chat.showHistory = true }
             }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -223,12 +277,15 @@ struct JarvisChatView: View {
                                 .lineLimit(1).truncationMode(.tail)
                                 .foregroundStyle(project.tint).padding(.horizontal, 7).padding(.vertical, 2)
                                 .background(project.tint.opacity(0.13), in: Capsule())
-                        }.buttonStyle(.plain).help("Este chat usa las instrucciones y archivos del proyecto")
+                        }.buttonStyle(.plain).help(String(localized: "Este chat usa las instrucciones y archivos del proyecto", bundle: .module))
                     }
                 }
-                Text(chat.temporary ? "Chat temporal · no se guarda ni usa tu memoria"
-                     : chat.selectionLoading ? "Cargando conversación" : chat.isBusy ? "\(model.pendingApproval != nil ? "Esperando tu aprobación" : "Preparando respuesta")"
-                     : model.canSendChatMessage ? "Listo para conversar" : "\(model.presentationStatus.title)")
+                Text(chat.temporary ? String(localized: "Chat temporal · no se guarda ni usa tu memoria", bundle: .module)
+                     : chat.selectionLoading ? String(localized: "Cargando conversación", bundle: .module)
+                     : chat.isBusy ? (model.pendingApproval != nil
+                                     ? String(localized: "Esperando tu aprobación", bundle: .module)
+                                     : String(localized: "Preparando respuesta", bundle: .module))
+                     : model.canSendChatMessage ? String(localized: "Listo para conversar", bundle: .module) : model.presentationStatus.title)
                     .font(.system(size: 11)).foregroundStyle(JarvisInterfaceStyle.secondaryText)
                     .lineLimit(2).fixedSize(horizontal: false, vertical: true)
             }.layoutPriority(1)
@@ -239,22 +296,22 @@ struct JarvisChatView: View {
                 } label: { Image(systemName: "ellipsis").frame(width: 16, height: 16) }
                     .menuStyle(.borderlessButton).fixedSize()
                     .disabled(!model.canManageChatHistory)
-                    .help("Acciones del chat").accessibilityLabel("Acciones del chat")
+                    .help(String(localized: "Acciones del chat", bundle: .module)).accessibilityLabel(String(localized: "Acciones del chat", bundle: .module))
             }
             Button { showBrowser.toggle() } label: { Image(systemName: "globe").frame(width: 16) }
                 .buttonStyle(JarvisIconButtonStyle())
-                .help("Navegador: abre páginas junto al chat y pregúntale a Jarvis sobre ellas")
-                .accessibilityLabel(showBrowser ? "Cerrar navegador" : "Navegador")
+                .help(String(localized: "Navegador: abre páginas junto al chat y pregúntale a Jarvis sobre ellas", bundle: .module))
+                .accessibilityLabel(showBrowser ? String(localized: "Cerrar navegador", bundle: .module) : String(localized: "Navegador", bundle: .module))
             Button { showSideChat.toggle() } label: { Image(systemName: "sidebar.right").frame(width: 16) }
                 .buttonStyle(JarvisIconButtonStyle())
                 .disabled(!model.canManageChatHistory)
-                .help("Chat lateral: una pregunta rápida sin interrumpir esta conversación")
-                .accessibilityLabel(showSideChat ? "Ocultar chat lateral" : "Chat lateral")
+                .help(String(localized: "Chat lateral: una pregunta rápida sin interrumpir esta conversación", bundle: .module))
+                .accessibilityLabel(showSideChat ? String(localized: "Ocultar chat lateral", bundle: .module) : String(localized: "Chat lateral", bundle: .module))
             Button { Task { await model.toggleMeetingNotes() } } label: {
                 if model.meetingRecording, let started = model.meetingStartedAt {
                     TimelineView(.periodic(from: .now, by: 1)) { context in
                         let seconds = max(0, Int(context.date.timeIntervalSince(started)))
-                        Label(String(format: "Detener %d:%02d", seconds / 60, seconds % 60),
+                        Label(String(format: String(localized: "Detener %d:%02d", bundle: .module), seconds / 60, seconds % 60),
                               systemImage: "stop.circle.fill")
                             .foregroundStyle(JarvisTheme.failure).monospacedDigit().fixedSize()
                     }
@@ -265,9 +322,9 @@ struct JarvisChatView: View {
                 .buttonStyle(JarvisIconButtonStyle())
                 .disabled(!model.meetingRecording && (!model.canManageChatHistory || chat.isBusy))
                 .help(model.meetingRecording
-                      ? "Terminar y resumir la reunión"
-                      : "Tomar notas de una reunión: transcribe en este Mac y luego la resume. Avisa a los presentes que estás grabando.")
-                .accessibilityLabel(model.meetingRecording ? "Terminar notas de reunión" : "Notas de reunión")
+                      ? String(localized: "Terminar y resumir la reunión", bundle: .module)
+                      : String(localized: "Tomar notas de una reunión: transcribe en este Mac y luego la resume. Avisa a los presentes que estás grabando.", bundle: .module))
+                .accessibilityLabel(model.meetingRecording ? String(localized: "Terminar notas de reunión", bundle: .module) : String(localized: "Notas de reunión", bundle: .module))
             Button {
                 chat.newTemporaryConversation()
                 draft = ""
@@ -275,10 +332,10 @@ struct JarvisChatView: View {
             } label: { Image(systemName: "eye.slash").frame(width: 16) }
                 .buttonStyle(JarvisIconButtonStyle())
                 .disabled(!model.canManageChatHistory || chat.temporary)
-                .help("Chat temporal: no se guarda en el historial ni usa ni crea recuerdos")
-                .accessibilityLabel("Chat temporal")
+                .help(String(localized: "Chat temporal: no se guarda en el historial ni usa ni crea recuerdos", bundle: .module))
+                .accessibilityLabel(String(localized: "Chat temporal", bundle: .module))
             // The sidebar already offers "Nuevo chat"; the toolbar keeps it only without one.
-            if !chat.showHistory { newConversationButton(compact: true) }
+            if !sidebarVisible { newConversationButton(compact: true) }
 
         }.padding(.horizontal, 14).frame(height: 52)
     }
@@ -290,12 +347,12 @@ struct JarvisChatView: View {
             composerFocused = true
         } label: {
             if compact { Image(systemName: "square.and.pencil").frame(width: 16) }
-            else { Label("Nueva conversación", systemImage: "square.and.pencil").fixedSize() }
+            else { Label(String(localized: "Nueva conversación", bundle: .module), systemImage: "square.and.pencil").fixedSize() }
         }
         .buttonStyle(JarvisIconButtonStyle())
         .disabled(!model.canManageChatHistory)
-        .help("Empezar otra conversación con contexto independiente")
-        .accessibilityLabel("Nueva conversación")
+        .help(String(localized: "Empezar otra conversación con contexto independiente", bundle: .module))
+        .accessibilityLabel(String(localized: "Nueva conversación", bundle: .module))
         .keyboardShortcut("n", modifiers: .command)
     }
 
@@ -305,14 +362,14 @@ struct JarvisChatView: View {
                 if chat.transcript.messages.isEmpty {
                     VStack(spacing: 12) {
                         Circle().fill(JarvisTheme.clay).frame(width: 14, height: 14).accessibilityHidden(true)
-                        Text("¿En qué te ayudo?").font(JarvisTheme.voice(28)).foregroundStyle(JarvisTheme.ink)
-                        Text("Escribe una pregunta o una tarea.\nLas acciones que requieran validación te pedirán aprobación.")
+                        Text(String(localized: "¿En qué te ayudo?", bundle: .module)).font(JarvisTheme.voice(28)).foregroundStyle(JarvisTheme.ink)
+                        Text(String(localized: "Escribe una pregunta o una tarea.\nLas acciones que requieran validación te pedirán aprobación.", bundle: .module))
                             .font(.system(size: 13)).foregroundStyle(JarvisTheme.inkSecondary).multilineTextAlignment(.center)
                     }.frame(maxWidth: .infinity).containerRelativeFrame(.vertical).padding(.horizontal, 24)
                 } else {
                     LazyVStack(spacing: 22) {
                         if chat.nextBeforeSequence != nil {
-                            Button("Cargar mensajes anteriores") { Task { await chat.loadOlder(model: model) } }
+                            Button(String(localized: "Cargar mensajes anteriores", bundle: .module)) { Task { await chat.loadOlder(model: model) } }
                                 .buttonStyle(MenuBarSmallButtonStyle()).disabled(!model.canManageChatHistory)
                         }
                         ForEach(chat.transcript.messages) { message in messageView(message) }
@@ -346,7 +403,7 @@ struct JarvisChatView: View {
                     }
                 }
                 if message.text.isEmpty {
-                    ProgressView().controlSize(.small).accessibilityLabel("Jarvis está preparando la respuesta")
+                    ProgressView().controlSize(.small).accessibilityLabel(String(localized: "Jarvis está preparando la respuesta", bundle: .module))
                 } else if fromOwner {
                     Text(verbatim: message.text).font(.system(size: 14)).lineSpacing(3)
                         .foregroundStyle(JarvisTheme.ink)
@@ -364,30 +421,52 @@ struct JarvisChatView: View {
                             chat.implementedPlans.insert(message.id)
                             chat.planMode = false
                             let numbered = steps.enumerated().map { "\($0.offset + 1). \($0.element)" }
-                            Task { await model.sendChatMessage("Implementa este plan:\n" + numbered.joined(separator: "\n")) }
+                            Task { await model.sendChatMessage(String(localized: "Implementa este plan:\n", bundle: .module) + numbered.joined(separator: "\n")) }
                         }
                     }
                 }
                 if message.interrupted {
-                    Label("Solicitud detenida", systemImage: "stop.circle")
+                    Label(String(localized: "Solicitud detenida", bundle: .module), systemImage: "stop.circle")
                         .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
                 }
                 if message.truncated {
-                    Text("Este mensaje se muestra parcialmente.").font(.system(size: 11))
+                    Text(String(localized: "Este mensaje se muestra parcialmente.", bundle: .module)).font(.system(size: 11))
                         .foregroundStyle(JarvisTheme.inkSecondary)
                 }
-                if !message.text.isEmpty && !fromOwner {
-                    MenuBarIconButton(symbol: "doc.on.doc", title: "Copiar mensaje") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(message.text, forType: .string)
-                    }
-                    .padding(.leading, -6)
+                if !message.text.isEmpty {
+                    HStack(spacing: 3) {
+                        MenuBarIconButton(symbol: "doc.on.doc", title: String(localized: "Copiar mensaje", bundle: .module)) {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(message.text, forType: .string)
+                        }
+                        if chat.replayTarget(for: message) != nil {
+                            MenuBarIconButton(symbol: fromOwner ? "pencil" : "arrow.clockwise",
+                                              title: fromOwner ? String(localized: "Editar desde este mensaje", bundle: .module) : String(localized: "Regenerar respuesta", bundle: .module)) {
+                                Task { await chat.replay(message, regenerate: !fromOwner, model: model) }
+                            }.disabled(!interactive || !model.canManageChatHistory)
+                        }
+                        if !fromOwner && message.sequence != nil && !message.interrupted {
+                            feedbackButton(message, value: "helpful", symbol: "hand.thumbsup",
+                                           title: String(localized: "Respuesta útil", bundle: .module))
+                            feedbackButton(message, value: "unhelpful", symbol: "hand.thumbsdown",
+                                           title: String(localized: "Respuesta no útil", bundle: .module))
+                        }
+                    }.padding(.leading, -6)
                 }
             }
             .frame(maxWidth: fromOwner ? 520 : .infinity, alignment: fromOwner ? .trailing : .leading)
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(fromOwner ? "Tú" : "Jarvis")
+        .accessibilityLabel(fromOwner ? String(localized: "Tú", bundle: .module) : String(localized: "Jarvis", bundle: .module))
+    }
+
+    private func feedbackButton(_ message: TextChatTranscript.Message, value: String,
+                                symbol: String, title: String) -> some View {
+        MenuBarIconButton(symbol: message.feedback == value ? symbol + ".fill" : symbol, title: title) {
+            Task { await chat.rate(message, value: value, model: model) }
+        }
+        .disabled(!interactive || !model.canManageChatHistory || chat.feedbackUpdating.contains(message.id))
+        .accessibilityValue(message.feedback == value ? String(localized: "Seleccionada", bundle: .module) : String(localized: "Sin seleccionar", bundle: .module))
     }
 
     private var composer: some View {
@@ -395,30 +474,30 @@ struct JarvisChatView: View {
             if !chat.attachments.isEmpty { JarvisChatAttachmentsView(chat: chat) }
             VStack(alignment: .leading, spacing: 6) {
                 ZStack(alignment: .topLeading) {
-                    if draft.isEmpty { Text(attachmentDropTarget ? "Suelta aquí tus archivos…" : "Pregúntale a Jarvis…")
+                    if draft.isEmpty { Text(attachmentDropTarget ? String(localized: "Suelta aquí tus archivos…", bundle: .module) : String(localized: "Pregúntale a Jarvis…", bundle: .module))
                         .font(.system(size: 14)).foregroundStyle(JarvisTheme.inkMuted).padding(.top, 8).padding(.leading, 5) }
                     TextEditor(text: $draft).font(.system(size: 14)).scrollContentBackground(.hidden)
                         .frame(minHeight: 40, maxHeight: 120).fixedSize(horizontal: false, vertical: true)
                         .focused($composerFocused)
-                        .accessibilityLabel("Mensaje para Jarvis")
+                        .accessibilityLabel(String(localized: "Mensaje para Jarvis", bundle: .module))
                 }
                 HStack {
-                    MenuBarIconButton(symbol: "paperclip", title: "Adjuntar archivos") { selectingFiles = true }
+                    MenuBarIconButton(symbol: "paperclip", title: String(localized: "Adjuntar archivos", bundle: .module)) { selectingFiles = true }
                         .disabled(!model.canManageChatHistory)
-                        .help("Adjuntar texto, PDF o imagen").accessibilityLabel("Adjuntar archivos")
+                        .help(String(localized: "Adjuntar texto, PDF o imagen", bundle: .module)).accessibilityLabel(String(localized: "Adjuntar archivos", bundle: .module))
                     Button { chat.planMode.toggle() } label: {
-                        Label("Plan", systemImage: "list.bullet.clipboard").font(.system(size: 12, weight: .medium))
+                        Label(String(localized: "Plan", bundle: .module), systemImage: "list.bullet.clipboard").font(.system(size: 12, weight: .medium))
                             .foregroundStyle(chat.planMode ? JarvisTheme.clay : JarvisTheme.inkSecondary)
                             .padding(.horizontal, 8).frame(height: 26)
                             .background(chat.planMode ? JarvisTheme.clay.opacity(0.13) : .clear, in: Capsule())
                             .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
-                    .help("Modo plan: Jarvis investiga y propone un plan sin actuar")
-                    .accessibilityLabel("Modo plan").accessibilityValue(chat.planMode ? "Activado" : "Desactivado")
-                    if chat.importing { ProgressView().controlSize(.small).accessibilityLabel("Preparando archivos") }
-                    Text(draft.utf8.count > 4_096 ? "El mensaje supera el límite de tamaño."
-                         : chat.planMode ? "Jarvis propondrá un plan sin actuar" : "⌘↩ para enviar")
+                    .help(String(localized: "Modo plan: Jarvis investiga y propone un plan sin actuar", bundle: .module))
+                    .accessibilityLabel(String(localized: "Modo plan", bundle: .module)).accessibilityValue(chat.planMode ? String(localized: "Activado", bundle: .module) : String(localized: "Desactivado", bundle: .module))
+                    if chat.importing { ProgressView().controlSize(.small).accessibilityLabel(String(localized: "Preparando archivos", bundle: .module)) }
+                    Text(draft.utf8.count > 4_096 ? String(localized: "El mensaje supera el límite de tamaño.", bundle: .module)
+                         : chat.planMode ? String(localized: "Jarvis propondrá un plan sin actuar", bundle: .module) : String(localized: "⌘↩ para enviar", bundle: .module))
                         .font(.system(size: 11)).foregroundStyle(draft.utf8.count > 4_096
                                                                 ? HUDStyle.accent(for: .warning) : JarvisInterfaceStyle.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
@@ -428,10 +507,10 @@ struct JarvisChatView: View {
                             // While Jarvis works: send after it finishes, or correct it now.
                             Button {
                                 if model.queueChatMessage(draft) { draft = "" }
-                            } label: { Label("En cola", systemImage: "text.badge.plus") }
+                            } label: { Label(String(localized: "En cola", bundle: .module), systemImage: "text.badge.plus") }
                                 .buttonStyle(MenuBarSmallButtonStyle())
                                 .disabled(!model.canQueueChatMessage)
-                                .help("Se enviará cuando Jarvis termine la respuesta actual")
+                                .help(String(localized: "Se enviará cuando Jarvis termine la respuesta actual", bundle: .module))
                                 .keyboardShortcut(.return, modifiers: .command)
                             Button {
                                 let correction = draft
@@ -441,12 +520,12 @@ struct JarvisChatView: View {
                                         draft = correction
                                     }
                                 }
-                            } label: { Label("Corregir", systemImage: "arrow.uturn.right") }
+                            } label: { Label(String(localized: "Corregir", bundle: .module), systemImage: "arrow.uturn.right") }
                                 .buttonStyle(MenuBarSmallButtonStyle()).disabled(chat.cancelling)
-                                .help("Detiene la respuesta actual y la repite con tu corrección")
+                                .help(String(localized: "Detiene la respuesta actual y la repite con tu corrección", bundle: .module))
                         }
                         Button { Task { await model.cancelChatResponse() } } label: {
-                            Label("Detener", systemImage: "stop.fill")
+                            Label(String(localized: "Detener", bundle: .module), systemImage: "stop.fill")
                         }.buttonStyle(MenuBarSmallButtonStyle()).disabled(chat.cancelling)
                     } else {
                         Button {
@@ -470,7 +549,7 @@ struct JarvisChatView: View {
                                 .background(validDraft && model.canSendChatMessage ? JarvisTheme.ink : JarvisTheme.inkMuted,
                                             in: Circle())
                         }
-                            .buttonStyle(.plain).accessibilityLabel("Enviar").help("Enviar (⌘↩)")
+                            .buttonStyle(.plain).accessibilityLabel(String(localized: "Enviar", bundle: .module)).help(String(localized: "Enviar (⌘↩)", bundle: .module))
                             .keyboardShortcut(.return, modifiers: .command)
                             .disabled(!validDraft || !model.canSendChatMessage)
                     }
@@ -489,7 +568,7 @@ struct JarvisChatView: View {
                 return true
             } isTargeted: { attachmentDropTarget = $0 }
             if !chat.attachments.isEmpty {
-                Text("Al enviar, NVIDIA recibe el contenido de los adjuntos. Los documentos quedan en este chat; las imágenes se usan en este turno.")
+                Text(String(localized: "Al enviar, NVIDIA recibe el contenido de los adjuntos. Los documentos quedan en este chat; las imágenes se usan en este turno.", bundle: .module))
                     .font(.system(size: 11)).foregroundStyle(JarvisInterfaceStyle.secondaryText)
             }
         }.padding(.horizontal, 20).padding(.bottom, 16).padding(.top, 6)

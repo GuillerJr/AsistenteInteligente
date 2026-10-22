@@ -9,7 +9,8 @@ fi
 JARVIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 JARVIS_DATASET="${1:-$HOME/Library/Application Support/Aegis/SpeakerEnrollment}"
 JARVIS_MODEL="$HOME/Library/Application Support/Aegis/Models/JarvisSpeakerIdentity.mlmodelc"
-JARVIS_INSTALLED_MODEL="$HOME/Applications/Jarvis.app/Contents/Resources/JarvisSpeakerIdentity.mlmodelc"
+JARVIS_INSTALLED_APP="$("$JARVIS_PROJECT_ROOT/script/resolve_installed_bundle.sh")"
+JARVIS_INSTALLED_MODEL="$JARVIS_INSTALLED_APP/Contents/Resources/JarvisSpeakerIdentity.mlmodelc"
 
 if [[ -e "$JARVIS_MODEL" || -L "$JARVIS_MODEL" ]]; then
     "$JARVIS_PROJECT_ROOT/script/train_speaker_identity.sh" --validate-model "$JARVIS_MODEL"

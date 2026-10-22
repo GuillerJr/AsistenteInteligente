@@ -2801,3 +2801,25 @@ async def test_telegram_approval_consumes_exact_grant_once_and_audits_remote_ide
         assert "voice_tool_confirmation_consumed" not in {event.event_type for event in events}
     finally:
         await jobs.close()
+
+
+@pytest.mark.asyncio
+async def test_ui_feedback_updates_current_metrics_and_persisted_answer(tmp_path: Path) -> None:
+    store = SQLiteEvaluationStore(tmp_path / "evaluations.sqlite3")
+    store.initialize()
+    jobs = SwarmJobManager(ImmediateGraph(), evaluation_store=store)
+    request = UserRequest(text="Explica este resultado sintético")
+    submitted = await jobs.submit(request)
+    await _terminal(jobs, submitted.job_id)
+    await jobs.record_owner_feedback(request.request_id, OwnerFeedback.UNHELPFUL)
+    snapshot = await jobs.status(submitted.job_id)
+    assert snapshot.evaluation.owner_feedback is OwnerFeedback.UNHELPFUL
+    assert (await jobs.metrics())["quality"]["observed"]["owner_feedback_count"] == 1
+    assert store.load_recent()[0].evaluation.owner_feedback is OwnerFeedback.UNHELPFUL
+    await jobs.close()
+    restarted = SwarmJobManager(ImmediateGraph(), evaluation_store=store)
+    await restarted.record_owner_feedback(request.request_id, OwnerFeedback.HELPFUL)
+    assert (await restarted.metrics())["quality"]["observed"]["owner_feedback_helpful_rate"] == 1
+    await restarted.record_owner_feedback(request.request_id, None)
+    assert (await restarted.metrics())["quality"]["observed"]["owner_feedback_count"] == 0
+    await restarted.close()

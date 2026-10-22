@@ -2,7 +2,8 @@
 set -euo pipefail
 
 AEGIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-AEGIS_INSTALLED_INFO="$HOME/Applications/Jarvis.app/Contents/Info.plist"
+AEGIS_RELOCATABLE_APP="$("$AEGIS_PROJECT_ROOT/script/resolve_installed_bundle.sh")"
+AEGIS_INSTALLED_INFO="$AEGIS_RELOCATABLE_APP/Contents/Info.plist"
 AEGIS_CHROME_APP="/Applications/Google Chrome.app"
 AEGIS_CHROME_BINARY="$AEGIS_CHROME_APP/Contents/MacOS/Google Chrome"
 AEGIS_CHROME_INFO="$AEGIS_CHROME_APP/Contents/Info.plist"
@@ -29,7 +30,7 @@ cleanup() {
 trap cleanup EXIT INT TERM HUP
 
 cd "$AEGIS_PROJECT_ROOT"
-if [[ -L "$HOME/Applications/Jarvis.app" || ! -f "$AEGIS_INSTALLED_INFO" ]]; then
+if [[ -L "$AEGIS_RELOCATABLE_APP" || ! -f "$AEGIS_INSTALLED_INFO" ]]; then
     echo "status=blocked reason=current_app_not_installed" >&2
     exit 2
 fi

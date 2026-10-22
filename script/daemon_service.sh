@@ -4,6 +4,7 @@ set -euo pipefail
 AEGIS_ACTION="${1:-status}"
 AEGIS_LABEL="ai.aegis.daemon"
 AEGIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+AEGIS_RELOCATABLE_APP="$("$AEGIS_PROJECT_ROOT/script/resolve_installed_bundle.sh")"
 AEGIS_PYTHON="$AEGIS_PROJECT_ROOT/.venv/bin/python"
 AEGIS_CLI="$AEGIS_PROJECT_ROOT/script/aegis.sh"
 AEGIS_DOMAIN="gui/$(id -u)"
@@ -15,7 +16,7 @@ AEGIS_MLX_ENABLED="${AEGIS_MLX_ENABLED:-}"
 AEGIS_MLX_MODEL_ID="${AEGIS_MLX_MODEL_ID:-}"
 AEGIS_MLX_DRAFT_MODEL_ID="${AEGIS_MLX_DRAFT_MODEL_ID:-}"
 AEGIS_MLX_DRAFT_MODEL_BYTES="${AEGIS_MLX_DRAFT_MODEL_BYTES:-}"
-AEGIS_MLX_ENGINE="$HOME/Applications/Jarvis.app/Contents/Helpers/jarvis-mlx-engine"
+AEGIS_MLX_ENGINE="$AEGIS_RELOCATABLE_APP/Contents/Helpers/jarvis-mlx-engine"
 AEGIS_SERVICE_DISABLED=false
 AEGIS_BUILD_REVISION="$(/usr/bin/git -C "$AEGIS_PROJECT_ROOT" rev-parse --verify HEAD)"
 

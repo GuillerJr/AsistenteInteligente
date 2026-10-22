@@ -173,15 +173,17 @@ async def send_wake_on_lan(mac_address: str, *, port: int = 9) -> None:
         raise ValueError("Wake-on-LAN port is invalid")
     packet = build_magic_packet(mac_address)
     loop = asyncio.get_running_loop()
-    udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp: socket.socket | None = None
     try:
+        udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         udp.setblocking(False)
         udp.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         await loop.sock_sendto(udp, packet, ("255.255.255.255", port))
     except OSError as error:
         raise TargetDeviceOffline("Wake-on-LAN broadcast failed") from error
     finally:
-        udp.close()
+        if udp is not None:
+            udp.close()
 
 
 async def discover_smart_tvs(*, timeout_seconds: float = 1.2) -> tuple[dict[str, str], ...]:
@@ -195,9 +197,10 @@ async def discover_smart_tvs(*, timeout_seconds: float = 1.2) -> tuple[dict[str,
         b"ST: ssdp:all\r\n\r\n"
     )
     loop = asyncio.get_running_loop()
-    udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    udp: socket.socket | None = None
     results: dict[tuple[str, str], dict[str, str]] = {}
     try:
+        udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         udp.setblocking(False)
         await loop.sock_sendto(udp, request, ("239.255.255.250", 1900))
         deadline = loop.time() + timeout_seconds
@@ -243,7 +246,8 @@ async def discover_smart_tvs(*, timeout_seconds: float = 1.2) -> tuple[dict[str,
     except OSError as error:
         raise TargetDeviceOffline("SSDP discovery failed") from error
     finally:
-        udp.close()
+        if udp is not None:
+            udp.close()
     return tuple(results[key] for key in sorted(results))
 
 

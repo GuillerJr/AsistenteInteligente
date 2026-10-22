@@ -31,16 +31,16 @@ struct JarvisForeignPluginsView: View {
     @State private var repository = ""
 
     var body: some View {
-        JarvisSettingsCard(title: "Complementos de Codex y Claude", detail:
-            "Jarvis instala sus habilidades; lo que ejecuta programas (servidores MCP, hooks) queda fuera. También puedes pedirlo en el chat: «instala el complemento de…».") {
+        JarvisSettingsCard(title: String(localized: "Complementos de Codex y Claude", bundle: .module), detail:
+            String(localized: "Jarvis instala sus habilidades; lo que ejecuta programas (servidores MCP, hooks) queda fuera. También puedes pedirlo en el chat: «instala el complemento de…».", bundle: .module)) {
             HStack {
-                TextField("usuario/repositorio de GitHub", text: $repository).jarvisInput(focused: false)
-                    .accessibilityLabel("Repositorio del marketplace")
-                Button("Agregar marketplace") {
+                TextField(String(localized: "usuario/repositorio de GitHub", bundle: .module), text: $repository).jarvisInput(focused: false)
+                    .accessibilityLabel(String(localized: "Repositorio del marketplace", bundle: .module))
+                Button(String(localized: "Agregar marketplace", bundle: .module)) {
                     let value = repository
                     Task {
                         await store.foreignPlugins("plugins.foreign.marketplace.add", payload: ["repository": value],
-                                                   success: "Marketplace agregado.")
+                                                   success: String(localized: "Marketplace agregado.", bundle: .module))
                         if !store.failed { repository = "" }
                     }
                 }.disabled(store.busy || repository.trimmingCharacters(in: .whitespaces).count < 3)
@@ -49,9 +49,9 @@ struct JarvisForeignPluginsView: View {
                 HStack {
                     Label(market.repository, systemImage: "shippingbox").foregroundStyle(JarvisTheme.inkSecondary)
                     Spacer()
-                    Button("Quitar") {
+                    Button(String(localized: "Quitar", bundle: .module)) {
                         Task { await store.foreignPlugins("plugins.foreign.marketplace.remove", payload: ["slug": market.slug],
-                                                          success: "Marketplace quitado.") }
+                                                          success: String(localized: "Marketplace quitado.", bundle: .module)) }
                     }.disabled(store.busy)
                 }
             }
@@ -61,27 +61,27 @@ struct JarvisForeignPluginsView: View {
             search.isEmpty || $0.name.localizedStandardContains(search) || $0.description.localizedStandardContains(search)
         }
         if store.foreignCatalogue != nil, plugins.isEmpty {
-            ContentUnavailableView("Sin complementos", systemImage: "puzzlepiece.extension",
-                                   description: Text("Agrega un marketplace o instala complementos en Codex o Claude."))
+            ContentUnavailableView(String(localized: "Sin complementos", bundle: .module), systemImage: "puzzlepiece.extension",
+                                   description: Text(String(localized: "Agrega un marketplace o instala complementos en Codex o Claude.", bundle: .module)))
         }
         ForEach(plugins) { plugin in
             JarvisSettingsCard(title: plugin.name, detail: plugin.description) {
                 HStack {
-                    let app = plugin.format == "codex" ? "Codex" : "Claude"
-                    Text("\(plugin.source == app ? app : "\(app) · \(plugin.source)") · \(plugin.skills.count) habilidades")
+                    let app = plugin.format == "codex" ? String(localized: "Codex", bundle: .module) : String(localized: "Claude", bundle: .module)
+                    Text(String(localized: "\(plugin.source == app ? app : "\(app) · \(plugin.source)") · \(plugin.skills.count) habilidades", bundle: .module))
                         .foregroundStyle(JarvisTheme.inkSecondary)
                     Spacer()
-                    Button(plugin.installed ? "Quitar" : "Instalar") {
+                    Button(plugin.installed ? String(localized: "Quitar", bundle: .module) : String(localized: "Instalar", bundle: .module)) {
                         Task {
                             await store.foreignPlugins(plugin.installed ? "plugins.foreign.remove" : "plugins.foreign.install",
                                                        payload: ["plugin_id": plugin.plugin_id],
-                                                       success: plugin.installed ? "Complemento quitado." : "Complemento instalado.")
+                                                       success: plugin.installed ? String(localized: "Complemento quitado.", bundle: .module) : String(localized: "Complemento instalado.", bundle: .module))
                             await store.refreshExtensions()
                         }
                     }.disabled(store.busy || !(plugin.installed || plugin.installable))
                 }
                 if !plugin.left_out.isEmpty {
-                    Text("Queda fuera: " + plugin.left_out.joined(separator: "; "))
+                    Text(String(localized: "Queda fuera: ", bundle: .module) + plugin.left_out.joined(separator: "; "))
                         .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkMuted)
                 }
             }

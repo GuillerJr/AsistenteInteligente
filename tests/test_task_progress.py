@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
+from historical.orchestration.graph import build_swarm_graph
 from test_nvidia_dialogue import OFFER, REQUEST, TOOL, Provider, answer, exchange
 
 from aegis_core.brain.nvidia_client import NvidiaBrainClient
@@ -31,7 +32,6 @@ from aegis_core.jobs import JobStatus, SwarmJobManager
 from aegis_core.mcp.client import McpArguments
 from aegis_core.memory.conversations import ConversationCoordinator, ConversationIpcService
 from aegis_core.memory.sqlite import SQLiteMemoryStore
-from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.orchestration.task_progress import (
     advance_checkpoint,
     reject_duplicate_calls,

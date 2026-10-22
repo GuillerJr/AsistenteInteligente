@@ -238,10 +238,11 @@ async def test_install_without_prepared_content_fails_closed(tmp_path):
 async def test_job_approval_binds_daemon_prepared_plugin_content(tmp_path, changed):
     import asyncio
 
+    from historical.orchestration.graph import build_swarm_graph
+
     from aegis_core.contracts import AgentResult, UserRequest
     from aegis_core.job_contracts import JobStatus
     from aegis_core.jobs import SwarmJobManager
-    from aegis_core.orchestration.graph import build_swarm_graph
     from aegis_core.plugins.foreign_service import foreign_plugin_tool_definitions
     from aegis_core.tools.broker import PolicyContext
     from aegis_core.tools.confirmations import OneTimeConfirmationStore

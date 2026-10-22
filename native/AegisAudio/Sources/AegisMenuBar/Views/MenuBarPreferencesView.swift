@@ -16,7 +16,7 @@ struct MenuBarPreferencesView: View {
                     .frame(width: 24)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Activación «Jarvis»").font(.system(size: 12, weight: .medium))
+                    Text(String(localized: "Activación «Jarvis»", bundle: .module)).font(.system(size: 12, weight: .medium))
                     Text(wakeWordSummary)
                         .font(.system(size: 11))
                         .foregroundStyle(JarvisTheme.inkSecondary)
@@ -27,7 +27,7 @@ struct MenuBarPreferencesView: View {
                     .buttonStyle(MenuBarSmallButtonStyle())
                     .disabled(!interactive || model.wakeWordListeningState == .starting)
                 if model.wakeWordCapability == .ready {
-                    MenuBarIconButton(symbol: "slider.horizontal.3", title: "Configurar activación") {
+                    MenuBarIconButton(symbol: "slider.horizontal.3", title: String(localized: "Configurar activación", bundle: .module)) {
                         RequestedWindowFocus.open("wake-word-enrollment") { openWindow(id: "wake-word-enrollment") }
                     }
                     .disabled(!interactive)
@@ -41,14 +41,14 @@ struct MenuBarPreferencesView: View {
                     .frame(width: 24)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Alertas proactivas").font(.system(size: 12, weight: .medium))
-                    Text("Batería, red, agenda y rendimiento")
+                    Text(String(localized: "Alertas proactivas", bundle: .module)).font(.system(size: 12, weight: .medium))
+                    Text(String(localized: "Batería, red, agenda y rendimiento", bundle: .module))
                         .font(.system(size: 11))
                         .foregroundStyle(JarvisTheme.inkSecondary)
                         .lineLimit(2)
                 }
                 Spacer(minLength: 4)
-                Toggle("Alertas proactivas", isOn: Binding(
+                Toggle(String(localized: "Alertas proactivas", bundle: .module), isOn: Binding(
                     get: { model.proactiveAlertsEnabled },
                     set: { enabled in
                         guard interactive else { return }
@@ -57,7 +57,7 @@ struct MenuBarPreferencesView: View {
                 ))
                 .toggleStyle(JarvisToggleControlStyle())
                 .disabled(!interactive)
-                .accessibilityHint("Avisos sobre batería, red, agenda y rendimiento")
+                .accessibilityHint(String(localized: "Avisos sobre batería, red, agenda y rendimiento", bundle: .module))
             }
         }
         .foregroundStyle(JarvisTheme.ink)
@@ -75,23 +75,23 @@ struct MenuBarPreferencesView: View {
 
     private var wakeWordSummary: String {
         guard model.wakeWordCapability == .ready else {
-            return model.wakeWordCapability == .invalid ? "Modelo inválido" : "Configuración pendiente"
+            return model.wakeWordCapability == .invalid ? String(localized: "Modelo inválido", bundle: .module) : String(localized: "Configuración pendiente", bundle: .module)
         }
         return switch model.wakeWordListeningState {
-        case .unavailable: "No disponible"
-        case .off: "Escucha desactivada"
-        case .starting: "Iniciando escucha"
-        case .recovering: "Recuperando escucha"
-        case .listening: "Escuchando en segundo plano"
-        case .paused: model.wakeWordPauseReason?.title ?? "En pausa"
-        case .failed: "La escucha falló"
+        case .unavailable: String(localized: "No disponible", bundle: .module)
+        case .off: String(localized: "Escucha desactivada", bundle: .module)
+        case .starting: String(localized: "Iniciando escucha", bundle: .module)
+        case .recovering: String(localized: "Recuperando escucha", bundle: .module)
+        case .listening: String(localized: "Escuchando en segundo plano", bundle: .module)
+        case .paused: model.wakeWordPauseReason?.title ?? String(localized: "En pausa", bundle: .module)
+        case .failed: String(localized: "La escucha falló", bundle: .module)
         }
     }
 
     private var wakeWordActionTitle: String {
-        guard model.wakeWordCapability == .ready else { return "Preparar" }
-        if model.wakeWordListeningState == .failed, model.wakeWordOptedIn { return "Reintentar" }
-        return model.wakeWordOptedIn ? "Desactivar" : "Activar"
+        guard model.wakeWordCapability == .ready else { return String(localized: "Preparar", bundle: .module) }
+        if model.wakeWordListeningState == .failed, model.wakeWordOptedIn { return String(localized: "Reintentar", bundle: .module) }
+        return model.wakeWordOptedIn ? String(localized: "Desactivar", bundle: .module) : String(localized: "Activar", bundle: .module)
     }
 
     private func performWakeWordAction() {

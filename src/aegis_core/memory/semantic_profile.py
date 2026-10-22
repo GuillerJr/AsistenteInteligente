@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
+from aegis_core.completion_boundary import optional_completion
 from aegis_core.contracts import AgentRole
 from aegis_core.models import INTERPRETATION_MODEL_IDS
 from aegis_core.privacy import redact_secrets_for_remote
@@ -210,7 +211,7 @@ async def interpret_owner_memory(
             identifier = f"{identifier}_"
         by_id[identifier] = fact.source
     try:
-        content = await complete([
+        content = await optional_completion(complete, [
             {"role": "system", "content": _INSTRUCTION},
             {"role": "user", "content": json.dumps({
                 "message": redact_secrets_for_remote(message[:_MAX_MESSAGE_CHARACTERS]).text,
@@ -221,7 +222,7 @@ async def interpret_owner_memory(
             }, ensure_ascii=False)},
         ])
         payload = json.loads(content) if len(content.encode()) <= _MAX_RESPONSE_BYTES else None
-    except Exception:
+    except (RecursionError, TypeError, ValueError):
         return None
     if not isinstance(payload, dict) or not isinstance(payload.get("operations"), list):
         return None

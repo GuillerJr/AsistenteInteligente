@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from aegis_core.activity import SwarmActivityTracker
 from aegis_core.async_tasks import run_blocking_owned
+from aegis_core.bundle_paths import installed_app_path
 from aegis_core.contracts import AgentRole, ImageInput
 from aegis_core.providers.base import ChatProvider
 from aegis_core.tools.background_automation import (
@@ -519,8 +520,8 @@ class NativeComputerBridge:
         verify_signature: bool = True,
     ) -> None:
         self._helper_path = helper_path or (
-            Path.home()
-            / "Applications/Jarvis.app/Contents/Helpers/JarvisComputerHelper.app"
+            installed_app_path()
+            / "Contents/Helpers/JarvisComputerHelper.app"
             / "Contents/MacOS/JarvisComputerHelper"
         )
         self._verify_signature = verify_signature

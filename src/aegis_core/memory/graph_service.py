@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from uuid import UUID, uuid4
 
 from aegis_core.async_tasks import run_blocking_owned
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.memory.contracts import MemoryRecord, MemorySearchHit
 from aegis_core.memory.graph_search import GraphSearchResult, PersonalizedPageRankSearch
 from aegis_core.memory.sqlite import DECAY_EVICTION_THRESHOLD, SQLiteMemoryStore
@@ -238,5 +239,6 @@ class MemoryDecayWorker:
                 component="graph_memory",
                 data=data,
             )
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             return

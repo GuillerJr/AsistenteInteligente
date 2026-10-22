@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from uuid import UUID
 
@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from aegis_core.async_tasks import run_blocking_owned
 from aegis_core.contracts import DocumentInput, ToolExecutionResult
+from aegis_core.feedback import OwnerFeedback
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.memory.contracts import ConversationRecord, ConversationTurn
@@ -56,7 +57,8 @@ def project_of(record: ConversationRecord) -> UUID | None:
 def public_record(record: ConversationRecord) -> dict:
     project = project_of(record)
     return {**record.model_dump(mode="json", exclude=PRIVATE_CONVERSATION_FIELDS),
-            "project_id": str(project) if project else None}
+            "project_id": str(project) if project else None,
+            "filed": record.context_checkpoints.get("filed_chat") is True}
 
 
 class ConversationIdPayload(BaseModel):
@@ -71,6 +73,19 @@ class ConversationHistoryPayload(ConversationIdPayload):
 
 class RenameConversationPayload(ConversationIdPayload):
     title: str = Field(min_length=1, max_length=128)
+
+
+class ForkConversationPayload(ConversationIdPayload):
+    before_turn_id: UUID | None = None
+
+
+class FileConversationPayload(ConversationIdPayload):
+    filed: bool = Field(strict=True)
+
+
+class ConversationFeedbackPayload(ConversationIdPayload):
+    turn_id: UUID
+    value: OwnerFeedback | None
 
 
 class EmptyTrashPayload(BaseModel):
@@ -88,6 +103,7 @@ class ConversationListPayload(BaseModel):
     offset: int = Field(default=0, ge=0, le=100_000)
     query: str = Field(default="", max_length=128)
     archived: bool = False
+    filed: bool = False
 
 
 class ConversationCoordinator:
@@ -390,12 +406,14 @@ class ConversationCoordinator:
                                            namespace=self._namespace,
                                            conversation_id=conversation_id, title=title)
 
-    async def fork(self, conversation_id: UUID) -> ConversationRecord:
+    async def fork(self, conversation_id: UUID, *,
+                   before_turn_id: UUID | None = None) -> ConversationRecord:
         async with self._locked(conversation_id):
             return await run_blocking_owned(self._store.fork_conversation,
                                            namespace=self._namespace,
                                            conversation_id=conversation_id,
-                                           max_conversations=self._max_conversations)
+                                           max_conversations=self._max_conversations,
+                                           before_turn_id=before_turn_id)
 
     @asynccontextmanager
     async def _locked(self, conversation_id: UUID) -> AsyncIterator[None]:
@@ -419,15 +437,19 @@ class ConversationIpcService:
         "conversations.list", "conversations.messages", "conversations.trash",
         "conversations.restore",
         "conversations.rename", "conversations.fork", "conversations.empty_trash",
+        "conversations.feedback", "conversations.file",
     })
 
     def __init__(
         self,
         store: SQLiteMemoryStore,
         coordinator: ConversationCoordinator,
+        *,
+        on_feedback: Callable[[UUID, OwnerFeedback | None], Awaitable[None]] | None = None,
     ) -> None:
         self._store = store
         self._coordinator = coordinator
+        self._on_feedback = on_feedback
 
     def handlers(self) -> dict[str, IpcMethodHandler]:
         return {method: self.handle for method in self.METHODS}
@@ -499,11 +521,49 @@ class ConversationIpcService:
                     mode="json", exclude=PRIVATE_CONVERSATION_FIELDS,
                 )
             elif request.method == "conversations.fork":
-                payload = ConversationIdPayload.model_validate(request.payload)
-                record = await self._coordinator.fork(payload.conversation_id)
-                response_payload = record.model_dump(
-                    mode="json", exclude=PRIVATE_CONVERSATION_FIELDS,
-                )
+                payload = ForkConversationPayload.model_validate(request.payload)
+                # The source is immutable except for feedback; identify the original user turn
+                # before creating a branch. The repository verifies membership again atomically.
+                replay = None
+                if payload.before_turn_id is not None:
+                    replay = await run_blocking_owned(
+                        self._store.conversation_turn, namespace=self._coordinator.namespace,
+                        conversation_id=payload.conversation_id, turn_id=payload.before_turn_id,
+                    )
+                    if replay.role.value != "user":
+                        raise MemoryQueryError("replay requires a user turn")
+                record = await self._coordinator.fork(
+                    payload.conversation_id, before_turn_id=payload.before_turn_id)
+                response_payload = public_record(record)
+                if replay is not None:
+                    response_payload["replay"] = {
+                        "text": replay.content,
+                        "documents": [document.model_dump(mode="json")
+                                      for document in replay.documents],
+                        "image_name": replay.image_name,
+                    }
+            elif request.method == "conversations.feedback":
+                payload = ConversationFeedbackPayload.model_validate(request.payload)
+                async with self._coordinator.serialized(payload.conversation_id):
+                    turn = await run_blocking_owned(
+                        self._store.set_conversation_feedback,
+                        namespace=self._coordinator.namespace,
+                        **payload.model_dump(),
+                    )
+                if self._on_feedback is not None and turn.request_id is not None:
+                    await self._on_feedback(turn.request_id, turn.owner_feedback)
+                response_payload = {"turn_id": str(turn.turn_id),
+                                    "value": turn.owner_feedback}
+            elif request.method == "conversations.file":
+                payload = FileConversationPayload.model_validate(request.payload)
+                async with self._coordinator.serialized(payload.conversation_id):
+                    await run_blocking_owned(
+                        self._store.mutate_conversation_context,
+                        namespace=self._coordinator.namespace,
+                        conversation_id=payload.conversation_id,
+                        transform=lambda context: {**context, "filed_chat": payload.filed},
+                    )
+                response_payload = {"status": "filed" if payload.filed else "unfiled"}
             elif request.method == "conversations.empty_trash":
                 EmptyTrashPayload.model_validate(request.payload)
                 count = await run_blocking_owned(self._store.empty_conversation_trash,

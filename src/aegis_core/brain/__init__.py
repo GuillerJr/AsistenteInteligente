@@ -1,28 +1,5 @@
-from aegis_core.brain.hybrid_client import (
-    HybridBrainClient,
-    LocalFoundationCascadeClient,
-    MacLocalFoundationClient,
-)
-from aegis_core.brain.routing import (
-    CascadeDecision,
-    ConfidenceMetrics,
-    RoutingPolicySnapshot,
-    TaskClassification,
-    classify_task,
-    decide_cascade,
-)
-from aegis_core.brain.speculative_engine import SpeculativeEngine, SpeculativeResult
+"""Production brain contracts. Inference is exclusively NVIDIA.
 
-__all__ = [
-    "CascadeDecision",
-    "ConfidenceMetrics",
-    "HybridBrainClient",
-    "LocalFoundationCascadeClient",
-    "MacLocalFoundationClient",
-    "RoutingPolicySnapshot",
-    "SpeculativeEngine",
-    "SpeculativeResult",
-    "TaskClassification",
-    "classify_task",
-    "decide_cascade",
-]
+Retired hybrid, speculative and distributed MLX implementations live under
+``tests/historical`` and are never imported by the installed daemon.
+"""

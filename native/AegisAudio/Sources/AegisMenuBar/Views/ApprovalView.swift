@@ -18,7 +18,7 @@ struct ApprovalView: View {
             } else if let recovery = model.pendingRecovery {
                 RecoveryDialog(model: model, recovery: recovery, interactive: interactive)
             } else {
-                ContentUnavailableView("Sin decisiones pendientes", systemImage: "checkmark.shield")
+                ContentUnavailableView(String(localized: "Sin decisiones pendientes", bundle: .module), systemImage: "checkmark.shield")
                     .frame(width: 560, height: 400)
             }
         }

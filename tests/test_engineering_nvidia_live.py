@@ -9,13 +9,13 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
+from historical.hybrid_client import HybridBrainClient
+from historical.orchestration.graph import build_swarm_graph
 
-from aegis_core.brain.hybrid_client import HybridBrainClient
 from aegis_core.config import Settings
 from aegis_core.contracts import UserRequest
 from aegis_core.engineering import _repository_manifest
 from aegis_core.memory.contracts import ConversationRole, ConversationTurn
-from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.providers.nvidia import NvidiaNimClient
 from aegis_core.secrets import MacOSKeychain
 from aegis_core.tools.defaults import default_policy_context

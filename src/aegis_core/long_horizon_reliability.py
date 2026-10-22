@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 import psutil
 
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.production_workflows import (
     EXPECTED_WORKFLOWS,
     JarvisProductionWorkflowBenchmark,
@@ -217,7 +218,8 @@ class JarvisLongHorizonReliabilityBenchmark:
                     failure_code = "workflow_gate_failed"
                 elif checkpoints_required != expected_checkpoints:
                     failure_code = "checkpoint_count_changed"
-            except Exception:
+            except Exception as error:
+                record_boundary_error(error)
                 failure_code = "internal_error"
             latency_ms = max(
                 0,

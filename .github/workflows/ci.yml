@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Allows a fresh attempt after hosted macOS capacity is restored.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -19,7 +21,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
@@ -40,7 +42,7 @@ jobs:
       run:
         working-directory: native/AegisAudio
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Select latest Xcode
         run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
       # Build only the core and its tests: `swift test` alone compiles every target,

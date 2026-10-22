@@ -39,7 +39,7 @@ struct MenuBarView: View {
                     DisclosureGroup {
                         MenuBarPreferencesView(model: model, interactive: interactive).padding(.horizontal, 6)
                     } label: {
-                        Label("Preferencias", systemImage: "slider.horizontal.3")
+                        Label(String(localized: "Preferencias", bundle: .module), systemImage: "slider.horizontal.3")
                     }
                     .font(.system(size: 13))
                     .disclosureGroupStyle(MenuBarDisclosureStyle())
@@ -51,17 +51,17 @@ struct MenuBarView: View {
                                 Task {
                                     defer { openingTerminal = false }
                                     do { try await JarvisTerminalLauncher.open() }
-                                    catch { terminalError = "No pude abrir la CLI. Comprueba que Jarvis esté instalado y Terminal esté disponible." }
+                                    catch { terminalError = String(localized: "No pude abrir la CLI. Comprueba que Jarvis esté instalado y Terminal esté disponible.", bundle: .module) }
                                 }
-                            } label: { Label(openingTerminal ? "Abriendo terminal…" : "Abrir terminal", systemImage: "terminal") }
+                            } label: { Label(openingTerminal ? String(localized: "Abriendo terminal…", bundle: .module) : String(localized: "Abrir terminal", bundle: .module), systemImage: "terminal") }
                                 .buttonStyle(MenuBarSmallButtonStyle())
                                 .disabled(!interactive || openingTerminal)
-                            Text("Sesión de ingeniería con la CLI de Jarvis.")
+                            Text(String(localized: "Sesión de ingeniería con la CLI de Jarvis.", bundle: .module))
                                 .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
                             if let terminalError { Text(terminalError).font(.system(size: 11)).foregroundStyle(JarvisTheme.warning) }
                         }.frame(maxWidth: .infinity, alignment: .leading)
                     } label: {
-                        Label("Herramientas de desarrollo", systemImage: "terminal")
+                        Label(String(localized: "Herramientas de desarrollo", bundle: .module), systemImage: "terminal")
                     }
                     .font(.system(size: 13))
                     .disclosureGroupStyle(MenuBarDisclosureStyle())
@@ -94,15 +94,15 @@ struct MenuBarView: View {
         HStack(spacing: 10) {
             Circle().fill(JarvisTheme.clay).frame(width: 12, height: 12).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
-                Text("Jarvis").font(.system(size: 14, weight: .semibold)).foregroundStyle(JarvisTheme.ink)
+                Text(String(localized: "Jarvis", bundle: .module)).font(.system(size: 14, weight: .semibold)).foregroundStyle(JarvisTheme.ink)
                 Text(model.pendingAttentionCount > 0
-                     ? "\(model.presentationStatus.compactTitle) · \(model.pendingAttentionCount) pendientes"
+                     ? String(localized: "\(model.presentationStatus.compactTitle) · \(model.pendingAttentionCount) pendientes", bundle: .module)
                      : model.presentationStatus.compactTitle)
                     .font(.system(size: 11.5)).foregroundStyle(JarvisTheme.inkSecondary).lineLimit(1)
             }
             Spacer(minLength: 4)
             MenuBarIconButton(symbol: "arrow.clockwise", title: model.runtimeProbeInProgress
-                              ? "Actualizando estado" : "Actualizar estado") {
+                              ? String(localized: "Actualizando estado", bundle: .module) : String(localized: "Actualizar estado", bundle: .module)) {
                 Task {
                     await model.refreshDaemon()
                     await model.refreshPrivacyCapabilities()
@@ -122,28 +122,28 @@ struct MenuBarView: View {
 
     private var quickActions: some View {
         VStack(spacing: 1) {
-            menuRow("Abrir chat", symbol: "bubble.left.and.bubble.right", trailing: "⇧⌘J") {
+            menuRow(String(localized: "Abrir chat", bundle: .module), symbol: "bubble.left.and.bubble.right", trailing: "⇧⌘J") {
                 RequestedWindowFocus.open("chat") { openWindow(id: "chat") }
             }
             if model.pendingAttentionCount > 0 {
-                menuRow("Requiere tu atención", symbol: "bell", trailing: "\(model.pendingAttentionCount)") {
+                menuRow(String(localized: "Requiere tu atención", bundle: .module), symbol: "bell", trailing: "\(model.pendingAttentionCount)") {
                     model.chat.showHistory = true
                     RequestedWindowFocus.open("chat") { openWindow(id: "chat") }
                 }
             }
-            menuRow("Pregunta rápida", symbol: "sparkles", trailing: "⌃⇧J") {
+            menuRow(String(localized: "Pregunta rápida", bundle: .module), symbol: "sparkles", trailing: "⌃⇧J") {
                 QuickEntryPanelController.shared.toggle(model: model)
             }
-            menuRow("Preguntar sobre una imagen", symbol: "photo") {
+            menuRow(String(localized: "Preguntar sobre una imagen", bundle: .module), symbol: "photo") {
                 guard let url = ImageFilePicker.chooseImage() else { return }
                 Task { await model.startImageVoiceTurn(fileURL: url) }
             }
             .disabled(!interactive || !model.canStartVoiceTurn)
-            menuRow("Preguntar sobre la pantalla", symbol: "macbook") {
+            menuRow(String(localized: "Preguntar sobre la pantalla", bundle: .module), symbol: "macbook") {
                 Task { await model.startScreenVoiceTurn() }
             }
             .disabled(!interactive || !model.canStartScreenTurn)
-            menuRow("Abrir HUD", symbol: "rectangle.on.rectangle") {
+            menuRow(String(localized: "Abrir HUD", bundle: .module), symbol: "rectangle.on.rectangle") {
                 HUDPanelController.shared.show(model: model)
             }
         }
@@ -182,7 +182,7 @@ struct MenuBarView: View {
                     }
                     .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .warning)))
                     .disabled(!interactive)
-                    .help("Continuar en " + option.name)
+                    .help(String(localized: "Continuar en ", bundle: .module) + option.name)
                 }
             }
         }
@@ -193,8 +193,8 @@ struct MenuBarView: View {
             menuRow("Ajustes…", symbol: "gearshape", trailing: "⌘,") {
                 RequestedWindowFocus.open("settings") { openWindow(id: "settings") }
             }
-            menuRow("Salir de Jarvis", symbol: "power", trailing: "⌘Q") { NSApplication.shared.terminate(nil) }
-            Text(model.voiceShortcutAvailable ? "\(JarvisVoiceShortcut.current.title) para hablar" : "Atajo de voz no disponible")
+            menuRow(String(localized: "Salir de Jarvis", bundle: .module), symbol: "power", trailing: "⌘Q") { NSApplication.shared.terminate(nil) }
+            Text(model.voiceShortcutAvailable ? String(localized: "\(JarvisVoiceShortcut.current.title) para hablar", bundle: .module) : String(localized: "Atajo de voz no disponible", bundle: .module))
                 .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkMuted)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 10).padding(.top, 6)
         }

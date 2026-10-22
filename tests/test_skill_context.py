@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
+from historical.orchestration.graph import build_swarm_graph
 from test_skill_policy import approve, draft, registry
 
 from aegis_core.contracts import (
@@ -22,7 +23,6 @@ from aegis_core.contracts import (
 )
 from aegis_core.engineering import ENGINEERING_SURFACE_METADATA
 from aegis_core.memory.contracts import ConversationRole, ConversationTurn
-from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.skills import SkillError
 from aegis_core.skills.contracts import SkillManifest, SkillOrigin
 

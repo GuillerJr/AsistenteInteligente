@@ -1,29 +1,27 @@
-"""Persistent local memory primitives for Aegis."""
+"""Persistent memory primitives, loaded lazily to keep contracts cycle-free."""
+from importlib import import_module
 
-from aegis_core.memory.conversations import ConversationCoordinator, ConversationIpcService
-from aegis_core.memory.graph_service import (
-    GraphRAGService,
-    HybridRRFResult,
-    MemoryDecayWorker,
-    SessionResetResult,
-)
-from aegis_core.memory.profile import OwnerProfile
-from aegis_core.memory.retrieval import EmbeddingBackfillWorker, HybridMemoryRetriever
-from aegis_core.memory.service import MemoryIpcService
-from aegis_core.memory.social import SocialMemory
-from aegis_core.memory.sqlite import SQLiteMemoryStore
+_EXPORTS = {
+    "ConversationCoordinator": "conversations",
+    "ConversationIpcService": "conversations",
+    "EmbeddingBackfillWorker": "retrieval",
+    "GraphRAGService": "graph_service",
+    "HybridMemoryRetriever": "retrieval",
+    "HybridRRFResult": "graph_service",
+    "MemoryDecayWorker": "graph_service",
+    "MemoryIpcService": "service",
+    "OwnerProfile": "profile",
+    "SQLiteMemoryStore": "sqlite",
+    "SessionResetResult": "graph_service",
+    "SocialMemory": "social",
+}
+__all__ = list(_EXPORTS)
 
-__all__ = [
-    "ConversationCoordinator",
-    "ConversationIpcService",
-    "EmbeddingBackfillWorker",
-    "GraphRAGService",
-    "HybridMemoryRetriever",
-    "HybridRRFResult",
-    "MemoryDecayWorker",
-    "MemoryIpcService",
-    "OwnerProfile",
-    "SQLiteMemoryStore",
-    "SessionResetResult",
-    "SocialMemory",
-]
+
+def __getattr__(name: str):
+    module = _EXPORTS.get(name)
+    if module is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module(f"{__name__}.{module}"), name)
+    globals()[name] = value
+    return value

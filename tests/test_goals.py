@@ -153,7 +153,7 @@ async def test_a_step_needing_approval_blocks_without_approving(tmp_path):
     runner = GoalRunner(store, jobs=jobs, conversations=None, judge=_judge(),
                         deliver=(deliver,))
     assert await runner.step(goal.goal_id) is GoalStatus.BLOCKED
-    assert len(jobs.cancelled) == 1 and "aprobarla en persona" in delivered[0]
+    assert len(jobs.cancelled) == 1 and "Revisa la acción en Jarvis" in delivered[0]
     assert jobs.requests[0].metadata["source_channel"] == "goal"
 
 

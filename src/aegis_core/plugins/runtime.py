@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict
 
+from aegis_core import __version__
 from aegis_core.contracts import (
     AgentRole,
     PolicyDecision,
@@ -313,7 +314,7 @@ class PluginMcpClient:
                         "io.modelcontextprotocol/clientCapabilities": {},
                         "io.modelcontextprotocol/clientInfo": {
                             "name": "Jarvis",
-                            "version": "0.1.0",
+                            "version": __version__,
                         },
                     },
                 },

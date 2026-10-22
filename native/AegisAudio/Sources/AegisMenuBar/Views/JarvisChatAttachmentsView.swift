@@ -15,7 +15,7 @@ struct JarvisChatAttachmentsView: View {
                         Button { chat.attachments.removeAll { $0.id == attachment.id } } label: {
                             Image(systemName: "xmark").frame(width: 24, height: 24)
                         }.buttonStyle(.plain).disabled(chat.isEditing)
-                            .accessibilityLabel("Quitar adjunto \(attachment.name)")
+                            .accessibilityLabel(String(localized: "Quitar adjunto \(attachment.name)", bundle: .module))
                     }
                     .font(.system(size: 11)).padding(.leading, 10).padding(.trailing, 4).padding(.vertical, 4)
                     .jarvisCard()

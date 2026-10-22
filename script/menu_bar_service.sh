@@ -7,7 +7,11 @@ AEGIS_LEGACY_APP_NAME="AegisMenuBar"
 AEGIS_LABEL="ai.aegis.menubar.autostart"
 AEGIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AEGIS_SOURCE_BUNDLE="/private/tmp/$AEGIS_APP_NAME.app"
-AEGIS_INSTALL_DIR="$HOME/Applications"
+AEGIS_INSTALL_DIR="${AEGIS_INSTALL_DIR:-$HOME/Applications}"
+# Follow an existing system installation when no destination was explicitly selected.
+if [[ "$AEGIS_INSTALL_DIR" == "$HOME/Applications" && -d /Applications/Jarvis.app && ! -d "$HOME/Applications/Jarvis.app" ]]; then
+    AEGIS_INSTALL_DIR="/Applications"
+fi
 AEGIS_INSTALLED_BUNDLE="$AEGIS_INSTALL_DIR/$AEGIS_APP_NAME.app"
 AEGIS_INSTALLED_BINARY="$AEGIS_INSTALLED_BUNDLE/Contents/MacOS/$AEGIS_APP_NAME"
 AEGIS_INSTALLED_DAEMON="$AEGIS_INSTALLED_BUNDLE/Contents/Resources/Daemon/jarvis-daemon"
@@ -94,25 +98,6 @@ stop_installed_daemon() {
     return 1
 }
 
-write_plist() {
-    local target="$1"
-    /usr/bin/plutil -create xml1 "$target"
-    /usr/bin/plutil -insert Label -string "$AEGIS_LABEL" "$target"
-    /usr/bin/plutil -insert ProgramArguments -array "$target"
-    /usr/bin/plutil -insert ProgramArguments.0 -string /usr/bin/open "$target"
-    /usr/bin/plutil -insert ProgramArguments.1 -string -g "$target"
-    /usr/bin/plutil -insert ProgramArguments.2 -string -n "$target"
-    /usr/bin/plutil -insert ProgramArguments.3 -string "$AEGIS_INSTALLED_BUNDLE" "$target"
-    /usr/bin/plutil -insert RunAtLoad -bool true "$target"
-    /usr/bin/plutil -insert LimitLoadToSessionType -string Aqua "$target"
-    /usr/bin/plutil -insert ProcessType -string Background "$target"
-    /usr/bin/plutil -insert ThrottleInterval -integer 10 "$target"
-    /usr/bin/plutil -insert Umask -integer 63 "$target"
-    /usr/bin/plutil -insert StandardOutPath -string "$AEGIS_LOG_DIR/menu-bar.log" "$target"
-    /usr/bin/plutil -insert StandardErrorPath -string "$AEGIS_LOG_DIR/menu-bar.error.log" "$target"
-    /usr/bin/plutil -lint "$target" >/dev/null
-}
-
 validate_legacy_bundle() {
     if [[ ! -e "$AEGIS_LEGACY_INSTALLED_BUNDLE" ]]; then
         return
@@ -148,7 +133,7 @@ rollback_failed_install() {
         echo "status=error reason=$reason rollback=restored_not_started" >&2
         return 1
     fi
-    if ! /bin/launchctl bootstrap "$AEGIS_DOMAIN" "$AEGIS_AGENT_PLIST"; then
+    if ! /usr/bin/open -g -n "$AEGIS_INSTALLED_BUNDLE"; then
         echo "status=error reason=$reason rollback=restored_service_failed" >&2
         return 1
     fi
@@ -199,14 +184,10 @@ install_service() {
         return 1
     fi
 
-    AEGIS_TEMPORARY="$(/usr/bin/mktemp /private/tmp/ai.aegis.menubar.XXXXXX)"
-    write_plist "$AEGIS_TEMPORARY"
-    if ! /usr/bin/install -m 600 "$AEGIS_TEMPORARY" "$AEGIS_AGENT_PLIST"; then
-        rollback_failed_install launch_agent_install_failed "$previous"
-        return 1
-    fi
-    if ! /bin/launchctl bootstrap "$AEGIS_DOMAIN" "$AEGIS_AGENT_PLIST"; then
-        rollback_failed_install launch_agent_bootstrap_failed "$previous"
+    # Login registration belongs exclusively to SMAppService in the app. A legacy
+    # plist is left for the signed app to migrate, preserving the owner's choice.
+    if ! /usr/bin/open -g -n "$AEGIS_INSTALLED_BUNDLE"; then
+        rollback_failed_install app_launch_failed "$previous"
         return 1
     fi
 
@@ -223,10 +204,6 @@ install_service() {
 }
 
 status_service() {
-    if ! /bin/launchctl print "$AEGIS_DOMAIN/$AEGIS_LABEL" >/dev/null 2>&1; then
-        echo "status=error reason=service_not_loaded"
-        return 1
-    fi
     if ! installed_app_is_running; then
         echo "status=error reason=app_not_running"
         return 1
@@ -292,6 +269,10 @@ restart_service() {
 }
 
 uninstall_service() {
+    if [[ -d "$AEGIS_INSTALLED_BUNDLE" ]]; then
+        /usr/bin/open -g -n "$AEGIS_INSTALLED_BUNDLE" --args --disable-login-item
+        sleep 1
+    fi
     /bin/launchctl bootout "$AEGIS_DOMAIN/$AEGIS_LABEL" >/dev/null 2>&1 || true
     pkill -x "$AEGIS_APP_NAME" >/dev/null 2>&1 || true
     pkill -x "$AEGIS_LEGACY_APP_NAME" >/dev/null 2>&1 || true

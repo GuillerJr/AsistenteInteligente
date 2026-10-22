@@ -329,8 +329,10 @@ async def test_screenshot_request_and_yes_reach_real_broker_confirmation(followu
         async def complete(self, **kwargs):
             pytest.fail("NVIDIA-only graph must never call a local model")
 
+    with pytest.raises(ValueError, match="NVIDIA exclusively"):
+        build_swarm_graph(NvidiaBrainClient(provider), local_provider=ForbiddenLocal())
     graph = build_swarm_graph(
-        NvidiaBrainClient(provider), inference_nvidia_only=True, local_provider=ForbiddenLocal(),
+        NvidiaBrainClient(provider), inference_nvidia_only=True,
         tool_broker=build_default_tool_broker((definition, detail)),
         dynamic_tool_names=lambda request: frozenset({TOOL, detail.name})
         if "search_gmail_messages" in google_request_tools(request.text) else frozenset(),

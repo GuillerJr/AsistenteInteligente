@@ -113,10 +113,11 @@ async def test_owner_manages_projects_and_moves_chats(tmp_path):
 async def test_project_context_only_reaches_provider_for_owner(tmp_path, identity):
     import asyncio
 
+    from historical.orchestration.graph import build_swarm_graph
+
     from aegis_core.contracts import AgentResult
     from aegis_core.job_contracts import JobStatus
     from aegis_core.jobs import SwarmJobManager
-    from aegis_core.orchestration.graph import build_swarm_graph
 
     _, conversations, store = _setup(tmp_path)
     project = store.save(project_id=None, name="Tesis", color="clay", icon="book",
@@ -166,8 +167,9 @@ def _request(identity):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("identity", ["unknown_voice", "unsigned", "temporary"])
 async def test_graph_filters_private_project_even_if_internal_metadata_is_present(identity):
+    from historical.orchestration.graph import build_swarm_graph
+
     from aegis_core.contracts import AgentResult
-    from aegis_core.orchestration.graph import build_swarm_graph
 
     prompts = []
 

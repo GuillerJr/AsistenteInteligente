@@ -13,6 +13,7 @@ import json
 import re
 from collections.abc import Awaitable, Callable, Sequence
 
+from aegis_core.completion_boundary import optional_completion
 from aegis_core.job_interactions import question_with_options
 from aegis_core.memory.contracts import ConversationRole, ConversationTurn
 from aegis_core.privacy import redact_secrets_for_remote
@@ -58,7 +59,7 @@ async def structured_clarification(request: str, reply: str, complete: Complete)
     if not may_ask_user(reply):
         return None
     try:
-        content = await complete([
+        content = await optional_completion(complete, [
             {"role": "system", "content": _INSTRUCTION},
             {"role": "user", "content": json.dumps({
                 "request": redact_secrets_for_remote(request[:1_000]).text,
@@ -66,7 +67,7 @@ async def structured_clarification(request: str, reply: str, complete: Complete)
             }, ensure_ascii=False)},
         ])
         payload = json.loads(content) if len(content.encode()) <= 2_048 else None
-    except Exception:
+    except (RecursionError, TypeError, ValueError):
         return None
     if (not isinstance(payload, dict) or set(payload) != {"asks", "question", "options"}
             or payload["asks"] is not True):

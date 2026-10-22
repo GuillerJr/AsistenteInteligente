@@ -521,7 +521,6 @@ class SkillFlowBenchmark:
                 )
                 graph = build_swarm_graph(
                     provider,
-                    local_provider=provider,
                     tool_broker=broker,
                     policy_context=context,
                     tool_executor=executor,

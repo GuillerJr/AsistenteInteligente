@@ -7,11 +7,14 @@ private struct JarvisSettingsError: Error { let code: String }
 
 @MainActor @Observable
 final class JarvisSettingsStore {
+    enum FailureSource { case configurationRead, operation }
+
     var snapshot: JarvisSettingsSnapshot?
     var loading = false
     var busy = false
     var message: String?
     var failed = false
+    private(set) var failureSource: FailureSource?
     var operationState = "idle"
     var memoryHits: [JarvisMemoryHit] = []
     var standingGrants: [JarvisStandingGrant] = []
@@ -35,11 +38,10 @@ final class JarvisSettingsStore {
         defer { loading = false }
         do {
             snapshot = try await request("settings.status", as: JarvisSettingsSnapshot.self)
-            if failed && message?.hasPrefix("No se pudo leer la configuración") == true {
-                clearMessage()
-            }
+            configurationReadRecovered()
         } catch {
-            fail("No se pudo leer la configuración. Comprueba que el servicio esté conectado.")
+            fail(String(localized: "No se pudo leer la configuración. Comprueba que el servicio esté conectado.", bundle: .module),
+                 source: .configurationRead)
         }
         await refreshExtensions()
     }
@@ -53,7 +55,7 @@ final class JarvisSettingsStore {
             extensionsError = nil
         } catch {
             extensionsSnapshot = nil
-            extensionsError = "No se pudo leer el catálogo de extensiones. Actualiza el estado del servicio."
+            extensionsError = String(localized: "No se pudo leer el catálogo de extensiones. Actualiza el estado del servicio.", bundle: .module)
         }
     }
 
@@ -86,19 +88,19 @@ final class JarvisSettingsStore {
         busy = true
         defer { busy = false }
         do { return try await request(method, payload: payload, as: type) }
-        catch { fail(extensionErrorMessage(error, fallback: "No se pudo revisar la extensión. Comprueba el formato y los límites del archivo.")) }
+        catch { fail(extensionErrorMessage(error, fallback: String(localized: "No se pudo revisar la extensión. Comprueba el formato y los límites del archivo.", bundle: .module))) }
         return nil
     }
 
     private func extensionErrorMessage(_ error: Error, fallback: String) -> String {
         guard let error = error as? JarvisSettingsError else { return fallback }
         switch error.code {
-        case "extensions_busy": return "Jarvis tiene una tarea en curso. Espera a que termine para cambiar extensiones."
-        case "extensions_source_changed", "source_changed": return "El contenido cambió desde la revisión. Actualiza y revisa la versión actual."
-        case "extensions_restart_required": return "Aplica los cambios y reinicia antes de modificar esta skill."
-        case "extensions_policy_unavailable": return "La política local no permite guardar más cambios. Revisa su integridad y capacidad antes de importar."
-        case "source_contains_secret_material": return "El archivo contiene posibles credenciales. Retíralas antes de importar."
-        case "extensions_executable_unsupported", "skill_executable_unsupported": return "Esta skill requiere código que Jarvis no ejecuta. Adáptala a instrucciones declarativas."
+        case "extensions_busy": return String(localized: "Jarvis tiene una tarea en curso. Espera a que termine para cambiar extensiones.", bundle: .module)
+        case "extensions_source_changed", "source_changed": return String(localized: "El contenido cambió desde la revisión. Actualiza y revisa la versión actual.", bundle: .module)
+        case "extensions_restart_required": return String(localized: "Aplica los cambios y reinicia antes de modificar esta skill.", bundle: .module)
+        case "extensions_policy_unavailable": return String(localized: "La política local no permite guardar más cambios. Revisa su integridad y capacidad antes de importar.", bundle: .module)
+        case "source_contains_secret_material": return String(localized: "El archivo contiene posibles credenciales. Retíralas antes de importar.", bundle: .module)
+        case "extensions_executable_unsupported", "skill_executable_unsupported": return String(localized: "Esta skill requiere código que Jarvis no ejecuta. Adáptala a instrucciones declarativas.", bundle: .module)
         default: return fallback
         }
     }
@@ -106,8 +108,7 @@ final class JarvisSettingsStore {
     func perform(_ method: String, payload: [String: Any] = [:], success: String) async {
         guard !busy else { return }
         busy = true
-        failed = false
-        message = nil
+        clearMessage()
         do {
             let data = try await call(method, payload: payload)
             let operation = try? JSONDecoder().decode(JarvisSettingsOperation.self, from: data)
@@ -121,7 +122,7 @@ final class JarvisSettingsStore {
             }
         } catch {
             busy = false
-            fail(extensionErrorMessage(error, fallback: "No se guardó el cambio. Revisa los datos, los permisos y el estado del servicio."))
+            fail(extensionErrorMessage(error, fallback: String(localized: "No se guardó el cambio. Revisa los datos, los permisos y el estado del servicio.", bundle: .module)))
         }
     }
 
@@ -130,14 +131,21 @@ final class JarvisSettingsStore {
             let data = try JSONEncoder().encode(preferences)
             let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
             await perform("settings.models.save", payload: payload,
-                          success: "Modelos guardados. Aplica los cambios para reiniciar el servicio.")
-        } catch { fail("No se pudo guardar la selección de modelos.") }
+                          success: String(localized: "Modelos guardados. Aplica los cambios para reiniciar el servicio.", bundle: .module))
+        } catch { fail(String(localized: "No se pudo guardar la selección de modelos.", bundle: .module)) }
+    }
+
+    func reconcileModelDraft(previous: JarvisModelPreferences?, current: JarvisModelPreferences?) {
+        // Follow refreshed settings only when there are no divergent unsaved edits.
+        if modelDraft == nil || modelDraft == previous || modelDraft == current {
+            modelDraft = current
+        }
     }
 
     func saveBrowserAutomation(enabled: Bool, mode: String) async {
         await perform("settings.browser.save", payload: [
             "enabled": enabled, "mode": mode, "confirm": true,
-        ], success: "Preferencias del navegador guardadas. Se usarán en la próxima tarea.")
+        ], success: String(localized: "Preferencias del navegador guardadas. Se usarán en la próxima tarea.", bundle: .module))
     }
 
     func cancelOperation() async {
@@ -146,9 +154,10 @@ final class JarvisSettingsStore {
             monitor?.cancel()
             busy = false
             operationState = "idle"
-            message = "Operación cancelada. Puedes aplicar los cambios para restablecer las conexiones."
+            clearMessage()
+            message = String(localized: "Operación cancelada. Puedes aplicar los cambios para restablecer las conexiones.", bundle: .module)
             await refresh()
-        } catch { fail("No se pudo cancelar la operación.") }
+        } catch { fail(String(localized: "No se pudo cancelar la operación.", bundle: .module)) }
     }
 
     func searchMemories(_ query: String) async {
@@ -160,16 +169,16 @@ final class JarvisSettingsStore {
                 "namespace": snapshot.memory_namespace, "query": query, "limit": 10,
             ], as: JarvisMemoryResults.self)
             memoryHits = result.hits
-            failed = false
-            message = result.hits.isEmpty ? "No se encontraron recuerdos para esta búsqueda." : nil
-        } catch { fail("No se pudo consultar la memoria.") }
+            clearMessage()
+            message = result.hits.isEmpty ? String(localized: "No se encontraron recuerdos para esta búsqueda.", bundle: .module) : nil
+        } catch { fail(String(localized: "No se pudo consultar la memoria.", bundle: .module)) }
     }
 
     func deleteMemory(_ hit: JarvisMemoryHit) async {
         guard let snapshot else { return }
         await perform("memory.delete", payload: ["namespace": snapshot.memory_namespace,
                                                 "memory_id": hit.memory_id],
-                      success: "Recuerdo eliminado.")
+                      success: String(localized: "Recuerdo eliminado.", bundle: .module))
         if !failed { memoryHits.removeAll { $0.id == hit.id } }
     }
 
@@ -177,74 +186,74 @@ final class JarvisSettingsStore {
         do {
             standingGrants = try await request("jobs.grants.list", as: JarvisStandingGrants.self)
                 .grants
-        } catch { fail("No se pudieron cargar los permisos permanentes.") }
+        } catch { fail(String(localized: "No se pudieron cargar los permisos permanentes.", bundle: .module)) }
     }
 
     func revokeStandingGrant(_ grant: JarvisStandingGrant) async {
         await perform("jobs.grants.revoke", payload: ["tool_name": grant.tool_name],
-                      success: "Jarvis volverá a pedir tu aprobación para esta herramienta.")
+                      success: String(localized: "Jarvis volverá a pedir tu aprobación para esta herramienta.", bundle: .module))
         if !failed { standingGrants.removeAll { $0.id == grant.id } }
     }
 
     func loadAppGrants() async {
         do { appGrants = try await request("jobs.app_grants.list", as: JarvisAppGrants.self).grants }
-        catch { fail("No se pudieron cargar las aplicaciones permitidas.") }
+        catch { fail(String(localized: "No se pudieron cargar las aplicaciones permitidas.", bundle: .module)) }
     }
 
     func revokeAppGrant(_ grant: JarvisAppGrant) async {
         await perform("jobs.app_grants.revoke", payload: ["bundle_identifier": grant.bundle_identifier],
-                      success: "Jarvis volverá a pedir tu aprobación para usar esa app.")
+                      success: String(localized: "Jarvis volverá a pedir tu aprobación para usar esa app.", bundle: .module))
         if !failed { appGrants.removeAll { $0.id == grant.id } }
     }
 
     func loadScheduledTasks() async {
         do {
             scheduledTasks = try await request("schedules.list", as: JarvisScheduledTasks.self).tasks
-        } catch { fail("No se pudieron cargar las tareas programadas.") }
+        } catch { fail(String(localized: "No se pudieron cargar las tareas programadas.", bundle: .module)) }
     }
 
     func setScheduledTask(_ task: JarvisScheduledTask, enabled: Bool) async {
         await perform("schedules.set_enabled", payload: ["task_id": task.task_id, "enabled": enabled],
-                      success: enabled ? "Tarea reanudada." : "Tarea pausada.")
+                      success: enabled ? String(localized: "Tarea reanudada.", bundle: .module) : String(localized: "Tarea pausada.", bundle: .module))
         await loadScheduledTasks()
     }
 
     func runScheduledTask(_ task: JarvisScheduledTask) async {
         await perform("schedules.run_now", payload: ["task_id": task.task_id],
-                      success: "Ejecutando «\(task.title)». Te avisaré con el resultado.")
+                      success: String(localized: "Ejecutando «\(task.title)». Te avisaré con el resultado.", bundle: .module))
     }
 
     func deleteScheduledTask(_ task: JarvisScheduledTask) async {
         await perform("schedules.delete", payload: ["task_id": task.task_id],
-                      success: "Tarea borrada.")
+                      success: String(localized: "Tarea borrada.", bundle: .module))
         if !failed { scheduledTasks.removeAll { $0.id == task.id } }
     }
 
     func loadGoals() async {
         do {
             goals = try await request("goals.list", as: JarvisGoals.self).goals
-        } catch { fail("No se pudieron cargar los objetivos.") }
+        } catch { fail(String(localized: "No se pudieron cargar los objetivos.", bundle: .module)) }
     }
 
     func setGoal(_ goal: JarvisGoal, running: Bool) async {
         await perform(running ? "goals.resume" : "goals.stop", payload: ["goal_id": goal.goal_id],
-                      success: running ? "Jarvis retomó el objetivo." : "Objetivo detenido.")
+                      success: running ? String(localized: "Jarvis retomó el objetivo.", bundle: .module) : String(localized: "Objetivo detenido.", bundle: .module))
         await loadGoals()
     }
 
     func deleteGoal(_ goal: JarvisGoal) async {
-        await perform("goals.delete", payload: ["goal_id": goal.goal_id], success: "Objetivo borrado.")
+        await perform("goals.delete", payload: ["goal_id": goal.goal_id], success: String(localized: "Objetivo borrado.", bundle: .module))
         if !failed { goals.removeAll { $0.id == goal.id } }
     }
 
     func loadPersonality() async {
         do { personality = try await request("personality.get", as: JarvisPersonality.self) }
-        catch { fail("No se pudo cargar la personalidad.") }
+        catch { fail(String(localized: "No se pudo cargar la personalidad.", bundle: .module)) }
     }
 
     func savePersonality(preset: String, custom: String) async {
         await perform("personality.save", payload: ["preset": preset, "custom": custom],
-                      success: "Jarvis usará esta personalidad desde la próxima respuesta.")
+                      success: String(localized: "Jarvis usará esta personalidad desde la próxima respuesta.", bundle: .module))
         await loadPersonality()
     }
 
@@ -259,13 +268,19 @@ final class JarvisSettingsStore {
                 method, payload: payload, timeout: method.hasSuffix("marketplace.add") ? 30 : 20))
             foreignCatalogue = status
             if let error = status.error { fail(error) }
-            else if let success { message = success; failed = false }
-        } catch { fail("No se pudo leer los complementos de Codex y Claude.") }
+            else if let success { clearMessage(); message = success }
+        } catch { fail(String(localized: "No se pudo leer los complementos de Codex y Claude.", bundle: .module)) }
     }
 
-    func clearMessage() { message = nil; failed = false }
+    func clearMessage() { message = nil; failed = false; failureSource = nil }
 
-    func fail(_ value: String) { message = value; failed = true }
+    func fail(_ value: String, source: FailureSource = .operation) {
+        message = value; failed = true; failureSource = source
+    }
+
+    func configurationReadRecovered() {
+        if failed, failureSource == .configurationRead { clearMessage() }
+    }
 
     private func monitorOperation(success: String) async {
         var openedURL = false
@@ -280,6 +295,7 @@ final class JarvisSettingsStore {
                 }
                 switch operation.state {
                 case "done":
+                    clearMessage()
                     message = success
                     busy = false
                     await refresh()
@@ -287,16 +303,16 @@ final class JarvisSettingsStore {
                 case "error", "cancelled":
                     busy = false
                     fail(operation.reason == "google_account_mismatch"
-                         ? "Google autorizó otra cuenta. Vuelve a conectar usando el correo indicado."
+                         ? String(localized: "Google autorizó otra cuenta. Vuelve a conectar usando el correo indicado.", bundle: .module)
                          : operation.reason == "browser_dependencies_unavailable"
-                         ? "Faltan los componentes revisados del navegador o cambiaron. Reinstala los peers MCP de Jarvis y revisa de nuevo el perfil."
+                         ? String(localized: "Faltan los componentes revisados del navegador o cambiaron. Reinstala los peers MCP de Jarvis y revisa de nuevo el perfil.", bundle: .module)
                          : operation.reason == "browser_schema_incompatible"
-                         ? "La versión del navegador MCP no coincide con las herramientas revisadas. No se cambió la conexión."
+                         ? String(localized: "La versión del navegador MCP no coincide con las herramientas revisadas. No se cambió la conexión.", bundle: .module)
                          : operation.reason == "browser_profile_capacity"
-                         ? "Se alcanzó el límite de perfiles preparados. Revisa los perfiles locales antes de crear otro."
+                         ? String(localized: "Se alcanzó el límite de perfiles preparados. Revisa los perfiles locales antes de crear otro.", bundle: .module)
                          : operation.reason?.hasPrefix("model_") == true
-                         ? "El modelo no superó la prueba de conexión o de capacidades. Revisa su ID y la clave de NVIDIA."
-                         : "La operación no se completó. Revisa la conexión o vuelve a intentarlo.")
+                         ? String(localized: "El modelo no superó la prueba de conexión o de capacidades. Revisa su ID y la clave de NVIDIA.", bundle: .module)
+                         : String(localized: "La operación no se completó. Revisa la conexión o vuelve a intentarlo.", bundle: .module))
                     await refresh()
                     return
                 default: break
@@ -306,7 +322,7 @@ final class JarvisSettingsStore {
         } catch {
             if !Task.isCancelled {
                 busy = false
-                fail("Se perdió la conexión durante la operación. Actualiza el estado antes de continuar.")
+                fail(String(localized: "Se perdió la conexión durante la operación. Actualiza el estado antes de continuar.", bundle: .module))
             }
         }
     }

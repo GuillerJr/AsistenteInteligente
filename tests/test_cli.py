@@ -405,6 +405,7 @@ def test_daemon_recovery_recognizes_current_bundled_supervisor(
             )
         )
 
+    monkeypatch.setattr(cli, "_bundled_supervisor_running", lambda: False)
     monkeypatch.setattr(cli.subprocess, "run", launchctl)
 
     assert cli._daemon_supervisor_loaded() is True
@@ -423,6 +424,7 @@ def test_daemon_recovery_keeps_legacy_development_supervisor_compatible(
             returncode=0 if command[-1].endswith("/ai.aegis.daemon") else 1
         )
 
+    monkeypatch.setattr(cli, "_bundled_supervisor_running", lambda: False)
     monkeypatch.setattr(cli.subprocess, "run", launchctl)
 
     assert cli._daemon_supervisor_loaded() is True
@@ -759,3 +761,9 @@ async def test_vision_probe_rejects_empty_provider_response(
 
     assert status == 1
     assert capsys.readouterr().out == "status=error reason=invalid_vision_response\n"
+
+
+def test_daemon_recovery_recognizes_smappservice_without_legacy_launchagent(monkeypatch):
+    monkeypatch.setattr(cli, "_bundled_supervisor_running", lambda: True)
+    monkeypatch.setattr(cli.subprocess, "run", lambda *_a, **_k: pytest.fail("legacy lookup"))
+    assert cli._daemon_supervisor_loaded() is True

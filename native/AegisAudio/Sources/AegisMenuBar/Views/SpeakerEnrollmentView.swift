@@ -18,35 +18,35 @@ struct SpeakerEnrollmentView: View {
 
     var body: some View {
         VoiceEnrollmentPanel(
-            title: "Identidad local de voz",
+            title: String(localized: "Identidad local de voz", bundle: .module),
             symbol: "person.2.fill",
-            detail: "Perfiles para personalización y contexto privado. No autentican ni aprueban acciones. Espera a “Grabando” antes de hablar; cada muestra dura 3 segundos.",
+            detail: String(localized: "Perfiles para personalización y contexto privado. No autentican ni aprueban acciones. Espera a “Grabando” antes de hablar; cada muestra dura 3 segundos.", bundle: .module),
             width: 620,
             height: 700
         ) {
             profileCreator
             VStack(alignment: .leading, spacing: 10) {
-                Text("Muestras de voz")
+                Text(String(localized: "Muestras de voz", bundle: .module))
                     .font(.system(size: 13, weight: .semibold))
                 sampleRow(
-                    title: "Fondo acústico",
-                    subtitle: "Sonidos y voces no enroladas",
+                    title: String(localized: "Fondo acústico", bundle: .module),
+                    subtitle: String(localized: "Sonidos y voces no enroladas", bundle: .module),
                     target: .background,
                     removable: false
                 )
                 ForEach(model.speakerEnrollmentProgress.profiles) { profile in
                     sampleRow(
                         title: profile.identifier,
-                        subtitle: "Perfil local de voz",
+                        subtitle: String(localized: "Perfil local de voz", bundle: .module),
                         target: .speaker(profile.identifier),
                         removable: true
                     )
                 }
                 if model.speakerEnrollmentProgress.profiles.isEmpty {
                     ContentUnavailableView(
-                        "Sin perfiles",
+                        String(localized: "Sin perfiles", bundle: .module),
                         systemImage: "person.2.slash",
-                        description: Text("Añade al menos un perfil de voz.")
+                        description: Text(String(localized: "Añade al menos un perfil de voz.", bundle: .module))
                     )
                     .frame(height: 120)
                     .foregroundStyle(JarvisTheme.inkSecondary)
@@ -68,34 +68,34 @@ struct SpeakerEnrollmentView: View {
             await model.refreshSpeakerIdentityConfiguration()
         }
         .confirmationDialog(
-            "¿Eliminar este perfil local?",
+            String(localized: "¿Eliminar este perfil local?", bundle: .module),
             isPresented: Binding(
                 get: { profilePendingRemoval != nil },
                 set: { if !$0 { profilePendingRemoval = nil } }
             )
         ) {
             if let identifier = profilePendingRemoval {
-                Button("Eliminar \(identifier)", role: .destructive) {
+                Button(String(localized: "Eliminar \(identifier)", bundle: .module), role: .destructive) {
                     profilePendingRemoval = nil
                     Task { await model.removeSpeakerProfile(identifier) }
                 }
             }
-            Button("Cancelar", role: .cancel) {
+            Button(String(localized: "Cancelar", bundle: .module), role: .cancel) {
                 profilePendingRemoval = nil
             }
         } message: {
-            Text("Se eliminarán únicamente sus clips de enrolamiento. Un modelo ya entrenado no cambia.")
+            Text(String(localized: "Se eliminarán únicamente sus clips de enrolamiento. Un modelo ya entrenado no cambia.", bundle: .module))
         }
         .confirmationDialog(
-            "¿Eliminar todas las muestras locales?",
+            String(localized: "¿Eliminar todas las muestras locales?", bundle: .module),
             isPresented: $confirmingSampleDeletion
         ) {
-            Button("Eliminar muestras", role: .destructive) {
+            Button(String(localized: "Eliminar muestras", bundle: .module), role: .destructive) {
                 Task { await model.clearSpeakerSamples() }
             }
-            Button("Cancelar", role: .cancel) {}
+            Button(String(localized: "Cancelar", bundle: .module), role: .cancel) {}
         } message: {
-            Text("Se conservarán los nombres de perfil. Un modelo ya entrenado no se eliminará.")
+            Text(String(localized: "Se conservarán los nombres de perfil. Un modelo ya entrenado no se eliminará.", bundle: .module))
         }
         .confirmationDialog(
             ownerConfirmationTitle,
@@ -106,43 +106,43 @@ struct SpeakerEnrollmentView: View {
         ) {
             switch pendingOwnerSelection {
             case let .select(identifier):
-                Button("Usar \(identifier) como propietario") {
+                Button(String(localized: "Usar \(identifier) como propietario", bundle: .module)) {
                     pendingOwnerSelection = nil
                     model.setSpeakerOwnerIdentifier(identifier)
                 }
             case .clear:
-                Button("Quitar selección") {
+                Button(String(localized: "Quitar selección", bundle: .module)) {
                     pendingOwnerSelection = nil
                     model.setSpeakerOwnerIdentifier(nil)
                 }
             case nil:
                 EmptyView()
             }
-            Button("Cancelar", role: .cancel) {
+            Button(String(localized: "Cancelar", bundle: .module), role: .cancel) {
                 pendingOwnerSelection = nil
             }
         } message: {
             Text(
-                "Esta elección controla quién puede recibir continuidad y memoria privada. "
-                    + "No concede control ni aprueba acciones."
+                String(localized: "Esta elección controla quién puede recibir continuidad y memoria privada. ", bundle: .module)
+                    + String(localized: "No concede control ni aprueba acciones.", bundle: .module)
             )
         }
     }
 
     private var profileCreator: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Perfiles de hablante")
+            Text(String(localized: "Perfiles de hablante", bundle: .module))
                 .font(.system(size: 13, weight: .semibold))
             HStack {
-                TextField("Nombre del perfil · p. ej. guillermo", text: $newIdentifier)
+                TextField(String(localized: "Nombre del perfil · p. ej. guillermo", bundle: .module), text: $newIdentifier)
                     .focused($profileNameFocused).jarvisInput(focused: profileNameFocused)
-                    .accessibilityLabel("Identificador del nuevo perfil de voz")
+                    .accessibilityLabel(String(localized: "Identificador del nuevo perfil de voz", bundle: .module))
                     .onSubmit(addProfile)
-                Button("Añadir", action: addProfile)
+                Button(String(localized: "Añadir", bundle: .module), action: addProfile)
                     .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active)))
                     .disabled(!canAddProfile)
             }
-            Text("Usa 2–32 caracteres: minúsculas, números, guion o guion bajo. Máximo 8 perfiles.")
+            Text(String(localized: "Usa 2–32 caracteres: minúsculas, números, guion o guion bajo. Máximo 8 perfiles.", bundle: .module))
                 .font(.caption)
                 .foregroundStyle(JarvisTheme.inkSecondary)
         }
@@ -181,19 +181,19 @@ struct SpeakerEnrollmentView: View {
             Label(readinessSummary, systemImage: "checkmark.circle")
                 .foregroundStyle(JarvisTheme.inkSecondary)
         case .loading:
-            Label("Validando almacenamiento local…", systemImage: "arrow.triangle.2.circlepath")
+            Label(String(localized: "Validando almacenamiento local…", bundle: .module), systemImage: "arrow.triangle.2.circlepath")
                 .foregroundStyle(JarvisTheme.inkSecondary)
         case .updating:
-            Label("Actualizando perfiles locales…", systemImage: "person.crop.circle.badge.clock")
+            Label(String(localized: "Actualizando perfiles locales…", bundle: .module), systemImage: "person.crop.circle.badge.clock")
                 .foregroundStyle(JarvisTheme.inkSecondary)
         case let .arming(target):
-            Label("Prepárate para \(targetTitle(target))…", systemImage: "timer")
+            Label(String(localized: "Prepárate para \(targetTitle(target))…", bundle: .module), systemImage: "timer")
                 .foregroundStyle(JarvisTheme.inkSecondary)
         case let .recording(target):
-            Label("Grabando \(targetTitle(target))…", systemImage: "record.circle.fill")
+            Label(String(localized: "Grabando \(targetTitle(target))…", bundle: .module), systemImage: "record.circle.fill")
                 .foregroundStyle(JarvisTheme.failure)
         case .ready:
-            Label("Muestras mínimas listas para entrenar", systemImage: "checkmark.circle.fill")
+            Label(String(localized: "Muestras mínimas listas para entrenar", bundle: .module), systemImage: "checkmark.circle.fill")
                 .foregroundStyle(HUDStyle.accent(for: .success))
         case let .failed(error):
             Label(errorTitle(error), systemImage: "exclamationmark.triangle.fill")
@@ -204,11 +204,11 @@ struct SpeakerEnrollmentView: View {
     private var ownerSelection: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
-                Label("Contexto privado", systemImage: "person.crop.circle.badge.checkmark")
+                Label(String(localized: "Contexto privado", bundle: .module), systemImage: "person.crop.circle.badge.checkmark")
                     .font(.system(size: 13, weight: .semibold))
                 Spacer()
                 JarvisMenuPicker(
-                    title: "Perfil propietario",
+                    title: String(localized: "Perfil propietario", bundle: .module),
                     selection: Binding<String?>(
                         get: { model.selectedSpeakerOwnerIdentifier },
                         set: proposeOwnerSelection
@@ -225,12 +225,12 @@ struct SpeakerEnrollmentView: View {
 
     private var ownerOptions: [JarvisSelectionOption<String?>] {
         var options: [JarvisSelectionOption<String?>] = [
-            .init(value: nil, title: model.speakerIdentityIdentifiers.count == 1 ? "Automático" : "Sin seleccionar"),
+            .init(value: nil, title: model.speakerIdentityIdentifiers.count == 1 ? String(localized: "Automático", bundle: .module) : String(localized: "Sin seleccionar", bundle: .module)),
         ]
         options += model.speakerIdentityIdentifiers.map { .init(value: Optional($0), title: $0) }
         if let selected = model.selectedSpeakerOwnerIdentifier,
            !model.speakerIdentityIdentifiers.contains(selected) {
-            options.append(.init(value: Optional(selected), title: "\(selected) (inactivo)"))
+            options.append(.init(value: Optional(selected), title: String(localized: "\(selected) (inactivo)", bundle: .module)))
         }
         return options
     }
@@ -242,33 +242,33 @@ struct SpeakerEnrollmentView: View {
         {
             VStack(alignment: .leading, spacing: 7) {
                 Label(
-                    "El modelo de voz cambió; confirma de nuevo a \(selected)",
+                    String(localized: "El modelo de voz cambió; confirma de nuevo a \(selected)", bundle: .module),
                     systemImage: "arrow.triangle.2.circlepath.circle.fill"
                 )
                 .font(.caption)
                 .foregroundStyle(HUDStyle.accent(for: .warning))
-                Button("Confirmar propietario") {
+                Button(String(localized: "Confirmar propietario", bundle: .module)) {
                     pendingOwnerSelection = .select(selected)
                 }
                 .disabled(!model.canModifySpeakerEnrollment)
             }
         } else if let identifier = model.effectiveSpeakerOwnerIdentifier {
             Label(
-                "\(identifier) puede recibir continuidad y memoria privada",
+                String(localized: "\(identifier) puede recibir continuidad y memoria privada", bundle: .module),
                 systemImage: "checkmark.shield.fill"
             )
             .font(.caption)
             .foregroundStyle(HUDStyle.accent(for: .success))
         } else if let selected = model.selectedSpeakerOwnerIdentifier {
             Label(
-                "El perfil \(selected) no existe en el modelo activo",
+                String(localized: "El perfil \(selected) no existe en el modelo activo", bundle: .module),
                 systemImage: "exclamationmark.triangle.fill"
             )
             .font(.caption)
             .foregroundStyle(HUDStyle.accent(for: .warning))
         } else {
             Label(
-                "Selecciona quién puede recibir contexto privado",
+                String(localized: "Selecciona quién puede recibir contexto privado", bundle: .module),
                 systemImage: "lock.trianglebadge.exclamationmark"
             )
             .font(.caption)
@@ -278,20 +278,20 @@ struct SpeakerEnrollmentView: View {
 
     private var activationHandoff: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Entrenar y activar")
+            Text(String(localized: "Entrenar y activar", bundle: .module))
                 .font(.system(size: 13, weight: .semibold))
             if model.speakerIdentityCapability == .ready {
-                Label("Modelo local activo", systemImage: "checkmark.shield.fill")
+                Label(String(localized: "Modelo local activo", bundle: .module), systemImage: "checkmark.shield.fill")
                     .foregroundStyle(HUDStyle.accent(for: .success))
             } else {
                 switch model.speakerModelTrainingState {
                 case .ready:
-                    Label("Modelo local activo", systemImage: "checkmark.shield.fill")
+                    Label(String(localized: "Modelo local activo", bundle: .module), systemImage: "checkmark.shield.fill")
                         .foregroundStyle(HUDStyle.accent(for: .success))
                 case .training:
                     HStack(spacing: 10) {
                         ProgressView().controlSize(.small)
-                        Text("Entrenando localmente… Puede tardar varios minutos.")
+                        Text(String(localized: "Entrenando localmente… Puede tardar varios minutos.", bundle: .module))
                             .font(.caption)
                             .foregroundStyle(JarvisTheme.inkSecondary)
                     }
@@ -299,19 +299,19 @@ struct SpeakerEnrollmentView: View {
                     Text(trainingErrorTitle(error))
                         .font(.caption)
                         .foregroundStyle(HUDStyle.accent(for: .warning))
-                    Button("Reintentar entrenamiento", systemImage: "arrow.clockwise") {
+                    Button(String(localized: "Reintentar entrenamiento", bundle: .module), systemImage: "arrow.clockwise") {
                         Task { await model.trainSpeakerIdentityModel() }
                     }
                     .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: true))
                     .disabled(!canTrainModel)
                 case .idle:
                     Text(
-                        "Create ML procesará las muestras en este Mac. "
-                            + "El audio y el modelo no salen del equipo."
+                        String(localized: "Create ML procesará las muestras en este Mac. ", bundle: .module)
+                            + String(localized: "El audio y el modelo no salen del equipo.", bundle: .module)
                     )
                         .font(.caption)
                         .foregroundStyle(JarvisTheme.inkSecondary)
-                    Button("Entrenar modelo local", systemImage: "cpu") {
+                    Button(String(localized: "Entrenar modelo local", bundle: .module), systemImage: "cpu") {
                         Task { await model.trainSpeakerIdentityModel() }
                     }
                     .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: true))
@@ -326,19 +326,19 @@ struct SpeakerEnrollmentView: View {
 
     private var footer: some View {
         HStack {
-            Button("Cerrar", role: .cancel) {
+            Button(String(localized: "Cerrar", bundle: .module), role: .cancel) {
                 dismissWindow(id: "speaker-enrollment")
             }
             .keyboardShortcut(.cancelAction)
             if hasSamples {
-                Button("Eliminar muestras…", role: .destructive) {
+                Button(String(localized: "Eliminar muestras…", bundle: .module), role: .destructive) {
                     confirmingSampleDeletion = true
                 }
                 .disabled(!model.canModifySpeakerEnrollment)
             }
             Spacer()
             if model.microphonePermission != .authorized {
-                Button("Permitir micrófono") {
+                Button(String(localized: "Permitir micrófono", bundle: .module)) {
                     Task { await model.requestMicrophone() }
                 }
             }
@@ -385,11 +385,11 @@ struct SpeakerEnrollmentView: View {
     private var ownerConfirmationTitle: String {
         switch pendingOwnerSelection {
         case let .select(identifier):
-            "¿Elegir \(identifier) como propietario?"
+            String(localized: "¿Elegir \(identifier) como propietario?", bundle: .module)
         case .clear:
-            "¿Quitar el perfil propietario?"
+            String(localized: "¿Quitar el perfil propietario?", bundle: .module)
         case nil:
-            "Confirmar perfil propietario"
+            String(localized: "Confirmar perfil propietario", bundle: .module)
         }
     }
 
@@ -405,9 +405,9 @@ struct SpeakerEnrollmentView: View {
                 - model.speakerEnrollmentProgress.profiles.count
         )
         if missing > 0 {
-            return "Faltan \(missing) perfiles de voz"
+            return String(localized: "Faltan \(missing) perfiles de voz", bundle: .module)
         }
-        return "Listo para grabar una muestra"
+        return String(localized: "Listo para grabar una muestra", bundle: .module)
     }
 
     private func recordButtonTitle(for target: SpeakerEnrollmentTarget) -> String {
@@ -421,48 +421,48 @@ struct SpeakerEnrollmentView: View {
         {
             return "Preparando…"
         }
-        return "Grabar 3 s"
+        return String(localized: "Grabar 3 s", bundle: .module)
     }
 
     private func targetTitle(_ target: SpeakerEnrollmentTarget) -> String {
-        target == .background ? "el ambiente" : "la voz de \(target.identifier)"
+        target == .background ? String(localized: "el ambiente", bundle: .module) : String(localized: "la voz de \(target.identifier)", bundle: .module)
     }
 
     private func errorTitle(_ error: SpeakerEnrollmentError) -> String {
         switch error {
         case .sampleTooQuiet:
-            "Muestra descartada: habla con voz clara"
+            String(localized: "Muestra descartada: habla con voz clara", bundle: .module)
         case .sampleClipped:
-            "Muestra descartada: reduce el volumen o aléjate"
+            String(localized: "Muestra descartada: reduce el volumen o aléjate", bundle: .module)
         case .permissionRequired:
-            "El micrófono requiere permiso"
+            String(localized: "El micrófono requiere permiso", bundle: .module)
         case .invalidIdentifier:
-            "El identificador no es válido"
+            String(localized: "El identificador no es válido", bundle: .module)
         case .duplicateProfile:
-            "Ese perfil ya existe"
+            String(localized: "Ese perfil ya existe", bundle: .module)
         case .missingProfile:
-            "El perfil ya no existe"
+            String(localized: "El perfil ya no existe", bundle: .module)
         case .capacityReached:
-            "Se alcanzó el límite local"
+            String(localized: "Se alcanzó el límite local", bundle: .module)
         case .unsafeStorage:
-            "El almacenamiento local no es seguro"
+            String(localized: "El almacenamiento local no es seguro", bundle: .module)
         case .invalidConfiguration, .invalidInputFormat, .recordingFailed:
-            "No fue posible guardar la muestra"
+            String(localized: "No fue posible guardar la muestra", bundle: .module)
         }
     }
 
     private func trainingErrorTitle(_ error: SpeakerModelTrainingError) -> String {
         switch error {
         case .helperUnavailable:
-            "El entrenador firmado no está disponible en esta instalación"
+            String(localized: "El entrenador firmado no está disponible en esta instalación", bundle: .module)
         case .modelExists:
-            "Ya existe un modelo local que Jarvis no debe sobrescribir"
+            String(localized: "Ya existe un modelo local que Jarvis no debe sobrescribir", bundle: .module)
         case .trainingFailed:
-            "El dataset no superó el entrenamiento o la validación local"
+            String(localized: "El dataset no superó el entrenamiento o la validación local", bundle: .module)
         case .unsafeStorage:
-            "La carpeta privada del modelo no cumple la política de seguridad"
+            String(localized: "La carpeta privada del modelo no cumple la política de seguridad", bundle: .module)
         case .invalidModel:
-            "El modelo generado no es compatible con identidad de voz"
+            String(localized: "El modelo generado no es compatible con identidad de voz", bundle: .module)
         }
     }
 }

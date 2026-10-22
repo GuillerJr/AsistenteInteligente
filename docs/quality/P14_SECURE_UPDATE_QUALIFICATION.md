@@ -40,6 +40,26 @@ de forma monotónica; un pipeline externo puede proporcionarlo mediante `AEGIS_B
 
 ## Verificación e instalación por el propietario
 
+En la app, **Configuración → General → Acerca de y actualizaciones** permite buscar una
+versión y confirmar **Instalar y reiniciar**. La comprobación descarga solo el manifiesto,
+verifica Ed25519, vigencia y build. Después de confirmar, descarga y autentica el ZIP y la
+evidencia de publicación; la instalación reutiliza el swap, la comprobación de salud y la
+recuperación de `secure_update.py`. Una revisión distinta a la que se confirmó se rechaza.
+
+El canal estable tiene una dirección fija:
+`https://github.com/GuillerJr/AsistenteInteligente/releases/latest/download/`.
+La publicación estable debe incluir `Jarvis.update.json`, `Jarvis.release.json` y `Jarvis.zip`
+producidos por la compuerta notarizada; se recomienda adjuntar también `Jarvis.spdx.json`.
+La consulta no usa tokens de GitHub ni credenciales del dueño, por lo que los artefactos deben
+ser públicos. Mientras el dueño no publique una versión notarizada, la app indica que el canal
+todavía no tiene una actualización. No se publica una versión de prueba para simular este paso.
+
+Los subcomandos `secure-update-check`, `secure-update-prepare --confirm-install REVISION` y
+`secure-update-apply --confirm-install REVISION` sirven al flujo gráfico. Solo se ejecutan desde
+el daemon congelado del bundle y derivan de allí sus rutas y clave pública; no aceptan una URL
+de descarga proporcionada por el cliente.
+
+Para la comprobación manual de archivos descargados se conserva la interfaz anterior.
 Primero se inspecciona sin modificar la app:
 
 ```bash

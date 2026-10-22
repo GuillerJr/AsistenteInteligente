@@ -7,9 +7,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from historical.orchestration.graph import build_swarm_graph
 
 from aegis_core.contracts import AgentResult, AgentRole, PolicyDecision, ToolCall, UserRequest
-from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.skills import SkillDraft, SkillError, SkillRegistry, SkillStore
 from aegis_core.tools.defaults import build_default_tool_broker
 

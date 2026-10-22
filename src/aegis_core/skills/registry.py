@@ -13,6 +13,7 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.request_intent import mask_quoted_text
 from aegis_core.skills.builtins import BUILTIN_SKILLS
 from aegis_core.skills.contracts import (
@@ -340,7 +341,8 @@ class SkillRegistry:
             return True
         try:
             return self._plugin_available(manifest.skill_id) is True
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             return False
 
     def reload(self) -> None:

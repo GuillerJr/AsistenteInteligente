@@ -338,7 +338,7 @@ class DistributedMLXProvider:
             "--",
             sys.executable,
             "-m",
-            "aegis_core.providers.mlx_distributed",
+            "historical.mlx_distributed",
             "--worker",
             "--model",
             self._model_id,

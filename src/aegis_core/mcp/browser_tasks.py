@@ -31,6 +31,7 @@ from aegis_core.contracts import (
     ToolExecutionResult,
     UserRequest,
 )
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult
 from aegis_core.mcp.browser_session import (
@@ -622,7 +623,8 @@ class BrowserTaskService:
                 task.close_task = asyncio.create_task(task.client.close())
             try:
                 await asyncio.shield(task.close_task)
-            except Exception:
+            except Exception as error:
+                record_boundary_error(error)
                 pass
 
     async def finish_request(self, request_id: UUID) -> None:
@@ -827,6 +829,7 @@ class BrowserTaskService:
                 await asyncio.shield(self._drop(task))
             raise
         except Exception as error:
+            record_boundary_error(error)
             if task is not None:
                 await self._drop(task)
             code = str(error) if isinstance(error, (PolicyViolation, BrowserSessionError)) else ""

@@ -37,7 +37,7 @@ struct JarvisSettingsView: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 8) {
                     Circle().fill(JarvisTheme.clay).frame(width: 10, height: 10).accessibilityHidden(true)
-                    Text("Ajustes").font(.system(size: 14, weight: .semibold)).foregroundStyle(JarvisTheme.ink)
+                    Text(String(localized: "Ajustes", bundle: .module)).font(.system(size: 14, weight: .semibold)).foregroundStyle(JarvisTheme.ink)
                 }
                 .padding(.horizontal, 20).padding(.top, 18).padding(.bottom, 8)
                 // Own rows, so the selection is a warm wash instead of the system blue.
@@ -85,7 +85,7 @@ struct JarvisSettingsView: View {
                minHeight: JarvisInterfaceStyle.settingsMinimumSize.height, idealHeight: 660)
         .tint(HUDStyle.accent(for: .active))
         .buttonStyle(MenuBarSmallButtonStyle())
-        .navigationTitle("Configuración de Jarvis")
+        .navigationTitle(String(localized: "Configuración de Jarvis", bundle: .module))
         .onChange(of: section) { _, _ in JarvisPopupButton.dismissMenus() }
         .onDisappear { JarvisPopupButton.dismissMenus() }
         .sheet(item: $presentedSheet) { sheet in
@@ -109,7 +109,7 @@ struct JarvisSettingsView: View {
 
     @ViewBuilder private var content: some View {
         switch selected {
-        case .general: JarvisGeneralSettingsView(model: model, store: store)
+        case .general: JarvisGeneralSettingsView(model: model, store: store, interactive: interactive)
         case .accounts: JarvisAccountsSettingsView(store: store, present: { presentedSheet = $0 })
         case .telegram: JarvisTelegramSettingsView()
         case .models: JarvisModelsSettingsView(store: store, openAddModel: { presentedSheet = .addModel })
@@ -135,29 +135,29 @@ struct JarvisSettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityLabel(message)
                     Spacer(minLength: 0)
-                    MenuBarIconButton(symbol: "xmark", title: "Cerrar aviso de configuración") { store.message = nil }
+                    MenuBarIconButton(symbol: "xmark", title: String(localized: "Cerrar aviso de configuración", bundle: .module)) { store.message = nil }
                 }
             }
             HStack(spacing: 10) {
                 if store.busy || restarting {
                     ProgressView().controlSize(.small)
-                    Text(restarting ? "Reiniciando servicio…" : store.operationState == "awaiting_authorization"
-                         ? "Completa la autorización en tu navegador" : "Procesando…")
+                    Text(restarting ? String(localized: "Reiniciando servicio…", bundle: .module) : store.operationState == "awaiting_authorization"
+                         ? String(localized: "Completa la autorización en tu navegador", bundle: .module) : "Procesando…")
                         .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
                     if store.operationState == "awaiting_authorization" {
-                        Button("Cancelar") { Task { await store.cancelOperation() } }
+                        Button(String(localized: "Cancelar", bundle: .module)) { Task { await store.cancelOperation() } }
                     }
                 } else {
-                    Label("Configuración en este Mac", systemImage: "lock.shield")
+                    Label(String(localized: "Configuración en este Mac", bundle: .module), systemImage: "lock.shield")
                         .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkMuted)
                 }
                 Spacer()
-                Button("Actualizar", systemImage: "arrow.clockwise") {
+                Button(String(localized: "Actualizar", bundle: .module), systemImage: "arrow.clockwise") {
                     Task { await model.refreshDaemon(); await store.refresh() }
                 }
                 .disabled(store.busy || restarting || store.loading)
                 if store.restartRequired {
-                    Button("Aplicar y reiniciar") {
+                    Button(String(localized: "Aplicar y reiniciar", bundle: .module)) {
                         Task {
                             restarting = true
                             defer { restarting = false }
@@ -166,9 +166,9 @@ struct JarvisSettingsView: View {
                                 await model.refreshDaemon()
                                 await store.refresh()
                                 if !store.restartRequired {
-                                    store.message = "Cambios aplicados."
+                                    store.message = String(localized: "Cambios aplicados.", bundle: .module)
                                 }
-                            } catch { store.fail("No se pudo reiniciar el servicio. Inténtalo nuevamente.") }
+                            } catch { store.fail(String(localized: "No se pudo reiniciar el servicio. Inténtalo nuevamente.", bundle: .module)) }
                         }
                     }
                     .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: true))

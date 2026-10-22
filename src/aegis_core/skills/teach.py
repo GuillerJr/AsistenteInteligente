@@ -24,6 +24,7 @@ from aegis_core.contracts import (
     ToolAuthorization,
     ToolExecutionResult,
 )
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.skills.importer import (
     SkillImportError,
     _has_executable_content,
@@ -119,7 +120,8 @@ class SkillTeachHandlers:
                 try:
                     tools = frozenset(sorted(await self._choose_tools(
                         "\n".join(parsed.steps)))[:3])
-                except Exception:
+                except Exception as error:
+                    record_boundary_error(error)
                     tools = frozenset()
             draft = finalize_skill_import(preview, {
                 "enabled": True, "role": AgentRole.PLANNER.value,

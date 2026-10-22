@@ -4,15 +4,11 @@ import sys
 from pathlib import Path
 
 import pytest
+from historical.mlx_provider import MLXProvider, MLXVerificationIpcService
 
 from aegis_core.contracts import AgentRole
 from aegis_core.ipc.protocol import IpcAuthenticator
-from aegis_core.providers.mlx_provider import (
-    MLXProvider,
-    MLXProviderError,
-    MLXVerificationIpcService,
-    MLXWhisperTranscriber,
-)
+from aegis_core.providers.mlx_provider import MLXProviderError, MLXWhisperTranscriber
 
 
 @pytest.fixture

@@ -170,6 +170,25 @@ async def test_unknown_or_failing_identifiers_fail_closed(ipc_root: Path, verdic
     assert response.error_code == "peer_not_trusted"
 
 
+@pytest.mark.asyncio
+async def test_retired_local_brain_cannot_submit_with_current_client_allowlist(
+    ipc_root: Path,
+) -> None:
+    path = ipc_root / "aegis.sock"
+    async with AegisDaemon(
+        path,
+        AUTHENTICATOR,
+        handlers={"swarm.submit": _status},
+        peer_identifier=lambda _peer: "jarvis-local-brain",
+        peer_client_methods=JARVIS_CLIENT_METHODS,
+        unsigned_peer_methods=UNSIGNED_PEER_METHODS,
+    ):
+        response = await IpcClient(path, AUTHENTICATOR).call("swarm.submit")
+
+    assert response.ok is False
+    assert response.error_code == "peer_not_trusted"
+
+
 def test_frozen_daemon_is_not_a_client_and_helpers_are_narrow() -> None:
     assert JARVIS_CLIENT_METHODS["ai.aegis.menubar"] is None
     assert all(
@@ -178,6 +197,7 @@ def test_frozen_daemon_is_not_a_client_and_helpers_are_narrow() -> None:
         if identifier != "ai.aegis.menubar"
     )
     assert not any("daemon" in identifier for identifier in JARVIS_CLIENT_METHODS)
+    assert "jarvis-local-brain" not in JARVIS_CLIENT_METHODS
 
 
 def test_unsigned_allowlist_excludes_private_data_and_control_methods() -> None:

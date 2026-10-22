@@ -22,6 +22,7 @@ from pydantic import (
     model_validator,
 )
 
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.memory.records import MemoryStorageMetrics
@@ -581,6 +582,7 @@ class PerformanceProfiler:
                 self._store.append(sample)
                 return sample
         except Exception as error:
+            record_boundary_error(error)
             raise PerformanceProfilerError("performance sample collection failed") from error
 
     @staticmethod

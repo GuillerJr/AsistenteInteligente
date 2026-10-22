@@ -511,9 +511,10 @@ def test_preparation_is_private_disabled_and_never_overwrites(monkeypatch, tmp_p
 
 
 def test_local_mcp_can_be_offline_but_a_provider_name_or_skill_cannot_grant_it():
+    from historical.orchestration.graph import _respect_engineering_offline
+
     from aegis_core.contracts import UserRequest
     from aegis_core.engineering import ENGINEERING_RESEARCH_METADATA, ENGINEERING_SURFACE_METADATA
-    from aegis_core.orchestration.graph import _respect_engineering_offline
 
     request = UserRequest(
         text="Filesystem",

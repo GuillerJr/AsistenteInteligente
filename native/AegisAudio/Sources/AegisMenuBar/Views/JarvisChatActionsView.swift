@@ -8,28 +8,31 @@ struct JarvisChatActionsView: View {
 
     var body: some View {
         if !entry.archived {
-            Button("Renombrar chat", systemImage: "pencil", action: rename)
-            Button("Crear fork", systemImage: "arrow.triangle.branch") {
+            Button(String(localized: "Renombrar chat", bundle: .module), systemImage: "pencil", action: rename)
+            Button(entry.filed ? String(localized: "Desarchivar chat", bundle: .module) : String(localized: "Archivar chat", bundle: .module), systemImage: "archivebox") {
+                Task { await model.chat.setFiled(entry, model: model, filed: !entry.filed) }
+            }
+            Button(String(localized: "Crear fork", bundle: .module), systemImage: "arrow.triangle.branch") {
                 Task { await model.chat.fork(entry, model: model) }
-            }.help("Continuar el historial en una conversación independiente")
-            Button("Continuar en Telegram", systemImage: "paperplane") {
+            }.help(String(localized: "Continuar el historial en una conversación independiente", bundle: .module))
+            Button(String(localized: "Continuar en Telegram", bundle: .module), systemImage: "paperplane") {
                 Task { await model.chat.continueInTelegram(entry, model: model) }
-            }.help("Seleccionar este chat para los siguientes mensajes del móvil")
+            }.help(String(localized: "Seleccionar este chat para los siguientes mensajes del móvil", bundle: .module))
             if !model.chat.projects.isEmpty || entry.projectID != nil {
-                Menu("Mover a proyecto", systemImage: "folder") {
+                Menu(String(localized: "Mover a proyecto", bundle: .module), systemImage: "folder") {
                     ForEach(model.chat.projects) { project in
                         Button(project.name) { move(to: project.project_id) }
                             .disabled(entry.projectID?.uuidString.lowercased() == project.project_id)
                     }
                     if entry.projectID != nil {
                         Divider()
-                        Button("Quitar del proyecto") { move(to: nil) }
+                        Button(String(localized: "Quitar del proyecto", bundle: .module)) { move(to: nil) }
                     }
                 }
             }
             Divider()
         }
-        Button(entry.archived ? "Restaurar chat" : "Mover a la papelera",
+        Button(entry.archived ? String(localized: "Restaurar chat", bundle: .module) : String(localized: "Mover a la papelera", bundle: .module),
                systemImage: entry.archived ? "arrow.uturn.backward" : "trash") {
             Task { await model.chat.setTrashed(entry, model: model, trashed: !entry.archived) }
         }
@@ -62,17 +65,17 @@ struct JarvisRenameChatView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Label("Renombrar chat", systemImage: "pencil")
+            Label(String(localized: "Renombrar chat", bundle: .module), systemImage: "pencil")
                 .font(.system(size: 19, weight: .semibold))
-            TextField("Nombre de la conversación", text: $title)
+            TextField(String(localized: "Nombre de la conversación", bundle: .module), text: $title)
                 .focused($focused).jarvisInput(focused: focused)
                 .onChange(of: title) { _, value in title = String(value.prefix(128)) }
-                .accessibilityLabel("Nombre de la conversación")
+                .accessibilityLabel(String(localized: "Nombre de la conversación", bundle: .module))
             HStack {
-                Text("Hasta 128 caracteres").font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
+                Text(String(localized: "Hasta 128 caracteres", bundle: .module)).font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
                 Spacer()
-                Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Guardar") {
+                Button(String(localized: "Cancelar", bundle: .module)) { dismiss() }.keyboardShortcut(.cancelAction)
+                Button(String(localized: "Guardar", bundle: .module)) {
                     let name = title
                     dismiss()
                     Task { await model.chat.rename(entry, title: name, model: model) }

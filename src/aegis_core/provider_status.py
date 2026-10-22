@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 
@@ -25,7 +26,8 @@ class ProviderStatusIpcService:
     async def _probe(probe: Callable[[], bool]) -> bool | None:
         try:
             return await asyncio.to_thread(probe)
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             return None
 
     async def status_payload(self) -> dict[str, str]:

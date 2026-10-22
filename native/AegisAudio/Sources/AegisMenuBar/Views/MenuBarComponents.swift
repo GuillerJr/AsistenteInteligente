@@ -22,8 +22,8 @@ struct MenuBarDisclosureStyle: DisclosureGroupStyle {
             }
             .buttonStyle(.plain)
             .foregroundStyle(JarvisTheme.ink)
-            .accessibilityValue(configuration.isExpanded ? "Expandido" : "Contraído")
-            .accessibilityHint(configuration.isExpanded ? "Contraer sección" : "Expandir sección")
+            .accessibilityValue(configuration.isExpanded ? String(localized: "Expandido", bundle: .module) : String(localized: "Contraído", bundle: .module))
+            .accessibilityHint(configuration.isExpanded ? String(localized: "Contraer sección", bundle: .module) : String(localized: "Expandir sección", bundle: .module))
 
             if configuration.isExpanded {
                 configuration.content
@@ -82,7 +82,7 @@ struct MenuBarPermissionItem: View {
                 Button(action: action) { content }
                     .buttonStyle(.plain)
                     .accessibilityLabel(title + ": " + state)
-                    .help("Configurar " + title.lowercased())
+                    .help(String(localized: "Configurar ", bundle: .module) + title.lowercased())
             } else {
                 content
                     .accessibilityElement(children: .ignore)

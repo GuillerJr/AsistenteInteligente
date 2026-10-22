@@ -8,6 +8,7 @@ from dataclasses import replace
 
 import httpx
 import pytest
+from historical.orchestration.graph import build_swarm_graph
 
 from aegis_core.brain.nvidia_client import NvidiaBrainClient
 from aegis_core.config import Settings
@@ -19,7 +20,6 @@ from aegis_core.contracts import (
     ToolExecutionResult,
     UserRequest,
 )
-from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.providers.base import IncompleteModelResponseError
 from aegis_core.providers.nvidia import NvidiaGlobalCooldown, NvidiaNimClient
 from aegis_core.settings_store import (

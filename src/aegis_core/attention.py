@@ -24,7 +24,8 @@ from aegis_core.scheduling import ScheduledTaskStore
 
 SNOOZE = timedelta(hours=1)
 _TASK_REASONS = {
-    "needs_approval": "Necesita que apruebes una lectura con «Aprobar siempre».",
+    "needs_approval": "Necesita que revises y apruebes una acción.",
+    "approval_expired": "La aprobación caducó. Puedes iniciar la tarea otra vez.",
     "failed": "La última ejecución falló.",
     "timeout": "La última ejecución tardó demasiado.",
 }

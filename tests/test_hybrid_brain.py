@@ -7,14 +7,15 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
-
-from aegis_core.brain.errors import RemoteProviderUnavailableError
-from aegis_core.brain.hybrid_client import (
+from historical.hybrid_client import (
     HybridBrainClient,
     LocalFoundationCascadeClient,
     LocalFoundationResponse,
     MacLocalFoundationClient,
 )
+from historical.speculative_engine import SpeculativeEngine
+
+from aegis_core.brain.errors import RemoteProviderUnavailableError
 from aegis_core.brain.routing import (
     DEEP_REASONING_MODEL_ID,
     FAST_PLANNING_MODEL_ID,
@@ -26,7 +27,6 @@ from aegis_core.brain.routing import (
     contains_private_data,
     decide_cascade,
 )
-from aegis_core.brain.speculative_engine import SpeculativeEngine
 from aegis_core.contracts import AgentResult, AgentRole
 from aegis_core.providers.nvidia import NvidiaNimError, NvidiaNimRateLimited
 

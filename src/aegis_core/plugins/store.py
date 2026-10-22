@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.plugins.contracts import SHA256_PATTERN, PluginPackage
 
 MAX_INSTALLED_PLUGINS = 32
@@ -302,7 +303,8 @@ class PluginStore:
             return False
         try:
             legacy_key = self._derive_seal_key(self._legacy_seal_key_loader())
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             return False
         return self._seal_matches_key(record, legacy_key)
 

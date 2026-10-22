@@ -13,7 +13,7 @@ struct JarvisNotchMascot: View {
     private static let bodyImage: Image = {
         guard let url = Bundle.module.url(forResource: "JarvisTricksterDot", withExtension: "png"),
               let image = NSImage(contentsOf: url) else {
-            preconditionFailure("The bundled Jarvis mascot texture is missing")
+            preconditionFailure(String(localized: "The bundled Jarvis mascot texture is missing", bundle: .module))
         }
         return Image(nsImage: image)
     }()

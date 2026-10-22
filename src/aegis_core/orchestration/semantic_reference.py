@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 from collections.abc import Awaitable, Callable
 
+from aegis_core.completion_boundary import optional_completion
 from aegis_core.mcp.collections import COLLECTIONS
 from aegis_core.memory.task_checkpoint import TaskCheckpoint
 from aegis_core.orchestration.task_progress import (
@@ -66,7 +67,7 @@ async def semantic_reference(
     items = [{"position": ref.position, "title": redact_secrets_for_remote(ref.label).text}
              for ref in sorted(evidence.references, key=lambda ref: ref.position)]
     try:
-        content = await complete([
+        content = await optional_completion(complete, [
             {"role": "system", "content": _INSTRUCTION},
             {"role": "user", "content": json.dumps({
                 "request": redact_secrets_for_remote(text).text,
@@ -74,7 +75,7 @@ async def semantic_reference(
             }, ensure_ascii=False)},
         ])
         payload = json.loads(content) if len(content.encode()) <= 1_024 else None
-    except Exception:
+    except (RecursionError, TypeError, ValueError):
         # Without the router, a request that clearly points at the shown list gets a
         # question with that list, never a reply made without its data.
         # Only a short follow-up ("léeme esos") may be taken as pointing at it: a long

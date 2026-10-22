@@ -50,23 +50,23 @@ struct JarvisDotView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                MenuBarIconButton(symbol: "sidebar.left", title: chat.showHistory ? "Ocultar historial" : "Mostrar historial") {
+                MenuBarIconButton(symbol: "sidebar.left", title: chat.showHistory ? String(localized: "Ocultar historial", bundle: .module) : String(localized: "Mostrar historial", bundle: .module)) {
                     chat.showHistory.toggle()
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Dot").font(.system(size: 14, weight: .semibold))
-                    Text("Lo que Jarvis hace por su cuenta, a toda hora").font(.system(size: 11))
+                    Text(String(localized: "Dot", bundle: .module)).font(.system(size: 14, weight: .semibold))
+                    Text(String(localized: "Lo que Jarvis hace por su cuenta, a toda hora", bundle: .module)).font(.system(size: 11))
                         .foregroundStyle(JarvisInterfaceStyle.secondaryText)
                 }
                 Spacer()
                 if let overview {
-                    Button(overview.paused ? "Reanudar Dot" : "Pausar Dot",
+                    Button(overview.paused ? String(localized: "Reanudar Dot", bundle: .module) : String(localized: "Pausar Dot", bundle: .module),
                            systemImage: overview.paused ? "play.fill" : "pause.fill") {
                         Task { await load(overview.paused ? "dot.resume" : "dot.pause") }
                     }
                     .buttonStyle(JarvisButtonStyle(prominent: overview.paused, compact: true))
-                    .help(overview.paused ? "Las tareas programadas y los objetivos vuelven a correr solos"
-                          : "Las tareas programadas y los objetivos dejan de correr solos hasta que lo reanudes")
+                    .help(overview.paused ? String(localized: "Las tareas programadas y los objetivos vuelven a correr solos", bundle: .module)
+                          : String(localized: "Las tareas programadas y los objetivos dejan de correr solos hasta que lo reanudes", bundle: .module))
                 }
             }.padding(.horizontal, 14).frame(height: 52)
             JarvisSeparator()
@@ -74,7 +74,7 @@ struct JarvisDotView: View {
                 if let overview { content(overview) }
                 else {
                     VStack(spacing: 10) {
-                        if failed { Text("No pude leer el estado de Dot.").foregroundStyle(JarvisTheme.inkSecondary) }
+                        if failed { Text(String(localized: "No pude leer el estado de Dot.", bundle: .module)).foregroundStyle(JarvisTheme.inkSecondary) }
                         else { ProgressView().controlSize(.small) }
                     }.frame(maxWidth: .infinity).padding(.top, 80)
                 }
@@ -105,34 +105,34 @@ struct JarvisDotView: View {
                 Circle().fill(overview.paused ? JarvisTheme.inkMuted : JarvisTheme.clay).frame(width: 16, height: 16)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(overview.paused ? "Dot está en pausa" : overview.now.isEmpty ? "Dot está atento" : "Dot está trabajando")
+                    Text(overview.paused ? String(localized: "Dot está en pausa", bundle: .module) : overview.now.isEmpty ? String(localized: "Dot está atento", bundle: .module) : String(localized: "Dot está trabajando", bundle: .module))
                         .font(JarvisTheme.voice(24)).foregroundStyle(JarvisTheme.ink)
-                    Text("Vigila \(overview.upcoming.count) tareas programadas y \(overview.goals.count) objetivos. Te avisa aquí y por Telegram.")
+                    Text(String(localized: "Vigila \(overview.upcoming.count) tareas programadas y \(overview.goals.count) objetivos. Te avisa aquí y por Telegram.", bundle: .module))
                         .font(.system(size: 12.5)).foregroundStyle(JarvisTheme.inkSecondary)
                 }
             }
             if overview.attention > 0 {
                 Button { chat.pane = .chat; chat.showHistory = true } label: {
-                    Label("\(overview.attention) \(overview.attention == 1 ? "cosa requiere" : "cosas requieren") tu atención",
+                    Label(String(localized: "\(overview.attention) \(overview.attention == 1 ? "cosa requiere" : "cosas requieren") tu atención", bundle: .module),
                           systemImage: "bell.badge")
                         .font(.system(size: 13, weight: .medium)).foregroundStyle(JarvisTheme.clay)
                 }.buttonStyle(.plain)
             }
-            section("Ahora") {
-                if overview.now.isEmpty { quiet("Nada en curso.") }
+            section(String(localized: "Ahora", bundle: .module)) {
+                if overview.now.isEmpty { quiet(String(localized: "Nada en curso.", bundle: .module)) }
                 ForEach(Array(overview.now.enumerated()), id: \.offset) { _, work in
                     row(work.title, detail: work.detail, symbol: "bolt.fill", conversation: work.conversation_id)
                 }
             }
-            section("Próximo") {
-                if overview.upcoming.isEmpty { quiet("Sin tareas programadas. Pídele a Jarvis «cada mañana…».") }
+            section(String(localized: "Próximo", bundle: .module)) {
+                if overview.upcoming.isEmpty { quiet(String(localized: "Sin tareas programadas. Pídele a Jarvis «cada mañana…».", bundle: .module)) }
                 ForEach(overview.upcoming) { task in
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Image(systemName: task.monitoring ? "eye" : "clock").frame(width: 16)
                             .foregroundStyle(JarvisTheme.inkSecondary)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(task.title).font(.system(size: 13, weight: .medium))
-                            Text(task.monitoring ? "Monitoreando · \(task.schedule)" : task.schedule)
+                            Text(task.monitoring ? String(localized: "Monitoreando · \(task.schedule)", bundle: .module) : task.schedule)
                                 .font(.system(size: 11.5)).foregroundStyle(JarvisTheme.inkSecondary)
                         }
                         Spacer()
@@ -142,19 +142,19 @@ struct JarvisDotView: View {
                         }
                     }
                 }
-                Button("Ver tareas programadas") { chat.pane = .scheduled }
+                Button(String(localized: "Ver tareas programadas", bundle: .module)) { chat.pane = .scheduled }
                     .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(JarvisTheme.clay)
             }
             if !overview.goals.isEmpty {
-                section("Objetivos") {
+                section(String(localized: "Objetivos", bundle: .module)) {
                     ForEach(overview.goals) { goal in
-                        row(goal.title, detail: "\(goal.status_label.capitalized) · \(goal.steps_used) de \(goal.max_steps) pasos",
+                        row(goal.title, detail: String(localized: "\(goal.status_label.capitalized) · \(goal.steps_used) de \(goal.max_steps) pasos", bundle: .module),
                             symbol: "flag", conversation: nil)
                     }
                 }
             }
-            section("Resultados recientes") {
-                if overview.recent.isEmpty { quiet("Aún no hay resultados.") }
+            section(String(localized: "Resultados recientes", bundle: .module)) {
+                if overview.recent.isEmpty { quiet(String(localized: "Aún no hay resultados.", bundle: .module)) }
                 ForEach(Array(overview.recent.enumerated()), id: \.offset) { _, result in
                     row(result.title, detail: result.text, symbol: "tray.full", conversation: result.conversation_id,
                         date: Date(jarvisISO: result.delivered_at))

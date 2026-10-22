@@ -22,6 +22,7 @@ from aegis_core.contracts import (
     ToolCallBasis,
     UserRequest,
 )
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 from aegis_core.tools.confirmations import ConfirmationStatus, ConfirmationStore
 
@@ -56,7 +57,8 @@ class PolicyContext:
             return False
         try:
             return self.security_compromised() is not False
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             return True
 
 

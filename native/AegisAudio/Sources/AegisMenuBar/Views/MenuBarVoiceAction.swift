@@ -51,45 +51,45 @@ struct MenuBarVoiceAction: View {
     }
 
     private var primaryTitle: String {
-        if model.pendingApproval != nil { return "Revisar solicitud" }
-        if model.pendingInput != nil { return "Responder a Jarvis" }
-        if model.pendingBrowserSelection != nil { return "Elegir navegador" }
-        if model.pendingRecovery != nil { return "Revisar problema" }
-        if model.activeComputerUseJobID != nil { return "Detener control del Mac" }
-        if model.canStartVoiceTurn { return "Hablar con Jarvis" }
-        if voicePermissionBlocked { return "Ajustar acceso a la voz" }
-        if voicePermissionPending { return "Configurar voz" }
+        if model.pendingApproval != nil { return String(localized: "Revisar solicitud", bundle: .module) }
+        if model.pendingInput != nil { return String(localized: "Responder a Jarvis", bundle: .module) }
+        if model.pendingBrowserSelection != nil { return String(localized: "Elegir navegador", bundle: .module) }
+        if model.pendingRecovery != nil { return String(localized: "Revisar problema", bundle: .module) }
+        if model.activeComputerUseJobID != nil { return String(localized: "Detener control del Mac", bundle: .module) }
+        if model.canStartVoiceTurn { return String(localized: "Hablar con Jarvis", bundle: .module) }
+        if voicePermissionBlocked { return String(localized: "Ajustar acceso a la voz", bundle: .module) }
+        if voicePermissionPending { return String(localized: "Configurar voz", bundle: .module) }
         if !model.hybridBrainReady, model.providerState == .missing {
-            return "Configurar proveedor"
+            return String(localized: "Configurar proveedor", bundle: .module)
         }
         if !model.hybridBrainReady, model.providerState == .unavailable {
-            return "Proveedor no disponible"
+            return String(localized: "Proveedor no disponible", bundle: .module)
         }
-        return model.voiceState.isBusy ? "Jarvis está trabajando" : "Voz no disponible"
+        return model.voiceState.isBusy ? String(localized: "Jarvis está trabajando", bundle: .module) : String(localized: "Voz no disponible", bundle: .module)
     }
 
     private var primarySubtitle: String {
-        if model.pendingApproval != nil { return "Confirmación de un solo uso" }
-        if model.pendingInput != nil { return "Completar la información pendiente" }
-        if model.pendingBrowserSelection != nil { return "Seleccionar dónde continuar" }
-        if model.pendingRecovery != nil { return "Revisar el estado de la solicitud" }
-        if model.activeComputerUseJobID != nil { return "Solicitar la cancelación activa" }
+        if model.pendingApproval != nil { return String(localized: "Confirmación de un solo uso", bundle: .module) }
+        if model.pendingInput != nil { return String(localized: "Completar la información pendiente", bundle: .module) }
+        if model.pendingBrowserSelection != nil { return String(localized: "Seleccionar dónde continuar", bundle: .module) }
+        if model.pendingRecovery != nil { return String(localized: "Revisar el estado de la solicitud", bundle: .module) }
+        if model.activeComputerUseJobID != nil { return String(localized: "Solicitar la cancelación activa", bundle: .module) }
         if model.canStartVoiceTurn, let speaker = model.lastSpeakerID {
-            return "Voz identificada: \(speaker)"
+            return String(localized: "Voz identificada: \(speaker)", bundle: .module)
         }
         if model.canStartVoiceTurn, model.speakerIdentityCapability == .ready {
-            return "Audio local · identidad activa"
+            return String(localized: "Audio local · identidad activa", bundle: .module)
         }
-        if model.canStartVoiceTurn { return "Audio local · identidad pendiente" }
-        if voicePermissionBlocked { return "Abrir privacidad de macOS" }
-        if voicePermissionPending { return "Micrófono y reconocimiento" }
+        if model.canStartVoiceTurn { return String(localized: "Audio local · identidad pendiente", bundle: .module) }
+        if voicePermissionBlocked { return String(localized: "Abrir privacidad de macOS", bundle: .module) }
+        if voicePermissionPending { return String(localized: "Micrófono y reconocimiento", bundle: .module) }
         if !model.hybridBrainReady, model.providerState == .missing {
-            return "Revisa la configuración del proveedor"
+            return String(localized: "Revisa la configuración del proveedor", bundle: .module)
         }
         if !model.hybridBrainReady, model.providerState == .unavailable {
-            return "Revisa el proveedor y el servicio"
+            return String(localized: "Revisa el proveedor y el servicio", bundle: .module)
         }
-        return model.voiceState.isBusy ? "Procesando solicitud" : "Revisa el servicio y su seguridad"
+        return model.voiceState.isBusy ? String(localized: "Procesando solicitud", bundle: .module) : String(localized: "Revisa el servicio y su seguridad", bundle: .module)
     }
 
     private var primarySymbol: String {

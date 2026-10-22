@@ -79,6 +79,15 @@ class Decision:
     expires: datetime
 
 
+@dataclass(frozen=True)
+class ScheduledReview:
+    job_id: UUID
+    digest: str
+    message_id: int
+    expires: datetime
+    reviewed: bool = False
+
+
 class TelegramService(TelegramExperience):
     """Outbound-only, explicitly paired owner adapter for the existing job broker."""
 
@@ -117,6 +126,7 @@ class TelegramService(TelegramExperience):
         self._active: UUID | None = None
         self._watch: asyncio.Task | None = None
         self._decision: Decision | None = None
+        self._scheduled_reviews: dict[str, ScheduledReview] = {}
         self._followup = None
         self._epoch = 0
         self._closed = False
@@ -755,6 +765,79 @@ class TelegramService(TelegramExperience):
         except (TelegramAPIError, TimeoutError):
             return False
 
+    async def deliver_review(self, text: str, job_id: UUID, expires: datetime) -> bool:
+        """Send a bounded, owner-bound review link; delivery never approves a job."""
+        self._scheduled_reviews = {
+            nonce: review for nonce, review in self._scheduled_reviews.items()
+            if review.expires > datetime.now(UTC)
+        }
+        if len(self._scheduled_reviews) >= 20 or expires <= datetime.now(UTC):
+            return False
+        try:
+            snapshot = await self._jobs.status(job_id)
+            confirmation = snapshot.confirmation
+            if snapshot.status is not JobStatus.AWAITING_CONFIRMATION or confirmation is None:
+                return False
+            nonce = secrets.token_urlsafe(18)
+            message_id = await self._send(text, buttons=[[{
+                "text": "Revisar", "callback_data": f"sr:{nonce}",
+            }]])
+            if not message_id:
+                return False
+            self._scheduled_reviews[nonce] = ScheduledReview(
+                job_id, confirmation.call_digest, message_id,
+                min(expires, confirmation.expires_at),
+            )
+            return True
+        except (TelegramAPIError, JobError, TimeoutError):
+            self._error = "telegram_delivery_failed"
+            return False
+
+    async def _scheduled_callback(self, callback: dict) -> bool:
+        data, message = callback.get("data"), callback.get("message")
+        if not isinstance(data, str) or not data.startswith(("sr:", "sa:", "sx:")):
+            return False
+        if not isinstance(message, dict):
+            return True
+        actor = self._private_actor(message, callback.get("from"))
+        nonce = data[3:]
+        review = self._scheduled_reviews.get(nonce)
+        if (review is None or not self._config.enabled or self._blocked() or self._closed
+                or actor != self._config.owner_id
+                or type(message.get("message_id")) is not int
+                or message["message_id"] != review.message_id
+                or review.expires <= datetime.now(UTC)):
+            return True
+        snapshot = await self._jobs.status(review.job_id)
+        confirmation = snapshot.confirmation
+        if (snapshot.status is not JobStatus.AWAITING_CONFIRMATION or confirmation is None
+                or confirmation.call_digest != review.digest
+                or confirmation.expires_at <= datetime.now(UTC)):
+            self._scheduled_reviews.pop(nonce, None)
+            await self._ack_callback(callback, "La acción ya no está pendiente")
+            return True
+        if data.startswith("sr:") and not review.reviewed:
+            preview = ("\n".join(f"{field.label}: {field.value}"
+                                 for field in confirmation.preview.fields)
+                       if confirmation.preview else f"Herramienta: {confirmation.tool_name}")
+            message_id = await self._send(
+                f"Decisión de Jarvis\n{confirmation.summary}\n\n{preview}\n\n"
+                "Esta acción sigue pendiente. Solo se ejecutará si la apruebas.",
+                buttons=[[{"text": "Aprobar una vez", "callback_data": f"sa:{nonce}"},
+                          {"text": "Rechazar", "callback_data": f"sx:{nonce}"}]],
+            )
+            if message_id:
+                self._scheduled_reviews[nonce] = ScheduledReview(
+                    review.job_id, review.digest, message_id, review.expires, reviewed=True)
+        elif review.reviewed and data.startswith(("sa:", "sx:")):
+            self._scheduled_reviews.pop(nonce, None)  # Consume before any side effect.
+            if data.startswith("sa:"):
+                await self._jobs.approve_from_telegram(review.job_id, review.digest, owner_id=actor)
+            else:
+                await self._jobs.cancel(review.job_id)
+            await self._ack_callback(callback, "Decisión registrada")
+        return True
+
     async def _send(self, text: str, *, buttons=None) -> int:
         if (
             not self._config.enabled
@@ -914,6 +997,8 @@ class TelegramService(TelegramExperience):
                     self._active, self._decision = None, None
 
     async def _callback(self, callback: dict) -> None:
+        if await self._scheduled_callback(callback):
+            return
         if await self._extra_callback(callback):
             return
         message = callback.get("message")

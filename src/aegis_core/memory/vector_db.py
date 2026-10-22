@@ -7,6 +7,7 @@ from enum import StrEnum
 from typing import Protocol
 from uuid import uuid4
 
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.memory.contracts import MemoryRecord, MemorySearchHit
 from aegis_core.memory.errors import MemoryQueryError
 from aegis_core.memory.graph_search import GraphSearchResult
@@ -364,5 +365,6 @@ class EmbeddingBackfillWorker:
                 component="graph_memory",
                 data=data,
             )
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             return

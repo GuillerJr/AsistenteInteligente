@@ -88,25 +88,16 @@ AEGIS_SPEAKER_TRAINER_NAME="jarvis-speaker-trainer"
 AEGIS_SPEAKER_TRAINER_BINARY="$AEGIS_APP_HELPERS/$AEGIS_SPEAKER_TRAINER_NAME"
 AEGIS_BIOMETRIC_CALIBRATOR_NAME="jarvis-biometric-calibrator"
 AEGIS_BIOMETRIC_CALIBRATOR_BINARY="$AEGIS_APP_HELPERS/$AEGIS_BIOMETRIC_CALIBRATOR_NAME"
-AEGIS_LOCAL_BRAIN_NAME="jarvis-local-brain"
-AEGIS_LOCAL_BRAIN_BINARY="$AEGIS_APP_HELPERS/$AEGIS_LOCAL_BRAIN_NAME"
+AEGIS_VAD_HELPER_NAME="jarvis-vad-helper"
+AEGIS_VAD_HELPER_BINARY="$AEGIS_APP_HELPERS/$AEGIS_VAD_HELPER_NAME"
 AEGIS_LOCAL_EMBEDDING_NAME="jarvis-local-embedding"
 AEGIS_LOCAL_EMBEDDING_BINARY="$AEGIS_APP_HELPERS/$AEGIS_LOCAL_EMBEDDING_NAME"
 AEGIS_IOS_BRIDGE_NAME="jarvis-ios-bridge"
 AEGIS_IOS_BRIDGE_BINARY="$AEGIS_APP_HELPERS/$AEGIS_IOS_BRIDGE_NAME"
 AEGIS_SPOTLIGHT_INDEXER_NAME="jarvis-spotlight-indexer"
 AEGIS_SPOTLIGHT_INDEXER_BINARY="$AEGIS_APP_HELPERS/$AEGIS_SPOTLIGHT_INDEXER_NAME"
-AEGIS_MLX_ENGINE_NAME="jarvis-mlx-engine"
-AEGIS_MLX_ENGINE_BINARY="$AEGIS_APP_HELPERS/$AEGIS_MLX_ENGINE_NAME"
-AEGIS_MLX_VLM_NAME="jarvis-mlx-vlm"
-AEGIS_MLX_VLM_BINARY="$AEGIS_APP_HELPERS/$AEGIS_MLX_VLM_NAME"
-AEGIS_CORE_RESOURCE_BUNDLE_NAME="AegisAudio_AegisAudioCore.bundle"
+AEGIS_VAD_RESOURCE_BUNDLE_NAME="AegisAudio_AegisVADRuntime.bundle"
 AEGIS_UI_RESOURCE_BUNDLE_NAME="AegisAudio_AegisMenuBar.bundle"
-AEGIS_MLX_RESOURCE_BUNDLES=(
-    "mlx-swift_Cmlx.bundle"
-    "swift-crypto_Crypto.bundle"
-    "swift-transformers_Hub.bundle"
-)
 AEGIS_COMPUTER_HELPER_PRODUCT="jarvis-computer-helper"
 AEGIS_COMPUTER_HELPER_NAME="JarvisComputerHelper"
 AEGIS_COMPUTER_HELPER_APP="$AEGIS_APP_HELPERS/$AEGIS_COMPUTER_HELPER_NAME.app"
@@ -145,16 +136,24 @@ fi
 AEGIS_BUILD_CONFIGURATION="debug"
 AEGIS_BUILD_DIRECTORY="Debug"
 AEGIS_PREVIEW_STATE="${2:-idle}"
-AEGIS_BUILD_MLX="${AEGIS_BUILD_MLX:-auto}"
 AEGIS_INCLUDE_PERSONAL_MODELS="${AEGIS_INCLUDE_PERSONAL_MODELS:-0}"
-AEGIS_BUILD_NUMBER="${AEGIS_BUILD_NUMBER:-}"
+# Seconds since 2020 stay below the signed 32-bit update limit until 2088.
+# Clamp above the installed build so local reinstalls never create a downgrade.
+if [[ -z "${AEGIS_BUILD_NUMBER:-}" ]]; then
+    AEGIS_BUILD_NUMBER="$(( $(/bin/date +%s) - 1577836800 ))"
+    for installed_info in "$HOME/Applications/Jarvis.app/Contents/Info.plist" "/Applications/Jarvis.app/Contents/Info.plist"; do
+        installed_build="$(/usr/bin/plutil -extract CFBundleVersion raw "$installed_info" 2>/dev/null || true)"
+        if [[ "$installed_build" =~ ^[1-9][0-9]{0,9}$ && "$installed_build" -ge "$AEGIS_BUILD_NUMBER" ]]; then
+            AEGIS_BUILD_NUMBER="$(( installed_build + 1 ))"
+        fi
+    done
+fi
 # Building and packaging are deliberately separate concerns.  A normal build must
 # never replace a release ZIP whose provenance has already been verified.
 AEGIS_EMIT_ARCHIVE="${AEGIS_EMIT_ARCHIVE:-0}"
 AEGIS_EMBED_DAEMON="${AEGIS_EMBED_DAEMON:-0}"
 AEGIS_MAX_BUNDLE_KIB="${AEGIS_MAX_BUNDLE_KIB:-450560}"
-# 25 MiB per stripped executable. ONNX Runtime (Silero VAD) is a fixed ~20 MB of
-# the app; the rest is Jarvis's own code, which grows with each window it gains.
+# 25 MiB per stripped executable. ONNX lives only in the isolated VAD helper.
 AEGIS_MAX_SWIFT_EXECUTABLE_BYTES="${AEGIS_MAX_SWIFT_EXECUTABLE_BYTES:-26214400}"
 
 case "$AEGIS_SCRATCH_DIR" in
@@ -188,21 +187,8 @@ if [[ "$AEGIS_MODE" == "--package" || "$AEGIS_MODE" == "package" ]]; then
     AEGIS_BUILD_CONFIGURATION="release"
     AEGIS_BUILD_DIRECTORY="Release"
 fi
-AEGIS_CORE_RESOURCE_BUNDLE_SOURCE="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_CORE_RESOURCE_BUNDLE_NAME"
+AEGIS_VAD_RESOURCE_BUNDLE_SOURCE="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_VAD_RESOURCE_BUNDLE_NAME"
 AEGIS_UI_RESOURCE_BUNDLE_SOURCE="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_UI_RESOURCE_BUNDLE_NAME"
-if [[ "$AEGIS_BUILD_MLX" == "auto" ]]; then
-    # Recent Xcode ships a `metal` stub even without the Metal Toolchain component,
-    # so only a compiler that actually runs counts.
-    if /usr/bin/xcrun metal -v >/dev/null 2>&1; then
-        AEGIS_BUILD_MLX="1"
-    else
-        AEGIS_BUILD_MLX="0"
-    fi
-fi
-if [[ "$AEGIS_BUILD_MLX" != "0" && "$AEGIS_BUILD_MLX" != "1" ]]; then
-    echo "AEGIS_BUILD_MLX must be 0, 1, or auto" >&2
-    exit 2
-fi
 if [[ "$AEGIS_INCLUDE_PERSONAL_MODELS" != "0" && "$AEGIS_INCLUDE_PERSONAL_MODELS" != "1" ]]; then
     echo "AEGIS_INCLUDE_PERSONAL_MODELS must be 0 or 1" >&2
     exit 2
@@ -272,7 +258,6 @@ build_product() {
             )
         fi
         env \
-            AEGIS_BUILD_MLX="$AEGIS_BUILD_MLX" \
             SDKROOT="$AEGIS_SDK_PATH" \
             CLANG_MODULE_CACHE_PATH="$AEGIS_SCRATCH_DIR/clang-cache" \
             SWIFTPM_MODULECACHE_OVERRIDE="$AEGIS_SCRATCH_DIR/swiftpm-cache" \
@@ -286,7 +271,6 @@ build_product() {
         return
     fi
     env \
-        AEGIS_BUILD_MLX="$AEGIS_BUILD_MLX" \
         SDKROOT="$AEGIS_SDK_PATH" \
         CLANG_MODULE_CACHE_PATH="$AEGIS_SCRATCH_DIR/clang-cache" \
         SWIFTPM_MODULECACHE_OVERRIDE="$AEGIS_SCRATCH_DIR/swiftpm-cache" \
@@ -302,40 +286,26 @@ build_product "$AEGIS_APP_NAME"
 build_product "$AEGIS_SPEAKER_TRAINER_NAME"
 build_product "$AEGIS_BIOMETRIC_CALIBRATOR_NAME"
 build_product "$AEGIS_COMPUTER_HELPER_PRODUCT"
-build_product "$AEGIS_LOCAL_BRAIN_NAME"
 build_product "$AEGIS_LOCAL_EMBEDDING_NAME"
+build_product "$AEGIS_VAD_HELPER_NAME"
 build_product "$AEGIS_IOS_BRIDGE_NAME"
 build_product "$AEGIS_SPOTLIGHT_INDEXER_NAME"
-if [[ "$AEGIS_BUILD_MLX" == "1" ]]; then
-    if ! /usr/bin/xcrun --find metal >/dev/null 2>&1; then
-        echo "The MLX helper requires the full Xcode Metal toolchain" >&2
-        exit 1
-    fi
-    build_product "$AEGIS_MLX_ENGINE_NAME"
-    build_product "$AEGIS_MLX_VLM_NAME"
-fi
 AEGIS_BUILD_BINARY="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_APP_NAME"
 AEGIS_BUILD_SPEAKER_TRAINER="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_SPEAKER_TRAINER_NAME"
 AEGIS_BUILD_BIOMETRIC_CALIBRATOR="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_BIOMETRIC_CALIBRATOR_NAME"
 AEGIS_BUILD_COMPUTER_HELPER="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_COMPUTER_HELPER_PRODUCT"
-AEGIS_BUILD_LOCAL_BRAIN="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_LOCAL_BRAIN_NAME"
 AEGIS_BUILD_LOCAL_EMBEDDING="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_LOCAL_EMBEDDING_NAME"
+AEGIS_BUILD_VAD_HELPER="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_VAD_HELPER_NAME"
 AEGIS_BUILD_IOS_BRIDGE="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_IOS_BRIDGE_NAME"
 AEGIS_BUILD_SPOTLIGHT_INDEXER="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_SPOTLIGHT_INDEXER_NAME"
-AEGIS_BUILD_MLX_ENGINE="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_MLX_ENGINE_NAME"
-AEGIS_BUILD_MLX_VLM="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$AEGIS_MLX_VLM_NAME"
 test -x "$AEGIS_BUILD_BINARY"
 test -x "$AEGIS_BUILD_SPEAKER_TRAINER"
 test -x "$AEGIS_BUILD_BIOMETRIC_CALIBRATOR"
 test -x "$AEGIS_BUILD_COMPUTER_HELPER"
-test -x "$AEGIS_BUILD_LOCAL_BRAIN"
 test -x "$AEGIS_BUILD_LOCAL_EMBEDDING"
+test -x "$AEGIS_BUILD_VAD_HELPER"
 test -x "$AEGIS_BUILD_IOS_BRIDGE"
 test -x "$AEGIS_BUILD_SPOTLIGHT_INDEXER"
-if [[ "$AEGIS_BUILD_MLX" == "1" ]]; then
-    test -x "$AEGIS_BUILD_MLX_ENGINE"
-    test -x "$AEGIS_BUILD_MLX_VLM"
-fi
 
 mkdir -p "$AEGIS_DIST_DIR"
 rm -rf "$AEGIS_DIST_DIR/$AEGIS_APP_NAME.app"
@@ -353,19 +323,10 @@ cp "$AEGIS_BUILD_BINARY" "$AEGIS_APP_BINARY"
 cp "$AEGIS_BUILD_SPEAKER_TRAINER" "$AEGIS_SPEAKER_TRAINER_BINARY"
 cp "$AEGIS_BUILD_BIOMETRIC_CALIBRATOR" "$AEGIS_BIOMETRIC_CALIBRATOR_BINARY"
 cp "$AEGIS_BUILD_COMPUTER_HELPER" "$AEGIS_COMPUTER_HELPER_BINARY"
-cp "$AEGIS_BUILD_LOCAL_BRAIN" "$AEGIS_LOCAL_BRAIN_BINARY"
 cp "$AEGIS_BUILD_LOCAL_EMBEDDING" "$AEGIS_LOCAL_EMBEDDING_BINARY"
+cp "$AEGIS_BUILD_VAD_HELPER" "$AEGIS_VAD_HELPER_BINARY"
 cp "$AEGIS_BUILD_IOS_BRIDGE" "$AEGIS_IOS_BRIDGE_BINARY"
 cp "$AEGIS_BUILD_SPOTLIGHT_INDEXER" "$AEGIS_SPOTLIGHT_INDEXER_BINARY"
-if [[ "$AEGIS_BUILD_MLX" == "1" ]]; then
-    cp "$AEGIS_BUILD_MLX_ENGINE" "$AEGIS_MLX_ENGINE_BINARY"
-    cp "$AEGIS_BUILD_MLX_VLM" "$AEGIS_MLX_VLM_BINARY"
-    for bundle_name in "${AEGIS_MLX_RESOURCE_BUNDLES[@]}"; do
-        bundle_source="$AEGIS_SCRATCH_DIR/out/Products/$AEGIS_BUILD_DIRECTORY/$bundle_name"
-        test -d "$bundle_source"
-        /usr/bin/ditto "$bundle_source" "$AEGIS_APP_RESOURCES/$bundle_name"
-    done
-fi
 cp "$AEGIS_INFO_SOURCE" "$AEGIS_APP_CONTENTS/Info.plist"
 if [[ -n "$AEGIS_BUILD_NUMBER" ]]; then
     /usr/bin/plutil -replace CFBundleVersion -string "$AEGIS_BUILD_NUMBER" \
@@ -379,15 +340,21 @@ cp "$AEGIS_COMPUTER_INFO_SOURCE" "$AEGIS_COMPUTER_HELPER_APP/Contents/Info.plist
 cp "$AEGIS_ICON_SOURCE" "$AEGIS_APP_RESOURCES/Jarvis.icns"
 cp "$AEGIS_UPDATE_PUBLIC_KEY_SOURCE" "$AEGIS_UPDATE_PUBLIC_KEY_RESOURCE"
 cp "$AEGIS_PROJECT_ROOT/LICENSE" "$AEGIS_APP_RESOURCES/LICENSE.txt"
+"$AEGIS_PROJECT_ROOT/.venv/bin/python" "$AEGIS_PROJECT_ROOT/script/bundle_notices.py" \
+    --root "$AEGIS_PROJECT_ROOT" --resources "$AEGIS_APP_RESOURCES" \
+    --revision "$AEGIS_BUILD_REVISION"
 cp "$AEGIS_PROJECT_ROOT/MANUAL_FACIL.md" "$AEGIS_APP_RESOURCES/MANUAL_FACIL.md"
 /usr/bin/ditto --norsrc "$AEGIS_PACKAGE_DIR/AppBundle/es.lproj" "$AEGIS_APP_RESOURCES/es.lproj"
 cp "$AEGIS_PROJECT_ROOT/packaging/Distribution_README.es.txt" "$AEGIS_APP_RESOURCES/LEEME.txt"
-test -d "$AEGIS_CORE_RESOURCE_BUNDLE_SOURCE"
-/usr/bin/ditto --norsrc "$AEGIS_CORE_RESOURCE_BUNDLE_SOURCE" \
-    "$AEGIS_APP_RESOURCES/$AEGIS_CORE_RESOURCE_BUNDLE_NAME"
+test -d "$AEGIS_VAD_RESOURCE_BUNDLE_SOURCE"
+/usr/bin/ditto --norsrc "$AEGIS_VAD_RESOURCE_BUNDLE_SOURCE" \
+    "$AEGIS_APP_RESOURCES/$AEGIS_VAD_RESOURCE_BUNDLE_NAME"
 test -f "$AEGIS_UI_RESOURCE_BUNDLE_SOURCE/Contents/Resources/JarvisTricksterDot.png"
 /usr/bin/ditto --norsrc "$AEGIS_UI_RESOURCE_BUNDLE_SOURCE" \
     "$AEGIS_APP_RESOURCES/$AEGIS_UI_RESOURCE_BUNDLE_NAME"
+# Bundle.main resolves SwiftUI localization from the application, not the SwiftPM bundle.
+cp "$AEGIS_UI_RESOURCE_BUNDLE_SOURCE/Contents/Resources/es.lproj/Localizable.strings" \
+    "$AEGIS_APP_RESOURCES/es.lproj/Localizable.strings"
 if [[ "$AEGIS_INCLUDE_PERSONAL_MODELS" == "1" && -e "$AEGIS_WAKE_MODEL_SOURCE" ]]; then
     if [[ -L "$AEGIS_WAKE_MODEL_SOURCE" || ! -d "$AEGIS_WAKE_MODEL_SOURCE" ]]; then
         echo "Invalid wake word model asset" >&2
@@ -408,14 +375,11 @@ chmod +x \
     "$AEGIS_APP_BINARY" \
     "$AEGIS_SPEAKER_TRAINER_BINARY" \
     "$AEGIS_BIOMETRIC_CALIBRATOR_BINARY" \
-    "$AEGIS_LOCAL_BRAIN_BINARY" \
     "$AEGIS_LOCAL_EMBEDDING_BINARY" \
+    "$AEGIS_VAD_HELPER_BINARY" \
     "$AEGIS_IOS_BRIDGE_BINARY" \
     "$AEGIS_SPOTLIGHT_INDEXER_BINARY" \
     "$AEGIS_COMPUTER_HELPER_BINARY"
-if [[ "$AEGIS_BUILD_MLX" == "1" ]]; then
-    chmod +x "$AEGIS_MLX_ENGINE_BINARY" "$AEGIS_MLX_VLM_BINARY"
-fi
 if [[ "$AEGIS_EMBED_DAEMON" == "1" ]]; then
     chmod +x "$AEGIS_APP_DAEMON_BINARY"
 fi
@@ -425,14 +389,11 @@ if [[ "$AEGIS_BUILD_CONFIGURATION" == "release" ]]; then
         "$AEGIS_SPEAKER_TRAINER_BINARY"
         "$AEGIS_BIOMETRIC_CALIBRATOR_BINARY"
         "$AEGIS_COMPUTER_HELPER_BINARY"
-        "$AEGIS_LOCAL_BRAIN_BINARY"
         "$AEGIS_LOCAL_EMBEDDING_BINARY"
+        "$AEGIS_VAD_HELPER_BINARY"
         "$AEGIS_IOS_BRIDGE_BINARY"
         "$AEGIS_SPOTLIGHT_INDEXER_BINARY"
     )
-    if [[ "$AEGIS_BUILD_MLX" == "1" ]]; then
-        AEGIS_RELEASE_EXECUTABLES+=("$AEGIS_MLX_ENGINE_BINARY" "$AEGIS_MLX_VLM_BINARY")
-    fi
     for release_executable in "${AEGIS_RELEASE_EXECUTABLES[@]}"; do
         if [[ "$release_executable" == "$AEGIS_APP_BINARY" ]]; then
             # Preserve undefined and dynamically referenced symbols in the UI
@@ -495,14 +456,10 @@ if [[ "$AEGIS_LOCAL_SIGNING" == "1" ]]; then
     fi
     /usr/bin/codesign --force --sign "$AEGIS_SIGN_IDENTITY" --options runtime --timestamp=none "$AEGIS_SPEAKER_TRAINER_BINARY"
     /usr/bin/codesign --force --sign "$AEGIS_SIGN_IDENTITY" --options runtime --timestamp=none "$AEGIS_BIOMETRIC_CALIBRATOR_BINARY"
-    /usr/bin/codesign --force --sign "$AEGIS_SIGN_IDENTITY" --options runtime --timestamp=none "$AEGIS_LOCAL_BRAIN_BINARY"
     /usr/bin/codesign --force --sign "$AEGIS_SIGN_IDENTITY" --options runtime --timestamp=none "$AEGIS_LOCAL_EMBEDDING_BINARY"
+    /usr/bin/codesign --force --sign "$AEGIS_SIGN_IDENTITY" --identifier jarvis-vad-helper --options runtime --timestamp=none "$AEGIS_VAD_HELPER_BINARY"
     /usr/bin/codesign --force --sign "$AEGIS_SIGN_IDENTITY" --options runtime --timestamp=none "$AEGIS_IOS_BRIDGE_BINARY"
     /usr/bin/codesign --force --sign "$AEGIS_SIGN_IDENTITY" --options runtime --timestamp=none "$AEGIS_SPOTLIGHT_INDEXER_BINARY"
-    if [[ "$AEGIS_BUILD_MLX" == "1" ]]; then
-        /usr/bin/codesign --force --deep --sign "$AEGIS_SIGN_IDENTITY" --options runtime --timestamp=none "$AEGIS_MLX_ENGINE_BINARY"
-        /usr/bin/codesign --force --deep --sign "$AEGIS_SIGN_IDENTITY" --options runtime --timestamp=none "$AEGIS_MLX_VLM_BINARY"
-    fi
     /usr/bin/codesign --force --deep --sign "$AEGIS_SIGN_IDENTITY" --options runtime --timestamp=none "$AEGIS_COMPUTER_HELPER_APP"
     /usr/bin/codesign \
         --force \
@@ -551,14 +508,15 @@ else
         --sign "$AEGIS_SIGN_IDENTITY" \
         --options runtime \
         "$AEGIS_TIMESTAMP_ARGUMENT" \
-        "$AEGIS_LOCAL_BRAIN_BINARY"
+        "$AEGIS_LOCAL_EMBEDDING_BINARY"
     /usr/bin/codesign \
         --force \
         --deep \
         --sign "$AEGIS_SIGN_IDENTITY" \
         --options runtime \
         "$AEGIS_TIMESTAMP_ARGUMENT" \
-        "$AEGIS_LOCAL_EMBEDDING_BINARY"
+        --identifier jarvis-vad-helper \
+        "$AEGIS_VAD_HELPER_BINARY"
     /usr/bin/codesign \
         --force \
         --deep \
@@ -573,22 +531,6 @@ else
         --options runtime \
         "$AEGIS_TIMESTAMP_ARGUMENT" \
         "$AEGIS_SPOTLIGHT_INDEXER_BINARY"
-    if [[ "$AEGIS_BUILD_MLX" == "1" ]]; then
-        /usr/bin/codesign \
-            --force \
-            --deep \
-            --sign "$AEGIS_SIGN_IDENTITY" \
-            --options runtime \
-            "$AEGIS_TIMESTAMP_ARGUMENT" \
-            "$AEGIS_MLX_ENGINE_BINARY"
-        /usr/bin/codesign \
-            --force \
-            --deep \
-            --sign "$AEGIS_SIGN_IDENTITY" \
-            --options runtime \
-            "$AEGIS_TIMESTAMP_ARGUMENT" \
-            "$AEGIS_MLX_VLM_BINARY"
-    fi
     /usr/bin/codesign \
         --force \
         --deep \

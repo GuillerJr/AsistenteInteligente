@@ -162,6 +162,7 @@ class PendingToolConfirmation(BaseModel):
 class JobEvaluation(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    request_id: UUID | None = None
     brain: BrainTarget
     model_id: str | None = Field(default=None, max_length=256)
     total_latency_ms: int = Field(ge=0, le=600_000)

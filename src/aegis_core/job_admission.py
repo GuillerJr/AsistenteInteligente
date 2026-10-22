@@ -225,8 +225,8 @@ class JobAdmissionCoordinator:
                     target.evaluation,
                     now,
                 )
-            except Exception:
-                LOGGER.warning("owner_feedback_write_failed")
+            except Exception as error:  # Pluggable evaluation storage boundary.
+                LOGGER.warning("owner_feedback_write_failed error_type=%s", type(error).__name__)
 
     def clear(self) -> None:
         self._repair_windows.clear()

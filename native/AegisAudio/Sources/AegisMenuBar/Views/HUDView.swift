@@ -41,7 +41,7 @@ struct HUDView: View {
 
                         if model.voiceState == .failed, let text = model.voiceOutputText {
                             VStack(alignment: .leading, spacing: 8) {
-                                Label("Respuesta en texto", systemImage: "text.alignleft")
+                                Label(String(localized: "Respuesta en texto", bundle: .module), systemImage: "text.alignleft")
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundStyle(JarvisTheme.inkSecondary)
                                 Text(verbatim: text)
@@ -108,13 +108,13 @@ struct HUDView: View {
                     }
                     .buttonStyle(HUDActionStyle(accent: accent))
                     .disabled(!interactive)
-                    .help("Continuar en \(option.name)")
+                    .help(String(localized: "Continuar en \(option.name)", bundle: .module))
                 }
             }
         }
         if model.interactionID != nil {
             Button { RequestedWindowFocus.open("approval") { openWindow(id: "approval") } } label: {
-                Label("Revisar solicitud", systemImage: "arrow.up.right")
+                Label(String(localized: "Revisar solicitud", bundle: .module), systemImage: "arrow.up.right")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(HUDActionStyle(accent: accent, prominent: true))
@@ -124,12 +124,12 @@ struct HUDView: View {
             Button(role: .destructive) {
                 Task { await model.cancelActiveComputerUse() }
             } label: {
-                Label("Detener control del Mac", systemImage: "stop.fill")
+                Label(String(localized: "Detener control del Mac", bundle: .module), systemImage: "stop.fill")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .failure)))
             .disabled(!interactive)
-            .help("Solicitar la cancelación de la tarea de control activa")
+            .help(String(localized: "Solicitar la cancelación de la tarea de control activa", bundle: .module))
         }
     }
 }

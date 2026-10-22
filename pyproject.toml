@@ -1,6 +1,6 @@
 [project]
 name = "aegis-swarm"
-version = "0.1.0"
+version = "1.0.0"
 description = "Local-first, policy-gated agent swarm for macOS Apple Silicon"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"

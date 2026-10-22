@@ -5,9 +5,9 @@ import sys
 from pathlib import Path
 
 import pytest
+from historical.apple import AppleLocalModelClient, AppleLocalModelError
 
 from aegis_core.contracts import AgentRole
-from aegis_core.providers.apple import AppleLocalModelClient, AppleLocalModelError
 
 # Fake helpers run the test interpreter directly: /usr/bin/python3 is an xcrun stub
 # whose start-up latency and toolchain lookup made timing-bound tests flaky.

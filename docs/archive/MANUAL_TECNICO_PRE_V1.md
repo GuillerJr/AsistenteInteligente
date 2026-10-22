@@ -1,0 +1,2515 @@
+# Documento histórico, no usar para instalar
+
+Conservado para no perder detalles anteriores. Las instrucciones vigentes están en
+[el manual único](../MANUAL_INSTALACION_CONFIGURACION.md). Las referencias a inferencia
+local/híbrida y al inicio mediante dos LaunchAgents están obsoletas.
+
+# Manual de instalación y configuración de Jarvis
+
+Este es el manual único para instalar, configurar, validar, actualizar y diagnosticar Jarvis en un
+Mac con Apple Silicon. Está escrito para que una instalación nueva pueda completarse copiando los
+comandos en orden, sin descargar modelos NVIDIA ni guardar credenciales dentro del proyecto.
+
+## 1. Qué se instala
+
+Jarvis se divide en dos procesos locales:
+
+- `ai.aegis.daemon`: núcleo Python que ejecuta LangGraph, memoria, políticas, auditoría y llamadas a
+  las API remotas de NVIDIA NIM.
+- `Jarvis.app`: aplicación macOS nativa que vive en Menu Bar y en el notch, captura voz local,
+  muestra el HUD, ejecuta las acciones visuales autorizadas y aloja el helper on-device del cerebro
+  local.
+
+Ambos arrancan al iniciar sesión mediante LaunchAgents del usuario. La aplicación no aparece en el
+Dock y el HUD solo se abre cuando el usuario lo solicita.
+
+Los modelos NVIDIA de lenguaje, visión, embeddings y voz se consumen mediante API; no se descargan
+ni se ejecutan modelos NVIDIA en el Mac. En macOS 26, Jarvis también puede usar el modelo de sistema
+de Apple ya administrado por Apple Intelligence para conversación breve. Existe además una ruta MLX
+opcional y desactivada por defecto: al habilitarla, sí descarga una única vez el modelo cuantizado
+elegido y conserva como máximo dos conversaciones/KV-caches en memoria unificada. Los modelos locales
+de wake word y hablante siguen siendo los que entrena el propietario.
+
+## 2. Requisitos
+
+### Hardware y sistema
+
+- Mac Apple Silicon nativo `arm64`; el proyecto está optimizado para el MacBook Air M5.
+- macOS 14 Sonoma o posterior.
+- Para la ruta conversacional on-device: macOS 26 y Apple Intelligence disponible. En sistemas
+  anteriores Jarvis funciona con NVIDIA sin esa ruta.
+- Conexión a Internet para NVIDIA NIM y las funciones de investigación web.
+- Cuenta de NVIDIA Developer/NGC con acceso a los endpoints públicos.
+- Cuenta con acceso al repositorio privado de GitHub.
+
+### Herramientas
+
+- Git.
+- Homebrew nativo para Apple Silicon.
+- Python 3.11 nativo. El código también admite 3.12 y 3.13, pero la instalación reproducible del
+  proyecto usa `/opt/homebrew/bin/python3.11`.
+- `uv` para crear y sincronizar el entorno Python.
+- Apple Command Line Tools con Swift 6.2 o posterior.
+- Xcode completo, con el compilador Metal, solo para compilar el helper MLX o crear una distribución
+  notarizada que lo incluya. Las Command Line Tools no contienen `metal`.
+
+Comprueba primero la arquitectura:
+
+```bash
+uname -m
+```
+
+El resultado obligatorio es `arm64`. Si aparece `x86_64`, cierra esa terminal y abre una terminal
+nativa; no continúes bajo Rosetta.
+
+Instala las Command Line Tools si todavía no existen:
+
+```bash
+xcode-select -p
+```
+
+Si el comando informa que no hay un directorio de desarrollo activo:
+
+```bash
+xcode-select --install
+```
+
+Instala Homebrew desde su [sitio oficial](https://brew.sh/) si aún no existe. Después instala las
+dependencias:
+
+```bash
+brew install python@3.11 uv
+```
+
+Verifica las herramientas:
+
+```bash
+git --version
+/opt/homebrew/bin/python3.11 --version
+/opt/homebrew/bin/uv --version
+/usr/bin/xcrun swift --version
+```
+
+Swift debe ser 6.2 o posterior.
+
+## 3. Instalación rápida
+
+Esta sección resume la instalación completa. Las secciones posteriores explican cada decisión y
+las configuraciones opcionales.
+
+```bash
+git clone https://github.com/GuillerJr/AsistenteInteligente.git
+cd AsistenteInteligente
+/opt/homebrew/bin/uv sync --all-groups --no-editable \
+  --python /opt/homebrew/bin/python3.11 \
+  --cache-dir .uv-cache
+```
+
+Con la clave NVIDIA visible en la pantalla de NVIDIA, cópiala al portapapeles y ejecuta de
+inmediato:
+
+```bash
+./script/aegis.sh import-nvidia-key
+./script/aegis.sh doctor
+./script/aegis.sh probe-nvidia
+```
+
+El primer comando almacena la clave en macOS Keychain y limpia el portapapeles. Nunca pegues la
+clave en un comando, archivo `.env`, mensaje, commit o captura de pantalla.
+
+Instala la identidad local estable, valida el proyecto y registra los servicios:
+
+```bash
+./script/local_codesign_identity.sh install
+/opt/homebrew/bin/uv run --no-sync pytest
+./script/test_native.sh
+./script/jarvis_beta.sh install
+```
+
+Solicita los permisos solo después de instalar la aplicación definitiva:
+
+```bash
+./script/menu_bar_service.sh permissions
+./script/menu_bar_service.sh computer-permissions
+```
+
+Concede en Ajustes del Sistema los permisos descritos en la sección 8 y valida:
+
+```bash
+./script/jarvis_beta.sh daily
+```
+
+Una instalación saludable termina con `status=ok smoke=passed network_calls=0`. El gate comprueba
+firma, arquitectura, servicios, IPC, seguridad, proveedor, cerebro local, permisos de voz y control,
+wake word y perfil biométrico sin enviar datos ni hacer inferencias en NVIDIA.
+
+## 4. Obtener y guardar la API de NVIDIA
+
+### 4.1 Crear la clave
+
+Jarvis usa una clave personal que empieza por `nvapi-`. Hay dos rutas oficiales:
+
+1. Abre [NVIDIA API Keys](https://build.nvidia.com/settings/api-key), inicia sesión y genera una
+   clave para los endpoints serverless.
+2. Si la cuenta usa NGC, abre [NGC Setup API Keys](https://org.ngc.nvidia.com/setup/api-keys), pulsa
+   `Generate Personal Key`, incluye `NGC Catalog` y `Public API Endpoints` y genera la clave.
+
+NVIDIA documenta la segunda ruta y permite seleccionar `Never Expire`. Si tu organización muestra
+esa opción y necesitas una credencial sin fecha de vigencia, selecciónala. Una clave sin caducidad
+debe rotarse manualmente si se sospecha exposición. Consulta la
+[guía oficial de NVIDIA](https://docs.nvidia.com/rag/latest/api-key.html) para comprobar los nombres
+vigentes de las opciones.
+
+### 4.2 Importar la clave de forma segura
+
+1. Copia la clave desde NVIDIA.
+2. Sin pegarla en la terminal, ejecuta:
+
+```bash
+./script/aegis.sh import-nvidia-key
+```
+
+El resultado esperado es:
+
+```text
+nvidia_api_key=stored clipboard=cleared
+```
+
+Jarvis la guarda en el Keychain del usuario con estos metadatos:
+
+| Campo | Valor |
+| --- | --- |
+| Servicio | `ai.aegis.nvidia-nim` |
+| Cuenta | `default` |
+| Valor | clave privada `nvapi-…` |
+
+El comando no imprime la clave y vacía el portapapeles incluso si la importación falla.
+
+### 4.3 Validar la clave
+
+```bash
+./script/aegis.sh doctor
+./script/aegis.sh probe-nvidia
+./script/aegis.sh probe-nvidia-embedding
+./script/aegis.sh probe-nvidia-vision
+./script/aegis.sh probe-nvidia-tts
+./script/aegis.sh probe-nvidia-tools
+```
+
+`doctor` comprueba arquitectura, disponibilidad del embedding local y presencia de la clave. Si
+informa `local_semantic_memory=unavailable`, reinstala la app; Jarvis seguirá recuperando mediante
+FTS5 mientras tanto. Los `probe-*` realizan
+solicitudes sintéticas mínimas y nunca muestran la credencial, un vector, audio privado o una
+imagen del usuario. `probe-nvidia-tools` valida Function Calling pero no ejecuta herramientas.
+
+### 4.4 Rotar o reemplazar la clave
+
+Genera una clave nueva, cópiala y vuelve a ejecutar:
+
+```bash
+./script/aegis.sh import-nvidia-key
+./script/aegis.sh probe-nvidia
+./script/daemon_service.sh install
+```
+
+La entrada existente se reemplaza y el daemon se reinicia. Revoca después la clave anterior desde
+NVIDIA.
+
+## 5. Preparar el proyecto
+
+### 5.1 Clonar
+
+```bash
+git clone https://github.com/GuillerJr/AsistenteInteligente.git
+cd AsistenteInteligente
+```
+
+El repositorio es privado. Si Git solicita autenticación, inicia sesión con una cuenta autorizada o
+usa el método de autenticación de GitHub ya configurado en el Mac.
+
+### 5.2 Crear el entorno Python
+
+```bash
+/opt/homebrew/bin/uv sync --all-groups --no-editable \
+  --python /opt/homebrew/bin/python3.11 \
+  --cache-dir .uv-cache
+```
+
+El comando crea `.venv/` dentro del proyecto e instala versiones resueltas por `uv.lock`. No
+instales las dependencias globalmente ni uses Rosetta, Docker o Conda para el núcleo local.
+
+El wrapper `./script/aegis.sh` utiliza siempre `.venv/bin/python` y el código de `src/`, evitando que
+se ejecute una copia antigua instalada en otro sitio.
+
+### 5.3 Diagnóstico inicial
+
+Ejecuta este paso después de importar la API:
+
+```bash
+./script/aegis.sh doctor
+```
+
+Resultado esperado:
+
+```text
+architecture=arm64
+python=3.11.x
+nvidia_base_url=https://integrate.api.nvidia.com/v1
+nvidia_api_key=available
+```
+
+## 6. Firma local estable
+
+macOS relaciona los permisos de privacidad con la identidad de la aplicación. Una firma ad hoc
+cambiaría al recompilar y podría hacer que los permisos parecieran activados en Ajustes, pero no en
+Jarvis. Para evitarlo, crea una sola identidad de desarrollo local:
+
+```bash
+./script/local_codesign_identity.sh install
+./script/local_codesign_identity.sh status
+# Si status avisa identity_in_login_keychain, muévela al llavero protegido:
+./script/local_codesign_identity.sh migrate
+```
+
+La identidad se llama `Jarvis Local Development` y queda en un llavero propio,
+`~/Library/Keychains/jarvis-signing.keychain-db`, con su propia contraseña. El llavero se bloquea a
+los 5 minutos y al dormir el Mac, y solo autoriza a `/usr/bin/codesign` a usar su clave privada.
+`build_and_run.sh` te pide esa contraseña al firmar y lo vuelve a bloquear al terminar.
+
+`migrate` crea una identidad nueva (la clave anterior no se puede exportar) y borra la del llavero
+de inicio de sesión. Como cambia la firma, después tienes que recompilar Jarvis.app, ejecutar
+`jarvis approval-signer-reset`, reiniciar el daemon y volver a conceder los permisos de privacidad
+que macOS asocia a la identidad anterior. Es una identidad local para este Mac; no
+sustituye un certificado `Developer ID Application` ni sirve para publicar la app.
+
+El instalador es idempotente: si la identidad ya existe, la reutiliza. No la regeneres en cada
+build. Si Keychain solicita confirmar confianza o acceso durante la primera instalación, autoriza
+la identidad local de Jarvis.
+
+## 7. Validar e instalar los servicios
+
+### 7.1 Pruebas
+
+```bash
+/opt/homebrew/bin/uv run --no-sync pytest
+./script/test_native.sh
+./script/build_and_run.sh --verify
+```
+
+- `pytest` prueba el daemon, orquestación, seguridad, memoria y proveedores con transportes
+  simulados; no consume la API real.
+- `test_native.sh` ejecuta la suite Swift nativa.
+- `build_and_run.sh --verify` compila, firma y abre un bundle temporal para una comprobación rápida.
+
+La compilación incluye `jarvis-local-brain` y `jarvis-local-embedding` dentro de
+`Jarvis.app/Contents/Helpers`. El daemon solo ejecuta helpers reales, ejecutables, propiedad del
+usuario y sin escritura para grupo u otros. El segundo usa NaturalLanguage de macOS para búsqueda
+semántica privada; si falta o falla, la memoria continúa mediante SQLite/FTS5.
+
+Para incluir también el helper MLX en una instalación local, selecciona primero Xcode como toolchain
+y activa su build de forma explícita:
+
+```bash
+sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+AEGIS_BUILD_MLX=1 ./script/menu_bar_service.sh install
+```
+
+El flujo `release_macos.sh` ya fuerza `AEGIS_BUILD_MLX=1` y falla antes de compilar si Xcode/Metal no
+están disponibles.
+
+### 7.2 Instalar el daemon
+
+```bash
+./script/daemon_service.sh install
+./script/daemon_service.sh status
+```
+
+El servicio queda en `~/Library/LaunchAgents/ai.aegis.daemon.plist`, arranca al iniciar sesión y se
+reinicia si falla. Sus logs están en `~/Library/Logs/Aegis/`.
+
+### 7.3 Instalar Jarvis
+
+```bash
+./script/menu_bar_service.sh install
+./script/menu_bar_service.sh status
+```
+
+El script:
+
+1. Compila los productos Swift en modo Release.
+2. Firma `Jarvis.app`, el entrenador de voz y `JarvisComputerHelper.app` con la identidad estable.
+3. Instala el bundle en `~/Applications/Jarvis.app`.
+4. Crea `~/Library/LaunchAgents/ai.aegis.menubar.autostart.plist`.
+5. Abre Jarvis como aplicación de Menu Bar.
+
+La instalación privada no genera ni reemplaza `dist/Jarvis.zip`; así los modelos personales de
+voz nunca entran por accidente en un archivo distribuible. Usa `release_macos.sh candidate` para
+crear un ZIP local verificable. La publicación para otros Macs requiere Developer ID y
+notarización.
+
+### 7.4 Distribución firmada y notarizada
+
+#### Validación de ingeniería sin voz ni instalación
+
+```bash
+./script/release_macos.sh preflight
+./script/release_macos.sh validate
+```
+
+El segundo comando imprime una carpeta privada `/private/tmp/aegis-distribution.*` con el ZIP,
+`Jarvis.validation.json`, `Jarvis.spdx.json` y el log de compilación. No modifica el ZIP certificado
+de `dist`, la app instalada, los LaunchAgents, permisos, credenciales ni modelos personales. No
+captura micrófono ni pide hablar. La compilación puede necesitar acceso de red para dependencias
+si todavía no están en caché; no hace solicitudes a NVIDIA ni envía grabaciones.
+
+Se verifica el ZIP antes de extraerlo, la firma de la copia extraída, cada Mach-O, sus dependencias
+de sistema, la clave pública fijada y el autodiagnóstico del daemon con un HOME temporal vacío.
+No abre la interfaz. Este perfil usa firma ad-hoc y no incluye los helpers Swift MLX opcionales,
+por lo que puede ejecutarse con Command Line Tools; no cambia el proveedor NVIDIA configurado.
+
+Admite fuentes sin commit para la validación local y las vincula mediante hash, incluidos archivos
+nuevos/eliminados; si cambian durante la compilación, falla. El informe conserva
+`public_release_qualified=false`, la voz pendiente de autorización y las compuertas públicas sin
+aprobar. No debe renombrarse ese informe a `Jarvis.release.json` ni utilizarse para firmar un canal.
+
+#### Candidato certificado y promoción pública
+
+Antes de usar credenciales de Apple puedes producir una release candidata local completa:
+
+```bash
+./script/release_macos.sh candidate
+```
+
+Además del ZIP, este comando crea `dist/Jarvis.release.json` y `dist/Jarvis.spdx.json`. El primero
+vincula mediante SHA-256 la revisión, el árbol tracked, el archivo y los miembros del bundle; el
+segundo inventaría dependencias bloqueadas en formato SPDX 2.3. Ambos omiten datos del usuario y se
+verifican inmediatamente. El build excluye expresamente `JarvisWakeWord.mlmodelc` y
+`JarvisSpeakerIdentity.mlmodelc`: son modelos personales de la instalación, no recursos
+distribuibles. Una firma local sigue siendo únicamente apta para este Mac.
+
+`candidate`, `archive` y `notarize` comprueban primero que las fuentes estén limpias, también los
+archivos nuevos bajo `src`, `native`, `script` y `packaging`. No necesitan capturar voz para generar
+artefactos, pero su generación por sí sola tampoco cierra P10/P11/P12/P14. La validación física final
+sigue siendo una operación posterior y explícita.
+
+Las releases se verifican en staging antes de promoverse a `dist`. El manifiesto se sustituye al
+final y el conjunto previo queda en `dist/.release-previous.*`, incluyendo evidencia de canal que
+ya no corresponde al ZIP nuevo. Ante un error durante el intercambio se restaura lo anterior. Si
+se corta la energía o el proceso muere abruptamente, no elimines `.release-publish.lock` ni el
+historial sin inspeccionar qué conjunto es íntegro; la verificación de hashes falla de forma
+cerrada, pero el intercambio de varios archivos no es una transacción atómica del filesystem.
+
+Instala en el Keychain una identidad `Developer ID Application` emitida por Apple y crea una vez
+el perfil privado de notarización; el asistente interactivo de Apple guarda las credenciales en
+Keychain, no en el repositorio:
+
+```bash
+/usr/bin/xcrun notarytool store-credentials aegis-notary
+```
+
+Genera primero un ZIP firmado o ejecuta el flujo completo:
+
+```bash
+AEGIS_CODESIGN_IDENTITY="Developer ID Application: Nombre (TEAMID)" \
+./script/release_macos.sh archive
+
+AEGIS_CODESIGN_IDENTITY="Developer ID Application: Nombre (TEAMID)" \
+AEGIS_NOTARY_PROFILE="aegis-notary" \
+./script/release_macos.sh notarize
+```
+
+El flujo compila Release arm64, firma desde los helpers hacia el bundle con hardened runtime y
+timestamp, genera provenance/SBOM, envía el ZIP, consulta el veredicto cada 15 segundos, guarda el
+log con modo `0600`, grapa el ticket, vuelve a sellar el ZIP modificado y comprueba Gatekeeper. El
+tiempo máximo predeterminado es una hora; solo si el servicio de Apple lo exige, ajusta
+`AEGIS_NOTARY_POLL_SECONDS` o
+`AEGIS_NOTARY_TIMEOUT_SECONDS`.
+
+El instalador intercambia bundles mediante staging y conserva la versión anterior hasta comprobar
+que la nueva firma y el LaunchAgent son válidos y que Jarvis arrancó. Si cualquiera de esos pasos
+falla, restaura automáticamente la app anterior. No borres manualmente el staging durante una
+instalación.
+
+### 7.5 Host MCP local y cerebro MLX opcional
+
+El daemon puede alojar servidores MCP estándar por `stdio`. La configuración es opcional; si el
+archivo no existe, no se inicia ningún proceso MCP. Crea el archivo privado así, reemplazando las
+rutas por ejecutables absolutos reales propiedad de tu usuario o de `root`:
+
+```bash
+mkdir -p "$HOME/Library/Application Support/Aegis"
+/usr/bin/install -m 600 /dev/null \
+  "$HOME/Library/Application Support/Aegis/mcp_servers.json"
+```
+
+Plantilla inactiva para un servidor stdio ya instalado y revisado (no descarga ni ejecuta nada):
+
+```json
+{
+  "servers": [
+    {
+      "server_id": "reviewed-docs",
+      "command": "/ruta/absoluta/al/servidor-mcp",
+      "arguments": [],
+      "working_directory": "/ruta/absoluta/a/un/directorio/privado",
+      "environment": {},
+      "capability": "web_read",
+      "risk": "high",
+      "read_only": true,
+      "approved_tools": {},
+      "application_bundle_ids": ["com.apple.Terminal"],
+      "allowed_roles": ["planner"],
+      "enabled": false
+    }
+  ]
+}
+```
+
+El archivo y el directorio de trabajo no pueden ser escribibles por grupo u otros. Jarvis no admite
+secretos en `environment`: las credenciales pertenecen al Keychain o al mecanismo seguro propio del
+servidor. Tampoco se permiten overrides de PATH/HOME ni inyección de loaders/interpretes mediante
+el entorno. No pongas credenciales en argumentos ni uses un launcher que descargue `latest`.
+
+Antes de habilitar, revisa el proveedor, la versión instalada, sus permisos reales de solo lectura
+y cada herramienta. Guarda cada `inputSchema` revisado en un JSON local y calcula su huella:
+
+```bash
+./script/aegis.sh mcp-schema /ruta/al/inputSchema-revisado.json
+./script/aegis.sh mcp-check
+```
+
+Añade a `approved_tools` una entrada `"nombre-remoto-exacto": "sha256-devuelto"` por herramienta;
+el comando de huella **no aprueba** herramientas ni comprueba efectos. Solo tras la revisión y la
+autorización explícita cambia `enabled` a `true` y reinicia el daemon de manera controlada.
+La plantilla vacía nunca inicia el proceso aunque se active por error. Las configuraciones previas
+sin revisión y aplicaciones explícitas requieren migración manual; no se hereda autoridad.
+
+El host negocia MCP `2025-11-25`, descubre `tools/list` y registra solo los contratos aprobados como
+`mcp_<servidor>__<herramienta>`. Una discrepancia pone ese servidor en cuarentena, sin bloquear a los
+otros ni al daemon. `notifications/tools/list_changed` invalida la sesión, sin actualización automática.
+Cada llamada requiere aprobación de un solo uso: leer también puede enviar una consulta privada.
+`readOnlyHint` no es una garantía de seguridad; deben limitarse los permisos en el servicio real.
+
+`./script/aegis.sh mcp-status` consulta el estado real por IPC autenticado, sin arrancar procesos.
+`mcp-check` solo comprueba requisitos estáticos y nunca afirma conexión, certificación o ejecución.
+Los diagnósticos no incluyen secretos, argumentos ni resultados. Un daemon instalado anterior a
+este cambio no conoce `mcp.status`; hay que actualizarlo antes de usar ese diagnóstico.
+
+Esto aplica al host stdio, no certifica Capability Packs HTTPS ni habilita automáticamente MCP en
+el CLI de ingeniería. El proceso externo no está dentro de App Sandbox: ejecuta con permisos del
+usuario. Debe revisarse el servidor completo, no solo su schema. Véase ADR-0226.
+
+### Context7: documentación por HTTPS, sin servidor local
+
+La integración revisada usa un Capability Pack y el endpoint oficial, no la configuración stdio.
+El pack contiene únicamente `resolve-library-id` y `query-docs`, esquemas cerrados y huellas remotas.
+No hace falta instalar Node ni ejecutar un servidor de terceros. Las pruebas anónimas funcionaron;
+el proveedor puede cambiar sus cuotas o exigir una clave en el futuro.
+
+```bash
+# Red: metadatos públicos, sin consultas de documentación.
+./script/aegis.sh context7-catalogue
+# Red: dos consultas fijas sobre Python, sin archivos ni voz del propietario.
+./script/aegis.sh probe-context7
+# Instala y sella el pack localmente; requiere un daemon actualizado y reinicio controlado.
+./script/aegis.sh plugins-install examples/plugins/context7-docs.jarvis-plugin.json
+# Verificación y simulación sin llamadas a Context7.
+./script/aegis.sh plugins-verify
+./script/aegis.sh plugins-simulate context7-docs --request "consulta context7 sobre Python"
+```
+
+Tras cargar el pack en el daemon actualizado, pide Context7 explícitamente y revisa la consulta en
+«Aprobar una vez». En el CLI de ingeniería usa `--research-policy public_web`; la política por defecto
+`offline` bloquea esta salida aunque se seleccione la Skill. Las consultas no pueden contener bloques
+de código, rutas personales, URLs, emails o credenciales reconocibles. Este filtro no identifica todo
+contenido confidencial: el usuario debe revisar el texto que se enviará al proveedor.
+
+Para deshabilitar: `./script/aegis.sh plugins-disable context7-docs` y reinicia el daemon de forma
+controlada. Ningún diagnóstico cambia permisos TCC ni necesita grabar voz. No pongas una API key en
+JSON/argumentos/chat; si el servicio llegara a requerir autenticación, usa el flujo Bearer/Keychain
+del runtime de plugins con aprobación separada. Contrato: ADR-0227.
+
+La distribución Release incluye `jarvis-mlx-engine` y Jarvis lo prefiere automáticamente cuando el
+helper firmado está disponible. Para generar una app de desarrollo que también lo incluya, instala
+Xcode completo, selecciona su toolchain y construye así:
+
+```bash
+sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+AEGIS_BUILD_MLX=1 ./script/build_and_run.sh --package
+```
+
+El primer uso descarga los pesos desde Hugging Face y puede tardar. No actives esta ruta si no quieres
+esa descarga. Jarvis usa un proceso aislado, KV-cache cuantizada a 4 bits, ventana máxima de 4.096
+tokens, dos sesiones LRU y un límite de 1.024 tokens por respuesta. Para especulación con un segundo
+modelo compatible debes proporcionar además `AEGIS_MLX_DRAFT_MODEL_ID` y una estimación exacta en
+`AEGIS_MLX_DRAFT_MODEL_BYTES`; la política de memoria recomendada de MLX deniega la carga si ambos
+modelos no caben con seguridad. Para volver al cerebro Apple/NVIDIA establece
+`AEGIS_MLX_ENABLED=false` y reinstala el daemon. Si el helper MLX no está presente, Jarvis selecciona
+automáticamente ese fallback sin impedir el arranque.
+
+## 8. Permisos de macOS
+
+Jarvis nunca solicita permisos silenciosamente al arrancar. Cada permiso se pide mediante una
+acción explícita y debe concederse al bundle instalado y firmado, no a una copia temporal.
+
+### 8.1 Voz
+
+```bash
+./script/menu_bar_service.sh permissions
+```
+
+`permissions` avanza en orden por los cuatro permisos: Micrófono, Reconocimiento de voz, Pantalla y
+Control. Se detiene cuando macOS necesita que tomes una decisión, por lo que nunca superpone dos
+paneles. Jarvis pasa temporalmente al frente para que los diálogos de Micrófono, Speech, Pantalla y
+Control no queden ocultos al arrancar desde Menu Bar; el helper de control aplica la misma regla.
+También puedes pulsar cada tarjeta del panel de Jarvis para configurar solo ese permiso.
+
+Concede:
+
+- `Micrófono` a Jarvis.
+- `Reconocimiento de voz` a Jarvis.
+
+Rutas habituales:
+
+- Ajustes del Sistema → Privacidad y seguridad → Micrófono.
+- Ajustes del Sistema → Privacidad y seguridad → Reconocimiento de voz.
+
+Jarvis consulta Micrófono con la API de grabación de macOS 14 o posterior. El estado mostrado
+corresponde al permiso de audio real, no a una autorización de cámara o captura independiente.
+El bundle firmado incluye el entitlement de entrada de audio requerido por hardened runtime.
+
+La transcripción exige reconocimiento local de Apple. Jarvis no permite fallback remoto de Apple.
+
+### 8.2 Pantalla y control del equipo
+
+```bash
+./script/menu_bar_service.sh computer-permissions
+```
+
+Concede:
+
+- `Grabación de pantalla y audio del sistema` —o `Grabación de pantalla`, según la versión de
+  macOS— a `Jarvis`.
+- `Accesibilidad` —llamada `Control de dispositivos y acceso a los datos` en versiones nuevas— a
+  `Jarvis`.
+- Si aparece `JarvisComputerHelper` o `Jarvis Computer Control` en el panel de Control, activa
+  también su entrada. El estado `CONTROL` solo será `LISTO` cuando el host y su helper estén
+  autorizados.
+
+El helper no mueve el cursor nativo. Jarvis dibuja su propio retículo y usa acciones accesibles
+validadas. Las capturas se mantienen en memoria, pero durante una sesión aprobada se envían al
+modelo de visión NVIDIA; la ventana de confirmación lo informa antes de ejecutar.
+
+Jarvis consulta el estado cada segundo mientras la autorización está en curso. Al cerrar o abandonar
+Ajustes del Sistema, se relanza automáticamente si el cambio requiere un proceso nuevo y vuelve a
+leer TCC con la identidad firmada. No reemplaces `Jarvis.app` manualmente ni cambies su firma, porque
+macOS puede crear una identidad de permiso distinta.
+
+### 8.3 Automatización de aplicaciones
+
+Mail, Calendario, Recordatorios y Contactos pueden mostrar una solicitud adicional de Automatización
+la primera vez que una acción los necesite. macOS conserva esa decisión. Jarvis nunca lee el cuerpo
+de los correos, notas de recordatorios, direcciones, cumpleaños ni notas de contactos. Toda acción
+que modifica datos exige una confirmación de un solo uso. Puedes revisar o revocar el permiso en
+**Ajustes del Sistema → Privacidad y seguridad → Automatización**.
+
+### 8.4 Alertas proactivas locales
+
+Activa **Alertas proactivas** en el menú de Jarvis. macOS solicitará **Notificaciones** y, para los
+avisos de agenda, **Calendarios**. Si deniegas Notificaciones, Jarvis devuelve el interruptor a
+apagado. Puedes cambiar después ambos permisos desde **Ajustes del Sistema → Notificaciones →
+Jarvis** y **Privacidad y seguridad → Calendarios**.
+
+Jarvis avisa de batería al 20 % y 10 %, pérdida/restauración de red, presión de memoria, presión
+térmica y un evento próximo. No incluye el título del evento en la notificación. Cada clase tiene un
+periodo de enfriamiento para evitar avisos repetidos. La implementación recibe eventos de macOS; no
+mantiene un polling continuo. EventKit conserva un único temporizador para el próximo evento y una
+revisión diaria solo cuando no hay eventos en los siguientes siete días.
+
+## 9. Comprobación final
+
+Ejecuta:
+
+```bash
+./script/local_codesign_identity.sh status
+./script/daemon_service.sh status
+./script/menu_bar_service.sh status
+./script/aegis.sh daemon-status
+./script/aegis.sh probe-nvidia
+./script/jarvis_beta.sh daily
+```
+
+Comprueba visualmente:
+
+- El icono template de Jarvis aparece en la Menu Bar.
+- El panel muestra el core y NVIDIA disponibles.
+- `MICRÓFONO` y `VOZ` aparecen autorizados.
+- `CONTROL` aparece `LISTO` después de conceder pantalla y Accesibilidad.
+- En un MacBook con notch se ve la presencia ambiental de Jarvis.
+- `⌃⇧Espacio` emite un beep e inicia un turno de voz.
+
+Estado de daemon esperado:
+
+```text
+status=ok protocol=1.0 architecture=arm64 security=intact provider=configured runtime=active active_agents=0
+```
+
+`provider=configured` confirma que la credencial existe y tiene formato válido. `probe-nvidia`
+confirma además conectividad y vigencia real. `runtime=suspended` también es saludable cuando Low
+Power Mode está activo o existe presión térmica: Jarvis conserva IPC y seguridad, pero difiere el
+trabajo no esencial hasta que macOS informe recuperación.
+
+## 10. Uso cotidiano
+
+### Iniciar un turno de voz
+
+Usa cualquiera de estas opciones:
+
+- Pulsa `⌃⇧Espacio` desde cualquier aplicación.
+- Abre Jarvis en la Menu Bar y pulsa `Hablar con Jarvis`.
+- Desde terminal ejecuta `./script/menu_bar_service.sh voice-turn`.
+- Después de entrenar y habilitar el wake word, di «Jarvis».
+
+Para habilitar la escucha entrenada sin abrir el menú:
+
+```bash
+./script/menu_bar_service.sh wake-word-on
+```
+
+El sistema espera como máximo ocho segundos para que comiences a hablar. Una vez detectada la voz,
+el turno termina tras 1,2 segundos de silencio o al alcanzar el límite defensivo total de 60
+segundos. Al terminar de responder, Jarvis mantiene durante cinco segundos una escucha de
+continuidad indicada por un pulso tenue en el notch. Si empiezas a hablar durante esa ventana, el
+umbral acústico adaptativo inicia Apple Speech on-device sin exigir «Jarvis» otra vez. Si no detecta
+voz, el plazo monotónico expira y Jarvis vuelve al modo de wake word de bajo consumo.
+
+Jarvis tiene una sola voz: **Ray de NVIDIA, estilo Neutral**. Se utiliza
+`Magpie-Multilingual.EN-US.Ray.Neutral` con idioma de texto `es-US`, combinación comprobada en el
+endpoint actual. El propietario eligió Ray y posteriormente rechazó Calm por demasiado relajado.
+No se usa Diego ni la síntesis de Apple.
+El inicio de reproducción tiene un límite de quince segundos. Si NVIDIA no inicia o el audio se
+corta, el HUD muestra la respuesta en texto y distingue el fallo de audio del resultado de la tarea;
+no cambia de voz, no repite lo hablado y no vuelve a ejecutar la acción.
+Cuando NVIDIA responde, el daemon entrega audio PCM incremental de 22,05 kHz por el IPC autenticado.
+La app lo reproduce mientras todavía se sintetiza; no descarga un modelo, no guarda audio en disco y no
+recibe la API key. Una secuencia inválida, bloque mayor de 4 KiB o muestra incompleta se rechaza.
+Una cola circular acotada reúne una reserva inicial de 100 ms de audio; libera antes una respuesta
+corta al recibir su fin. Se mide un objetivo de 150 ms desde el primer PCM, sujeto a la red.
+Cuando ya existe otra frase completa en cola, prepara solo esa frase mientras reproduce la actual.
+El prefetch nunca excede 2 MiB, no sobrevive al turno y cierra su token aunque se interrumpa.
+Ray mantiene su tono y velocidad originales. La naturalidad se trabaja con pensamientos conectados,
+menos fragmentos, pausas de puntuación y preparación anticipada; no con efectos de robot o cambios
+de locutor. La personalidad es despierta, resolutiva y precisa, sin una cadencia adormecida ni
+entusiasmo fingido, con humor discreto fuera de situaciones delicadas.
+La salida PCM aplica un ajuste conservador de pausas: tramos continuos casi inaudibles, por debajo
+de aproximadamente -60 dBFS, quedan limitados a 80 ms al inicio y 300 ms después. No altera tono,
+volumen ni muestras por encima de ese umbral. Para conservar el PCM sin ajustar, establece
+`AEGIS_NVIDIA_TTS_SMOOTH_PAUSES=false`. Solo afecta a la salida TTS en streaming, no a la captura,
+biometría o al WAV de compatibilidad. Las voces extremadamente tenues requieren valoración auditiva.
+
+Antes de abrir el micrófono, Jarvis consulta una sola vez `runtime.preflight`. El daemon comprueba
+en paralelo la auditoría, la credencial NVIDIA y el cerebro local; no conserva una copia temporal de
+la integridad ni hace tres viajes IPC consecutivos. Si cualquiera de los campos es inválido, el turno
+no comienza.
+
+La respuesta puede comenzar mientras el modelo todavía genera. Jarvis agrupa frases muy cortas,
+reúne al menos 120 caracteres por unidad (o libera el resto al terminar), prioriza finales de
+oración y, al alcanzar 320 caracteres de prosa, busca una cláusula o un espacio. Esperar más texto
+puede retrasar el primer audio; reduce reinicios de entonación en respuestas breves.
+No divide títulos o decimales como finales de frase ni vuelve a pronunciar un fragmento ya emitido.
+Si dices «Jarvis» mientras está procesando o hablando, cancela el trabajo y el audio actuales y abre
+un turno nuevo. No es necesario esperar al final de la respuesta.
+
+Si la captura no detecta voz, no completa la transcripción o falta un permiso, Jarvis explica el
+problema en el HUD antes de contactar al daemon. Una cancelación intencional permanece
+silenciosa y no crea conversación, job ni solicitud a NVIDIA. Los fallos posteriores de job o
+stream no intentan recuperarse llamando otra vez a NVIDIA TTS ni usando una voz distinta.
+
+Para repetir la última salida sin generar una respuesta nueva, di «Jarvis, repite», «Jarvis,
+repítelo» o «Jarvis, dilo otra vez». Jarvis reproduce el audio original de Ray almacenado en RAM:
+no crea job, conversación, memoria persistente ni solicitud NVIDIA. Solo conserva audio reproducido
+completamente, hasta 4 MiB y 4096 bloques, ligado al texto exacto de hasta 2.000 caracteres y válido
+cinco minutos. Se borra al dormir, bloquear o empezar una conversación nueva. Exige perfil del
+propietario y presencia local verificados. Si falta o caducó el audio, se informa en pantalla.
+
+El stream hablado admite como máximo 2.000 caracteres en todo el turno, no por fragmento. Cada
+instantánea debe extender exactamente la anterior después de normalizar espacios. Si un proveedor
+reemplaza texto ya pronunciado, Jarvis cancela el job y comunica el fallo; si la respuesta final está
+vacía, el daemon la rechaza antes de añadirla a la conversación.
+
+### Temporizador local por voz
+
+Después de activar un turno, usa una orden completa con una cantidad numérica:
+
+- «Pon un temporizador de 30 segundos».
+- «Pon un temporizador de cinco minutos».
+- «Configura un temporizador por 5 minutos».
+- «Inicia un temporizador de 1 hora».
+- «Estado del temporizador» o «Cuánto falta del temporizador».
+- «Pausa el temporizador».
+- «Reanuda el temporizador».
+- «Cancela el temporizador».
+
+Jarvis acepta desde un segundo hasta 24 horas y solo mantiene un temporizador activo. La confirmación
+y el tiempo restante se expresan con horas, minutos y segundos naturales. La consulta no crea un
+sondeo: calcula el remanente desde el deadline monotónico únicamente al pedirlo. La confirmación y
+el aviso final usan la voz existente; al vencer siempre emite además un beep. Si Jarvis está
+escuchando, procesando, hablando o esperando una aprobación, conserva ese turno y limita el aviso al
+beep. El temporizador vive únicamente en memoria: cerrar, actualizar o reiniciar `Jarvis.app` lo
+cancela. No usa NVIDIA, el daemon, red, memoria RAG ni un permiso nuevo, y no guarda la orden.
+Pausar cancela la espera activa, conserva el remanente y sigue ocupando el único slot; reanudar crea
+otra espera local por ese mismo tiempo. Ninguna de las dos operaciones crea un proceso o monitor.
+Las cantidades escritas con palabras se admiten del uno al sesenta en español o inglés; fuera de ese
+rango usa cifras. Fracciones, aproximaciones y cantidades vagas conservan el flujo normal.
+
+### Aplicación activa por voz
+
+Di `¿Qué aplicación estoy usando?`, `¿Cuál es la aplicación activa?` o
+`What app am I using`. Jarvis consulta `NSWorkspace` dentro de la app nativa y responde con el nombre
+de la aplicación en primer plano. El turno conserva el preflight normal de permisos, daemon e
+integridad, pero no envía el transcript o el nombre mediante `voice.submit`. Tampoco captura pantalla,
+enumera ventanas, lee documentos o usa modelos. El nombre se normaliza, se limita antes de hablar y
+nunca llega a los logs; el bundle identifier tampoco se expone. Una pregunta compuesta conserva el
+cerebro híbrido normal.
+
+### Guía de capacidades por voz
+
+Di `¿Qué puedes hacer?`, `¿Qué sabes hacer?` o `¿Cómo puedes ayudarme?`. Jarvis responde con un
+resumen breve de conversación, memoria, consultas y acciones, y comprueba si Pantalla y Control
+están listos antes de mencionar el control visual. La respuesta se construye dentro de la app, sin
+modelo ni `voice.submit`, y no ejecuta o autoriza ninguna capacidad. Abrir aplicaciones, ejecutar
+atajos y controlar visualmente una app conservan su aprobación de un solo uso y auditoría.
+
+### Qué cerebro atiende cada solicitud
+
+- Determinista/nativo: reloj, temporizadores, estado del Mac y órdenes inequívocas. Es siempre la
+  primera opción y no usa modelos.
+- NVIDIA NIM rápido: una confianza local inferior a `0.82`, una orden de herramientas o una
+  planificación de varios pasos usa `openai/gpt-oss-20b`.
+- NVIDIA NIM profundo: código, ciberseguridad y razonamiento crítico usan
+  `deepseek-ai/deepseek-v4-flash-0731`. Visión conserva el especialista multimodal registrado.
+- Degradación: un HTTP 429 activa al menos cinco segundos de cooldown global para chat, visión,
+  embeddings y voz NVIDIA. El turno devuelve la respuesta Apple ya obtenida sin volver a abrir red.
+  Broker, TCC, confirmaciones y ejecutores conservan toda la autoridad.
+
+La confianza se calcula con probabilidades del token seleccionado y entropía normalizada de sus
+alternativas. Si el wrapper no entrega `logprobs`, la confianza se considera desconocida y escala de
+forma segura. La carga remota usa la solicitud redactada; no recibe automáticamente memoria privada,
+identidad del hablante o historial del propietario. Cada selección se añade a `audit.jsonl` sin
+guardar el prompt o la respuesta.
+
+Private Cloud Compute no se finge mediante HTTP. La API Foundation Models correspondiente requiere
+una versión de macOS posterior al target 26 y un entitlement administrado; por eso el binario actual
+opera Apple on-device → NVIDIA. Cuando Apple habilite ese contrato para el target desplegado, PCC se
+insertará como segundo nivel sin cambiar LangGraph ni el límite de autoridad local.
+
+Una mención aislada de «hoy», «app», «clima», «precio» o «noticias» no carga herramientas. Jarvis
+busca una orden explícita como «abre Safari», «revisa mi correo», «crea un evento», «busca…» o una
+pregunta de información actual. Esto evita latencia remota durante una conversación casual, pero
+no autoriza acciones: toda herramienta conserva su política y, cuando corresponde, la aprobación
+de un solo uso.
+
+Las siguientes órdenes inequívocas no necesitan una inferencia para decidir y encaminar la acción:
+
+- `Abre Safari` — abre directamente; también admite Chrome, Firefox, Calendario, Mail, Notas, Vista
+  Previa, Xcode y Spotify mediante una lista local de bundle IDs conocidos.
+- `Ejecuta el atajo Informe diario` — conserva literalmente el nombre y no admite rutas ni entrada.
+- `Lista mis recordatorios` — devuelve título, lista, vencimiento y estado mediante lectura local.
+- `Busca el contacto Ada` — busca nombre, correos y teléfonos localmente, sin enviar el resultado a
+  NVIDIA.
+- `Pon el volumen al 40 por ciento`, `Silencia el Mac` y `Activa el sonido` — cambian CoreAudio
+  directamente cuando la orden local es exacta.
+- `Pausa la música`, `Siguiente canción` y `Canción anterior` — controlan una única instancia activa
+  de Music o Spotify directamente cuando la orden local es exacta.
+- `Busca en Spotlight Informe` — devuelve como máximo 10 nombres y tipos, nunca el contenido.
+- `Abre con Spotlight Informe.pdf` — abre solo una coincidencia exacta, única y segura después de
+  confirmar.
+- `Busca arquitectura segura en Safari` — abre una búsqueda visible de DuckDuckGo por una orden
+  local exacta; también admite Chrome, Firefox o `el navegador` predeterminado.
+- `Revisa el estado de Git`, `Lista los procesos`, `Lista los puertos abiertos` y
+  `Revisa la postura de seguridad` — seleccionan uno de los cuatro diagnósticos fijos existentes.
+
+Jarvis ejecuta directamente solo las órdenes exactas reversibles de audio, multimedia, aplicación,
+URL pública y búsqueda visible. Atajos, diagnósticos, Spotlight abierto, mutaciones, control visual
+y cualquier acción propuesta por NVIDIA muestran `Aprobación pendiente` y no se ejecutan antes de
+`Aprobar una vez`. Si la frase contiene más de una acción, una negación, una aplicación desconocida,
+un adjunto o audio no transcrito localmente, la autorización rápida no se usa.
+
+Crear contactos o recordatorios y marcar un recordatorio como completado siempre muestra una
+confirmación. La aprobación queda ligada a la acción y valores exactos; cambiar cualquier campo la
+invalida. Completar también exige que exista una sola coincidencia exacta entre recordatorios
+pendientes.
+
+Spotlight se limita a tu carpeta personal y descarta `Library`, `.Trash`, nombres ocultos y enlaces
+simbólicos. Si hay cero o varias coincidencias exactas, no abre nada. El control multimedia falla de
+forma segura si Music y Spotify están activos al mismo tiempo o si ninguno está activo.
+
+Para las órdenes que sí requieren NVIDIA, Jarvis no envía el catálogo completo. Una solicitud como
+`Revisa mi correo` expone solamente `mail_list_recent`; `Crea un evento` solo
+`calendar_create_event`; `Escanea mi red` solo `network_discover_hosts`; y `Controla Safari` solo
+`computer_use`. Esto reduce tokens y evita que el modelo elija una capacidad ajena a la intención.
+El broker verifica de nuevo el conjunto ofrecido y responde `tool_not_offered` ante cualquier
+desviación. Si la intención operativa es ambigua, conserva el catálogo permitido del rol y todas las
+políticas habituales.
+
+Las lecturas privadas siguientes tienen un camino local adicional:
+
+- `Revisa mi correo` o `Muéstrame mis correos no leídos`: consulta como máximo 10 metadatos del
+  inbox. Nunca recupera cuerpos.
+- `Tengo correos no leídos` o `Tengo algún correo sin leer`: comprueba como máximo un resultado y
+  responde sí o no sin invocar planificación ni síntesis por modelo.
+- `Cuál es mi último correo` o `Dime mi último correo`: consulta un único mensaje y presenta
+  remitente, asunto y fecha local sin recuperar el cuerpo ni usar un modelo.
+- `Qué tengo hoy`, `Revisa mi agenda` o `Revisa mi calendario`: consulta como máximo 20 eventos
+  entre las 00:00 y 24:00 de la zona horaria local.
+- `Tengo eventos hoy` o `Tengo algo en el calendario hoy`: comprueba como máximo un evento del día
+  local y responde sí o no sin invocar ningún modelo.
+- `Qué tengo mañana` o `Revisa mi calendario de mañana`: usa el mismo límite para el siguiente día
+  local exacto.
+- `Cuál es mi próximo evento` o `Qué sigue en mi calendario`: devuelve el primer evento cronológico
+  desde el instante actual, con un horizonte máximo de 31 días. Título, fecha y hora se formatean
+  localmente con el offset aplicable al día del evento, sin sintetizador.
+
+La llamada de lectura se construye sin NVIDIA y Mail/Calendario se presentan con plantillas locales:
+como máximo cinco elementos y un contador del resto. Un resultado válido, error o estructura
+inválida no se envía a Apple Intelligence ni NVIDIA. Las restricciones TCC y la auditoría siguen
+activas. Pasado mañana, días de semana, rangos y expresiones compuestas vuelven al planner para no
+elegir un intervalo incorrecto; la presentación del resultado continúa local. La búsqueda del
+próximo evento ordena candidatos entre todos los calendarios antes de devolver uno y falla de forma
+cerrada si el volumen excede el tope interno.
+
+El mismo gestor de aprobación ejecuta después de `Aprobar una vez` correo, calendario, contactos,
+recordatorios, CoreAudio, multimedia, Spotlight, aplicaciones, navegador y atajos. Valida el
+contrato devuelto y los valores ligados a la autorización antes de mostrar una respuesta
+determinista; una salida incoherente marca el trabajo como fallido. Para aplicaciones, búsquedas y
+control visual, el destino técnico permanece en la ventana y la auditoría, pero Jarvis no pronuncia
+bundle IDs ni repite consultas completas al confirmar la acción.
+
+La investigación web inequívoca también tiene un camino rápido:
+
+- `Busca noticias de NVIDIA NIM` o `Investiga seguridad en Apple Silicon`: consulta DuckDuckGo y
+  lee como máximo tres páginas públicas. Si DuckDuckGo presenta un desafío o no devuelve candidatos
+  analizables, realiza una única recuperación mediante el RSS público de Bing.
+- `Lee https://example.com/report`: extrae como máximo 8.000 caracteres de texto público.
+- `Abre https://example.com/report`: valida y abre directamente la URL pública literal sin
+  inferencia. Una URL propuesta por un modelo continúa exigiendo `Aprobar una vez`.
+- `Abre la primera fuente`, `abre la fuente dos` o `open the third source`: reutiliza una de las
+  tres URLs de la investigación válida más reciente. Jarvis la conserva solo cinco minutos, en
+  memoria volátil y dentro de la misma conversación; la URL exacta aparece en `Aprobar una vez`.
+  No se persiste, no se envía a NVIDIA y un reinicio la elimina. Después de abrirla, Jarvis confirma
+  la acción con una frase natural y no pronuncia la URL completa.
+- `Busca arquitectura segura en Safari`: prepara una búsqueda visible de DuckDuckGo sin usar
+  memoria ni modelos y exige `Aprobar una vez`; admite Safari, Chrome, Firefox o el navegador
+  predeterminado.
+
+Solo se acepta HTTPS público. Jarvis rechaza credenciales dentro de la URL, puertos no estándar,
+destinos locales o privados, contenido binario y más de tres redirecciones. Estas lecturas no usan
+cookies ni la sesión abierta de Safari o Chrome. En estas órdenes web exactas Jarvis valida el
+contrato y responde con dominio, título y un extracto local de hasta 280 caracteres; no invoca Apple
+Intelligence ni NVIDIA. Un contrato incoherente falla localmente y no se entrega a otro modelo.
+Un filtro léxico local bilingüe descarta palabras genéricas, exige cobertura de los términos
+distintivos en título, URL o resumen y vuelve a comprobar el texto de la página. Si los dos
+buscadores solo ofrecen ruido temático, Jarvis responde que no encontró resultados en vez de
+presentarlo como evidencia.
+La recuperación RSS aplica el mismo transporte con DNS e IP pública validados, TLS con hostname,
+límite de 512 KiB y un máximo de diez candidatos. Si ambos orígenes fallan, Jarvis informa el fallo;
+no lo presenta falsamente como una búsqueda sin resultados.
+La búsqueda visible envía únicamente a DuckDuckGo la consulta mostrada en la aprobación y no lee
+los resultados. Jarvis rechaza localmente consultas que parezcan contener una API key, token,
+contraseña u otra credencial. Una aceptación de `/usr/bin/open` confirma que macOS recibió la orden,
+no que la página haya terminado de cargar.
+Una orden compuesta o una frase fuera de estas gramáticas exactas vuelve al planner normal.
+
+### Reproducción directa en Google Chrome mediante CDP
+
+La orden exacta `Reproduce Michael Jackson Man in the Mirror en YouTube` usa primero Chrome
+DevTools Protocol en el loopback `127.0.0.1:9222`: navega a YouTube, espera
+`Page.loadEventFired`, escribe en el DOM y abre el primer resultado sin mover el cursor. Jarvis solo
+acepta un WebSocket de loopback en ese puerto y limita cada mensaje CDP a 1 MiB. Para habilitarlo en
+un perfil aislado de Chrome, cierra esa instancia y arráncala manualmente con:
+
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --remote-debugging-address=127.0.0.1 \
+  --remote-debugging-port=9222 \
+  --user-data-dir="$HOME/Library/Application Support/Aegis/ChromeCDP"
+```
+
+No expongas el puerto a la red ni uses un directorio de perfil compartido. Si CDP no está activo,
+Jarvis conmuta una sola vez a JXA firmado para la instancia normal de Chrome. Si ambas rutas fallan,
+la herramienta termina cerrada y no intenta clics Accessibility.
+
+Para una lectura local breve usa una ruta relativa al workspace configurado:
+
+- `Lee el archivo README.md`
+- `Lee el archivo docs/architecture/ADR-0093-local-public-web-research.md`
+- `Read file notes/daily brief.txt`
+
+Jarvis lee como máximo 8 KiB de un archivo UTF-8 regular y resume el resultado con Apple
+Intelligence on-device. Rechaza rutas absolutas, `..`, escapes del workspace y enlaces que apunten
+fuera de él; durante la apertura no sigue enlaces. El contenido se considera no confiable: una
+instrucción escrita dentro del archivo nunca autoriza acciones. Si el cerebro local no puede iniciar,
+Jarvis informa el fallo sin sacar el fragmento del Mac. Usa `Revisa el archivo …`
+cuando quieras análisis de código o ciberseguridad; esa frase permanece en el especialista NVIDIA y
+no entra en el atajo de lectura literal.
+
+Una frase no exacta, como `Revisa mi correo reciente`, todavía usa NVIDIA una vez para escoger y
+parametrizar la lectura. Después de que el broker y el ejecutor local terminan, el resultado de Mail,
+Calendario o una lectura web planificada se resume con Apple Intelligence. Así los metadatos privados
+no salen del Mac en el caso normal y se elimina la segunda ronda NVIDIA. Si Apple no está disponible
+antes del primer fragmento, Jarvis conserva el resultado local y explica que no pudo sintetizarlo.
+Las lecturas solicitadas por el especialista de código/ciberseguridad no cambian de cerebro.
+
+Cuando el resultado válido está vacío, Jarvis responde directamente: no hay mensajes, eventos,
+resultados públicos, texto legible o contenido de archivo. No se invoca Apple Intelligence ni un
+synthesizer NVIDIA para redactar esa ausencia. Una respuesta malformada o una lectura no vacía vuelve
+al camino normal; el atajo nunca convierte un error de acceso en “no encontré nada”.
+
+Los errores conocidos se explican igual de rápido y sin inferencia: archivo inexistente, texto que no
+es UTF-8, permiso denegado, timeout, acceso web fallido o error local de I/O. La frase no muestra la
+ruta, URL, query ni argumentos originales. Un código nuevo o inconsistente vuelve al synthesizer en
+vez de inventar una explicación. Las denegaciones del broker siguen siendo decisiones separadas y no
+se disfrazan como fallos de ejecución.
+
+Para consultar el equipo real sin inferencia, di `Describe este Mac`, `¿Qué Mac tengo?` o
+`What hardware does this Mac have`. Jarvis obtiene arquitectura, versión de macOS y Python; en macOS
+también intenta leer chip, modelo y memoria con `/usr/sbin/sysctl`. La orden es fija, no usa shell,
+tiene timeout de un segundo y no requiere red, NVIDIA, Apple Intelligence ni permisos nuevos. Si los
+campos de hardware no están disponibles, responde con los metadatos base en vez de bloquearse.
+
+Para conocer la energía actual di `Estado de la batería`, `¿Cuánta batería queda?` o
+`¿Cómo está la batería?`. Jarvis ejecuta una única consulta fija `/usr/bin/pmset -g batt`, valida y
+reduce la salida localmente y responde sin Apple Intelligence ni NVIDIA. Nunca expone el ID interno
+de la batería y no solicita permisos: informa únicamente porcentaje, carga o descarga, fuente de
+energía y, cuando macOS la ofrece, autonomía estimada. La consulta ocurre solo al pedirla; no instala
+un monitor ni hace *polling* energético.
+
+Para conocer el espacio disponible di `¿Cuánto almacenamiento queda?`,
+`¿Cuánto espacio libre queda?` o `Estado del almacenamiento`. Jarvis consulta con `statvfs` el
+volumen de inicio y responde directamente con capacidad total, disponible y porcentaje libre. No
+enumera archivos, carpetas, otros volúmenes, snapshots o identificadores; tampoco usa procesos,
+shell, memoria, Apple Intelligence, NVIDIA, permisos nuevos ni monitor residente. En APFS la cifra
+puede variar respecto a Finder por espacio purgable y snapshots administrados por macOS.
+
+Jarvis también puede describir tres señales operativas sin modelos ni permisos nuevos:
+
+- `Estado del audio` o `¿El Mac está silenciado?`: informa volumen de salida y silencio mediante
+  CoreAudio. No inicia, consulta ni devuelve el dispositivo de entrada.
+- `Estado de la red` o `¿Tengo conexión de red?`: confirma únicamente conectividad de red local y
+  disponibilidad de IPv4/IPv6. No revela IP, MAC, SSID o nombre de interfaz y no garantiza que
+  Internet sea alcanzable. Para comprobar Internet se necesita una lectura web explícita.
+- `Estado del rendimiento` o `Carga del sistema`: informa carga media de un minuto frente a los
+  núcleos lógicos y memoria disponible agregada. No enumera procesos ni conserva muestras.
+
+Estas lecturas se ejecutan solo al solicitarlas. Red y memoria usan comandos absolutos con timeout de
+dos segundos; audio llama directamente a CoreAudio sin abrir un proceso. Una salida malformada o
+fuera de límites falla cerrada y nunca se envía a Apple Intelligence o NVIDIA para interpretarla.
+
+Para consultar el reloj local di `¿Qué hora es?`, `¿Qué fecha es hoy?` o
+`Dime la fecha y hora`. Jarvis usa la fecha, hora y zona horaria del proceso local, responde en
+español con formato de 24 horas y no invoca memoria, herramientas, Apple Intelligence o NVIDIA.
+Consultas como `¿Qué hora es en Tokio?` no usan este atajo porque requieren interpretar otra zona.
+`¿Cuál es mi zona horaria?` informa el offset UTC actual, incluidos offsets de media hora o 45
+minutos, sin inferir una ciudad.
+
+Para consultar el tiempo desde el arranque di `¿Cuánto tiempo lleva encendido este Mac?`,
+`Tiempo activo del Mac` o `System uptime`. Jarvis lee `CLOCK_MONOTONIC_RAW`, que en macOS continúa
+durante reposo y no cambia por ajustes del reloj civil. Redondea hacia abajo a minutos, no instala
+un monitor y no usa permisos, procesos, memoria ni modelos. Si el reloj no está disponible, responde
+con un fallo local en vez de escalar a NVIDIA.
+
+Para cálculos breves di `Calcula 12,5 por 4`, `¿Cuánto es doce por cuatro?`,
+`¿Cuánto es 25 más 17?` o
+`Calcula 144 dividido entre 12`. Jarvis admite exactamente dos números decimales y uno de estos
+operadores: suma, resta, multiplicación o división. El cálculo usa `Decimal` local, nunca `eval`, y
+responde sin memoria ni modelos. Una división por cero recibe una negativa directa; potencias,
+porcentajes, expresiones encadenadas y números fuera de los límites pasan al cerebro normal. Los
+enteros hablados se aceptan de −100 a 100 en español o inglés; los decimales hablados no se infieren.
+
+Comprueba la disponibilidad observada por el daemon:
+
+```bash
+./script/aegis.sh daemon-status
+```
+
+`local_model=available` significa que el modelo de sistema aceptó el probe local. No revela datos
+del modelo ni contenido conversacional.
+
+### Enseñar preferencias a Jarvis
+
+Exprésalas de forma directa: «Me gusta el jazz», «Prefiero respuestas breves», «Me interesa la
+astronomía», «Trabajo como desarrollador» o «Mi nombre es Guillermo». Jarvis guarda el dato después
+de completar el turno, dentro de la base privada local, y lo aplica sutilmente en conversaciones
+posteriores. No ejecuta otra llamada al modelo para aprender.
+
+Cada hecho guarda evidencia (`explicit_text` o `verified_voice`), confianza y fecha de última
+confirmación. Expresiones temporales como «por ahora» o «esta semana» caducan a los 14 días y dejan
+de recuperarse automáticamente. Jarvis no eleva una inferencia silenciosa a preferencia confirmada.
+
+Puedes preguntar «¿Qué sabes de mí?», eliminar un dato con «Olvida que me gusta el jazz» o borrar
+todo el perfil con «Olvida todo lo que sabes de mí». Esto no borra el historial de conversaciones ni
+otras memorias creadas manualmente. Una afirmación hablada solo modifica el perfil cuando el modelo
+contiene un único perfil y lo reconoce con confianza suficiente. Con varios perfiles, el aprendizaje
+por voz falla cerrado hasta que exista una selección explícita de propietario. La identidad nunca
+aprueba una acción, pero sí puede bloquearla o forzar confirmación manual según su riesgo.
+
+### Corregir el estilo de Jarvis
+
+Las correcciones de estilo son órdenes explícitas y se aplican desde el turno siguiente:
+
+- `Sé más breve` o `Dame más detalle` cambia únicamente el nivel de detalle.
+- `Háblame más natural`, `Sé más directo` o `Háblame con más calidez` cambia únicamente el tono.
+- `No termines con preguntas` desactiva preguntas finales salvo que falte una aclaración necesaria.
+- `Puedes hacer preguntas de seguimiento` permite una sola cuando aporte continuidad.
+- `No repitas` evita reiterar información que el propietario ya comprendió.
+- `Restablece tu estilo` elimina estas preferencias sin borrar nombre, intereses o historial.
+
+Jarvis conserva una ranura por dimensión. Por eso pedir después `Dame más detalle` reemplaza
+`Sé más breve`, pero mantiene `Háblame más natural` y `No repitas`. Si una sola frase pide a la vez
+brevedad y detalle, esa dimensión no se aprende. Una pregunta como `¿Puedes ser más breve?` tampoco
+se interpreta como preferencia permanente.
+
+En voz, el feedback exige el único perfil local reconocido con confianza suficiente. Las etiquetas
+se traducen a un conjunto fijo de instrucciones para Apple Intelligence; el contenido de memoria no
+se eleva a instrucción y NVIDIA no recibe estilo, perfil ni identidad. El turno de corrección se
+responde mediante una plantilla local, sin Apple Intelligence ni NVIDIA; una voz no verificada
+recibe una negativa y no modifica el perfil. La compuerta de calidad de `self-evaluation` permite
+comprobar después si disminuyen repetición, exceso y aperturas mecánicas.
+
+### Calificar la respuesta anterior
+
+Di `Esa respuesta fue útil` o `Esa respuesta no fue útil` para calificar el último job completado
+de la misma conversación. Jarvis responde mediante una plantilla local; no llama a Apple
+Intelligence ni NVIDIA. En voz exige el propietario reconocido. Una pregunta, un comentario ambiguo
+como `bien` o una voz no verificada no modifican la evaluación.
+
+Solo se persiste `helpful` o `unhelpful` en el SQLite privado de evaluaciones. No se copia la
+respuesta, solicitud, identidad o audio. El acuse se marca como evento de feedback y queda fuera de
+la latencia y calidad conversacional para no mejorar artificialmente las cifras. Un feedback
+cancelado tampoco se aplica. La asociación vive en el daemon y está limitada a la conversación
+actual; si no existe un job reciente o el servicio se reinició, Jarvis informa que no encontró un
+objetivo y no adivina.
+
+Cuando la calificación es `Esa respuesta no fue útil`, Jarvis pide la corrección y reserva el
+siguiente turno de esa conversación como reparación durante un máximo de dos minutos. Basta con
+decir lo que se necesitaba, por ejemplo: `Necesitaba un resumen ejecutivo`. El cliente de voz
+conserva el mismo identificador de conversación, por lo que el cerebro local ya dispone del
+intercambio anterior. La ventana se consume al enviar ese turno, caduca sin polling y desaparece al
+reiniciar el daemon; no modifica gustos ni estilo permanente. Una calificación útil la cancela.
+Una voz no verificada no recibe ni consume esta ventana: queda disponible para la siguiente
+corrección del propietario dentro del plazo original.
+
+La señal de reparación y el historial se entregan exclusivamente a Apple Intelligence. Si el
+modelo local no está disponible, el fallback NVIDIA recibe solo la solicitud minimizada y la
+política conversacional normal: no conoce el veredicto, la ventana ni el historial privado.
+
+Para confirmar que Jarvis corrigió el problema, califica inmediatamente la reparación con
+`Esa respuesta fue útil` o `Esa respuesta no fue útil`. La evaluación guarda únicamente que el
+turno fue un intento de reparación y el enum del veredicto; no crea otro registro de texto.
+
+### Conversar con continuidad y gestionar compromisos
+
+Jarvis decide localmente si el turno es una tarea, conversación, petición de apoyo, consejo, lluvia
+de ideas o corrección de un malentendido. La clasificación no se guarda como estado emocional ni
+usa otro modelo. Solo ajusta la forma de responder: por ejemplo, una corrección se reconoce antes de
+continuar y una expresión de frustración recibe atención antes de una posible solución. Jarvis sigue
+identificándose como IA y no fomenta exclusividad o dependencia emocional.
+
+Un saludo que acompaña una orden (`Hola Jarvis, abre Calendar`) conserva el modo tarea. Las frases
+citadas o dentro de código no se toman como la intención del hablante y una negación directa como
+`No estoy frustrado` no activa apoyo. Correcciones como `Me refería al segundo informe` o
+`Quise decir mañana` activan reparación. Son reglas acotadas de estilo, no una interpretación
+infalible del lenguaje ni una autorización para ejecutar acciones.
+
+La política compartida pide priorizar la corrección actual, no repetir preguntas ya contestadas y
+no inventar historial ausente. Como máximo formula una pregunta útil; una tarea completa no añade
+otra por costumbre. La síntesis local conserva el historial reciente y las preferencias explícitas
+ya recuperadas, siempre como contexto no confiable y sin conceder permisos. En voz, el historial de
+síntesis mantiene el límite de 1536 bytes y el contexto relacional de 512 bytes. Una voz no
+verificada recibe ambos vacíos. El fallback remoto ordinario no recibe estos datos; el CLI de
+ingeniería conserva su política NVIDIA y sus reglas explícitas de historial técnico.
+
+La sesión de voz mantiene contexto durante 30 minutos desde el último turno enviado. Queda ligada
+al propietario elegido o resuelto por el modelo, a la huella del Core ML exacto y a una prueba
+reciente de presencia del dueño del dispositivo. Esta prueba vive solo en RAM durante 30 minutos
+desde el último desbloqueo o desde una autenticación nativa. Arrancar o reiniciar Jarvis no concede
+presencia por sí solo. No se renueva por hablar ni se guarda en `UserDefaults`.
+
+Cuando vence, el siguiente turno reconocido como propietario muestra el diálogo de macOS para
+Touch ID o contraseña. Si eliges `Continuar sin memoria`, cancelas o la autenticación falla, Jarvis
+sigue respondiendo en una conversación aislada: no expone historial, memoria, gustos ni contexto
+relacional y no reemplaza la sesión privada. La misma regla cubre una consulta hablada que adjunta
+una captura de pantalla. Un perfil único ya no concede contexto privado por sí solo.
+
+Al bloquear o abandonar la sesión de macOS, Jarvis revoca inmediatamente la presencia, cancela la
+captura, la voz, el job y el control en curso, detiene la activación y oculta su puntero. Después de
+desbloquear puede reanudar el detector si el opt-in, los permisos, el modelo y el daemon siguen
+disponibles. Este flujo no cambia los permisos TCC ni concede autorización para acciones externas.
+Cada sesión activa usa una generación local distinta: una respuesta, aprobación u orden iniciada
+antes del bloqueo nunca recupera validez al desbloquear. Si el daemon devuelve tarde un `job_id`,
+Jarvis lo cancela automáticamente.
+
+Si pasan 30 minutos, la próxima solicitud crea una conversación nueva automáticamente. No existe un
+temporizador en segundo plano: la app comprueba la fecha local justo antes de enviar. Un UUID sin
+fecha, un reloj retrocedido o un estado incompleto también fuerzan una sesión nueva. Solo se guardan
+en `UserDefaults` el UUID, la fecha y, cuando corresponde, el identificador acotado del perfil y la
+huella SHA-256 del modelo local; no se guardan audio, embeddings ni confianza.
+
+La creación o recuperación ocurre dentro del mismo `voice.submit` o `image.submit`; Jarvis no hace
+una llamada previa ni reenvía la captura. El daemon devuelve el UUID definitivo únicamente cuando
+la voz propietaria y la presencia local están verificadas. Una voz invitada sigue respondiendo de
+forma efímera y no crea una conversación en la base local.
+
+Para separar temas de inmediato di `Jarvis, nueva conversación`, `Jarvis, inicia una conversación
+nueva` o `Jarvis, empecemos una conversación nueva`. Es una orden local exacta: no llama a Apple
+Intelligence ni NVIDIA. Preguntar `¿Nueva conversación?` o citar la frase no ejecuta esta orden;
+el comando directo sí admite punto final o exclamación. La rotación no borra el historial anterior,
+gustos, perfil, temas o
+compromisos; simplemente impide que los turnos de la sesión anterior se adjunten a la siguiente. Si
+la sesión está ligada a un perfil, una voz sin identidad y presencia local verificadas no puede
+rotarla. La identidad vocal sigue
+siendo una señal falible de privacidad y personalización: no autentica, autoriza herramientas ni
+reemplaza las confirmaciones visibles.
+
+Para mantener continuidad explícita puedes decir:
+
+- `Estoy trabajando en Jarvis` o `Mi proyecto actual es Jarvis` para conservar un tema 90 días.
+- `Recuerda que debo terminar la prueba de voz` para conservar un compromiso 30 días.
+- `Marca como resuelto terminar la prueba de voz` para retirar ese compromiso exacto.
+- `Olvida el tema Jarvis` para retirar un tema exacto.
+- `Olvida mis compromisos` o `Olvida mis temas y compromisos` para limpiar esas categorías.
+
+Se guardan como memorias episódicas en el mismo SQLite privado, solo después de un turno exitoso.
+Una orden hablada necesita el perfil de propietario verificado y una presencia local reciente.
+Jarvis no deduce compromisos
+de conversaciones ambiguas, no conserva perfiles emocionales y no envía este contexto a NVIDIA.
+
+### Abrir el HUD
+
+```bash
+./script/menu_bar_service.sh hud
+```
+
+También puedes elegir `Abrir HUD` en la Menu Bar. El HUD usa una superficie grafito, no se abre al iniciar
+sesión y muestra los agentes activos por su nombre. El menú comparte su paleta azul hielo y sus
+controles; `Permisos` despliega los accesos de micrófono, reconocimiento, pantalla y control del Mac.
+
+### Controlar aplicaciones o navegador
+
+Pide el objetivo por voz. Si Jarvis propone una acción externa, abrir una URL, enviar correo, crear
+un evento o controlar visualmente una app, aparecerá automáticamente una única ventana de
+aprobación. Revisa el destino y la advertencia específica y elige `Aprobar una vez` o `Denegar`.
+Cerrar la ventana no aprueba ni cancela: mientras no caduque puedes reabrirla desde `Revisar solicitud`
+en la Menu Bar. Al caducar, Jarvis retira automáticamente esa revisión y confirma por voz
+que no ejecutó la acción; la ventana también se cierra. La comprobación ocurre una sola vez en la
+fecha indicada, sin polling. Mientras exista una aprobación pendiente, el atajo global no inicia
+otro turno. Jarvis abre en paralelo Touch ID y una ventana vocal local de tres segundos. Puedes
+tocar Touch ID, pulsar el botón visible o decir exactamente `sí`, `confirmo`, `adelante`, `procede`,
+`aprobado`, `dale`, `autorizo` u `ok`. La vía vocal solo se acepta si
+`JarvisSpeakerIdentity.mlmodelc` identifica al perfil propietario con confianza mínima de 0,78 y
+el daemon reconoce en lo que dijiste uno de esos operadores. La app transcribe ese mismo audio con el
+reconocimiento de voz de Apple en el dispositivo y firma el texto junto con el PCM, de modo que
+ninguno de los dos puede cambiarse por separado; el daemon decide con esa transcripción. Solo si la
+app no puede transcribir (sin permiso de reconocimiento de voz o sin el idioma descargado) el daemon
+recurre a Whisper MLX, que la app empaquetada no incluye. El PCM se autentica por IPC, su SHA-256 se
+retiene solo en RAM durante quince minutos para impedir replays y nunca se guarda como telemetría.
+Si cualquiera de las dos comprobaciones falla, la acción permanece pendiente para Touch ID o clic.
+
+La solicitud caduca a los dos minutos también en el daemon, usando tiempo monotónico: atrasar el
+reloj del Mac no prolonga el consentimiento. Cancelarla o dejarla caducar mientras Whisper trabaja
+impide que una verificación tardía la apruebe. El destino y los argumentos normalizados deben seguir
+coincidiendo exactamente con los revisados; si la política cambia o la reautorización falla, no
+queda un permiso aprovechable por otra ejecución.
+
+Di una afirmación inequívoca: `¡Sí!` y `Aprobado.` son válidas, pero `¿sí?`, una frase citada, `sí…`
+o `sí, pero espera` no lo son. La caché conserva como máximo 512 hashes sin expulsar protecciones
+vigentes. Si se llena, usa el botón visible o Touch ID dentro del plazo de la solicitud; no es
+necesario borrar memoria ni volver a enrolar tu voz. Esta defensa detecta PCM idéntico durante su
+ventana y proceso, no garantiza detectar una grabación transformada ni demostrar presencia viva.
+
+La captura mantiene un bus Core Audio de entrada puro para impedir que un cambio del dispositivo de
+salida silencie Apple Speech. El reconocedor y la biometría reciben PCM nativo; una copia privada en
+memoria aplica puerta de ruido a -45 dB y compresión suave antes de Silero VAD. Silero procesa
+bloques locales de 512 muestras a 16 kHz (32 ms), exige una probabilidad de voz mayor que 0,55 y
+solo cierra la frase tras 800 ms continuos de silencio después de detectar habla. El modelo ONNX y
+su licencia viajan dentro del bundle; no se descarga ni se contacta un servicio durante la escucha.
+
+Whisper MLX solo interviene como respaldo cuando el daemon se ejecuta desde el código fuente (el
+paquete no lleva los 177 MB de la librería Metal de MLX). En ese caso, instala de antemano un modelo
+Whisper convertido para MLX en la ruta privada siguiente. Jarvis rechaza enlaces simbólicos, directorios de otro usuario o escribibles por
+grupo/otros, y no descarga modelos durante una aprobación:
+
+```text
+~/Library/Application Support/Aegis/Models/whisper-tiny-mlx-4bit/
+  config.json
+  weights.npz
+```
+
+La descarga es explícita y se limita a esos dos archivos (aproximadamente 51 MiB de pesos):
+
+```bash
+mkdir -p "$HOME/Library/Application Support/Aegis/Models/whisper-tiny-mlx-4bit"
+/opt/homebrew/bin/uv run hf download mlx-community/whisper-tiny-mlx-4bit \
+  --include config.json \
+  --include weights.npz \
+  --local-dir "$HOME/Library/Application Support/Aegis/Models/whisper-tiny-mlx-4bit"
+chmod -R go-rwx "$HOME/Library/Application Support/Aegis/Models/whisper-tiny-mlx-4bit"
+```
+
+Después del primer `runtime.preflight` satisfactorio, el daemon precarga esos pesos una sola vez en
+una tarea de fondo; el socket ya está disponible y el preflight no espera a Metal. La inferencia de
+confirmación reutiliza el modelo cargado. Si el modelo falta, es inseguro o no carga en 30 segundos,
+la vía vocal falla cerrada y Touch ID/clic siguen disponibles.
+
+Para aplicaciones compatibles con Atajos de macOS, crea primero el atajo en la app Atajos y pide:
+«Jarvis, ejecuta el atajo Informe diario». Jarvis solo acepta su nombre exacto, no archivos de
+entrada ni argumentos de terminal, y solicita aprobación de un solo uso antes de invocarlo.
+
+El control visual está limitado deliberadamente. No opera Passwords, Keychain, Ajustes del Sistema,
+gestores de contraseñas, pagos, logins, descargas, borrados, campos seguros ni atajos destructivos.
+No controla Terminal, Finder o Mail mediante visión; esas capacidades usan herramientas específicas
+y políticas separadas.
+
+En una sesión aprobada, Jarvis analiza primero la aplicación autorizada de forma local. Vision
+reconoce hasta 16 fragmentos de texto y Accessibility recorre hasta 256 elementos para extraer
+ventanas, botones, enlaces y campos. Si una orden exacta como `Pulsa el botón Documentación`
+coincide con un único control no sensible, el helper ejecuta `AXPress` sin enviar la captura a
+NVIDIA. Si hay ambigüedad, el rol de visión recibe la captura acotada junto con el resumen local. Un
+campo seguro o texto asociado a login, pago, envío, descarga, borrado o permisos bloquea la sesión
+antes de cualquier envío remoto. El OCR solo aporta percepción; nunca autoriza una acción.
+La captura contiene únicamente las ventanas de esa aplicación: macOS excluye barra de menús,
+cursor, audio, escritorio, puntero de Jarvis y cualquier otra app.
+Jarvis fija la instancia mediante bundle ID, PID y fecha de lanzamiento. ScreenCaptureKit captura
+solo el proceso exacto y el recorrido Accessibility descarta cualquier ventana o elemento cuyo PID
+no coincida. La identidad vuelve a comprobarse tras la captura y al terminar OCR/percepción local;
+si la aplicación se cierra o relanza, esa observación no se entrega al modelo.
+En equipos con varios monitores, Jarvis no presupone que la app vive en la pantalla principal.
+Selecciona el display con mayor intersección respecto a la ventana Accessibility enfocada y usa sus
+mismos límites para captura, OCR, coordenadas de clic y scroll. Una ventana repartida entre dos
+monitores queda ligada al de mayor área visible; un empate se resuelve de forma determinista. Si la
+ventana deja de intersectar un display activo o cambia de display durante la observación, la sesión
+falla cerrada y no ejecuta la acción.
+Una aplicación congelada tampoco retiene el ciclo indefinidamente. El helper limita cada consulta
+AX perceptual a 150 ms y deja de iniciar consultas al superar un presupuesto monotónico de 500 ms;
+en ese caso informa percepción truncada y conserva solo el OCR ya disponible. Una acción dispone de
+un segundo por llamada AX y no se repite automáticamente si macOS informa que no pudo completarla.
+
+El contrato de teclado permite sin modificadores únicamente Escape, Tab, flechas, Inicio, Fin y
+Página arriba/abajo. Enter, Espacio y letras sueltas se rechazan antes del helper para impedir envíos
+accidentales o escritura carácter por carácter; los únicos atajos son `⌘A/F/L/R/T` y `⇧Tab`. Python,
+el decoder Swift y el ejecutable nativo aplican la misma lista. Captura, OCR, títulos y textos
+Accessibility se tratan como datos no confiables, y controles bidi/no imprimibles fallan cerrados.
+
+Los cinco atajos con Command tienen un camino local exacto: `Selecciona todo` (`⌘A`), `Buscar en la
+página` (`⌘F`), `Enfoca la barra de direcciones` (`⌘L`), `Recarga la página` (`⌘R`) y `Abre una
+pestaña nueva` (`⌘T`). También aceptan sus equivalentes directos en inglés. La frase debe coincidir
+completa; `Recarga la página y abre otra pestaña` no ejecuta la primera mitad. Jarvis no envía la
+captura a NVIDIA, pero conserva la aprobación de un solo uso, el contexto visual y la recaptura de
+progreso posterior.
+
+Para buscar texto dentro de la página sin inferencia, di `Busca «arquitectura segura» en la página`
+o `Find "release notes" on page`. Jarvis exige presupuesto para dos pasos antes de comenzar. Primero
+ejecuta `⌘F` y recaptura; únicamente si el panel produjo progreso verificable y no reveló contenido
+sensible escribe el literal exacto. No pulsa Enter. Si la primera acción no cambia la interfaz, el
+texto nunca se entrega y la sesión termina como incierta.
+
+Para escribir sin inferencia en el campo ya enfocado, usa una orden literal cerrada:
+`Escribe «Hola, mundo»` o `Type "release status: ready"`. Jarvis conserva exactamente Unicode,
+espacios internos y puntuación entre las comillas. Comillas vacías, texto con espacios exteriores,
+órdenes sin comillas o delimitadores incompletos no entran en este fast-path. Palabras que identifican
+contraseñas, PIN, tokens, secretos, claves API o tarjetas bloquean localmente la operación antes de
+contactar al proveedor. La aprobación de control visual de un solo uso sigue siendo obligatoria.
+
+También puedes indicar el campo sin recurrir a NVIDIA: `Escribe «informe» en el campo «Buscar»` o
+`Type "report" in the "Search" field`. Jarvis exige un único `ComboBox`, `SearchField`, `TextArea` o
+`TextField` Accessibility no sensible cuya etiqueta coincida. Lo enfoca con `AXFocused`, recaptura y
+solo escribe cuando macOS confirma que ese mismo elemento recibió el foco. Si ya estaba enfocado,
+omite ese efecto. OCR, campos seguros, árboles truncados y coincidencias ambiguas no autorizan la
+secuencia; tampoco mueve el cursor del usuario.
+
+Para sustituir contenido existente de forma explícita usa
+`Reemplaza el contenido del campo «Buscar» por «arquitectura segura»` o
+`Replace the contents of the "Search" field with "secure architecture"`. Esta variante no simula
+`⌘A`: realiza una única asignación local de `AXValue` sobre el campo Accessibility inequívoco. El
+helper compara PID, coordenadas, descriptor completo, ventana, contador de entrada física y permiso;
+después vuelve a leer el valor y el daemon recaptura la app para comprobar progreso semántico. No usa
+portapapeles, puntero ni NVIDIA. Un campo de contraseña, sensible, ambiguo, truncado o no modificable
+se bloquea sin escritura parcial.
+
+Al escribir, Jarvis fija el campo Accessibility enfocado al inicio y lo vuelve a comprobar antes de
+cada fragmento: la aplicación debe seguir al frente, el elemento debe ser el mismo, su rol debe
+seguir siendo editable y no puede volverse seguro o sensible. Un cambio de foco detiene los
+fragmentos restantes. La división conserva grafemas Unicode completos, incluidos emojis y acentos,
+sin usar portapapeles ni persistir el texto.
+
+El helper fija además el PID exacto de la aplicación al comenzar cada acción. Escritura, teclas y
+scroll se entregan directamente a ese PID con la API pública de CoreGraphics y una fuente privada;
+no se publican como entrada HID global. Si la app cambia, termina o se reinicia, Jarvis no continúa
+contra el nuevo proceso. Todo campo, ventana o control Accessibility debe pertenecer al mismo PID,
+incluso cuando conserva el mismo bundle ID.
+
+La observación lleva internamente un contexto visual SHA-256 de 64 caracteres ligado al bundle ID,
+PID, fecha de lanzamiento, display y geometría de la ventana enfocada. Jarvis lo conserva fuera del
+prompt y lo entrega automáticamente al helper con la siguiente acción. Si la ventana se mueve,
+cambia de tamaño, pasa a otro monitor o la app se relanza, el contexto ya no coincide y no se ejecuta
+el primer clic, foco, texto, tecla o scroll. El daemon recaptura una sola vez localmente y vuelve a validar
+la misma acción únicamente cuando proviene del fast-path determinista de una orden local exacta; solo
+la reintenta con el contexto nuevo si el objetivo Accessibility sigue siendo exacto y no apareció
+contenido sensible. No vuelve a consultar NVIDIA. Otro cambio local, un botón distinto o percepción
+segura se detienen como estado incierto o sensible. Para una decisión remota, Jarvis nunca repite la
+acción obsoleta: descarta esa salida, recaptura una vez y solicita a visión una
+decisión nueva con la escena actual. Este refresco no cuenta como una acción ejecutada. Si el contexto
+vuelve a cambiar o la recaptura detecta contenido sensible, termina sin otro intento. El helper
+compara el contexto al inicio y al final de cada captura para impedir que OCR o NVIDIA reciban una
+imagen asociada a coordenadas obsoletas. Este digest vive solo durante el paso: no entra en memoria
+persistente, auditoría o logs.
+
+El scroll usa un evento propio ubicado en el centro de la porción visible de la ventana
+Accessibility enfocada dentro del display seleccionado; nunca consulta, mueve o suplanta el cursor
+nativo. Antes de publicarlo comprueba que el elemento bajo el punto todavía pertenece al mismo PID
+y a la misma instancia. Si otra aplicación lo cubre o la geometría deja de ser válida, no desplaza
+nada.
+
+Un `AXPress`, desplazamiento o tecla local no se considera suficiente por sí solo. Jarvis recaptura
+inmediatamente en el Mac. Si ya existe progreso, elimina la antigua espera fija de 450 ms. Solo
+cuando esa primera captura sigue estable espera ese intervalo y realiza una captura final.
+CoreGraphics reduce las imágenes a firmas dHash de 256 bits. Un cambio semántico Accessibility o al
+menos 8 bits visuales cuenta como progreso; jitter de coordenadas, OCR, orden de ventanas y
+variaciones menores se ignoran. Sin progreso suficiente, Jarvis informa estado incierto y no repite
+ni consulta NVIDIA. Si cualquier captura revela un login, campo seguro o texto sensible, bloquea la
+sesión antes de esperar, evaluar la firma o informar éxito.
+Si cualquiera de las dos percepciones Accessibility está truncada, cambios entre sus subconjuntos no
+cuentan como progreso: deben cambiar al menos 8 bits de la firma visual. Jarvis tampoco presenta
+texto AX como evidencia nueva después de una acción ni infiere que un botón es único a partir de un
+árbol incompleto. La sesión termina como incierta antes de declarar éxito con esa comparación.
+
+Cuando NVIDIA debe elegir entre varios controles, su clic copia la etiqueta y el centro exactos de
+un elemento `Accessibility` pulsable observado localmente. El daemon verifica esa relación y el
+helper firmado comprueba otra vez la etiqueta del elemento real justo antes de `AXPress`. Si el
+control cambió, desapareció o no coincide, Jarvis no pulsa nada y termina ese paso como estado
+incierto. El puntero visual de Jarvis sigue siendo solo una representación; nunca mueve el cursor
+nativo del usuario. Tras un clic correcto, el helper devuelve el identificador del display validado
+y el retículo se dibuja en ese monitor. Una respuesta fallida o sin display válido no muestra un
+puntero potencialmente engañoso.
+
+El teclado, ratón y trackpad del usuario siempre tienen prioridad. Jarvis liga cada captura a la
+última entrada física detectada por CoreGraphics y vuelve a comprobarla justo antes de cada efecto.
+Si escribes, haces clic, scroll o mueves el puntero, termina la sesión sin recapturar ni reintentar y
+responde que cedió el control. No existe un keylogger ni un monitor permanente: solo compara un
+contador monotónico efímero dentro del helper firmado, sin guardar teclas, coordenadas o eventos y
+sin enviarlos a NVIDIA.
+
+La finalización remota también falla de forma cerrada. Para responder que el objetivo terminó,
+NVIDIA debe copiar como evidencia el texto exacto de un elemento no sensible de Accessibility o el
+título de una ventana incluidos en la observación local actual. Una frase inventada, aproximada o
+detectada únicamente por OCR se rechaza como estado incierto; no activa el helper ni genera otra
+captura o llamada al modelo.
+Después de un clic, escritura, tecla o desplazamiento elegido por NVIDIA, la prueba debe ser además
+nueva respecto a la observación anterior y el estado debe mostrar progreso perceptual. Jarvis envía
+al especialista únicamente la lista de evidencias locales nuevas que puede citar. Un cambio de
+píxeles sin una prueba Accessibility nueva, o una etiqueta que ya estaba visible antes de actuar,
+no basta para declarar el objetivo terminado.
+Cada acción elegida por NVIDIA provoca una recaptura inmediata, incluso si consume el último paso.
+Jarvis bloquea en ese punto cualquier contenido sensible revelado y reutiliza la misma observación
+en la decisión siguiente. Alcanzar el límite puede informar `step_limit`, pero no deja una acción
+final sin inspección local ni genera dos capturas para el mismo estado.
+
+El relay permanece inactivo en `computer.wait` hasta que exista una orden. Esa espera y el helper
+firmado están ligados a la generación actual de la sesión macOS. Bloquear la pantalla invalida una
+orden todavía en espera, termina el helper ya iniciado y suprime cualquier puntero tardío. Tras
+desbloquear se crea una generación nueva; Jarvis no reintenta automáticamente el paso anterior.
+
+## 11. Activación por «Jarvis»
+
+La transcripción permanente no existe. Hasta que haya un modelo Core ML entrenado, la activación por
+nombre permanece desactivada. Una vez habilitada, solo un clasificador acústico local inspecciona
+buffers efímeros buscando «Jarvis»; Apple Speech, el daemon y NVIDIA permanecen inactivos hasta que
+el nombre se confirma.
+
+### Ruta recomendada desde la interfaz
+
+1. Abre el icono de Jarvis en la Menu Bar.
+2. Pulsa `Preparar` en `Activación «Jarvis»` (o su botón de configuración si ya existe un modelo).
+3. Graba al menos 20 muestras de `jarvis` en condiciones variadas.
+4. Graba al menos 20 muestras de `background`, incluyendo silencio y ruido habitual.
+5. Cierra la ventana cuando ambas clases estén completas.
+6. Desde el directorio del proyecto ejecuta:
+
+```bash
+./script/activate_wake_word.sh
+```
+
+7. Abre Jarvis y habilita explícitamente la escucha de la palabra de activación.
+
+El flujo valida el dataset, entrena el clasificador local, instala el modelo y reinicia la app. Las
+muestras permanecen privadas bajo:
+
+```text
+~/Library/Application Support/Aegis/WakeWordEnrollment
+```
+
+El modelo queda en:
+
+```text
+~/Library/Application Support/Aegis/Models/JarvisWakeWord.mlmodelc
+```
+
+El detector se pausa automáticamente durante captura y reproducción de voz, reposo del Mac,
+presión térmica seria o indisponibilidad del daemon. En modo de bajo consumo permanece activo el
+clasificador local mínimo para que «Jarvis» siga funcionando; Speech y NVIDIA continúan apagados.
+La transición térmica es event-driven: `serious` o `critical` detiene SoundAnalysis, elimina el tap,
+vacía los requests y reinicia AVAudioEngine; `nominal` o `fair` rearma el detector si las demás
+compuertas siguen válidas. El estado llega a la Menu Bar y queda encadenado en `audit.jsonl`.
+
+Mientras Jarvis habla, dos detecciones consecutivas de «jarvis» con confianza mínima `0.85` ejecutan
+barge-in: una rampa sample-accurate reduce Magpie a silencio durante 150 ms mientras `jobs.cancel`
+cancela el job por el UDS autenticado. El HUD refleja el estado del turno mediante una presencia
+monocromática y un mensaje legible, sin añadir otra captura de audio. Después se abre el turno
+de reemplazo. Si faltan la clave IPC, el acuse de cancelación o la
+auditoría, la transición falla cerrada y no comienza otra captura.
+
+### Dataset externo opcional
+
+Debe contener exactamente las carpetas `jarvis/` y `background/`, con un mínimo de 20 clips reales
+por clase:
+
+```bash
+./script/train_wake_word.sh /ruta/al/dataset
+./script/activate_wake_word.sh /ruta/al/dataset
+```
+
+## 12. Identidad de hablantes
+
+La identidad de voz sirve para seleccionar el perfil privado, impedir aprendizaje no autorizado y
+cerrar la compuerta de herramientas sensibles. No aprueba acciones por sí sola: correo y herramientas
+críticas se deniegan si el perfil es desconocido, no es el propietario o queda bajo `0.78`; una
+acción de riesgo alto pasa obligatoriamente a confirmación manual. Jarvis exige además presencia
+local reciente de la sesión macOS, descrita en la sección de conversación.
+
+1. Abre Jarvis en la Menu Bar.
+2. Pulsa el icono de perfil de la cabecera (`Configurar identidad de voz`).
+3. Crea entre uno y ocho perfiles con identificadores simples, por ejemplo `guillermo` o
+   `invitado`.
+4. Graba al menos 20 clips por persona y 20 clips de fondo.
+5. Pulsa `Entrenar modelo local`.
+6. Si el modelo contiene varias voces, en `Contexto privado` selecciona al propietario y confirma.
+
+La lista de propietario usa únicamente etiquetas del modelo compilado y validado. Si hay un solo
+perfil, Jarvis lo utiliza automáticamente como candidato; todavía necesita presencia local reciente
+para recibir contexto privado. Con varios perfiles y sin selección, todos los turnos de voz fallan
+cerrados para historial, memoria y gustos privados. Cambiar o quitar el propietario rota
+la conversación de voz actual, pero no borra datos. La selección guarda solo el identificador local
+en `UserDefaults` junto con la huella SHA-256 del modelo; no guarda audio, embeddings o confianza.
+Si reemplazas o reentrenas el modelo, Jarvis mostrará `Confirmar propietario`: confirma de nuevo
+antes de usar historial o memoria privada, incluso si la etiqueta conserva el mismo nombre. Una
+conversación vinculada a otra huella nunca se reutiliza. El comando de terminal `transcribe-submit`
+no adivina al propietario de un modelo con varias voces.
+
+La vía de terminal sirve para diagnóstico o recuperación:
+
+```bash
+./script/train_speaker_identity.sh --check
+./script/activate_speaker_identity.sh
+```
+
+Datos y modelo se guardan respectivamente en:
+
+```text
+~/Library/Application Support/Aegis/SpeakerEnrollment
+~/Library/Application Support/Aegis/Models/JarvisSpeakerIdentity.mlmodelc
+```
+
+No se envían muestras de entrenamiento a NVIDIA ni se incorporan a Git.
+
+Después de decir «Jarvis», pregunta `¿Quién soy?`, `¿Me reconoces?` o `¿Sabes quién soy?`. Si la
+evidencia de ese turno supera el umbral ya validado por el clasificador local, Jarvis responde con el
+identificador del perfil. Si no, indica que no pudo reconocer la voz con suficiente confianza; no
+adivina ni revela el porcentaje. La consulta conserva el preflight normal, pero no ejecuta otro
+modelo ni envía el transcript mediante `voice.submit`. El resultado sirve para personalización y
+nunca autentica al propietario, concede control, aprueba herramientas o reemplaza una confirmación.
+
+## 13. Configuración de referencia
+
+El nombre visible es Jarvis, pero se conserva el namespace técnico `aegis` para no invalidar
+Keychain, permisos, memoria o servicios existentes.
+
+### Modelos NVIDIA asignados
+
+Valores por defecto del registro; las preferencias guardadas pueden sustituirlos.
+
+| Rol | Modelo principal | Respaldo |
+| --- | --- | --- |
+| Router, planificación y síntesis de conversación | `nvidia/nemotron-3.5-lightning-30b-a3b` | `openai/gpt-oss-20b` |
+| Código y ciberseguridad | `nvidia/nemotron-3.5-lightning-30b-a3b` | `nvidia/nemotron-3-super-120b-a12b` |
+| Razonamiento crítico independiente | `nvidia/nemotron-3-super-120b-a12b` | `openai/gpt-oss-120b` |
+| Visión y omni | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` | `meta/muse-glimmer-30b` |
+| Embeddings remotos opt-in | `nvidia/nemotron-3-embed-1b` | NaturalLanguage on-device y FTS5 |
+| Voz | NVIDIA Magpie `Magpie-Multilingual.EN-US.Ray.Neutral`, texto `es-US` | texto en HUD; nunca otro locutor |
+
+La conversación, planificación y revisión actuales usan exclusivamente las APIs NVIDIA. Las
+rutas deterministas del sistema conservan sus ejecutores locales. Las referencias a la cascada
+Apple en apartados anteriores describen una configuración histórica que no está activa en el
+modo NVIDIA-only.
+
+La disponibilidad de un modelo preview puede cambiar en NVIDIA. Los fallbacks se aplican solo en
+las condiciones previstas por el cliente; valida los endpoints con los probes tras una
+actualización.
+
+El razonador crítico solo se añade a solicitudes de código o ciberseguridad clasificadas localmente
+como riesgo alto o crítico. Trabaja en paralelo como revisor independiente y no recibe herramientas.
+El sintetizador compara consenso e incertidumbres; nunca concede autoridad para ejecutar acciones.
+
+NVIDIA recibe la solicitud y el contexto autorizado necesario: historial reciente, memoria
+pertinente, archivos adjuntos y resultados solicitados. Los secretos y tokens se excluyen; una voz
+no verificada no recibe contexto privado. Las skills importadas y de plugins requieren
+consentimiento por contenido antes de enviar sus instrucciones y recursos. El broker local
+conserva la autorización y ejecución de herramientas.
+
+### Rutas locales
+
+| Elemento | Ruta o identificador |
+| --- | --- |
+| Aplicación | `~/Applications/Jarvis.app` |
+| Helper de cerebro local | `~/Applications/Jarvis.app/Contents/Helpers/jarvis-local-brain` |
+| Helper de embeddings local | `~/Applications/Jarvis.app/Contents/Helpers/jarvis-local-embedding` |
+| Memoria SQLite | `~/Library/Application Support/Aegis/memory.sqlite3` |
+| Evaluaciones SQLite | `~/Library/Application Support/Aegis/evaluations.sqlite3` |
+| Socket IPC | `~/Library/Application Support/Aegis/aegis.sock` |
+| Auditoría | `~/Library/Application Support/Aegis/audit.jsonl` (activo) y `audit.archive/` (segmentos sellados) |
+| Modelos locales | `~/Library/Application Support/Aegis/Models/` |
+| Logs | `~/Library/Logs/Aegis/` |
+| LaunchAgent daemon | `~/Library/LaunchAgents/ai.aegis.daemon.plist` |
+| LaunchAgent app | `~/Library/LaunchAgents/ai.aegis.menubar.autostart.plist` |
+| API NVIDIA en Keychain | servicio `ai.aegis.nvidia-nim`, cuenta `default` |
+| Secreto IPC en Keychain | servicio `ai.aegis.ipc-auth`, cuenta `default` |
+
+### Televisores, Android e iPhone
+
+Jarvis carga únicamente perfiles locales incluidos explícitamente en una lista permitida. Los tres
+archivos deben pertenecer al usuario, ser archivos regulares —no enlaces simbólicos—, medir menos de
+64 KiB y tener permisos `600`. Crea primero el directorio privado:
+
+```bash
+install -d -m 700 "$HOME/Library/Application Support/Aegis/devices"
+```
+
+Para televisores, guarda un arreglo JSON en
+`~/Library/Application Support/Aegis/devices/smart_tvs.json`. Usa IP privadas literales; no se
+aceptan nombres DNS ni destinos públicos. WebOS y Tizen requieren el SHA-256 hexadecimal del
+certificado TLS observado y verificado físicamente durante el emparejamiento:
+
+```json
+[
+  {
+    "device_id": "sala-lg",
+    "platform": "webos",
+    "host": "192.168.1.40",
+    "mac_address": "aa:bb:cc:dd:ee:ff",
+    "port": 3001,
+    "certificate_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  },
+  {
+    "device_id": "oficina-samsung",
+    "platform": "tizen",
+    "host": "192.168.1.41",
+    "mac_address": "11:22:33:44:55:66",
+    "port": 8002,
+    "certificate_sha256": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+  },
+  {
+    "device_id": "dormitorio-android",
+    "platform": "android",
+    "host": "192.168.1.42",
+    "port": 6466,
+    "rpc_path": "/jsonrpc"
+  }
+]
+```
+
+Después ejecuta `chmod 600` sobre el archivo. Jarvis guarda automáticamente las claves de
+emparejamiento WebOS/Tizen en Keychain bajo
+`ai.aegis.device.<device_id>.<platform>`. El adaptador JSON-RPC de Android TV requiere un servicio
+HTTPS local compatible y un bearer token. Pon ese token, sin salto de línea, en un archivo temporal
+privado y haz que el CLI lo importe y destruya:
+
+```bash
+chmod 600 "$HOME/Library/Application Support/Aegis/android-tv-token.txt"
+./script/aegis.sh devices-credential-import \
+  "$HOME/Library/Application Support/Aegis/android-tv-token.txt" \
+  --connector dormitorio-android.android
+```
+
+No incluyas tokens en el JSON. `wake` utiliza Wake-on-LAN; por ello la TV debe tener activado el
+encendido por red y una MAC en el perfil. WebOS y Tizen aceptan apps, entrada, apagado y navegación;
+Tizen ajusta volumen con `volume_up`, `volume_down` o `mute`, porque su protocolo remoto local no
+ofrece un setter absoluto autenticado. Un certificado, token o conexión inválidos fallan cerrados y
+activan la recuperación táctica, no un transporte inseguro.
+
+Para un Android móvil instala Android Platform Tools y empareja una sola vez desde las opciones de
+desarrollador del teléfono:
+
+```bash
+brew install android-platform-tools
+adb pair 192.168.1.50:37099
+```
+
+Guarda luego el puerto de conexión inalámbrica anunciado por Android en
+`~/Library/Application Support/Aegis/devices/android_devices.json`:
+
+```json
+[
+  {
+    "device_id": "telefono-guillermo",
+    "host": "192.168.1.50",
+    "port": 39127
+  }
+]
+```
+
+Aplica `chmod 600` al archivo. El cliente llama al binario ADB sin shell, mantiene la conexión del
+servidor ADB, limita tiempo y salida, y usa `uiautomator` XML para localizar controles. No toma una
+captura ni activa visión pesada. Toques, escritura y apertura de apps son acciones críticas:
+requieren la confirmación de un solo uso del broker antes de ejecutarse.
+
+Para iPhone, crea primero los atajos en Shortcuts y permite que iCloud los sincronice al Mac. Define
+la lista permitida en `~/Library/Application Support/Aegis/devices/ios_shortcuts.json`:
+
+```json
+[
+  {
+    "shortcut_id": "modo-casa",
+    "name": "Jarvis - Modo casa",
+    "critical": false
+  },
+  {
+    "shortcut_id": "cerradura-principal",
+    "name": "Jarvis - Cerradura principal",
+    "critical": true
+  }
+]
+```
+
+Aplica `chmod 600`. Un atajo crítico exige Touch ID en el Mac mediante el helper firmado
+`jarvis-ios-bridge` antes de invocar `Shortcuts Events`. La ejecución ocurre en Shortcuts de macOS;
+si debe actuar sobre el iPhone, HomeKit o un dispositivo emparejado, esa acción debe estar dentro del
+propio atajo sincronizado. macOS no publica el nombre arbitrario del Focus actual a aplicaciones de
+terceros. Para sincronizar `Trabajo`, `Dormir` o `Personal`, añade el filtro de Focus de Jarvis a cada
+modo en Ajustes del Sistema y asigna allí el modo correspondiente. El filtro envía únicamente modo,
+estado y prioridad por el IPC HMAC local; no registra contenido personal.
+
+Después de modificar perfiles, reinstala o reinicia Jarvis para recargarlos:
+
+```bash
+./script/build_and_run.sh
+```
+
+Los dispositivos y ubicaciones mencionados durante una conversación se enlazan en GraphRAG como
+`device`, `sensor` y `location`. IP, MAC y tokens se cifran con AES-GCM; los índices exactos usan
+HMAC ciego. La búsqueda nunca devuelve una propiedad sin autenticar y el historial no convierte por
+sí solo un dispositivo desconocido en un destino autorizado: el perfil privado sigue siendo la
+fuente de autoridad.
+
+### Variables avanzadas
+
+La configuración base no necesita un `.env`; de hecho, Jarvis no carga archivos `.env`. Los
+valores seguros están definidos en `src/aegis_core/config.py`. Entre los overrides disponibles se
+encuentran:
+
+| Variable | Predeterminado | Efecto |
+| --- | --- | --- |
+| `AEGIS_MEMORY_RAG_NAMESPACE` | `user.default` | Namespace fijo de memoria del operador. |
+| `AEGIS_MEMORY_RAG_LIMIT` | `5` | Cantidad máxima de recuerdos recuperados. |
+| `AEGIS_MEMORY_EMBEDDING_BACKFILL_LIMIT` | `500` | Nodos pendientes que se indexan por lotes en segundo plano al iniciar. |
+| `AEGIS_MEMORY_MAX_NODE_EMBEDDINGS` | `2000` | Techo estricto por namespace para embeddings GraphRAG `float32[384]`. |
+| `AEGIS_EVALUATION_DATABASE_PATH` | `~/Library/Application Support/Aegis/evaluations.sqlite3` | Historial local sin contenido de usuario. |
+| `AEGIS_EVALUATION_MAX_ENTRIES` | `10000` | Retención máxima de evaluaciones terminales. |
+| `AEGIS_NVIDIA_TTS_VOICE` | `Magpie-Multilingual.EN-US.Ray.Neutral` | Única identidad remota seleccionada; no hay fallback a Apple. |
+| `AEGIS_NVIDIA_TTS_LANGUAGE` | `es-US` | Idioma de la voz remota. |
+| `AEGIS_NVIDIA_TTS_SMOOTH_PAUSES` | `true` | Acorta solo pausas casi inaudibles del PCM de salida; `false` conserva el stream sin ajustar. |
+| `AEGIS_NVIDIA_TTS_STREAM_URL` | endpoint Magpie `synthesize_online` | Endpoint HTTPS de audio PCM incremental. |
+| `AEGIS_MAX_CONCURRENCY` | `4` | Concurrencia máxima hacia el proveedor. |
+| `AEGIS_MAX_OUTPUT_TOKENS` | `4096` | Límite máximo de salida. |
+| `AEGIS_JOB_TIMEOUT_SECONDS` | `120` | Tiempo máximo de un job. |
+| `AEGIS_LOCAL_BRAIN_EXECUTABLE_PATH` | helper dentro de `Jarvis.app` | Ruta firmada del cerebro local. |
+| `AEGIS_LOCAL_BRAIN_TIMEOUT_SECONDS` | `20` | Presupuesto total del turno local; el primer fragmento conserva un límite interno de 4 segundos. |
+| `AEGIS_APPROVAL_SIGNER_PUBLIC_KEY_PATH` | `~/Library/Application Support/Aegis/approval_signer.pub` | Clave pública de Jarvis.app fijada en el primer registro; `jarvis approval-signer-reset` la retira. |
+| `AEGIS_LOCAL_FOUNDATION_API_URL` | `http://127.0.0.1:9999/v1/chat/completions` | Endpoint fijo del wrapper local; otros hosts, puertos o rutas se rechazan. |
+| `AEGIS_LOCAL_FOUNDATION_CONFIDENCE_THRESHOLD` | `0.82` | Umbral de aceptación de la respuesta local. |
+| `AEGIS_LOCAL_EMBEDDING_EXECUTABLE_PATH` | helper dentro de `Jarvis.app` | Ruta del embedding on-device. |
+| `AEGIS_LOCAL_EMBEDDING_TIMEOUT_SECONDS` | `5` | Presupuesto máximo de un lote local. |
+| `AEGIS_MLX_WHISPER_MODEL_PATH` | `~/Library/Application Support/Aegis/Models/whisper-tiny-mlx-4bit` | Modelo Whisper MLX 4-bit privado usado solo para confirmaciones habladas. |
+| `AEGIS_MLX_WHISPER_CONFIRMATION_TIMEOUT_SECONDS` | `8` | Presupuesto cerrado de transcripción para autorización vocal. |
+| `AEGIS_AUDIT_MAX_BYTES` | `16777216` | Capacidad de cada segmento de auditoría; al llenarse se sella y empieza otro. |
+| `AEGIS_AUDIT_ARCHIVED_SEGMENTS` | `16` | Segmentos sellados que se conservan en `audit.archive/`; `0` desactiva la rotación. |
+| `AEGIS_SMART_TV_CONFIGURATION_PATH` | `~/Library/Application Support/Aegis/devices/smart_tvs.json` | Lista privada de televisores autorizados. |
+| `AEGIS_SMART_TV_TIMEOUT_SECONDS` | `6` | Límite por operación local de TV. |
+| `AEGIS_ANDROID_ADB_CONFIGURATION_PATH` | `~/Library/Application Support/Aegis/devices/android_devices.json` | Lista privada de Android autorizados. |
+| `AEGIS_ANDROID_ADB_EXECUTABLE_PATH` | `/opt/homebrew/bin/adb` | Binario ADB de Homebrew en Apple Silicon. |
+| `AEGIS_ANDROID_ADB_TIMEOUT_SECONDS` | `8` | Límite por operación ADB. |
+| `AEGIS_IOS_SHORTCUTS_CONFIGURATION_PATH` | `~/Library/Application Support/Aegis/devices/ios_shortcuts.json` | Lista permitida de Shortcuts sincronizados. |
+| `AEGIS_IOS_SHORTCUT_TIMEOUT_SECONDS` | `30` | Límite de Touch ID y ejecución del atajo. |
+
+Los overrides exportados en una terminal solo afectan procesos iniciados desde esa terminal. El
+LaunchAgent usa los valores versionados del proyecto y fija automáticamente
+`AEGIS_WORKSPACE_ROOT`. Para cambiar de forma persistente un límite del servicio, modifica la
+configuración como un cambio de código revisado, ejecuta las pruebas y reinstala el daemon; no
+guardes secretos en variables, `.zshrc`, plist o `.env`.
+
+La memoria semántica usa exclusivamente `NaturalLanguage` incluido en macOS: no descarga un modelo,
+no mantiene otro daemon y no envía entidades a NVIDIA. El esquema GraphRAG guarda documentos,
+entidades y relaciones en SQLite; nombres y propiedades permanecen cifrados con AES-GCM. El KNN
+local selecciona semillas sobre `sqlite-vec` y siete iteraciones de Personalized PageRank producen
+el subgrafo relevante. FTS5 cifrado mediante índices ciegos sigue siendo el respaldo determinista.
+El FIFO de 2.000 posiciones elimina solo embeddings antiguos; los recuerdos y hechos permanecen.
+Cada nodo valida AEAD y `content_sha256` antes de salir del almacén; una alteración externa bloquea
+el subsistema de memoria.
+
+## 14. Actualizar Jarvis
+
+Antes de actualizar, conserva cualquier cambio propio y comprueba el estado:
+
+```bash
+git status --short
+git pull --ff-only
+/opt/homebrew/bin/uv sync --all-groups --no-editable \
+  --python /opt/homebrew/bin/python3.11 \
+  --cache-dir .uv-cache
+/opt/homebrew/bin/uv run --no-sync pytest
+./script/test_native.sh
+./script/daemon_service.sh install
+./script/menu_bar_service.sh install
+```
+
+No borres ni recrees la identidad `Jarvis Local Development`. Al reutilizarla, macOS conserva la
+atribución estable de permisos entre builds.
+
+## 15. Operación y diagnóstico
+
+### Activar y comprobar la compuerta de Git
+
+El hook está versionado en `.githooks/pre-commit`, pero Git no lo activa automáticamente al clonar
+el repositorio. Actívalo una sola vez por checkout:
+
+```bash
+./script/setup_git_gates.sh --install
+./script/setup_git_gates.sh --check
+```
+
+La comprobación debe responder
+`status=active hooks_path=.githooks pre_commit=fast pre_push=full hardware=manual`. Las compuertas
+están separadas por responsabilidad:
+
+- `pre-commit`: integridad del diff, Ruff, pruebas Python y parseo de Swift modificado. Es rápido,
+  determinista y no depende de permisos del Mac.
+- `pre-push`: pruebas completas Python/Swift, bundle no interactivo y contratos de aceptación.
+- `./script/macos_qualification_gate.sh`: validación explícita del hardware, TCC, audio, daemon y
+  evidencia operativa con puntuación 100.
+
+La calificación viva no se ejecuta durante cada commit porque un permiso TCC revocado o un daemon
+detenido describen el estado del equipo, no la corrección del parche. No se debe eludir ninguna
+compuerta con `--no-verify` ni sustituir evidencia faltante con resultados inventados.
+
+### Estado de servicios
+
+```bash
+./script/daemon_service.sh status
+./script/menu_bar_service.sh status
+./script/aegis.sh daemon-status
+./script/jarvis_beta.sh check
+```
+
+### Reiniciar
+
+Los instaladores son idempotentes y constituyen el reinicio seguro:
+
+```bash
+./script/daemon_service.sh install
+./script/menu_bar_service.sh install
+```
+
+### Logs
+
+```bash
+tail -n 100 "$HOME/Library/Logs/Aegis/daemon.error.log"
+tail -n 100 "$HOME/Library/Logs/Aegis/menu-bar.error.log"
+/usr/bin/log show --last 10m --style compact \
+  --predicate 'subsystem == "ai.aegis.menubar"'
+```
+
+Los logs no deben contener claves, audio, transcripciones, respuestas, capturas ni argumentos
+privados.
+
+### Integridad de auditoría
+
+```bash
+./script/aegis.sh verify-audit \
+  "$HOME/Library/Application Support/Aegis/audit.jsonl"
+```
+
+Resultado esperado: `status=ok`, con `records` del segmento activo y `chain_records` de toda la cadena
+conservada. No borres ni edites archivos de `audit.archive/`: un hueco o un byte cambiado invalida la
+cadena. Si aparece `audit_integrity_failure`, Jarvis se bloquea de forma
+deliberada. Conserva el archivo para análisis y no intentes repararlo mientras el daemon esté vivo.
+
+Si confirmaste que el fallo fue causado por un cierre no controlado conocido y la cadena interna es
+válida, recupera el ancla únicamente con el servicio detenido:
+
+```bash
+./script/daemon_service.sh uninstall
+./script/aegis.sh verify-audit \
+  "$HOME/Library/Application Support/Aegis/audit.jsonl"
+./script/aegis.sh recover-audit-anchor \
+  "$HOME/Library/Application Support/Aegis/audit.jsonl"
+./script/daemon_service.sh install
+./script/jarvis_beta.sh daily
+```
+
+La recuperación acepta exclusivamente la ruta oficial, rechaza enlaces simbólicos, verifica toda
+la cadena, registra el evento y sella una nueva ancla en Keychain. Si no conoces la causa del cambio,
+no recuperes el ancla: preserva la evidencia y revisa el incidente.
+
+### Prueba de estabilidad del daemon
+
+```bash
+./script/aegis.sh daemon-soak
+```
+
+Esta prueba usa IPC local, no NVIDIA. Comprueba latencia, memoria, arquitectura, integridad y PID.
+En Low Power Mode o presión térmica devuelve `deferred=runtime_suspended` sin generar carga
+artificial; no se considera un fallo.
+
+### Autoevaluación de la sesión
+
+```bash
+./script/aegis.sh self-evaluation
+```
+
+### Benchmark local 25/25
+
+```bash
+./script/aegis.sh acceptance-benchmark
+```
+
+Para comprobar que los componentes también funcionan encadenados, ejecuta:
+
+```bash
+./script/aegis.sh production-workflows
+```
+
+Este segundo gate recorre 20 flujos locales con checkpoints obligatorios. Usa ventanas y estados
+controlados en memoria: no abre tus aplicaciones, no envía correos, no usa Internet y no conserva
+el texto utilizado por las pruebas. Un resultado `gate_passed=true` demuestra integración
+determinista; las capacidades físicas del Mac se validan por separado con `macos-qualification`.
+
+Ejecuta cinco contratos por cada área crítica: conversación, navegador, acciones de sistema,
+memoria cifrada y seguridad. No abre aplicaciones, no llama a NVIDIA y no modifica datos del
+propietario. Usa bases temporales privadas para verificar cifrado, aislamiento por namespace,
+reinicio de sesión y FIFO. El comando termina correctamente solo con `gate_passed=true`,
+`score=100` y `25/25` casos aprobados. El JSON no contiene prompts, URLs ni transcripciones.
+
+`./script/jarvis_beta.sh daily` ejecuta esta compuerta antes de la autoevaluación y el soak del
+daemon. El 100 de este benchmark prueba los contratos locales, pero no sustituye la validación de
+permisos TCC, firma, voz real ni automatización visible en el Mac.
+
+### Calificación macOS con evidencia real
+
+```bash
+./script/aegis.sh macos-qualification
+```
+
+Esta compuerta consulta el daemon autenticado y dos archivos privados `0600`:
+`runtime-readiness.json` y `runtime-evidence.json`. El segundo contiene exclusivamente contadores y
+latencias de turnos de voz, capturas en memoria y acciones de computadora cuyo cambio de estado fue
+verificado. Cada reporte está ligado a la revisión Git exacta del daemon y de la app nativa: al
+instalar una compilación nueva, los resultados de versiones anteriores se conservan para diagnóstico
+pero no cuentan como evidencia de la versión actual. Así se evita que un fallo viejo penalice una
+corrección o que una prueba antigua oculte una regresión nueva.
+No almacena audio, capturas, transcripciones, prompts, aplicaciones ni URLs.
+
+El resultado tiene cinco comprobaciones: integridad del runtime, TCC, voz del propietario,
+automatización visual y latencia/estabilidad. Los estados significan:
+
+- `passed`: objetivo cumplido con evidencia real.
+- `needs_interaction`: falta ejecutar al menos una interacción real después de actualizar Jarvis.
+- `needs_attention`: hay evidencia, pero la tasa de éxito o latencia está fuera del objetivo.
+- `blocked`: seguridad, permisos, presión térmica o Low Power Mode impiden una medición válida.
+
+La medición sostenida utiliza 100 ciclos locales, exige p95 IPC menor o igual a 250 ms y limita el
+crecimiento de RSS a 8 MiB. Si Low Power Mode está activo, el test no fuerza el procesador: informa
+`blocked` y conserva la suspensión térmicamente consciente. La rutina `jarvis_beta.sh daily` exige
+esta calificación además del benchmark determinista 25/25.
+
+Devuelve JSON con cantidad de trabajos terminales, tasa de éxito, latencias p50/p95, distribución
+entre cerebro local, NVIDIA y rutas deterministas y una muestra privada de rendimiento.
+`latency_ms.active_*` mide solamente el tiempo
+atribuible a Jarvis. `wall_p95` incluye la experiencia completa y `confirmation_wait_p95` separa el
+tiempo durante el cual Jarvis estuvo detenido esperando una aprobación humana. La misma distinción
+existe para el primer fragmento. Los nombres históricos `p50`, `p95`, `first_partial_*` y
+`conversation_p95` son alias compatibles de las métricas activas. Cada trabajo mide además modelo,
+cantidad de fragmentos y herramienta. Para respuestas sin herramientas, un
+evaluador local registra modo conversacional, puntuación, longitud y banderas acotadas; nunca guarda
+el texto evaluado. Esta evaluación es automática y no persiste prompts, respuestas ni argumentos
+de herramientas. Solo conserva campos operativos acotados en `evaluations.sqlite3`, un archivo
+local privado que se valida antes de cada acceso.
+
+El evaluador señala respuestas vacías o invisibles y más de una pregunta por turno. Excluye la
+puntuación interna de enlaces, versiones, decimales y código del conteo de frases, sin convertir
+referencias diferentes en repeticiones. Distingue `No soy humano` de `No, soy humano`. Estas reglas
+son heurísticas posteriores a la entrega: no bloquean ni regeneran la respuesta, no garantizan
+su exactitud y no añaden llamadas a modelos. La evaluación no guarda el texto de estos ejemplos.
+
+La sección `performance` contiene RSS actual y máximo del daemon, CPU por núcleo, RSS del servidor
+AFM local si está escuchando en `127.0.0.1:9999`, estado térmico recibido por UDS y ocupación global
+de las 50.000 memorias y del índice de nodos GraphRAG acotado por namespace. Se persiste únicamente
+este esquema numérico en `performance.sqlite3`; no existen campos para prompts, URLs o
+transcripciones. Para obtener la instantánea:
+
+```bash
+./script/aegis.sh self-evaluation
+```
+
+El perfilador se ejecuta bajo demanda; no añade polling térmico ni un monitor residente al MacBook
+Air.
+
+El objeto `quality` interpreta la muestra actual usando latencia activa, nunca la rapidez con la que
+el propietario responde una confirmación:
+
+- `insufficient_data`: todavía no hay 20 trabajos terminales;
+- `competitive`: éxito mínimo de 95 %, primer fragmento p95 de hasta 2 segundos, conversación
+  completa p95 de hasta 8 segundos y calidad conversacional aprobada en al menos 95 % de las
+  respuestas evaluadas;
+- `needs_attention`: existe una muestra suficiente, pero al menos un objetivo no se cumple.
+
+`observed.action_success_rate` separa la fiabilidad de herramientas de la conversación y solo
+cuenta resultados con `outcome_verified=true`. En control visual esto exige una captura posterior
+que pruebe el objetivo; un bloqueo seguro o el límite de pasos puede terminar de forma controlada,
+pero no cuenta como acción correcta. Un valor `null` significa que la sesión todavía no ejecutó
+acciones; no es un fallo. Reiniciar el daemon conserva la muestra hasta el límite de retención
+configurado; las entradas más antiguas se eliminan automáticamente. Los registros previos a esta
+separación siguen siendo compatibles y no requieren migrar ni borrar `evaluations.sqlite3`.
+
+`observed.owner_recognition_rate` aparece cuando la sesión contiene voz. El objetivo es 90 % y
+cuenta únicamente la coincidencia local con el único perfil configurado. Jarvis no publica el
+nombre, identificador, confianza ni audio. Esta métrica sirve para detectar que el perfil necesita
+reentrenamiento; no sustituye las confirmaciones de acciones.
+
+`observed.response_quality_pass_rate` y `response_quality_score_p50` miden la disciplina de la
+respuesta sin otra inferencia. `response_quality_flags` cuenta aperturas prefabricadas, eco literal
+de la solicitud, exceso de longitud, frases repetidas, afirmaciones de identidad humana y lenguaje
+de dependencia relacional. Son señales conservadoras de regresión, no un diagnóstico emocional ni
+una autorización para reescribir respuestas. Un registro antiguo sin estos campos continúa siendo
+válido y queda fuera del denominador hasta que existan respuestas nuevas evaluadas.
+
+`observed.owner_feedback_helpful_rate` agrega las calificaciones explícitas del propietario. Se
+publica desde la primera muestra, pero no afecta `competitive` hasta reunir cinco respuestas
+calificadas; desde entonces el objetivo mínimo es 80 %. `owner_feedback_count` cuenta respuestas
+calificadas y `feedback_jobs` cuenta los acuses locales, que no forman parte de `conversation_jobs`.
+
+`observed.repair_recovery_rate` mide cuántas reparaciones calificadas terminaron como `helpful`.
+`repair_attempts` cuenta los turnos que consumieron una ventana y `repair_rated_count` solo aquellos
+que el propietario calificó después. La compuerta permanece en `null` hasta reunir tres
+reparaciones calificadas; desde entonces exige una recuperación mínima de 80 %. Reiniciar el daemon
+conserva esta métrica, pero no reconstruye ni mantiene abierta una ventana de reparación.
+
+## 16. Skills: especialización y aprendizaje seguro
+
+Jarvis incluye estas Skills listas para usar; se activan automáticamente por intención y no hay que
+habilitarlas en la interfaz:
+
+- `mac-control-expert`: decide entre una acción nativa y control visual de Safari, Chrome, Firefox
+  u otra aplicación explícita.
+- `browser-navigation-expert`: diferencia investigar, leer una URL, abrirla o interactuar con una
+  página.
+- `security-audit-expert`: guía auditorías defensivas de macOS, red y código.
+- `code-review-expert`: busca fallos demostrables y recomienda cambios mínimos.
+- `personal-productivity-expert`: especializa correo, calendario, contactos y recordatorios.
+
+Una Skill no es un programa ni un permiso. Solo contiene disparadores, instrucciones, un rol y una
+lista de herramientas que ya existen. El broker vuelve a validar cada llamada y conserva todas las
+confirmaciones actuales.
+
+### Ver las Skills disponibles
+
+```bash
+./script/aegis.sh skills-list
+```
+
+Cada línea JSON indica identificador, nombre, origen, rol y herramientas. La última línea debe
+mostrar `status=ok`.
+
+### Enseñar una Skill propia
+
+1. Copia `examples/skills/research-first.json` fuera del repositorio si incluirás preferencias
+   privadas.
+2. Cambia `skill_id`, nombre, descripción, frases, términos e instrucciones.
+3. Conserva únicamente nombres de herramientas que el rol ya puede usar.
+4. Valida e instala el archivo:
+
+```bash
+./script/aegis.sh skills-learn /ruta/privada/mi-skill.json
+./script/aegis.sh skills-list
+```
+
+No hay que reiniciar: el daemon detecta el cambio cuando llega la siguiente solicitud. El archivo
+validado queda en `~/Library/Application Support/Aegis/skills` con permisos `0600`. Las
+instrucciones aprendidas permanecen en el Mac hasta que el propietario revise el contenido completo
+y lo autorice en **Configuración → Extensiones → Revisar instrucciones → Autorizar en NVIDIA**.
+La autorización corresponde al SHA256 actual, se invalida al cambiar la skill y nunca concede
+permisos de ejecución. Las importaciones visuales admiten JSON y SKILL.md declarativo y quedan
+desactivadas hasta su revisión. Los scripts y las dependencias necesitan adaptación.
+
+El aprendizaje rechaza campos extra, identificadores inválidos, credenciales probables, texto para
+omitir políticas, herramientas fuera del rol, código arbitrario y archivos demasiado grandes. Una
+Skill puede orientar o reducir herramientas, pero no conceder Screen Recording, Accessibility,
+Mail, Calendar, red, shell ni ningún permiso.
+
+Ejemplo de invocación después de instalar la plantilla:
+
+```text
+Jarvis, activa modo investigación prioritaria y revisa las novedades públicas de NVIDIA NIM.
+```
+
+Cada acción sigue atravesando el broker, los presupuestos del grafo y las confirmaciones exactas.
+Combinar procedimientos no convierte una aprobación en permiso para acciones posteriores.
+
+### Actualizar o retirar una Skill
+
+Instalar otra vez el mismo `skill_id` reemplaza atómicamente solo esa Skill aprendida. Para
+retirarla:
+
+```bash
+./script/aegis.sh skills-forget research-first
+```
+
+Las Skills integradas forman parte del núcleo firmado y no se pueden reemplazar o borrar mediante
+el almacén aprendido.
+
+### Aprendizaje adaptativo cuando falta una capacidad
+
+Si una orden operativa no coincide con una herramienta ni una Skill, Jarvis no improvisa una
+ejecución. Expone al planner exclusivamente `web_research`, formula una consulta no personal y
+prioriza documentación HTTPS oficial. Puede investigar una ruta de implementación, pero no puede
+instalar paquetes, escribir o ejecutar código, modificar permisos ni afirmar que completó la orden.
+
+Hasta tres fuentes válidas se guardan durante 30 días en
+`~/Library/Application Support/Aegis/capabilities`. El directorio usa permisos `0700`, cada registro
+`0600`, el contenido se valida al cargar y un SHA-256 detecta alteraciones. Se admiten como máximo
+128 brechas. Una formulación equivalente reutiliza la evidencia exclusivamente con Apple
+Intelligence on-device y no repite la búsqueda. Una voz no verificada nunca crea este aprendizaje.
+
+Jarvis deriva de cada brecha un blueprint determinista. Este propone una de tres rutas
+(`native_adapter`, `shortcut_workflow` o `capability_pack`), asigna riesgo y prioridad y enumera
+restricciones y pruebas de aceptación. Los estados posibles son `needs_research`,
+`ready_for_review` y `sensitive_review`. Es un artefacto de revisión: no concede permisos, no
+instala integraciones y no se convierte automáticamente en herramienta.
+
+Para listar las brechas por prioridad —sin imprimir extractos—:
+
+```bash
+./script/aegis.sh capabilities-list
+```
+
+Para inspeccionar el blueprint completo, usa el identificador SHA-256. La evidencia se limita a
+título y URL:
+
+```bash
+./script/aegis.sh capabilities-inspect <gap_id>
+```
+
+Para obtener el dossier de implementación correspondiente:
+
+```bash
+./script/aegis.sh capabilities-plan <gap_id>
+```
+
+El dossier se genera localmente en cada consulta y está sellado con SHA-256. Según el caso propone
+un diseño de herramienta del núcleo, un contrato de Shortcut o un borrador conceptual de Capability
+Pack. Enumera exactamente qué datos aún faltan, los pasos de implementación y las verificaciones.
+`execution_allowed` siempre es `false`: el archivo no es aceptado por `skills-learn`,
+`plugins-pack` ni `plugins-install`. `research_required` exige evidencia primero, `owner_review`
+exige la decisión del propietario y `security_review` se reserva para operaciones críticas.
+
+La revisión recibe un JSON privado de hasta 16 KiB. Para una ruta `capability_pack`, su forma es:
+
+```json
+{
+  "schema_version": 1,
+  "gap_id": "<gap_id del dossier>",
+  "dossier_sha256": "<integrity_sha256 del dossier>",
+  "decision": "accept_design",
+  "review_gate": "owner_review",
+  "completed_inputs": {
+    "public_https_endpoint": "https://api.example.com/mcp",
+    "auth_mode": "none",
+    "declared_capabilities": "web_read",
+    "closed_tool_schemas": "{\"read_data\":{\"type\":\"object\",\"properties\":{},\"required\":[],\"additionalProperties\":false}}",
+    "verification_probe": "Read the resulting record using its public identifier."
+  },
+  "accepted_security_checks": [0, 1, 2, 3, 4],
+  "passed_acceptance_tests": [0, 1, 2, 3, 4],
+  "test_evidence_sha256": "<SHA-256 del reporte de pruebas>",
+  "security_review_reference": null,
+  "rationale": "El diseño acotado y sus pruebas fueron revisados localmente.",
+  "acknowledges_no_execution": true
+}
+```
+
+Reemplaza los campos entre ángulos y conserva exactamente las claves que muestre el dossier. Para
+una compuerta `security_review`, añade una referencia de revisión real. No incluyas tokens ni
+credenciales: el modo puede ser `bearer`, pero el secreto se importa después a Keychain.
+
+Valida el archivo con:
+
+```bash
+./script/aegis.sh capabilities-review /ruta/privada/review.json
+```
+
+La aceptación exige el dossier vigente; si cambió la necesidad o prioridad, el hash queda obsoleto
+y la revisión falla cerrada. También exige el SHA-256 de un reporte de pruebas y falla por checks
+incompletos, propiedades extra, esquemas abiertos, capacidades no admitidas, endpoint local/IP,
+credenciales o symlinks. El resultado
+`ready_for_manual_implementation` no instala, registra ni autoriza una herramienta.
+
+Para olvidar un registro usa su identificador SHA-256 completo:
+
+```bash
+./script/aegis.sh capabilities-forget <gap_id>
+```
+
+La investigación no convierte por sí sola la brecha en una capacidad ejecutable. Después debe
+implementarse como API nativa, Skill declarativa o Capability Pack firmado; política, permisos y
+confirmaciones vuelven a validarse. `daemon-status` muestra únicamente los contadores
+`capabilities` y `researched`.
+
+## 17. Capability Packs: Skills y plugins instalables
+
+Un Capability Pack agrupa una o más Skills, referencias locales y, opcionalmente, conectores MCP.
+No contiene ni ejecuta Python, shell, binarios, dylibs o AppleScript. El único código ejecutable es
+el núcleo firmado de Jarvis; una integración remota se invoca como herramienta MCP declarada y
+continúa atravesando el Tool Broker.
+
+### Crear e instalar un pack de Skills
+
+La plantilla funcional `examples/plugins/research-first.plugin-draft.json` no necesita un servidor
+externo. Empaquétala e instálala así:
+
+```bash
+./script/aegis.sh plugins-pack examples/plugins/research-first.plugin-draft.json
+./script/aegis.sh plugins-install \
+  examples/plugins/research-first.plugin-draft.jarvis-plugin.json
+./script/aegis.sh plugins-enable research-first-pack
+./script/daemon_service.sh install
+./script/aegis.sh plugins-list
+./script/aegis.sh plugins-verify
+./script/aegis.sh plugins-simulate research-first-pack \
+  --request "activa investigación prioritaria"
+./script/aegis.sh daemon-status
+```
+
+`plugins-pack` valida el manifiesto y genera un checksum SHA-256 canónico. `plugins-install` vuelve
+a validar el paquete, impide downgrades, comprueba colisiones con Skills y herramientas existentes,
+y almacena un registro desactivado `0600` bajo `~/Library/Application Support/Aegis/plugins`. Ese registro queda
+sellado con HMAC usando una subclave de dominio derivada de la credencial IPC protegida por
+Keychain; una modificación manual hace que el plugin no se cargue y que `plugins-verify` informe
+`compromised`.
+`plugins-simulate` evalúa localmente los disparadores y muestra Skill, score, herramientas, riesgo,
+destino y confirmación sin llamar a NVIDIA, MCP ni ejecutar una acción.
+
+### Contrato de un conector MCP
+
+Cada conector declara un endpoint HTTPS de puerto 443, modo de autenticación `none` o `bearer`, y
+una lista cerrada de herramientas. Cada herramienta declara descripción, capacidad, riesgo y un
+JSON Schema cerrado y acotado. Jarvis rechaza `$ref`, uniones, propiedades adicionales, cadenas o
+arrays sin máximo, capacidades que el runtime de plugins no ofrece y descripciones que intenten
+omitir políticas.
+
+Los nombres expuestos siguen este formato:
+
+```text
+plugin_<plugin_id>__<connector_id>__<tool_name>
+```
+
+El host del endpoint debe coincidir exactamente con `allowed_network_hosts`, no puede incluir
+credenciales, HTTP, puerto alternativo, fragmento o localhost. En cada llamada Jarvis resuelve el
+host, rechaza cualquier dirección no pública y fija TLS a la IP validada para reducir DNS rebinding.
+No sigue redirecciones. Envía una solicitud MCP stateless `2026-07-28` con `Mcp-Method` y
+`Mcp-Name`, y acepta únicamente JSON o SSE acotado cuyo `id` coincida.
+
+Para un conector `bearer`, crea un archivo temporal propietario con modo `0600` y ejecuta:
+
+```bash
+./script/aegis.sh plugins-credential-import /ruta/privada/token.txt \
+  --connector mi-plugin.mi-conector
+```
+
+Jarvis importa el valor a la entrada Keychain
+`ai.jarvis.plugin.mi-plugin.mi-conector`, sobrescribe el archivo con ceros y lo elimina. El token no
+se guarda en el manifiesto, Skill, memoria, log, prompt o resultado. Retirar el plugin conserva una
+copia privada del paquete y mantiene sus credenciales en Keychain para una recuperación posterior.
+
+### Administrar el ciclo de vida
+
+```bash
+./script/aegis.sh plugins-disable research-first-pack
+./script/daemon_service.sh install
+./script/aegis.sh plugins-enable research-first-pack
+./script/daemon_service.sh install
+./script/aegis.sh plugins-remove research-first-pack
+./script/daemon_service.sh install
+```
+
+Instalar la misma versión o una superior es una actualización atómica. Una versión inferior se
+rechaza. Activar valida el conjunto completo antes de escribir; desactivar conserva el paquete pero
+revoca inmediatamente sus herramientas. Activarlo o actualizarlo requiere aplicar y reiniciar.
+El daemon expone `plugins.status` y `daemon-status` muestra el
+número cargado y la versión MCP sin revelar endpoints, argumentos ni credenciales.
+
+Una Skill del plugin se selecciona por disparadores, continuidad del propio chat o un selector
+NVIDIA acotado. Sus instrucciones y referencias solo llegan a NVIDIA después de autorizar su
+contenido exacto en Configuración. Jarvis puede combinar hasta tres skills del mismo rol dentro del
+presupuesto de contexto. Un plugin nunca puede reemplazar una Skill integrada,
+ampliar las capacidades de un rol, autorizar su propia llamada ni evitar una confirmación.
+
+## 18. Publicar e instalar actualizaciones seguras (P14)
+
+P14 separa dos identidades. Developer ID y la notarización demuestran que Apple reconoce al
+publicador y al ejecutable; la firma Ed25519 demuestra que una revisión concreta pertenece al canal
+estable de Jarvis. Una no sustituye a la otra.
+
+### Crear la raíz del canal una sola vez
+
+En el Mac autorizado para publicar ejecuta:
+
+```bash
+.venv/bin/python script/update_channel.py init
+```
+
+La clave privada se guarda en Keychain con servicio `ai.aegis.update-signing` y cuenta `default`.
+Solo `packaging/JarvisUpdatePublicKey.ed25519` se versiona y se incorpora al bundle. No borres la
+entrada de Keychain: si el archivo público existe pero falta su secreto correspondiente, el proceso
+falla cerrado para impedir una rotación silenciosa.
+
+### Generar el canal certificado
+
+```bash
+AEGIS_CODESIGN_IDENTITY="Developer ID Application: Nombre (TEAMID)" \
+AEGIS_NOTARY_PROFILE="jarvis-notary" \
+./script/p14_secure_update_gate.sh
+```
+
+El comando encadena P13, firma `dist/Jarvis.update.json` y valida cinco contratos. Exige que el ZIP,
+el manifiesto P12, la revisión Git y la clave pública coincidan exactamente. Rechaza builds iguales
+o anteriores, manifiestos vencidos, miembros ZIP inseguros, cambio de Team ID y datos privados. El
+pipeline crea un número de build monotónico; CI puede definir uno propio con `AEGIS_BUILD_NUMBER`.
+
+### Verificar antes de instalar
+
+Usa el daemon autocontenido de la versión instalada; no depende del checkout:
+
+```bash
+~/Applications/Jarvis.app/Contents/Resources/Daemon/jarvis-daemon \
+  secure-update-verify /ruta/Jarvis.update.json \
+  --archive /ruta/Jarvis.zip \
+  --release-manifest /ruta/Jarvis.release.json
+```
+
+La verificación es de solo lectura. Para instalar, copia la revisión de 40 caracteres que devolvió y
+confírmala explícitamente:
+
+```bash
+~/Applications/Jarvis.app/Contents/Resources/Daemon/jarvis-daemon \
+  secure-update-install /ruta/Jarvis.update.json \
+  --archive /ruta/Jarvis.zip \
+  --release-manifest /ruta/Jarvis.release.json \
+  --confirm-install REVISION_DE_40_CARACTERES
+```
+
+Jarvis exige que el daemon esté íntegro y sin trabajos activos. Después extrae en memoria de trabajo
+privada, valida Gatekeeper y hace un intercambio mediante renombres en el mismo volumen. La nueva app
+arranca con una sonda de actualización de un solo uso. Si no entrega salud IPC e integridad dentro
+del plazo, se restaura automáticamente el bundle anterior.
+
+Si el equipo se apagó entre estados y la aplicación queda protegida por el diario, ejecuta:
+
+```bash
+~/Applications/Jarvis.app/Contents/Resources/Daemon/jarvis-daemon secure-update-recover
+```
+
+El diario está en `~/Library/Application Support/Aegis/update-transaction.json`, es propiedad del
+usuario y no contiene credenciales ni texto personal. No lo edites o elimines manualmente.
+
+## 19. Solución de problemas
+
+### `doctor` indica `nvidia_api_key=missing`
+
+1. Genera o copia una clave `nvapi-…` válida.
+2. Ejecuta `./script/aegis.sh import-nvidia-key`.
+3. Ejecuta `./script/aegis.sh doctor` y `./script/aegis.sh probe-nvidia`.
+
+No uses `export NVIDIA_API_KEY=…` como solución permanente: puede terminar en historial, logs o
+configuración de shell y no es necesaria con Keychain.
+
+### `provider=missing` o NVIDIA aparece inactivo
+
+```bash
+./script/aegis.sh probe-nvidia
+./script/aegis.sh probe-nvidia-swarm
+./script/aegis.sh probe-nvidia-tools
+./script/daemon_service.sh install
+./script/aegis.sh daemon-status
+```
+
+Si la entrada existe pero el probe falla, revisa conexión, cuota, vigencia y disponibilidad del
+endpoint en NVIDIA. `probe-nvidia-swarm` verifica cada primario con contenido sintético y falla si
+un rol continúa en fallback después de un reintento. `probe-nvidia-tools` valida function calling
+sin autorizar ni ejecutar la herramienta. `configured` por sí solo no garantiza que la clave siga
+activa.
+
+Si `local_model=available`, la conversación breve todavía puede funcionar sin NVIDIA. Visión,
+herramientas y razonamiento profundo requieren que el proveedor remoto vuelva a estar disponible.
+
+### `local_model=unavailable`
+
+En macOS 14 o 15 es el comportamiento esperado. En macOS 26, confirma que Apple Intelligence esté
+activado y listo, reinstala la app y reinicia el daemon:
+
+```bash
+./script/menu_bar_service.sh install
+./script/daemon_service.sh install
+./script/aegis.sh daemon-status
+```
+
+No descargues un modelo ni modifiques permisos del helper manualmente. Jarvis conmuta a NVIDIA de
+forma automática mientras la ruta local no esté disponible.
+Si el proceso local inicia pero no produce ningún fragmento en cuatro segundos, Jarvis lo termina y
+conmuta a NVIDIA. Después de un fragmento parcial no mezcla proveedores ni repite la respuesta.
+
+La voz es independiente del cerebro: siempre Ray Neutral de NVIDIA. Si TTS no inicia en quince
+segundos o se corta, se detiene el audio y la respuesta queda disponible en el HUD, sin otro locutor.
+El siguiente turno puede volver a solicitar Ray. «Repite» solo reproduce el audio completo en RAM;
+no relanza la tarea ni transmite de nuevo el texto. Mantén `AEGIS_NVIDIA_TTS_LANGUAGE=es-US` para
+respuestas en español. Si habías fijado `AEGIS_NVIDIA_TTS_VOICE` manualmente, actualiza ese override
+a `Magpie-Multilingual.EN-US.Ray.Neutral`: una variable explícita tiene prioridad sobre el valor por defecto.
+
+### `service_not_loaded` o `app_not_running`
+
+```bash
+./script/daemon_service.sh install
+./script/menu_bar_service.sh install
+```
+
+Si persiste, revisa los dos archivos `*.error.log` de la sección anterior.
+
+### El control sigue sin aparecer activo
+
+1. Ejecuta `./script/local_codesign_identity.sh status`.
+2. Ejecuta `./script/menu_bar_service.sh computer-permissions`.
+3. En Privacidad y seguridad activa pantalla para `Jarvis` y Control para `Jarvis` y el helper si
+   aparece.
+4. Cierra Ajustes del Sistema.
+5. Espera el reinicio automático de Jarvis y abre su panel; `CONTROL` debe mostrar `LISTO`.
+
+Si sigue sin aplicarse, ejecuta de nuevo `./script/menu_bar_service.sh computer-permissions`: el
+comando solicita únicamente el permiso que todavía falta, sin revocar los que ya están activos.
+
+Si existen entradas antiguas o duplicadas de Jarvis, desactiva las obsoletas, conserva la que apunta
+a `~/Applications/Jarvis.app` y reinstala la app con el script. No firmes el bundle con una identidad
+diferente.
+
+### Micrófono o voz aparecen denegados
+
+Abre sus paneles de Privacidad y seguridad, activa Jarvis y ejecuta:
+
+```bash
+./script/menu_bar_service.sh permissions
+```
+
+### No aparece el notch
+
+El panel ambiental solo se crea en la pantalla integrada cuando macOS reporta una geometría de
+notch válida. No se muestra en monitores sin notch. Comprueba que Jarvis esté corriendo con
+`./script/menu_bar_service.sh status`.
+
+### «Jarvis» no activa la escucha
+
+Comprueba que:
+
+- el modelo se entrenó y validó;
+- la escucha se habilitó explícitamente en Menu Bar;
+- micrófono y daemon están disponibles;
+- el Mac no está bajo presión térmica seria, en reposo o reproduciendo voz. Bajo consumo conserva
+  únicamente el detector local del nombre.
+
+Valida el modelo instalado:
+
+```bash
+./script/train_wake_word.sh --validate-model \
+  "$HOME/Applications/Jarvis.app/Contents/Resources/JarvisWakeWord.mlmodelc"
+```
+
+### La compilación pierde permisos después de cada cambio
+
+```bash
+./script/local_codesign_identity.sh install
+./script/menu_bar_service.sh install
+```
+
+Trabaja siempre con `~/Applications/Jarvis.app`; `/private/tmp/Jarvis.app` es solo un bundle de
+compilación y prueba.
+
+## 20. Detener o desinstalar
+
+### Detener el autoinicio sin borrar datos
+
+```bash
+./script/menu_bar_service.sh uninstall
+./script/daemon_service.sh uninstall
+```
+
+Esto cierra los procesos y elimina los LaunchAgents. Conserva `~/Applications/Jarvis.app`, Keychain,
+memoria, modelos, auditoría y logs. Es la opción segura y reversible.
+
+### Retirar la API NVIDIA
+
+Solo si realmente deseas revocarla en este Mac, detén primero los servicios y ejecuta:
+
+```bash
+/usr/bin/security delete-generic-password \
+  -a default \
+  -s ai.aegis.nvidia-nim
+```
+
+La eliminación local no revoca la clave en NVIDIA. Revócala también desde el portal NVIDIA. Esta
+acción no se puede deshacer salvo importando otra vez una copia válida.
+
+No elimines `ai.aegis.ipc-auth` durante una instalación activa: es el secreto local que autentica
+la comunicación entre la app y el daemon.
+
+Los datos persistentes, modelos y bundle se eliminan manualmente desde Finder solo cuando exista un
+respaldo y se haya decidido un borrado completo. No forman parte de `uninstall` para evitar pérdida
+accidental.
+
+## 21. Lista de seguridad
+
+- Nunca guardar una clave `nvapi-…` en Git, `.env`, `.zshrc`, plist, logs o documentación.
+- Nunca compartir capturas donde aparezca la API.
+- Usar `import-nvidia-key` para que el portapapeles se limpie automáticamente.
+- Mantener la identidad de firma estable para preservar y atribuir correctamente TCC.
+- Aprobar herramientas solo después de revisar el objetivo y los argumentos.
+- Si las aprobaciones empiezan a fallar sin haber reinstalado Jarvis, el daemon puede tener fijada
+  la clave de otro proceso (`approval_signer_mismatch`): tratarlo como incidente. Tras una reinstalación legítima con
+  otra identidad de firma, ejecutar `jarvis approval-signer-reset` y reiniciar el daemon.
+- Ante un estado `compromised`, no insistir en aprobar: el daemon bloquea nuevas entradas a
+  herramientas y recuperación. Investigar la causa de integridad antes de reanudar; no borrar
+  auditoría, memoria ni credenciales para ocultar el estado.
+- Mantener fecha y hora correctas. Un retroceso observado hace que IPC y grants fallen cerrados
+  hasta alcanzar su última hora observada; las solicitudes pendientes conservan su límite real
+  de dos minutos.
+- Recordar que pantalla e imágenes aprobadas se envían a NVIDIA para inferencia.
+- Verificar que la memoria semántica indique `available`; FTS5 debe seguir operativo si no lo está.
+- Revisar una Skill aprendida antes de instalarla y no incluir credenciales o datos innecesarios.
+- Ejecutar pruebas antes de reinstalar una actualización.
+- Conservar memoria, modelos y auditoría fuera del repositorio.
+
+Cuando todos los puntos de la sección 9 se cumplen, Jarvis queda instalado, configurado y listo para
+operación voice-first en segundo plano.

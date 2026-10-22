@@ -1,10 +1,10 @@
 from pathlib import Path
 
 import pytest
+from historical.orchestration.graph import build_swarm_graph
 
 from aegis_core.contracts import AgentResult, AgentRole, ToolCall, UserRequest
 from aegis_core.engineering import _repository_manifest
-from aegis_core.orchestration.graph import build_swarm_graph
 from aegis_core.tools.defaults import default_policy_context
 
 

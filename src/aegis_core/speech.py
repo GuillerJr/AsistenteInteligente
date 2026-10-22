@@ -23,6 +23,7 @@ from pydantic import (
     field_validator,
 )
 
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.providers.nvidia import NvidiaNimError
@@ -297,7 +298,8 @@ class SpeechStreamManager:
         if close is not None:
             try:
                 await close()
-            except Exception:
+            except Exception as error:
+                record_boundary_error(error)
                 pass
 
 
@@ -350,7 +352,8 @@ class SpeechArtifactStore:
                         raise OSError("speech artifact write failed")
                     offset += written
                 os.fchmod(descriptor, 0o600)
-            except Exception:
+            except Exception as error:
+                record_boundary_error(error)
                 os.close(descriptor)
                 path.unlink(missing_ok=True)
                 raise

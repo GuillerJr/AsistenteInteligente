@@ -22,6 +22,7 @@ import psutil
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from aegis_core.build_info import runtime_build_revision
+from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.ipc.framing import DEFAULT_MAX_MESSAGE_BYTES, encode_frames, read_message
 from aegis_core.ipc.protocol import (
     PROTOCOL_VERSION,
@@ -382,7 +383,8 @@ class AegisDaemon:
             return True
         try:
             identifier = self._peer_identifier(peer_socket)
-        except Exception:
+        except Exception as error:
+            record_boundary_error(error)
             identifier = None
         signed = isinstance(identifier, str) and identifier in self._peer_client_methods
         ipc_peer_signed.set(signed)
@@ -404,7 +406,8 @@ class AegisDaemon:
                         "client": identifier if signed else None,
                     },
                 )
-            except Exception:
+            except Exception as error:
+                record_boundary_error(error)
                 pass
         return False
 
@@ -480,7 +483,8 @@ class AegisDaemon:
             except TimeoutError:
                 await self._send_error(writer, request, "handler_timeout")
                 return
-            except Exception:
+            except Exception as error:
+                record_boundary_error(error)
                 await self._send_error(writer, request, "handler_failed")
                 return
             if self._security_compromised():
@@ -587,6 +591,7 @@ class AegisDaemon:
                     "suppressed_since_last": suppressed,
                 },
             )
-        except Exception:
+        except Exception as error:
             # The transport still aborts if the append-only ledger is unavailable.
+            record_boundary_error(error)
             return

@@ -3,7 +3,8 @@ set -euo pipefail
 umask 077
 
 AEGIS_PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-AEGIS_INSTALLED_INFO="$HOME/Applications/Jarvis.app/Contents/Info.plist"
+AEGIS_RELOCATABLE_APP="$("$AEGIS_PROJECT_ROOT/script/resolve_installed_bundle.sh")"
+AEGIS_INSTALLED_INFO="$AEGIS_RELOCATABLE_APP/Contents/Info.plist"
 AEGIS_TEMPORARY_ROOT=""
 AEGIS_TRANSIENT_REPORT=""
 AEGIS_FINAL_REPORT="$AEGIS_PROJECT_ROOT/dist/Jarvis.pilot.json"
@@ -23,7 +24,7 @@ cleanup() {
 trap cleanup EXIT INT TERM HUP
 
 cd "$AEGIS_PROJECT_ROOT"
-if [[ -L "$HOME/Applications/Jarvis.app" || ! -f "$AEGIS_INSTALLED_INFO" ]]; then
+if [[ -L "$AEGIS_RELOCATABLE_APP" || ! -f "$AEGIS_INSTALLED_INFO" ]]; then
     echo "status=blocked reason=current_app_not_installed" >&2
     exit 2
 fi

@@ -29,15 +29,15 @@ from aegis_core.brain.routing import (
     decide_cascade,
     extract_text,
 )
-from aegis_core.brain.speculative_engine import SpeculativeEngine
 from aegis_core.contracts import AgentResult, AgentRole
 from aegis_core.providers.base import ChatProvider, IncompleteModelResponseError
-from aegis_core.providers.mlx_distributed import (
+from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError, NvidiaNimRateLimited
+from aegis_core.tools.audit import AuditSink, NullAuditSink
+from historical.mlx_distributed import (
     DistributedMLXError,
     DistributedMLXProvider,
 )
-from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError, NvidiaNimRateLimited
-from aegis_core.tools.audit import AuditSink, NullAuditSink
+from historical.speculative_engine import SpeculativeEngine
 
 MAX_LOCAL_REQUEST_BYTES = 32_768
 MAX_LOCAL_RESPONSE_BYTES = 32_768
@@ -325,7 +325,7 @@ class LocalFoundationCascadeClient:
     ) -> LocalFoundationResponse:
         # Only the native helper supports typed history and brokered repository reads.
         # A listening HTTP port does not establish those capabilities.
-        from aegis_core.providers.apple import AppleLocalModelClient
+        from historical.apple import AppleLocalModelClient
 
         if not isinstance(self._secondary, AppleLocalModelClient):
             return await self.complete_with_confidence_stream(

@@ -103,14 +103,8 @@ public struct BundledDaemonLaunchPlan: Equatable, Sendable {
             "AEGIS_BUILD_REVISION": buildRevision,
             "AEGIS_WORKSPACE_ROOT": workspace.path,
             "AEGIS_BUNDLED_RUNTIME": "1",
-            "AEGIS_LOCAL_BRAIN_EXECUTABLE_PATH": helpers
-                .appendingPathComponent("jarvis-local-brain").path,
             "AEGIS_LOCAL_EMBEDDING_EXECUTABLE_PATH": helpers
                 .appendingPathComponent("jarvis-local-embedding").path,
-            "AEGIS_MLX_EXECUTABLE_PATH": helpers
-                .appendingPathComponent("jarvis-mlx-engine").path,
-            "AEGIS_MLX_VLM_EXECUTABLE_PATH": helpers
-                .appendingPathComponent("jarvis-mlx-vlm").path,
             "AEGIS_IOS_BRIDGE_EXECUTABLE_PATH": helpers
                 .appendingPathComponent("jarvis-ios-bridge").path,
             "AEGIS_BIOMETRIC_TRAINER_EXECUTABLE_PATH": helpers

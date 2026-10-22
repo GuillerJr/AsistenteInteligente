@@ -50,34 +50,34 @@ struct NotchPresenceView: View {
     }
 
     private var status: String {
-        if !model.mascotSessionAvailable { return "En pausa" }
-        if model.interactionID != nil { return "Necesito tu atención" }
+        if !model.mascotSessionAvailable { return String(localized: "En pausa", bundle: .module) }
+        if model.interactionID != nil { return String(localized: "Necesito tu atención", bundle: .module) }
         if [.idle, .ambient, .completed].contains(model.presentationStatus.kind) {
             if let notice = model.mascotNotice, notice.count <= 48 { return notice }
-            if model.mascotNotice != nil { return "Hay un aviso para ti" }
+            if model.mascotNotice != nil { return String(localized: "Hay un aviso para ti", bundle: .module) }
             if model.pendingAttentionCount > 0 {
-                return model.pendingAttentionCount == 1 ? "1 pendiente" : "\(model.pendingAttentionCount) pendientes"
+                return model.pendingAttentionCount == 1 ? "1 pendiente" : String(localized: "\(model.pendingAttentionCount) pendientes", bundle: .module)
             }
-            return presentation.interaction.isHovered ? "Estoy contigo" : "Jarvis"
+            return presentation.interaction.isHovered ? String(localized: "Estoy contigo", bundle: .module) : String(localized: "Jarvis", bundle: .module)
         }
         return model.presentationStatus.compactTitle
     }
 
     private var hint: String {
-        if !model.mascotSessionAvailable { return "Desbloquea tu Mac" }
-        if model.interactionID != nil { return "Doble clic para revisar" }
+        if !model.mascotSessionAvailable { return String(localized: "Desbloquea tu Mac", bundle: .module) }
+        if model.interactionID != nil { return String(localized: "Doble clic para revisar", bundle: .module) }
         if model.voiceState == .listening || model.voiceState == .followingUp {
-            return "Doble clic para dejar de escuchar"
+            return String(localized: "Doble clic para dejar de escuchar", bundle: .module)
         }
-        if !model.canActivateMascotVoice { return "Revisa el estado en el menubar" }
-        return "Doble clic para hablar"
+        if !model.canActivateMascotVoice { return String(localized: "Revisa el estado en el menubar", bundle: .module) }
+        return String(localized: "Doble clic para hablar", bundle: .module)
     }
 
     private var voiceActionTitle: String {
-        if model.interactionID != nil { return "Revisar decisión" }
-        if model.voiceState == .listening || model.voiceState == .followingUp { return "Cancelar escucha" }
-        if model.voiceState == .speaking || model.voiceState == .processing { return "Interrumpir" }
-        return "Hablar con Jarvis"
+        if model.interactionID != nil { return String(localized: "Revisar decisión", bundle: .module) }
+        if model.voiceState == .listening || model.voiceState == .followingUp { return String(localized: "Cancelar escucha", bundle: .module) }
+        if model.voiceState == .speaking || model.voiceState == .processing { return String(localized: "Interrumpir", bundle: .module) }
+        return String(localized: "Hablar con Jarvis", bundle: .module)
     }
 
     private func touch() {
@@ -125,7 +125,7 @@ private struct MascotMotionStage: View {
                             .padding(.horizontal, 3).frame(minWidth: 12, minHeight: 12)
                             .background(Color(red: 1, green: 0.76, blue: 0.32), in: Capsule())
                             .offset(x: 3, y: -2)
-                            .accessibilityLabel("\(model.pendingAttentionCount) pendientes")
+                            .accessibilityLabel(String(localized: "\(model.pendingAttentionCount) pendientes", bundle: .module))
                     }
                 }
                 .rotationEffect(.radians(reduceMotion ? 0 : presentation.autonomy.tilt))
@@ -140,11 +140,11 @@ private struct MascotMotionStage: View {
                 })
         }
         .buttonStyle(.plain).disabled(!interactive || !model.mascotSessionAvailable)
-        .accessibilityLabel("Mascota de Jarvis")
+        .accessibilityLabel(String(localized: "Mascota de Jarvis", bundle: .module))
         .accessibilityValue(model.mascotSessionAvailable
-                            ? model.presentationStatus.accessibilityDescription : "Jarvis en pausa")
+                            ? model.presentationStatus.accessibilityDescription : String(localized: "Jarvis en pausa", bundle: .module))
         .accessibilityAction(named: Text(voiceActionTitle), activateVoice)
-        .help("Pulsa o acaricia para interactuar. Doble clic para hablar, interrumpir o dejar de escuchar.")
+        .help(String(localized: "Pulsa o acaricia para interactuar. Doble clic para hablar, interrumpir o dejar de escuchar.", bundle: .module))
         .position(center)
         .onAppear { synchronize(room) }
         .onChange(of: room) { _, room in synchronize(room) }

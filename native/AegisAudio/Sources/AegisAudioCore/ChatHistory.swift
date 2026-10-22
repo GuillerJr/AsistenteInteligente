@@ -7,6 +7,13 @@ public struct ChatConversationSummary: Identifiable, Equatable, Sendable {
     public let archived: Bool
     /// The project the chat belongs to, if any.
     public var projectID: UUID? = nil
+    public var filed: Bool = false
+
+    public init(id: UUID, title: String, updatedAt: String, archived: Bool,
+                projectID: UUID? = nil, filed: Bool = false) {
+        self.id = id; self.title = title; self.updatedAt = updatedAt; self.archived = archived
+        self.projectID = projectID; self.filed = filed
+    }
 
     public static func record(_ data: Data) throws -> Self {
         guard let row = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -27,7 +34,8 @@ public struct ChatConversationSummary: Identifiable, Equatable, Sendable {
                   let date = row["updated_at"] as? String else { throw LocalIPCError.malformedResponse }
             return Self(id: id, title: row["title"] as? String ?? "Conversación sin título",
                         updatedAt: date, archived: row["archived"] as? Bool ?? false,
-                        projectID: (row["project_id"] as? String).flatMap(UUID.init(uuidString:)))
+                        projectID: (row["project_id"] as? String).flatMap(UUID.init(uuidString:)),
+                        filed: row["filed"] as? Bool ?? false)
         }
         return (summaries, payload["next_offset"] as? Int)
     }
@@ -56,7 +64,8 @@ public struct ChatHistoryPage: Sendable {
             lastSequence = sequence
             messages.append(.init(id: id, role: role == "user" ? .user : .assistant, text: text,
                                   attachmentNames: turn["attachment_names"] as? [String] ?? [],
-                                  truncated: turn["truncated"] as? Bool ?? false))
+                                  truncated: turn["truncated"] as? Bool ?? false, sequence: sequence,
+                                  feedback: turn["owner_feedback"] as? String))
         }
         self.conversationID = conversationID
         self.messages = messages

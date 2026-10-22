@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from historical.orchestration.graph import _route_request, _tool_names_for_request
 
 from aegis_core.contracts import AgentRole, InputModality, UserRequest
 from aegis_core.engineering import (
@@ -22,7 +23,6 @@ from aegis_core.engineering import (
 )
 from aegis_core.engineering_cli import EngineeringCLI
 from aegis_core.jobs import JobSnapshot, JobStatus
-from aegis_core.orchestration.graph import _route_request, _tool_names_for_request
 
 
 class FakeJobs:

@@ -53,18 +53,18 @@ struct JarvisAppearancePicker: View {
     @AppStorage(JarvisAppearance.storageKey) private var appearance = JarvisAppearance.dark.rawValue
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Aspecto", systemImage: "circle.lefthalf.filled")
+            Label(String(localized: "Aspecto", bundle: .module), systemImage: "circle.lefthalf.filled")
                 .font(.system(size: 12, weight: .medium))
-            JarvisSegmentedPicker(title: "Aspecto de Jarvis", selection: Binding(
+            JarvisSegmentedPicker(title: String(localized: "Aspecto de Jarvis", bundle: .module), selection: Binding(
                 get: { appearance },
                 set: { value in
                     appearance = value
                     JarvisAppearanceController.shared.applySavedAppearance()
                 }
             ), options: [
-                .init(value: JarvisAppearance.light.rawValue, title: "Claro"),
-                .init(value: JarvisAppearance.dark.rawValue, title: "Oscuro"),
-                .init(value: JarvisAppearance.system.rawValue, title: "Sistema"),
+                .init(value: JarvisAppearance.light.rawValue, title: String(localized: "Claro", bundle: .module)),
+                .init(value: JarvisAppearance.dark.rawValue, title: String(localized: "Oscuro", bundle: .module)),
+                .init(value: JarvisAppearance.system.rawValue, title: String(localized: "Sistema", bundle: .module)),
             ])
         }
     }

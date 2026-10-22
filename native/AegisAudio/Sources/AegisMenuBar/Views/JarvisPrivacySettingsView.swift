@@ -8,14 +8,14 @@ struct JarvisPrivacySettingsView: View {
     @FocusState private var queryFocused: Bool
 
     var body: some View {
-        JarvisSettingsCard(title: "Permisos del Mac") {
+        JarvisSettingsCard(title: String(localized: "Permisos del Mac", bundle: .module)) {
             MenuBarPermissionsView(model: model)
-            Button("Actualizar permisos") { Task { await model.refreshPrivacyCapabilities() } }
+            Button(String(localized: "Actualizar permisos", bundle: .module)) { Task { await model.refreshPrivacyCapabilities() } }
         }
-        JarvisSettingsCard(title: "Tareas programadas",
-                          detail: "Lo que Jarvis hace solo, como «cada mañana resúmeme mis correos». Pídelo en el chat; aquí puedes pausarlas, ejecutarlas ya o borrarlas.") {
+        JarvisSettingsCard(title: String(localized: "Tareas programadas", bundle: .module),
+                          detail: String(localized: "Lo que Jarvis hace solo, como «cada mañana resúmeme mis correos». Pídelo en el chat; aquí puedes pausarlas, ejecutarlas ya o borrarlas.", bundle: .module)) {
             if store.scheduledTasks.isEmpty {
-                Text("Ninguna. Pídele a Jarvis, por ejemplo: «cada mañana a las 8 resúmeme mis correos».")
+                Text(String(localized: "Ninguna. Pídele a Jarvis, por ejemplo: «cada mañana a las 8 resúmeme mis correos».", bundle: .module))
                     .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
             }
             ForEach(store.scheduledTasks) { task in
@@ -26,30 +26,30 @@ struct JarvisPrivacySettingsView: View {
                             .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    Toggle("Activa", isOn: Binding(
+                    Toggle(String(localized: "Activa", bundle: .module), isOn: Binding(
                         get: { task.enabled },
                         set: { value in Task { await store.setScheduledTask(task, enabled: value) } }
                     )).labelsHidden().toggleStyle(.switch)
-                    Button("Ejecutar ahora") { Task { await store.runScheduledTask(task) } }
+                    Button(String(localized: "Ejecutar ahora", bundle: .module)) { Task { await store.runScheduledTask(task) } }
                     Button { Task { await store.deleteScheduledTask(task) } } label: {
                         Image(systemName: "trash")
-                    }.accessibilityLabel("Borrar la tarea \(task.title)")
+                    }.accessibilityLabel(String(localized: "Borrar la tarea \(task.title)", bundle: .module))
                 }
                 .padding(12).voiceEnrollmentCard()
             }
         }
         .task { await store.loadScheduledTasks() }
-        JarvisSettingsCard(title: "Objetivos",
-                          detail: "Encargos de varios pasos que Jarvis trabaja solo hasta terminarlos, como «hazte cargo de revisar mis correos de la semana». Pídelos en el chat.") {
+        JarvisSettingsCard(title: String(localized: "Objetivos", bundle: .module),
+                          detail: String(localized: "Encargos de varios pasos que Jarvis trabaja solo hasta terminarlos, como «hazte cargo de revisar mis correos de la semana». Pídelos en el chat.", bundle: .module)) {
             if store.goals.isEmpty {
-                Text("Ninguno. Pídele a Jarvis, por ejemplo: «hazte cargo hasta terminarlo: …».")
+                Text(String(localized: "Ninguno. Pídele a Jarvis, por ejemplo: «hazte cargo hasta terminarlo: …».", bundle: .module))
                     .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
             }
             ForEach(store.goals) { goal in
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(goal.title).font(.system(size: 12, weight: .semibold))
-                        Text("\(goal.status_label) · \(goal.steps_used)/\(goal.max_steps) pasos")
+                        Text(String(localized: "\(goal.status_label) · \(goal.steps_used)/\(goal.max_steps) pasos", bundle: .module))
                             .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
                         if let last = goal.notes.last {
                             Text(last).font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
@@ -58,60 +58,60 @@ struct JarvisPrivacySettingsView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     if goal.status != "complete" {
-                        Button(goal.active ? "Detener" : "Reanudar") {
+                        Button(goal.active ? String(localized: "Detener", bundle: .module) : String(localized: "Reanudar", bundle: .module)) {
                             Task { await store.setGoal(goal, running: !goal.active) }
                         }
                     }
                     Button { Task { await store.deleteGoal(goal) } } label: {
                         Image(systemName: "trash")
-                    }.accessibilityLabel("Borrar el objetivo \(goal.title)")
+                    }.accessibilityLabel(String(localized: "Borrar el objetivo \(goal.title)", bundle: .module))
                 }
                 .padding(12).voiceEnrollmentCard()
             }
         }
         .task { await store.loadGoals() }
-        JarvisSettingsCard(title: "Permitidas siempre",
-                          detail: "Herramientas de solo lectura que aprobaste con «Aprobar siempre». Las que escriben, envían o borran siempre piden tu aprobación.") {
+        JarvisSettingsCard(title: String(localized: "Permitidas siempre", bundle: .module),
+                          detail: String(localized: "Herramientas de solo lectura que aprobaste con «Aprobar siempre». Las que escriben, envían o borran siempre piden tu aprobación.", bundle: .module)) {
             if store.standingGrants.isEmpty {
-                Text("Ninguna. Jarvis pide tu aprobación cada vez.")
+                Text(String(localized: "Ninguna. Jarvis pide tu aprobación cada vez.", bundle: .module))
                     .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
             }
             ForEach(store.standingGrants) { grant in
                 HStack(spacing: 12) {
                     Text(grant.label).font(.system(size: 12)).textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    Button("Revocar") { Task { await store.revokeStandingGrant(grant) } }
-                        .accessibilityLabel("Revocar el permiso permanente de \(grant.label)")
+                    Button(String(localized: "Revocar", bundle: .module)) { Task { await store.revokeStandingGrant(grant) } }
+                        .accessibilityLabel(String(localized: "Revocar el permiso permanente de \(grant.label)", bundle: .module))
                 }
                 .padding(12).voiceEnrollmentCard()
             }
         }
         .task { await store.loadStandingGrants() }
-        JarvisSettingsCard(title: "Apps que Jarvis puede usar",
-                          detail: "Aplicaciones en las que permitiste siempre el uso de la computadora. Las apps del sistema sensibles y los flujos de varios pasos siempre piden tu aprobación.") {
+        JarvisSettingsCard(title: String(localized: "Apps que Jarvis puede usar", bundle: .module),
+                          detail: String(localized: "Aplicaciones en las que permitiste siempre el uso de la computadora. Las apps del sistema sensibles y los flujos de varios pasos siempre piden tu aprobación.", bundle: .module)) {
             if store.appGrants.isEmpty {
-                Text("Ninguna. Jarvis pide tu aprobación cada vez que usa una app.")
+                Text(String(localized: "Ninguna. Jarvis pide tu aprobación cada vez que usa una app.", bundle: .module))
                     .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
             }
             ForEach(store.appGrants) { grant in
                 HStack(spacing: 12) {
                     Text(ActionReviewView.appName(grant.bundle_identifier)).font(.system(size: 12))
                         .frame(maxWidth: .infinity, alignment: .leading)
-                    Button("Quitar") { Task { await store.revokeAppGrant(grant) } }
-                        .accessibilityLabel("Quitar el permiso para usar \(grant.bundle_identifier)")
+                    Button(String(localized: "Quitar", bundle: .module)) { Task { await store.revokeAppGrant(grant) } }
+                        .accessibilityLabel(String(localized: "Quitar el permiso para usar \(grant.bundle_identifier)", bundle: .module))
                 }
                 .padding(12).voiceEnrollmentCard()
             }
         }
         .task { await store.loadAppGrants() }
-        JarvisSettingsCard(title: "Recuerdos guardados",
-                          detail: "Busca en la memoria de este espacio de Jarvis. Puedes eliminar cada recuerdo después de revisarlo.") {
+        JarvisSettingsCard(title: String(localized: "Recuerdos guardados", bundle: .module),
+                          detail: String(localized: "Busca en la memoria de este espacio de Jarvis. Puedes eliminar cada recuerdo después de revisarlo.", bundle: .module)) {
             HStack {
-                TextField("Buscar un recuerdo…", text: $query)
+                TextField(String(localized: "Buscar un recuerdo…", bundle: .module), text: $query)
                     .focused($queryFocused).jarvisInput(focused: queryFocused)
                     .onSubmit { Task { await store.searchMemories(query) } }
-                    .accessibilityLabel("Buscar recuerdos de Jarvis")
-                Button("Buscar") { Task { await store.searchMemories(query) } }
+                    .accessibilityLabel(String(localized: "Buscar recuerdos de Jarvis", bundle: .module))
+                Button(String(localized: "Buscar", bundle: .module)) { Task { await store.searchMemories(query) } }
                     .disabled(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || store.snapshot == nil)
             }
             ForEach(store.memoryHits) { hit in
@@ -119,16 +119,16 @@ struct JarvisPrivacySettingsView: View {
                     Text(hit.excerpt).font(.system(size: 12)).textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Button { deleting = hit } label: { Image(systemName: "trash") }
-                        .accessibilityLabel("Eliminar este recuerdo")
+                        .accessibilityLabel(String(localized: "Eliminar este recuerdo", bundle: .module))
                 }
                 .padding(12).voiceEnrollmentCard()
             }
         }
-        .alert("¿Eliminar este recuerdo?", isPresented: Binding(
+        .alert(String(localized: "¿Eliminar este recuerdo?", bundle: .module), isPresented: Binding(
             get: { deleting != nil }, set: { if !$0 { deleting = nil } }
         ), presenting: deleting) { hit in
-            Button("Eliminar", role: .destructive) { Task { await store.deleteMemory(hit) } }
-            Button("Cancelar", role: .cancel) {}
-        } message: { hit in Text(hit.excerpt + "\n\nEsta eliminación no se puede deshacer.") }
+            Button(String(localized: "Eliminar", bundle: .module), role: .destructive) { Task { await store.deleteMemory(hit) } }
+            Button(String(localized: "Cancelar", bundle: .module), role: .cancel) {}
+        } message: { hit in Text(hit.excerpt + String(localized: "\n\nEsta eliminación no se puede deshacer.", bundle: .module)) }
     }
 }

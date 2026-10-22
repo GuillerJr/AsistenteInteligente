@@ -6,8 +6,8 @@ struct BrowserChoiceDialog: View {
     var interactive = true
 
     var body: some View {
-        JarvisDialogShell(title: "Elige un navegador", symbol: "globe",
-                          detail: "Encontré varias opciones. Elige dónde continuar con tu solicitud.", height: 440) {
+        JarvisDialogShell(title: String(localized: "Elige un navegador", bundle: .module), symbol: "globe",
+                          detail: String(localized: "Encontré varias opciones. Elige dónde continuar con tu solicitud.", bundle: .module), height: 440) {
             ForEach(selection.options, id: \.bundleIdentifier) { option in
                 Button {
                     Task { await model.selectBrowser(bundleIdentifier: option.bundleIdentifier) }
@@ -16,7 +16,7 @@ struct BrowserChoiceDialog: View {
                         Image(systemName: "globe").font(.system(size: 20))
                         VStack(alignment: .leading, spacing: 4) {
                             Text(option.name).font(.system(size: 14, weight: .medium))
-                            Text(option.running ? "Ya está abierto" : "Disponible en este Mac")
+                            Text(option.running ? String(localized: "Ya está abierto", bundle: .module) : String(localized: "Disponible en este Mac", bundle: .module))
                                 .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkMuted)
                         }
                         Spacer()
@@ -24,11 +24,11 @@ struct BrowserChoiceDialog: View {
                     }.frame(maxWidth: .infinity, alignment: .leading)
                 }.buttonStyle(JarvisButtonStyle()).disabled(!interactive)
             }
-            Text("También puedes decir el nombre del navegador.")
+            Text(String(localized: "También puedes decir el nombre del navegador.", bundle: .module))
                 .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
         } footer: {
             HStack {
-                Button("Cancelar", role: .cancel) { Task { await model.cancelInteraction() } }
+                Button(String(localized: "Cancelar", bundle: .module), role: .cancel) { Task { await model.cancelInteraction() } }
                     .keyboardShortcut(.cancelAction)
                     .disabled(!interactive)
                 Spacer()

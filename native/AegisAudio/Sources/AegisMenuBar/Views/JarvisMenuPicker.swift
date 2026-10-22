@@ -30,7 +30,7 @@ struct JarvisMenuPicker<Value: Hashable>: NSViewRepresentable {
 
     func updateNSView(_ button: JarvisPopupButton, context: Context) {
         context.coordinator.parent = self
-        let titles = options.isEmpty ? ["Seleccionar…"] : options.map(\.title)
+        let titles = options.isEmpty ? [String(localized: "Seleccionar…", bundle: .module)] : options.map(\.title)
         if button.itemTitles != titles {
             button.removeAllItems()
             button.addItems(withTitles: titles)
@@ -44,6 +44,8 @@ struct JarvisMenuPicker<Value: Hashable>: NSViewRepresentable {
             : colorScheme == .dark ? .darkAqua : .aqua
         button.appearance = NSAppearance(named: appearance)
         button.setAccessibilityLabel(title)
+        // AppKit exposes the popup cell as the actual actionable AX element.
+        button.cell?.setAccessibilityLabel(title)
         button.toolTip = button.title
         (button.cell as? JarvisPopupCell)?.increasedContrast = contrast == .increased
         button.needsDisplay = true
@@ -126,7 +128,7 @@ final class JarvisPopupCell: NSPopUpButtonCell {
         shape.stroke()
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byTruncatingMiddle
-        let text = title.flatMap { $0.isEmpty ? nil : $0 } ?? "Seleccionar…"
+        let text = title.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "Seleccionar…", bundle: .module)
         let textRect = NSRect(x: bounds.minX + 12, y: bounds.midY - 8,
                               width: max(0, bounds.width - 40), height: 18)
         (text as NSString).draw(in: textRect, withAttributes: [

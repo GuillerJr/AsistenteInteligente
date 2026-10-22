@@ -160,7 +160,7 @@ build_archive() {
     "$AEGIS_PYTHON" "$AEGIS_EVIDENCE_TOOL" preflight --project-root "$AEGIS_PROJECT_ROOT"
     /usr/bin/xcrun --find metal >/dev/null 2>&1 || die "metal_toolchain_missing" 2
     begin_release_workspace
-    AEGIS_BUILD_MLX=1 AEGIS_INCLUDE_PERSONAL_MODELS=0 AEGIS_EMIT_ARCHIVE=1 \
+    AEGIS_INCLUDE_PERSONAL_MODELS=0 AEGIS_EMIT_ARCHIVE=1 \
         AEGIS_EMBED_DAEMON=1 \
         AEGIS_PACKAGE_OUTPUT_ROOT="$AEGIS_RELEASE_WORKSPACE/bundle" \
         AEGIS_DAEMON_BUILD_ROOT="/private/tmp/aegis-daemon-${AEGIS_RELEASE_WORKSPACE##*/}" \

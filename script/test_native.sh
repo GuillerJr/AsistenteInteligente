@@ -62,7 +62,6 @@ if [[ -e "$AEGIS_PLATFORM_PLUGINS/libSwiftUIMacros.dylib" ]]; then
 fi
 
 env \
-    AEGIS_BUILD_MLX=0 \
     SDKROOT="$AEGIS_SDK_PATH" \
     CLANG_MODULE_CACHE_PATH="$AEGIS_SCRATCH_DIR/clang-cache" \
     SWIFTPM_MODULECACHE_OVERRIDE="$AEGIS_SCRATCH_DIR/swiftpm-cache" \
