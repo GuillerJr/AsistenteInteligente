@@ -83,7 +83,8 @@ async def test_approved_tool_completion_persists_one_bounded_exchange() -> None:
     assert completion.succeeded is True
     assert completion.result == "Aplicación abierta."
     assert completion.tool_name == "application_open"
-    assert completion.action_verified is True
+    # A successful job with no native receipt does not verify its external outcome.
+    assert completion.action_verified is False
     assert completion.conversation_persisted is True
     assert persistence.calls == [
         {

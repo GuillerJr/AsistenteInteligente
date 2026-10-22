@@ -829,6 +829,17 @@ class SQLiteMemoryStore:
             record = self._conversation_repository.get(
                 connection, namespace=namespace, conversation_id=conversation_id,
             )
+            if recovery.status == "not_dispatched":
+                previous = record.task_recovery
+                if (
+                    previous is None
+                    or previous.status != "executing"
+                    or previous.request_id != recovery.request_id
+                    or previous.call_digest != recovery.call_digest
+                    or previous.tool_name != "computer_use"
+                    or previous.computer_workflow is not None
+                ):
+                    return  # A late failure must not erase another operation's uncertainty.
             count = connection.execute(
                 "SELECT turn_count FROM conversations WHERE conversation_id = ?",
                 (str(conversation_id),),
@@ -966,6 +977,17 @@ class SQLiteMemoryStore:
             return self._conversation_repository.list_records(
                 connection, namespace=namespace, archived=archived,
                 query=query, offset=offset, limit=limit, filed=filed,
+            )
+
+    def list_project_conversations(
+        self, *, namespace: str, project_id: UUID,
+        before: tuple[datetime, UUID] | None = None, limit: int = 30,
+    ) -> tuple[tuple[ConversationRecord, ...], bool]:
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        with self._lock, self._connect(read_only=True) as connection:
+            return self._conversation_repository.list_project_records(
+                connection, namespace=namespace, project_id=project_id, before=before, limit=limit,
             )
 
     def shared_conversation_context(

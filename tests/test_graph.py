@@ -508,12 +508,8 @@ async def test_unambiguous_action_bypasses_models_and_memory(
                     "opened": True,
                 },
             }
-            return ToolExecutionResult(
-                call_id=authorization.call_id,
-                tool_name=authorization.tool_name,
-                success=True,
-                output=json.dumps(payloads[authorization.tool_name]),
-                metadata={"verified": True},
+            return ReadOnlyToolExecutor._json_result(
+                authorization, payloads[authorization.tool_name], "macos_open"
             )
 
     remote = FakeProvider()
@@ -542,7 +538,8 @@ async def test_unambiguous_action_bypasses_models_and_memory(
     assert authorization.normalized_arguments == arguments
     assert authorization.decision is decision
     if tool_name == "browser_open_url":
-        assert state["final_result"].content == "Abrí la dirección web solicitada."
+        assert state["final_result"].content == (
+            "macOS aceptó abrir la dirección web solicitada. No he comprobado la página.")
         assert arguments["url"] not in state["final_result"].content
     expected_events = (
         ["tool_authorization", "tool_execution"]
@@ -1244,7 +1241,8 @@ async def test_exact_visible_browser_search_needs_no_model_or_second_confirmatio
 
     assert remote.roles == []
     assert state["final_result"].model_id == "local/deterministic-native-control"
-    assert state["final_result"].content == "Abrí la búsqueda solicitada en Safari."
+    assert state["final_result"].content == (
+        "macOS aceptó abrir la búsqueda en Safari. No he comprobado la página.")
 
 
 @pytest.mark.asyncio

@@ -59,8 +59,10 @@ from aegis_core.tools.computer import (
 )
 from aegis_core.tools.computer_postconditions import ComputerPostcondition
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
+from aegis_core.tools.execution import ReadOnlyToolExecutor
+from aegis_core.tools.native_receipts import NATIVE_RECEIPT_SCOPE
 from aegis_core.tools.silent_executor import SilentAction, SilentExecutor
-from aegis_core.tools.verification import result_is_verified
+from aegis_core.tools.verification import result_goal_is_verified, result_is_verified
 
 SCHEMA_VERSION = "1.0"
 EXPECTED_WORKFLOWS = 20
@@ -733,6 +735,36 @@ class JarvisProductionWorkflowBenchmark:
         reason: str = "objective_complete",
         verified: bool = True,
     ) -> ToolExecutionResult:
+        if success:
+            # Exercise the production receipt boundary without invoking an app.
+            # Opening requests acknowledge dispatch, never a resulting window/page.
+            arguments = authorization.normalized_arguments
+            fixtures = {
+                "application_open": (
+                    {"opened": True, "bundle_identifier": arguments.get("bundle_identifier")},
+                    "macos_open",
+                ),
+                "browser_search": (
+                    {"opened": True, "query": arguments.get("query"),
+                     "browser": arguments.get("browser")},
+                    "macos_open",
+                ),
+                "system_audio_set": (
+                    {"output_volume_percent": arguments.get("volume_percent"),
+                     "output_muted": arguments.get("muted")},
+                    "core_audio",
+                ),
+            }
+            payload, source = fixtures[authorization.tool_name]
+            result = ReadOnlyToolExecutor._json_result(authorization, payload, source)
+            if not result.success:
+                return result
+            acknowledgement = result.metadata.get("verification_scope") == NATIVE_RECEIPT_SCOPE
+            return result.model_copy(update={"metadata": {
+                **result.metadata, "status": status, "steps": 0,
+                "reason_code": "command_acknowledged" if acknowledgement else reason,
+                "verified": verified and result.metadata.get("verified", True) is True,
+            }})
         return ToolExecutionResult(
             call_id=authorization.call_id,
             tool_name=authorization.tool_name,
@@ -743,7 +775,7 @@ class JarvisProductionWorkflowBenchmark:
                 "status": status,
                 "reason_code": reason,
                 "steps": 0,
-                "verified": verified,
+                "verified": False,
             },
         )
 
@@ -801,12 +833,14 @@ class JarvisProductionWorkflowBenchmark:
         _: WorkflowContext,
         probe: WorkflowProbe,
     ) -> None:
+        commands = (
+            ("application_open", {"bundle_identifier": "ai.aegis.fixture"}),
+            ("browser_search", {"query": "controlled fixture", "browser": "safari"}),
+            ("system_audio_set", {"volume_percent": 42, "muted": False}),
+        )
         authorizations = tuple(
-            self._authorization(f"plan-{index}", tool)
-            for index, tool in enumerate(
-                ("application_open", "browser_search", "system_audio_set"),
-                start=1,
-            )
+            self._authorization(f"plan-{index}", tool, normalized_arguments=arguments)
+            for index, (tool, arguments) in enumerate(commands, start=1)
         )
         executed: list[str] = []
 
@@ -823,7 +857,15 @@ class JarvisProductionWorkflowBenchmark:
         probe.confirm(
             "all_verified",
             not outcome.halted
-            and all(step.status is PlanStepStatus.SUCCEEDED for step in outcome.contract.steps),
+            and all(step.status is PlanStepStatus.SUCCEEDED for step in outcome.contract.steps)
+            and len(outcome.results) == 3
+            and all(result_is_verified(result) for result in outcome.results)
+            and all(
+                result.metadata.get("verification_scope") == NATIVE_RECEIPT_SCOPE
+                and not result_goal_is_verified(result)
+                for result in outcome.results[:2]
+            )
+            and result_goal_is_verified(outcome.results[2]),
         )
         probe.confirm("goal_redacted", goal not in outcome.contract.markdown())
 
@@ -943,7 +985,10 @@ class JarvisProductionWorkflowBenchmark:
             "terminal_run_template",
             decision=PolicyDecision.DENY,
         )
-        allowed = self._authorization("prune-allowed", "application_open")
+        allowed = self._authorization(
+            "prune-allowed", "application_open",
+            normalized_arguments={"bundle_identifier": "ai.aegis.fixture"},
+        )
         executed: list[str] = []
 
         async def executor(active: ToolAuthorization) -> ToolExecutionResult:
@@ -955,7 +1000,11 @@ class JarvisProductionWorkflowBenchmark:
             authorizations=(denied, allowed),
         )
         probe.confirm("denied_not_planned", "prune-denied" not in executed)
-        probe.confirm("allowed_executed", executed == ["prune-allowed"])
+        probe.confirm(
+            "allowed_executed",
+            executed == ["prune-allowed"] and not outcome.halted
+            and outcome.contract.steps[0].status is PlanStepStatus.SUCCEEDED,
+        )
         probe.confirm(
             "contract_minimal",
             len(outcome.contract.steps) == 1

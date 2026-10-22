@@ -159,7 +159,7 @@ class JobCompletionCoordinator:
             error_code=None,
             conversation_persisted=conversation_persisted,
             tool_name=result.tool_name,
-            action_verified=outcome.verified,
+            action_verified=outcome.goal_verified,
         )
 
     async def _observe(self, request: UserRequest, outcome: JobExecutionOutcome) -> None:

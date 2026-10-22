@@ -32,6 +32,7 @@ from aegis_core.tools.computer_workflow import (
     ComputerWorkflowState,
     recover_interrupted_workflow,
 )
+from aegis_core.tools.native_receipts import NATIVE_RECEIPT_SCOPE, SMART_TV_RECEIPT_SCOPE
 from aegis_core.tools.verification import result_is_verified
 
 StreamCallback = Callable[[str], None]
@@ -209,7 +210,15 @@ class JobExecutionPipeline:
         text = redact_secrets_for_remote(request_text).text.encode("utf-8")[:2_048]
         observation = verified_task_result(result) if result is not None else None
         if result is not None and observation is None and result_is_verified(result):
-            clean = sanitize_remote_reference({"result": result.output})["result"]
+            evidence = result.output
+            scope = result.metadata.get("verification_scope")
+            if scope in {NATIVE_RECEIPT_SCOPE, SMART_TV_RECEIPT_SCOPE}:
+                evidence = json.dumps({
+                    "verification_scope": scope,
+                    "goal_verified": False,
+                    "receipt": json.loads(result.output),
+                }, ensure_ascii=False)
+            clean = sanitize_remote_reference({"result": evidence})["result"]
             excerpt = clean if isinstance(clean, str) else json.dumps(clean, ensure_ascii=False)
             observation = VerifiedTaskResult(
                 tool_name=result.tool_name,

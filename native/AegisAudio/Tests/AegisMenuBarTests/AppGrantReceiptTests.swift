@@ -26,6 +26,7 @@ final class AppGrantReceiptTests: XCTestCase {
     private func modelWithActiveChat() -> (MenuBarModel, UUID) {
         // Construct state only: no monitoring, service startup or credential loading.
         let model = MenuBarModel()
+        model.wakeWordOptedIn = false
         let job = UUID()
         model.chat.conversationID = UUID()
         _ = model.chat.transcript.begin("Solicitud sintética")
@@ -42,6 +43,7 @@ final class AppGrantReceiptTests: XCTestCase {
         XCTAssertTrue(chat.notice?.contains("Permiso permanente guardado") == true)
         XCTAssertTrue(chat.notice?.contains("quitarlo") == true)
         XCTAssertNil(chat.error)
+        XCTAssertNil(chat.appGrantWarning)
     }
 
     func testUnconfirmedScopeCannotDisplaySuccessEvenIfTheActionFinishes() async {
@@ -50,8 +52,9 @@ final class AppGrantReceiptTests: XCTestCase {
         chat.recordAppGrantResult(jobID: job, scope: "conversation", confirmed: false)
         chat.transcript.finish("La acción terminó con aprobación de una sola vez", jobID: job)
         XCTAssertNil(chat.notice)
-        XCTAssertTrue(chat.error?.contains("No pude confirmar") == true)
-        XCTAssertTrue(chat.error?.contains("permiso") == true)
+        XCTAssertNil(chat.error)
+        XCTAssertTrue(chat.appGrantWarning?.contains("No pude confirmar") == true)
+        XCTAssertTrue(chat.appGrantWarning?.contains("permiso") == true)
     }
 
     func testLateReceiptCannotChangeAnotherChatAndNewChatClearsIt() async {
@@ -60,15 +63,18 @@ final class AppGrantReceiptTests: XCTestCase {
         chat.transcript.finish("Finalizado", jobID: job)
         chat.newTemporaryConversation()
         XCTAssertNil(chat.notice)
+        XCTAssertNil(chat.appGrantWarning)
         for confirmed in [true, false] {
             chat.recordAppGrantResult(jobID: job, scope: "always", confirmed: confirmed)
             XCTAssertNil(chat.notice)
             XCTAssertNil(chat.error)
+            XCTAssertNil(chat.appGrantWarning)
         }
         let newJob = UUID()
         chat.transcript.attach(newJob)
         chat.recordAppGrantResult(jobID: newJob, scope: "unsupported", confirmed: true)
         XCTAssertNil(chat.notice)
+        XCTAssertNil(chat.appGrantWarning)
     }
 
     func testConsumedApprovalReportsUnconfirmedAppScopeWithoutSendingIPC() async throws {
@@ -82,14 +88,15 @@ final class AppGrantReceiptTests: XCTestCase {
 
                 await model.approvePending(expected: expected, appScope: scope)
 
-                XCTAssertTrue(model.chat.error?.contains("No pude confirmar") == true)
+                XCTAssertTrue(model.chat.appGrantWarning?.contains("No pude confirmar") == true)
+                XCTAssertNil(model.chat.error)
                 XCTAssertNil(model.chat.notice)
                 XCTAssertEqual(model.pendingApproval, current)
                 XCTAssertEqual(model.activeJobID, job)
                 XCTAssertFalse(model.approvalActionInProgress)
                 XCTAssertNil(model.dualAuthorizationTask)
                 model.chat.transcript.finish("Acción sintética terminada", jobID: job)
-                XCTAssertTrue(model.chat.error?.contains("No pude confirmar") == true)
+                XCTAssertTrue(model.chat.appGrantWarning?.contains("No pude confirmar") == true)
             }
         }
     }
@@ -110,6 +117,7 @@ final class AppGrantReceiptTests: XCTestCase {
 
             XCTAssertNil(model.chat.error, reason)
             XCTAssertNil(model.chat.notice, reason)
+            XCTAssertNil(model.chat.appGrantWarning, reason)
             XCTAssertEqual(model.activeJobID, job)
             XCTAssertFalse(model.approvalActionInProgress)
         }
@@ -128,7 +136,60 @@ final class AppGrantReceiptTests: XCTestCase {
 
         XCTAssertNil(model.chat.error)
         XCTAssertNil(model.chat.notice)
+        XCTAssertNil(model.chat.appGrantWarning)
         XCTAssertEqual(model.chat.transcript.jobID, nextJob)
         XCTAssertNil(model.pendingApproval)
+    }
+
+    func testUnconfirmedPermissionRemainsVisibleAfterIncompleteModelResponse() async throws {
+        let (model, job) = modelWithActiveChat()
+        let expected = try pendingApproval(jobID: job)
+        XCTAssertNil(model.pendingApproval)
+        XCTAssertNil(model.ipcSecret)
+
+        await model.approvePending(expected: expected, appScope: "conversation")
+        let warning = try XCTUnwrap(model.chat.appGrantWarning)
+        model.handleJobOutcome(.failed("incomplete_model_response"), jobID: job)
+
+        XCTAssertEqual(model.chat.appGrantWarning, warning)
+        XCTAssertEqual(model.chat.error, ChatRecovery.message("incomplete_model_response"))
+        XCTAssertNil(model.chat.notice)
+        XCTAssertNil(model.chat.transcript.jobID)
+        XCTAssertNil(model.activeJobID)
+        XCTAssertNil(model.pendingApproval)
+        XCTAssertNil(model.wakeWordResumeTask)
+    }
+
+    func testConfirmedPermissionRemainsVisibleAfterIncompleteModelResponse() async {
+        for scope in ["conversation", "always"] {
+            let (model, job) = modelWithActiveChat()
+            model.chat.recordAppGrantResult(jobID: job, scope: scope, confirmed: false)
+            model.chat.recordAppGrantResult(jobID: job, scope: scope, confirmed: true)
+            let notice = model.chat.notice
+            XCTAssertNotNil(notice)
+
+            model.handleJobOutcome(.failed("incomplete_model_response"), jobID: job)
+
+            XCTAssertEqual(model.chat.notice, notice)
+            XCTAssertEqual(model.chat.error, ChatRecovery.message("incomplete_model_response"))
+            XCTAssertNil(model.chat.appGrantWarning)
+            XCTAssertNil(model.chat.transcript.jobID)
+            XCTAssertNil(model.activeJobID)
+            XCTAssertNil(model.wakeWordResumeTask)
+        }
+    }
+
+    func testNewChatClearsUnconfirmedPermissionAndIgnoresLateFailureReceipt() async {
+        let (chat, job) = activeChat()
+        chat.recordAppGrantResult(jobID: job, scope: "always", confirmed: false)
+        XCTAssertNotNil(chat.appGrantWarning)
+        chat.transcript.finish("Finalizado", jobID: job)
+
+        chat.newTemporaryConversation()
+        chat.recordAppGrantResult(jobID: job, scope: "always", confirmed: false)
+
+        XCTAssertNil(chat.appGrantWarning)
+        XCTAssertNil(chat.error)
+        XCTAssertNil(chat.notice)
     }
 }

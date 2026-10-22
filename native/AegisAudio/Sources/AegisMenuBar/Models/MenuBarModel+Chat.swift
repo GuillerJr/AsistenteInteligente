@@ -57,6 +57,7 @@ extension MenuBarModel {
 
     var canQueueChatMessage: Bool {
         chat.transcript.jobID != nil && queuedChatMessages.count < Self.maximumQueuedChatMessages
+            && chat.attachments.isEmpty && !chat.importing
     }
 
     @discardableResult
@@ -64,6 +65,7 @@ extension MenuBarModel {
         let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canQueueChatMessage, !cleaned.isEmpty, cleaned.utf8.count <= 4_096 else { return false }
         queuedChatMessages.append(cleaned)
+        chat.consumeSubmittedDraft(cleaned)
         logger.info("chat_message_queued count=\(self.queuedChatMessages.count, privacy: .public)")
         return true
     }
@@ -77,27 +79,67 @@ extension MenuBarModel {
     /// owner's correction attached, so Jarvis does not finish the wrong thing first.
     @discardableResult
     func steerChatResponse(_ correction: String) async -> Bool {
+        await steerChatResponse(correction, cancel: { await self.cancelChatResponse() },
+                                send: {
+            await self.submitChatMessage(
+                .init(text: $0, attachments: self.chat.attachments, planMode: self.chat.planMode),
+                consumingComposerText: correction)
+        })
+    }
+
+    @discardableResult
+    func steerChatResponse(_ correction: String, cancel: () async -> Void,
+                           send: (String) async -> Bool) async -> Bool {
         let cleaned = correction.trimmingCharacters(in: .whitespacesAndNewlines)
         guard chat.transcript.jobID != nil, !cleaned.isEmpty,
               let original = chat.transcript.messages.last(where: { $0.role == .user })?.text
         else { return false }
-        await cancelChatResponse()
-        guard chat.transcript.jobID == nil else { return false }
+        let conversationID = chat.conversationID
+        let revision = chat.transcriptRevision
+        await cancel()
+        guard chat.conversationID == conversationID, chat.transcriptRevision == revision,
+              chat.transcript.jobID == nil else { return false }
         let combined = String(String(localized: "\(original)\n\n(Corrección: \(cleaned))", bundle: .module).prefix(4_000))
         logger.info("chat_response_steered")
-        return await sendChatMessage(combined)
+        return await send(combined)
     }
 
     func sendNextQueuedChatMessage() async {
+        await sendNextQueuedChatMessage(send: { await self.sendChatMessage($0) })
+    }
+
+    func sendNextQueuedChatMessage(send: (String) async -> Bool) async {
         guard !queuedChatMessages.isEmpty, canSendChatMessage else { return }
         let next = queuedChatMessages.removeFirst()
-        if !(await sendChatMessage(next)) { queuedChatMessages.insert(next, at: 0) }
+        if !(await send(next)) { queuedChatMessages.insert(next, at: 0) }
     }
 
     @discardableResult
-    func sendChatMessage(_ text: String, maximumBytes: Int = 4_096) async -> Bool {
+    func sendChatMessage(_ text: String, maximumBytes: Int = 4_096,
+                         consumingComposer: Bool = false) async -> Bool {
+        await sendChatMessage(text, consumingComposer: consumingComposer) { submission, consumed in
+            await self.submitChatMessage(submission, maximumBytes: maximumBytes,
+                                         consumingComposerText: consumed)
+        }
+    }
+
+    @discardableResult
+    func sendChatMessage(_ text: String, consumingComposer: Bool = false,
+                         send: (ChatSubmission, String?) async -> Bool) async -> Bool {
         let cleaned = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let text = cleaned.isEmpty && !chat.attachments.isEmpty ? String(localized: "Analiza los archivos adjuntos.", bundle: .module) : cleaned
+        // Automatic turns own only their text. Callers with their own files must
+        // provide an explicit ChatSubmission instead of borrowing the composer.
+        let attachments = consumingComposer ? chat.attachments : []
+        let text = cleaned.isEmpty && !attachments.isEmpty ? String(localized: "Analiza los archivos adjuntos.", bundle: .module) : cleaned
+        return await send(.init(text: text, attachments: attachments, planMode: chat.planMode),
+                          consumingComposer ? cleaned : nil)
+    }
+
+    @discardableResult
+    func submitChatMessage(_ submission: ChatSubmission, maximumBytes: Int = 4_096,
+                           consumingComposerText: String? = nil) async -> Bool {
+        let text = submission.text
+        let attachments = submission.attachments
         guard canSendChatMessage, !text.isEmpty, text.utf8.count <= maximumBytes,
               let permit = userSessionExecutionGate.permit, let secret = ipcSecret else { return false }
         let conversationID = chat.conversationID
@@ -116,10 +158,10 @@ extension MenuBarModel {
         voiceOutputText = nil
         voiceHistoryConversationID = nil
         mascotNotice = nil
-        let attachments = chat.attachments
         chat.error = nil
-        guard chat.transcript.begin(text, attachmentNames: attachments.map(\.name)) else { return false }
-        let submission = ChatSubmission(text: text, attachments: attachments, planMode: chat.planMode)
+        chat.appGrantWarning = nil
+        guard chat.beginSubmission(submission, consumingComposerText: consumingComposerText)
+        else { return false }
         chat.activeSubmission = submission
         chat.completedTurnPersisted = false
         chat.retrySubmission = nil
@@ -168,6 +210,8 @@ extension MenuBarModel {
             voiceState = .idle
             return true
         }
+        // Submission only keeps the existing ID or adopts the ID just created
+        // for this same chat. Preserve any next draft typed while IPC was pending.
         chat.conversationID = result.0
         if let created = result.0, temporaryChat { chat.adoptTemporaryConversation(created) }
         guard let submission = result.1 else {
@@ -179,7 +223,7 @@ extension MenuBarModel {
             return true
         }
         chat.transcript.attach(submission.jobID)
-        chat.attachments = []
+        chat.consumeSubmittedAttachments(attachments)
         activeJobID = submission.jobID
         voiceState = .processing
         let outcome = await awaitJob(submission.jobID, secret: secret)
@@ -188,15 +232,18 @@ extension MenuBarModel {
     }
 
     func retryChatMessage() async {
+        await retryChatMessage(refresh: { await self.refreshDaemon() },
+                               send: { await self.submitChatMessage($0) })
+    }
+
+    func retryChatMessage(refresh: () async -> Void, send: (ChatSubmission) async -> Bool) async {
         guard chat.retryAvailable, let retry = chat.retrySubmission else { return }
         let conversationID = chat.conversationID
         let revision = chat.transcriptRevision
-        await refreshDaemon()
+        await refresh()
         guard canSendChatMessage, chat.conversationID == conversationID,
               chat.transcriptRevision == revision else { return }
-        chat.attachments = retry.attachments
-        chat.planMode = retry.planMode
-        _ = await sendChatMessage(retry.text)
+        _ = await send(retry)
     }
 
     func cancelChatResponse() async {

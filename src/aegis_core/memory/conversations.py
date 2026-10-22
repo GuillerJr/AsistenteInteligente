@@ -4,6 +4,7 @@ import asyncio
 import json
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -208,6 +209,14 @@ class ConversationCoordinator:
             if not has_more or not records:
                 break
         return found[:limit]
+
+    async def project_records(
+        self, project_id: UUID, *, before: tuple[datetime, UUID] | None = None, limit: int = 30,
+    ) -> tuple[tuple[ConversationRecord, ...], bool]:
+        return await run_blocking_owned(
+            self._store.list_project_conversations, namespace=self._namespace,
+            project_id=project_id, before=before, limit=limit,
+        )
 
     async def is_temporary(self, conversation_id: UUID) -> bool:
         try:

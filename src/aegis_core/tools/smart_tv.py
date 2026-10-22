@@ -35,6 +35,11 @@ from aegis_core.secrets import (
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 from aegis_core.tools.broker import PolicyContext, ToolDefinition
 from aegis_core.tools.device_config import load_private_profile_list
+from aegis_core.tools.native_receipts import (
+    SMART_TV_RECEIPT_SCOPE,
+    SMART_TV_RECEIPT_STATES,
+    decode_native_json,
+)
 
 MAX_DISCOVERY_DATAGRAM_BYTES = 8_192
 WEBOS_PERMISSIONS = (
@@ -50,6 +55,12 @@ WEBOS_PERMISSIONS = (
 
 class TargetDeviceOffline(ConnectionError):
     """Raised when an authorized local device cannot be reached or authenticated."""
+
+    def __init__(self, message: str, *, command_dispatched: bool | None = None) -> None:
+        super().__init__(message)
+        # None includes transports that cannot distinguish connection failure from
+        # a lost reply after delivery. Only an explicit False permits recovery.
+        self.command_dispatched = command_dispatched
 
 
 class TVProtocolError(RuntimeError):
@@ -370,6 +381,7 @@ class SmartTVController:
     ) -> str:
         client = await self._client()
         url = f"wss://{profile.host}:{profile.resolved_port}/"
+        command_dispatched = False
         try:
             async with client.ws_connect(
                 url,
@@ -380,12 +392,20 @@ class SmartTVController:
             ) as websocket:
                 await self._webos_register(websocket, profile)
                 if arguments.action == "key":
+                    command_dispatched = True
                     return await self._webos_key(websocket, profile, str(arguments.value))
                 uri, payload = self._webos_command(arguments)
+                # Set before the await: cancellation/timeout cannot prove that the
+                # peer did not receive or execute the command.
+                command_dispatched = True
                 response = await self._webos_request(websocket, uri, payload)
-                return str(response.get("returnValue", True)).lower()
+                if response.get("returnValue") is not True:
+                    raise TVProtocolError("WebOS command was not acknowledged")
+                return "true"
         except (TimeoutError, OSError, aiohttp.ClientError, ssl.SSLError) as error:
-            raise TargetDeviceOffline("WebOS TV is unavailable") from error
+            raise TargetDeviceOffline(
+                "WebOS TV is unavailable", command_dispatched=command_dispatched,
+            ) from error
 
     async def _webos_register(
         self,
@@ -446,7 +466,7 @@ class SmartTVController:
         )
         message = await asyncio.wait_for(websocket.receive(), timeout=self._timeout.total)
         response = self._json_message(message)
-        if response.get("id") != request_id or response.get("type") == "error":
+        if response.get("id") != request_id or response.get("type") != "response":
             raise TVProtocolError("WebOS command was rejected")
         result = response.get("payload")
         if not isinstance(result, dict):
@@ -490,6 +510,7 @@ class SmartTVController:
             f"samsung.remote.control?name={quote(name)}"
             + (f"&token={quote(token)}" if token else "")
         )
+        command_dispatched = False
         try:
             async with (await self._client()).ws_connect(
                 url,
@@ -505,10 +526,13 @@ class SmartTVController:
                 returned = connect_message.get("data", {}).get("token")
                 if isinstance(returned, str) and returned and returned != token:
                     await self._store_credential(profile, returned)
+                command_dispatched = True
                 await websocket.send_json(self._tizen_command(arguments))
                 return "command_sent"
         except (TimeoutError, OSError, aiohttp.ClientError, ssl.SSLError) as error:
-            raise TargetDeviceOffline("Tizen TV is unavailable") from error
+            raise TargetDeviceOffline(
+                "Tizen TV is unavailable", command_dispatched=command_dispatched,
+            ) from error
 
     @staticmethod
     def _tizen_command(arguments: SmartTVControlArguments) -> dict[str, Any]:
@@ -625,8 +649,8 @@ class SmartTVController:
         if len(message.data.encode("utf-8")) > 65_536:
             raise TVProtocolError("TV WebSocket response exceeds the safety ceiling")
         try:
-            value = json.loads(message.data)
-        except json.JSONDecodeError as error:
+            value = decode_native_json(message.data)
+        except (ValueError, RecursionError) as error:
             raise TVProtocolError("TV WebSocket response is not JSON") from error
         if not isinstance(value, dict):
             raise TVProtocolError("TV WebSocket response is malformed")
@@ -684,17 +708,24 @@ class SmartTVToolService:
         context: PolicyContext,
     ) -> ToolExecutionResult:
         del context
-        if authorization.decision is not PolicyDecision.ALLOW or authorization.reason_code not in {
+        if (authorization.tool_name != self.CONTROL_TOOL
+                or authorization.decision is not PolicyDecision.ALLOW
+                or authorization.reason_code not in {
             "confirmation_consumed",
             "explicit_local_intent",
-        }:
+        }):
             return self._error(authorization, "access_denied")
         arguments = SmartTVControlArguments.model_validate(authorization.normalized_arguments)
         try:
             state, latency = await self._controller.execute(arguments)
-        except TargetDeviceOffline:
-            return self._offline(authorization, arguments.device_id)
+        except TargetDeviceOffline as error:
+            return self._offline(
+                authorization, arguments.device_id,
+                not_dispatched=error.command_dispatched is False,
+            )
         except (TVProtocolError, ValueError):
+            return self._error(authorization, "device_command_rejected")
+        if not isinstance(state, str) or state not in SMART_TV_RECEIPT_STATES:
             return self._error(authorization, "device_command_rejected")
         self._audit.record_system_event(
             uuid4(),
@@ -722,6 +753,8 @@ class SmartTVToolService:
                 "device_state": state,
                 "network_latency_ms": latency,
                 "verified": True,
+                "goal_verified": False,
+                "verification_scope": SMART_TV_RECEIPT_SCOPE,
             },
         )
 
@@ -761,13 +794,18 @@ class SmartTVToolService:
             return False, 0
 
     @staticmethod
-    def _offline(authorization: ToolAuthorization, device_id: str) -> ToolExecutionResult:
+    def _offline(
+        authorization: ToolAuthorization, device_id: str, *, not_dispatched: bool = False,
+    ) -> ToolExecutionResult:
         return ToolExecutionResult(
             call_id=authorization.call_id,
             tool_name=authorization.tool_name,
             success=False,
             error_code="target_device_offline",
-            metadata={"device_id": device_id, "device_state": "offline", "verified": False},
+            metadata={
+                "device_id": device_id, "device_state": "offline", "verified": False,
+                **({"dispatch_status": "not_dispatched"} if not_dispatched else {}),
+            },
         )
 
     @staticmethod

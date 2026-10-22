@@ -99,7 +99,8 @@ extension MenuBarModel {
             if conversationDecision.boundSpeakerID != nil,
                conversationDecision.boundModelFingerprint != nil {
                 voiceHistoryConversationID = acceptedConversationID
-                chat.conversationID = acceptedConversationID
+                chat.adoptVoiceConversation(acceptedConversationID,
+                    requestedConversationID: conversationDecision.conversationID)
                 chat.transcriptRevision = UUID()
             } else {
                 voiceHistoryConversationID = nil

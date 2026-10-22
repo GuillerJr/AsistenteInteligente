@@ -15,6 +15,7 @@ extension JarvisChatStore {
               generation == historyGeneration, !Task.isCancelled else { return }
         do {
             let (entries, next) = try ChatConversationSummary.page(data)
+            for entry in entries where entry.archived { draftCache.remove(entry.id) }
             let existing = append ? conversations : []
             let ids = Set(existing.map(\.id))
             conversations = existing + entries.filter { !ids.contains($0.id) }
@@ -36,13 +37,20 @@ extension JarvisChatStore {
         ]) else { return }
         do {
             let page = try ChatHistoryPage(data)
-            guard page.conversationID == conversation.id else { throw LocalIPCError.malformedResponse }
-            resetConversation()
-            conversationID = conversation.id
-            selectedConversation = conversation
-            transcript.restore(page.messages)
-            nextBeforeSequence = page.nextBeforeSequence
+            try restoreConversation(conversation, page: page)
         } catch { self.error = String(localized: "No pude abrir esa conversación. Inténtalo de nuevo.", bundle: .module) }
+    }
+
+    /// Apply a validated history response in one synchronous transition, so the
+    /// outgoing composer is retained before the incoming draft is restored.
+    func restoreConversation(_ conversation: ChatConversationSummary, page: ChatHistoryPage) throws {
+        guard !conversation.archived, page.conversationID == conversation.id else {
+            throw LocalIPCError.malformedResponse
+        }
+        switchConversation(to: conversation.id)
+        selectedConversation = conversation
+        transcript.restore(page.messages)
+        nextBeforeSequence = page.nextBeforeSequence
     }
 
     func loadOlder(model: MenuBarModel) async {
@@ -94,7 +102,10 @@ extension JarvisChatStore {
         guard await model.performChatIPC(trashed ? "conversations.trash" : "conversations.restore",
                                         payload: ["conversation_id": conversation.id.uuidString.lowercased()]) != nil
         else { return }
-        if trashed && conversationID == conversation.id { resetConversation() }
+        if trashed {
+            discardDraft(for: conversation.id)
+            if conversationID == conversation.id { resetConversation(preservingDraft: false) }
+        }
         await refreshHistory(model: model)
     }
 
@@ -170,6 +181,7 @@ extension JarvisChatStore {
         selectionLoading = true
         defer { selectionLoading = false }
         guard await model.performChatIPC("conversations.empty_trash") != nil else { return }
+        for entry in conversations where entry.archived { discardDraft(for: entry.id) }
         await refreshHistory(model: model)
     }
 }

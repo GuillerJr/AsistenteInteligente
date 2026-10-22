@@ -1,0 +1,63 @@
+{
+  "review_date": "2026-10-22",
+  "target": {
+    "path": "/Applications/ChatGPT.app",
+    "bundle_identifier": "com.openai.codex",
+    "version": "26.1016.51333",
+    "asar_sha256": "9d0260dd37f9c45546d5a89d9d782b8362c9957b70b992e2c3f91df60a046b07"
+  },
+  "method": "REA 6.7.0; inert static analysis; no runtime reachability claim",
+  "functional_pass": {
+    "parent_evidence_id": "ev_511f7c08eb2305e98d3b79488ddd818000c31a6cb97d95e7c39d2989b86042e0",
+    "source_paths": [
+      "webview/assets/local-conversation-thread-8fc19d13d0c3.js",
+      "webview/assets/composer-state-663ec26e08ce.js",
+      "webview/assets/draft-state-f4281fb15cf0.js",
+      "webview/assets/user-message-attachments-55948af093ee.js",
+      ".vite/build/conversation-turn-mutations-DZp-AgIY.js",
+      "webview/assets/permissions-mode-dropdown-5bfd40ad39ac.js",
+      "webview/assets/computer-use-app-approval-request-card-7bec482f1d6d.js",
+      "webview/assets/automatic-approval-review-details-f0919ab6d12f.js",
+      "webview/assets/terminal-panel-486678df92fb.js",
+      "webview/assets/execution-2b7d3fc59406.js",
+      "webview/assets/computer-use-settings-f8f580b57013.js",
+      "webview/assets/browser-5df07c06cb5c.js",
+      "webview/assets/browser-use-policy-site-permissions-5c1ff3bb2dfd.js",
+      "webview/assets/projects-index-page-1585e6b140f6.js",
+      "webview/assets/chatgpt-project-settings-dialog-ffab6a5c6076.js",
+      "webview/assets/automations-page-7caedda66613.js",
+      "webview/assets/schedule-draft-8465455b9eb3.js",
+      "webview/assets/local-conversation-heartbeat-automation-53506fdd6cc2.js",
+      "webview/assets/mcp-request-card-11250f4a3960.js",
+      "webview/assets/mcp-server-elicitation-request-panel-94c95402faf6.js",
+      "webview/assets/mcp-tool-call-approval-f8486fe564ec.js",
+      "webview/assets/plugins-settings-bd5e06145b83.js",
+      "webview/assets/plugin-install-modal-ff357d8ec27a.js",
+      "webview/assets/voice-session-1d73af02aac2.js",
+      "webview/assets/voice-configuration-manager-bf435a94ddd5.js",
+      "webview/assets/vad-audio-frame-processor-b6bea101f49a.js",
+      "webview/assets/data-controls-settings-e7645e2ff073.js",
+      "webview/assets/memory-b678f2c23aa6.js",
+      "webview/assets/debug-panel-51518721fdaf.js",
+      ".vite/build/file-based-logger-DD0smlUs.js"
+    ],
+    "parsed_javascript_files": 30,
+    "parse_failures": 0,
+    "semantic_coverage": "partial"
+  },
+  "unresolved_selected_sources": [
+    ".vite/build/browser-page-preload.js",
+    "webview/assets/app-shared-60f4bb85435f.js"
+  ],
+  "evidence_export": {
+    "path": "/private/tmp/codex-rea-evidence-final-20261022.json",
+    "bytes": 1196381001,
+    "records": 16
+  },
+  "limits": [
+    "Whole-application runtime behavior and remote services not verified",
+    "Static semantic graph truncated by memory and result budgets",
+    "Seven native artifact integrity contradictions recorded; cause not determined",
+    "Source paths identify inspected assets, not transplanted implementation"
+  ]
+}

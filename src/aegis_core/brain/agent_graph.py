@@ -298,7 +298,7 @@ class PlanExecuteReflectRunner:
                 )
 
             async def wake_device() -> DeviceActionResult:
-                if integrity_failed:
+                if integrity_failed or not safe_to_recover_device():
                     return DeviceActionResult(success=False, state="unknown")
                 assert self._device_waker is not None
                 success, latency = await self._device_waker(authorization)
@@ -309,7 +309,7 @@ class PlanExecuteReflectRunner:
                 )
 
             async def verify_device() -> DeviceActionResult:
-                if integrity_failed:
+                if integrity_failed or not safe_to_recover_device():
                     return DeviceActionResult(success=False, state="unknown")
                 assert self._device_verifier is not None
                 success, latency = await self._device_verifier(authorization)
@@ -317,6 +317,16 @@ class PlanExecuteReflectRunner:
                     success=success,
                     state="online" if success else "offline",
                     latency_ms=latency,
+                )
+
+            def safe_to_recover_device() -> bool:
+                if authorization.tool_name != "smart_tv_control":
+                    return True
+                latest = execution_results[-1] if execution_results else None
+                return bool(
+                    latest is not None and not latest.success
+                    and latest.error_code == "target_device_offline"
+                    and latest.metadata.get("dispatch_status") == "not_dispatched"
                 )
 
             tree = TacticalDeviceBehaviorTree(

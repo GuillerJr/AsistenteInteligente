@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sqlite3
 import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import replace
@@ -51,11 +52,13 @@ from aegis_core.job_tool_runtime import (
     JobToolRuntime,
 )
 from aegis_core.memory.conversations import ConversationCoordinator
+from aegis_core.memory.errors import MemoryStoreError
 from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.social import SocialMemory
 from aegis_core.standing_grants import StandingGrant, StandingGrantError, StandingGrantStore
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 from aegis_core.tools.broker import PolicyContext, ToolBroker
+from aegis_core.tools.computer import ComputerUseReport, ComputerVisionNotDispatchedError
 from aegis_core.tools.computer_workflow import (
     ComputerWorkflowState,
     begin_workflow_step,
@@ -698,7 +701,39 @@ class SwarmJobManager:
                 job_id, JobStatus.FAILED, error_code=JobFailureCode.SWARM_EXECUTION_TIMEOUT.value
             )
         except Exception as error:
-            await self._interrupt_workflow(job_id)
+            async with self._lock:
+                job = self._registry.get(job_id)
+                no_dispatch = (
+                    isinstance(error, ComputerVisionNotDispatchedError)
+                    and authorization.tool_name == "computer_use"
+                    and job is not None
+                    and job.status is JobStatus.RUNNING
+                    and job.computer_workflow is None
+                )
+            if no_dispatch:
+                try:
+                    await self._execution.record_recovery(
+                        context.conversation_id,
+                        request_id=context.request_id,
+                        request_text=context.request_text,
+                        tool_name="computer_use",
+                        call_digest=authorization.call_digest,
+                        status="not_dispatched",
+                    )
+                except (OSError, sqlite3.Error, MemoryStoreError) as recovery_error:
+                    # Keep the existing journal when evidence cannot be persisted.
+                    # Never leave a finished worker advertised as still running.
+                    LOGGER.error(
+                        "computer_recovery_persistence_failed job_id=%s error_type=%s",
+                        job_id, type(recovery_error).__name__,
+                    )
+                    await self._transition(
+                        job_id, JobStatus.FAILED,
+                        error_code=JobFailureCode.CONVERSATION_UNAVAILABLE.value,
+                    )
+                    return
+            else:
+                await self._interrupt_workflow(job_id)
             await self._transition(
                 job_id,
                 JobStatus.FAILED,
@@ -783,9 +818,22 @@ class SwarmJobManager:
             if complete_workflow
             else await self._completion.from_approved_tool(context, outcome)
         )
+        recovery_resolved = authorization.tool_name != "computer_use" or outcome.verified
+        if not recovery_resolved and outcome.result.success:
+            try:
+                report = ComputerUseReport.model_validate_json(outcome.result.output)
+            except (ValueError, RecursionError):
+                pass
+            else:
+                # A refusal before deciding an action has no uncertain mutation.
+                # A partial result or even a failed first dispatch stays unresolved.
+                recovery_resolved = (
+                    report.status == "blocked" and report.steps == 0 and report.last_action is None
+                )
         if (
             completion.succeeded
             and completion.conversation_persisted
+            and recovery_resolved
             and (workflow is None or complete_workflow)
             and not browser_tool
         ):

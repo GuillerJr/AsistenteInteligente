@@ -30,10 +30,10 @@ latencias y códigos acotados; nunca incluye entradas, respuestas, rutas, URLs o
 | `conversation.support_quality` | Detecta soporte, acepta una respuesta empática y respeta el presupuesto de frases. |
 | `conversation.repair_transition` | Entra en reparación, cierra el follow-up y limita la respuesta correctiva. |
 | `conversation.identity_boundary` | Rechaza afirmaciones de identidad humana y dependencia emocional. |
-| `orchestration.three_step_contract` | Ejecuta tres autorizaciones en orden, verifica cada resultado y no expone el objetivo. |
+| `orchestration.three_step_contract` | Ejecuta tres autorizaciones en orden, valida los acuses de apertura sin elevarlos a objetivos verificados, comprueba el estado de audio simulado y no expone el objetivo. |
 | `orchestration.modal_self_correction` | Detecta un bloqueo, corrige una vez y valida el reintento. |
 | `orchestration.failure_halts_downstream` | Un primer paso fallido detiene el plan antes de tocar el siguiente. |
-| `orchestration.denied_step_pruned` | Una autorización denegada no entra al contrato; la permitida sí se ejecuta. |
+| `orchestration.denied_step_pruned` | Una autorización denegada no entra al contrato; la permitida termina con un acuse válido. |
 | `automation.browser_disambiguation` | Dos navegadores activos fuerzan selección; la elección conserva la consulta. |
 | `automation.ax_then_pid_fallback` | AX es primario; PID es solo fallback y nunca interviene el cursor físico. |
 | `automation.modal_recovery_bounds` | Recupera un modal y pide intervención tras tres ciclos si no es resoluble. |

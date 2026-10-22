@@ -67,6 +67,7 @@ from aegis_core.tools.broker import PolicyContext, ToolBroker
 from aegis_core.tools.confirmations import OneTimeConfirmationStore
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
 from aegis_core.tools.execution import ReadOnlyToolExecutor
+from aegis_core.tools.native_receipts import NATIVE_RECEIPT_SCOPE, NATIVE_RECEIPT_SOURCES
 
 
 class ImmediateGraph:
@@ -2271,10 +2272,11 @@ async def test_confirmed_mail_action_preserves_conversation_and_hides_body_from_
 
     assert completed.status is JobStatus.COMPLETED
     assert completed.conversation_persisted is True
-    assert completed.result == "Correo enviado a 1 destinatario(s)."
+    assert completed.result == (
+        "Mail aceptó la solicitud de envío a 1 destinatario(s). No he comprobado la entrega.")
     assert [turn.content for turn in history] == [
         "Envía el estado",
-        "Correo enviado a 1 destinatario(s).",
+        "Mail aceptó la solicitud de envío a 1 destinatario(s). No he comprobado la entrega.",
     ]
     await jobs.close()
 
@@ -2287,21 +2289,23 @@ async def test_confirmed_mail_action_preserves_conversation_and_hides_body_from_
             {"title": "Revisar informe"},
             '{"created":true,"list":"Recordatorios","title":"Revisar informe"}',
             "Crear recordatorio «Revisar informe»",
-            "Recordatorio «Revisar informe» creado en «Recordatorios».",
+            "Recordatorios aceptó crear «Revisar informe» en «Recordatorios». "
+            "No he comprobado su estado final.",
         ),
         (
             "reminder_complete",
             {"title": "Revisar informe"},
             '{"completed":true,"list":"Recordatorios","title":"Revisar informe"}',
             "Completar recordatorio «Revisar informe»",
-            "Recordatorio «Revisar informe» completado en «Recordatorios».",
+            "Recordatorios aceptó marcar como completado «Revisar informe» en «Recordatorios». "
+            "No he comprobado su estado final.",
         ),
         (
             "contact_create",
             {"first_name": "Ada", "email": "ada@example.com"},
             '{"created":true,"name":"Ada"}',
             "Crear contacto «Ada»; correo: ada@example.com",
-            "Contacto «Ada» creado.",
+            "Contactos aceptó crear «Ada». No he comprobado el contacto resultante.",
         ),
         (
             "system_audio_set",
@@ -2315,7 +2319,8 @@ async def test_confirmed_mail_action_preserves_conversation_and_hides_body_from_
             {"action": "next"},
             '{"action":"next","bundle_identifier":"com.apple.Music"}',
             "Control multimedia: siguiente pista",
-            "Pasé a la siguiente pista.",
+            "La app de música aceptó la orden solicitada. "
+            "No he comprobado el estado de reproducción.",
         ),
         (
             "spotlight_open",
@@ -2329,21 +2334,21 @@ async def test_confirmed_mail_action_preserves_conversation_and_hides_body_from_
             {"query": "arquitectura segura", "browser": "safari"},
             '{"browser":"safari","opened":true,"query":"arquitectura segura"}',
             "Buscar con DuckDuckGo en Safari: arquitectura segura",
-            "Abrí la búsqueda solicitada en Safari.",
+            "macOS aceptó abrir la búsqueda en Safari. No he comprobado la página.",
         ),
         (
             "browser_open_url",
             {"url": "https://docs.nvidia.com/nim/guide"},
             '{"opened":true,"url":"https://docs.nvidia.com/nim/guide"}',
             "Abrir en el navegador: https://docs.nvidia.com/nim/guide",
-            "Abrí la dirección web solicitada.",
+            "macOS aceptó abrir la dirección web solicitada. No he comprobado la página.",
         ),
         (
             "application_open",
             {"bundle_identifier": "com.apple.Safari"},
             '{"bundle_identifier":"com.apple.Safari","opened":true}',
             "Abrir aplicación: com.apple.Safari",
-            "Abrí la aplicación solicitada.",
+            "macOS aceptó abrir la aplicación solicitada. No he comprobado su ventana.",
         ),
         (
             "computer_use",
@@ -2384,6 +2389,11 @@ async def test_local_mutations_complete_through_the_exact_confirmation_flow(
         ) -> ToolExecutionResult:
             del context
             assert authorization.reason_code == "confirmation_consumed"
+            if authorization.tool_name in NATIVE_RECEIPT_SOURCES:
+                return ReadOnlyToolExecutor._json_result(
+                    authorization, json.loads(output),
+                    NATIVE_RECEIPT_SOURCES[authorization.tool_name],
+                )
             return ToolExecutionResult(
                 call_id=authorization.call_id,
                 tool_name=authorization.tool_name,
@@ -2437,7 +2447,7 @@ async def test_local_mutations_complete_through_the_exact_confirmation_flow(
     if tool_name in {"application_open", "computer_use"}:
         assert "com.apple.Safari" not in completed.result
     assert completed.evaluation is not None
-    assert completed.evaluation.outcome_verified is True
+    assert completed.evaluation.outcome_verified is (tool_name not in NATIVE_RECEIPT_SOURCES)
     await jobs.close()
 
 
@@ -2475,9 +2485,11 @@ def test_confirmed_browser_result_must_match_the_authorized_url() -> None:
         tool_name=authorization.tool_name,
         success=True,
         output='{"opened":true,"url":"https://attacker.invalid/substituted"}',
+        metadata={"verified": True, "goal_verified": False,
+                  "verification_scope": NATIVE_RECEIPT_SCOPE, "source": "macos_open"},
     )
 
-    with pytest.raises(ValueError, match="browser result is invalid"):
+    with pytest.raises(ValueError, match="native receipt does not match authorization"):
         JobToolPresenter.format_result(result, authorization)
 
 
@@ -2488,7 +2500,7 @@ def test_confirmed_browser_result_must_match_the_authorized_url() -> None:
             "application_open",
             {"bundle_identifier": "com.apple.Safari"},
             '{"bundle_identifier":"com.google.Chrome","opened":true}',
-            "application result is invalid",
+            "native receipt does not match authorization",
         ),
         (
             "computer_use",
@@ -2550,6 +2562,9 @@ def test_confirmed_action_result_must_match_its_authorized_scope(
         tool_name=authorization.tool_name,
         success=True,
         output=output,
+        metadata=({"verified": True, "goal_verified": False,
+                   "verification_scope": NATIVE_RECEIPT_SCOPE, "source": "macos_open"}
+                  if tool_name == "application_open" else {}),
     )
 
     with pytest.raises(ValueError, match=message):

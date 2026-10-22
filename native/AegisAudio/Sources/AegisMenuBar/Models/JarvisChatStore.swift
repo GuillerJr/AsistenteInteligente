@@ -24,6 +24,7 @@ final class JarvisChatStore {
     var browserRequest = UUID()
     var deleteRequest = UUID()
     var composerDraft: String?
+    @ObservationIgnored var draftCache = ChatDraftCache()
     var feedbackUpdating: Set<UUID> = []
     var completedTurnPersisted = false
     var activeSubmission: ChatSubmission?
@@ -39,6 +40,7 @@ final class JarvisChatStore {
     var attachments: [ChatAttachment] = []
     var error: String?
     var notice: String?
+    var appGrantWarning: String?
     var historyGeneration = UUID()
     var transcriptRevision = UUID()
     /// A temporary chat (like ChatGPT's): not listed, never uses or creates memories,
@@ -97,7 +99,8 @@ final class JarvisChatStore {
         temporaryConversationID = id
     }
 
-    func resetConversation() {
+    func resetConversation(preservingDraft: Bool = true) {
+        let discarded = preservingDraft ? retainCurrentDraft() : .none
         pane = .chat
         newChatProjectID = nil
         if let leaving = temporaryConversationID {
@@ -122,7 +125,14 @@ final class JarvisChatStore {
         planReplies = []
         implementedPlans = []
         error = nil
-        notice = nil
+        switch discarded {
+        case .none: notice = nil
+        case .oldest:
+            notice = String(localized: "Se descartaron los borradores menos recientes para limitar el uso de memoria. Los borradores solo se conservan mientras Jarvis está abierto.", bundle: .module)
+        case .oversized:
+            notice = String(localized: "El borrador anterior superaba el límite de memoria y no se conservó al cambiar de chat.", bundle: .module)
+        }
+        appGrantWarning = nil
     }
 
     func refreshAttention(model: MenuBarModel, snoozing: String? = nil) async {
@@ -180,6 +190,7 @@ final class JarvisChatStore {
         for id in pending where await model.performChatIPC("conversations.delete", payload: [
             "conversation_id": id.uuidString.lowercased()
         ]) != nil {
+            discardDraft(for: id)
             abandonedTemporaryChats.removeAll { $0 == id }
         }
     }

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Mapping
 
-from aegis_core.contracts import ToolAuthorization, ToolExecutionResult
+from aegis_core.contracts import PolicyDecision, ToolAuthorization, ToolExecutionResult
 from aegis_core.goals import format_goal_result, goal_confirmation_summary, is_goal_tool
 from aegis_core.mcp.client import MAX_MCP_MESSAGE_BYTES
 from aegis_core.mcp.result_text import readable_mcp_result
@@ -19,6 +19,13 @@ from aegis_core.scheduling import (
 from aegis_core.skills.teach import is_skill_tool, skill_confirmation_summary
 from aegis_core.tools.broker import ToolBroker
 from aegis_core.tools.computer import ComputerUseReport
+from aegis_core.tools.native_receipts import (
+    NATIVE_RECEIPT_SOURCES,
+    decode_native_json,
+    native_receipt_is_valid,
+    native_receipt_summary,
+    smart_tv_receipt_is_valid,
+)
 from aegis_core.tools.verification import result_is_verified
 
 CONFIRMED_TOOL_NAMES = frozenset(
@@ -266,6 +273,28 @@ class JobToolPresenter:
         result: ToolExecutionResult,
         authorization: ToolAuthorization | None = None,
     ) -> str:
+        if result.tool_name in NATIVE_RECEIPT_SOURCES:
+            if (authorization is None or authorization.decision is not PolicyDecision.ALLOW
+                    or authorization.call_id != result.call_id
+                    or authorization.tool_name != result.tool_name
+                    or not result_is_verified(result)):
+                raise ValueError("native command acknowledgement is invalid")
+            payload = json.loads(result.output)
+            if not native_receipt_is_valid(
+                result.tool_name, payload, authorization.normalized_arguments
+            ):
+                raise ValueError("native receipt does not match authorization")
+            return native_receipt_summary(result.tool_name, payload)
+        if result.tool_name == "smart_tv_control":
+            if (authorization is None or authorization.decision is not PolicyDecision.ALLOW
+                    or authorization.call_id != result.call_id
+                    or authorization.tool_name != result.tool_name
+                    or not result_is_verified(result)):
+                raise ValueError("TV command acknowledgement is invalid")
+            payload = decode_native_json(result.output)
+            if not smart_tv_receipt_is_valid(payload, authorization.normalized_arguments):
+                raise ValueError("TV receipt does not match authorization")
+            return "Envié la orden al televisor. No he comprobado su estado final."
         if is_schedule_tool(result.tool_name):
             return format_schedule_result(result)
         if is_goal_tool(result.tool_name) or is_skill_tool(result.tool_name):
@@ -303,43 +332,6 @@ class JobToolPresenter:
             return (
                 "La acción quedó sin verificar. Me detuve para evitar repetir cambios."
             )
-        if result.tool_name == "mail_send_message":
-            payload = json.loads(result.output)
-            sent = payload.get("sent")
-            recipient_count = payload.get("recipient_count")
-            if (
-                sent is not True
-                or type(recipient_count) is not int
-                or not 1 <= recipient_count <= 10
-            ):
-                raise ValueError("mail result is invalid")
-            return f"Correo enviado a {recipient_count} destinatario(s)."
-        if result.tool_name == "calendar_create_event":
-            payload = json.loads(result.output)
-            calendar = normalized_label(payload.get("calendar"), 200)
-            title = normalized_label(payload.get("title"), 300)
-            if payload.get("created") is not True:
-                raise ValueError("calendar result is invalid")
-            return f"Evento «{title}» creado en «{calendar}»."
-        if result.tool_name in {"reminder_create", "reminder_complete"}:
-            payload = json.loads(result.output)
-            expected_state = "created" if result.tool_name == "reminder_create" else "completed"
-            title = normalized_label(payload.get("title"), 300)
-            list_name = normalized_label(payload.get("list"), 128)
-            if payload.get(expected_state) is not True:
-                raise ValueError("reminder result is invalid")
-            if authorization is not None and title != normalized_label(
-                authorization.normalized_arguments.get("title"), 300
-            ):
-                raise ValueError("reminder result does not match authorization")
-            action = "creado" if result.tool_name == "reminder_create" else "completado"
-            return f"Recordatorio «{title}» {action} en «{list_name}»."
-        if result.tool_name == "contact_create":
-            payload = json.loads(result.output)
-            name = normalized_label(payload.get("name"), 300)
-            if payload.get("created") is not True:
-                raise ValueError("contact result is invalid")
-            return f"Contacto «{name}» creado."
         if result.tool_name == "system_audio_set":
             payload = json.loads(result.output)
             muted = payload.get("output_muted")
@@ -355,66 +347,12 @@ class JobToolPresenter:
                     raise ValueError("audio result does not match authorization")
             state = "silenciado" if muted else "con sonido"
             return f"Audio del Mac {state}, volumen al {volume} %."
-        if result.tool_name == "media_control":
-            payload = json.loads(result.output)
-            action = payload.get("action")
-            bundle_identifier = payload.get("bundle_identifier")
-            expected_action = (
-                authorization.normalized_arguments.get("action")
-                if authorization is not None
-                else action
-            )
-            rendered = {
-                "play_pause": "Alterné reproducción y pausa.",
-                "next": "Pasé a la siguiente pista.",
-                "previous": "Volví a la pista anterior.",
-            }.get(action)
-            if (
-                rendered is None
-                or action != expected_action
-                or bundle_identifier not in {"com.apple.Music", "com.spotify.client"}
-            ):
-                raise ValueError("media result is invalid")
-            return rendered
         if result.tool_name == "spotlight_open":
             payload = json.loads(result.output)
             name = normalized_label(payload.get("name"), 500)
             if payload.get("opened") is not True:
                 raise ValueError("Spotlight result is invalid")
             return f"Abrí {name} desde Spotlight."
-        if result.tool_name == "browser_open_url":
-            payload = json.loads(result.output)
-            url = payload.get("url")
-            if (
-                authorization is None
-                or set(payload) != {"opened", "url"}
-                or payload.get("opened") is not True
-                or not isinstance(url, str)
-                or url != authorization.normalized_arguments.get("url")
-            ):
-                raise ValueError("browser result is invalid")
-            return "Abrí la dirección web solicitada."
-        if result.tool_name == "browser_search":
-            payload = json.loads(result.output)
-            query = normalized_label(payload.get("query"), 300)
-            browser = payload.get("browser")
-            if (
-                authorization is None
-                or set(payload) != {"browser", "opened", "query"}
-                or payload.get("opened") is not True
-                or query != authorization.normalized_arguments.get("query")
-                or browser != authorization.normalized_arguments.get("browser")
-            ):
-                raise ValueError("browser search result is invalid")
-            browser_name = {
-                "default": "el navegador predeterminado",
-                "safari": "Safari",
-                "chrome": "Chrome",
-                "firefox": "Firefox",
-            }.get(browser)
-            if browser_name is None:
-                raise ValueError("browser search result is invalid")
-            return f"Abrí la búsqueda solicitada en {browser_name}."
         if result.tool_name == "browser_play_media":
             payload = json.loads(result.output)
             if (
@@ -428,24 +366,6 @@ class JobToolPresenter:
             ):
                 raise ValueError("browser media result is invalid")
             return "Inicié la reproducción solicitada en YouTube con Chrome."
-        if result.tool_name == "application_open":
-            payload = json.loads(result.output)
-            bundle_identifier = payload.get("bundle_identifier")
-            if (
-                authorization is None
-                or set(payload) != {"bundle_identifier", "opened"}
-                or payload.get("opened") is not True
-                or not isinstance(bundle_identifier, str)
-                or bundle_identifier != authorization.normalized_arguments.get("bundle_identifier")
-            ):
-                raise ValueError("application result is invalid")
-            return "Abrí la aplicación solicitada."
-        if result.tool_name == "shortcut_run":
-            payload = json.loads(result.output)
-            name = payload.get("name")
-            if payload.get("completed") is not True or not isinstance(name, str):
-                raise ValueError("shortcut result is invalid")
-            return f"Atajo «{name}» ejecutado."
         if result.tool_name == "computer_use":
             report = ComputerUseReport.model_validate_json(result.output)
             status, steps = report.status, report.steps

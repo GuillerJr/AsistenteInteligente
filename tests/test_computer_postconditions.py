@@ -19,7 +19,9 @@ from aegis_core.tools.computer import (
 from aegis_core.tools.computer_postconditions import (
     ComputerPostcondition,
     check_postcondition,
+    postcondition_requires_change,
     postconditions_are_bound,
+    requested_type_literals,
 )
 from aegis_core.tools.defaults import build_default_tool_broker, default_policy_context
 
@@ -320,6 +322,57 @@ def test_negative_operator_is_not_itself_a_forbidden_payload():
     assert postconditions_are_bound(
         (ComputerPostcondition(kind="field_contains", value="No"),),
         "Escribe «No». No abras otros documentos ni guardes.",
+    )
+
+
+@pytest.mark.parametrize("verb", ["añade", "añadir", "agrega", "agregar", "inserta", "insertar",
+                                  "append", "insert"])
+@pytest.mark.parametrize("kind", ["field_value", "field_contains"])
+def test_insertion_vocabulary_binds_exact_literal_field_and_requires_new_effect(verb, kind):
+    objective = (
+        f'{verb} únicamente «Árbol 7319» en el campo «Buscar». '
+        "No borres el texto existente, no abras otros documentos ni guardes."
+    )
+    condition = ComputerPostcondition(kind=kind, target="Buscar", value="Árbol 7319")
+    assert requested_type_literals(objective) == ("Árbol 7319",)
+    assert postconditions_are_bound((condition,), objective)
+    assert postcondition_requires_change(condition, objective)
+
+
+@pytest.mark.parametrize("verb", ["agrega", "agregar", "inserta", "insertar", "agregues",
+                                  "insertes"])
+@pytest.mark.parametrize("prefix", ["No", "Nunca", "No abras otros documentos ni"])
+def test_negated_insertions_cannot_authorize_literal_or_claim_an_effect(verb, prefix):
+    objective = f"{prefix} {verb} «7319» en el campo Buscar."
+    condition = ComputerPostcondition(kind="field_contains", target="Buscar", value="7319")
+    assert requested_type_literals(objective) == ()
+    assert not postconditions_are_bound((condition,), objective)
+    assert not postcondition_requires_change(condition, objective)
+
+
+@pytest.mark.parametrize("verb", ["agregar", "insertar"])
+def test_quoted_insertion_is_data_and_restrictions_do_not_become_payloads(verb):
+    condition = ComputerPostcondition(kind="field_contains", target="Buscar", value="7319")
+    quoted = f'Explica la instrucción "{verb} «7319» en el campo Buscar".'
+    assert requested_type_literals(quoted) == ()
+    assert not postconditions_are_bound((condition,), quoted)
+    assert not postcondition_requires_change(condition, quoted)
+
+    objective = f"{verb} «7319» en el campo Buscar. No {verb} «17319» en Privado."
+    assert requested_type_literals(objective) == ("7319",)
+    assert not postconditions_are_bound((condition.model_copy(update={"value": "17319"}),),
+                                       objective)
+    assert not postconditions_are_bound((condition.model_copy(update={"target": "Privado"}),),
+                                       objective)
+
+
+@pytest.mark.parametrize("verb", ["agregar", "insertar"])
+def test_insertion_does_not_infer_an_unrequested_literal_or_new_postcondition(verb):
+    objective = f"Controla TextEdit para {verb} información en Buscar."
+    assert requested_type_literals(objective) == ()
+    assert ComputerUseController._inferred_postconditions(objective) == ()
+    assert not postconditions_are_bound(
+        (ComputerPostcondition(kind="field_contains", target="Buscar", value="7319"),), objective,
     )
 
 

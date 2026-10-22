@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from aegis_core.contracts import ToolAuthorization, ToolExecutionResult
+from aegis_core.tools.native_receipts import NATIVE_RECEIPT_SCOPE, SMART_TV_RECEIPT_SCOPE
 from aegis_core.tools.verification import result_is_verified, result_matches_authorization
 
 
@@ -60,7 +61,11 @@ class VisualReflectionNode:
         if visual_verified:
             return ReflectionDecision(
                 status=ReflectionStatus.VERIFIED,
-                reason="expected_state_observed",
+                reason=("command_acknowledged"
+                        if result.metadata.get("verification_scope") in {
+                            NATIVE_RECEIPT_SCOPE, SMART_TV_RECEIPT_SCOPE,
+                        }
+                        else "expected_state_observed"),
                 visual_verified=True,
                 correction_required=False,
             )

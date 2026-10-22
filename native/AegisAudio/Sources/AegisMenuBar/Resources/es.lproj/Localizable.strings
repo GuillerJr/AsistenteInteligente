@@ -200,6 +200,7 @@
 "Cerrar HUD (Esc). No cancela el turno." = "Cerrar HUD (Esc). No cancela el turno.";
 "Cerrar aviso" = "Cerrar aviso";
 "Cerrar aviso de configuración" = "Cerrar aviso de configuración";
+"Cerrar aviso de permiso" = "Cerrar aviso de permiso";
 "Cerrar chat lateral" = "Cerrar chat lateral";
 "Cerrar confirmación" = "Cerrar confirmación";
 "Cerrar navegador" = "Cerrar navegador";
@@ -372,6 +373,7 @@
 "El análisis del contenido con NVIDIA se aprobará al iniciar cada tarea. Las pantallas de credenciales permanecen protegidas." = "El análisis del contenido con NVIDIA se aprobará al iniciar cada tarea. Las pantallas de credenciales permanecen protegidas.";
 "El archivo contiene posibles credenciales. Retíralas antes de importar." = "El archivo contiene posibles credenciales. Retíralas antes de importar.";
 "El audio y el modelo no salen del equipo." = "El audio y el modelo no salen del equipo.";
+"El borrador anterior superaba el límite de memoria y no se conservó al cambiar de chat." = "El borrador anterior superaba el límite de memoria y no se conservó al cambiar de chat.";
 "El canal se detuvo para evitar repetir operaciones. Puedes conservar el archivo dañado y restablecer únicamente su cola de transporte." = "El canal se detuvo para evitar repetir operaciones. Puedes conservar el archivo dañado y restablecer únicamente su cola de transporte.";
 "El componente local JarvisComputerHelper no está disponible" = "El componente local JarvisComputerHelper no está disponible";
 "El contenido cambió desde la revisión. Actualiza y revisa la versión actual." = "El contenido cambió desde la revisión. Actualiza y revisa la versión actual.";
@@ -438,6 +440,7 @@
 "Enviar" = "Enviar";
 "Enviar (⌘↩)" = "Enviar (⌘↩)";
 "Enviar mensaje de ejemplo" = "Enviar mensaje de ejemplo";
+"Envía los adjuntos cuando termine la respuesta actual." = "Envía los adjuntos cuando termine la respuesta actual.";
 "Envía texto, notas de voz, imágenes o documentos. Puedes responder a un mensaje concreto y usar sus botones. Jarvis comparte el contexto de tus chats del Mac." = "Envía texto, notas de voz, imágenes o documentos. Puedes responder a un mensaje concreto y usar sus botones. Jarvis comparte el contexto de tus chats del Mac.";
 "Envío de correo" = "Envío de correo";
 "Es solo un recordatorio (no ejecuta nada)" = "Es solo un recordatorio (no ejecuta nada)";
@@ -990,6 +993,7 @@
 "Se conservará un respaldo privado del archivo dañado. Se descartarán las entradas y respuestas pendientes de Telegram para evitar repetir acciones. El acceso quedará desactivado hasta que lo actives nuevamente. Tu token, cuenta autorizada y conversaciones se conservarán." = "Se conservará un respaldo privado del archivo dañado. Se descartarán las entradas y respuestas pendientes de Telegram para evitar repetir acciones. El acceso quedará desactivado hasta que lo actives nuevamente. Tu token, cuenta autorizada y conversaciones se conservarán.";
 "Se conservarán los nombres de perfil. Un modelo ya entrenado no se eliminará." = "Se conservarán los nombres de perfil. Un modelo ya entrenado no se eliminará.";
 "Se creó una bifurcación desde este mensaje. El chat original se conserva." = "Se creó una bifurcación desde este mensaje. El chat original se conserva.";
+"Se descartaron los borradores menos recientes para limitar el uso de memoria. Los borradores solo se conservan mientras Jarvis está abierto." = "Se descartaron los borradores menos recientes para limitar el uso de memoria. Los borradores solo se conservan mientras Jarvis está abierto.";
 "Se detendrá la conexión y se retirará su configuración de Jarvis. Sus credenciales se conservan en el llavero; quitar el perfil no revoca permisos en el proveedor." = "Se detendrá la conexión y se retirará su configuración de Jarvis. Sus credenciales se conservan en el llavero; quitar el perfil no revoca permisos en el proveedor.";
 "Se detendrá la conexión, se revocará el acceso de esta app a la cuenta de Google y se eliminarán sus tokens locales. Podrás volver a autorizarla después." = "Se detendrá la conexión, se revocará el acceso de esta app a la cuenta de Google y se eliminarán sus tokens locales. Podrás volver a autorizarla después.";
 "Se eliminarán permanentemente todos los chats de la papelera y sus documentos, incluidos los que no muestra la búsqueda. Esta acción no se puede deshacer." = "Se eliminarán permanentemente todos los chats de la papelera y sus documentos, incluidos los que no muestra la búsqueda. Esta acción no se puede deshacer.";

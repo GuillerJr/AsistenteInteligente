@@ -20,6 +20,11 @@ from pydantic import ValidationError
 
 from aegis_core.async_tasks import run_blocking_owned
 from aegis_core.contracts import PolicyDecision, ToolAuthorization, ToolExecutionResult
+from aegis_core.tools.automation_errors import (
+    AutomationExecutionError,
+    bounded_jxa_program,
+    raise_for_automation_error,
+)
 from aegis_core.tools.broker import PolicyContext
 from aegis_core.tools.computer import ComputerUseController, ComputerUseError, ComputerUseReport
 from aegis_core.tools.defaults import (
@@ -50,6 +55,12 @@ from aegis_core.tools.defaults import (
     TerminalTemplateArguments,
     WebFetchArguments,
     WebResearchArguments,
+)
+from aegis_core.tools.native_receipts import (
+    NATIVE_RECEIPT_SCOPE,
+    NATIVE_RECEIPT_SOURCES,
+    decode_native_json,
+    native_receipt_is_valid,
 )
 from aegis_core.tools.verification import result_is_recoverable_ui_block
 from aegis_core.tools.web import PublicWebClient, WebAccessError, validate_public_https_url
@@ -999,6 +1010,8 @@ class ReadOnlyToolExecutor:
             return self._error(authorization, "executor_unavailable")
         try:
             return handler(authorization, context)
+        except AutomationExecutionError as error:
+            return self._error(authorization, error.code)
         except ValidationError:
             return self._error(authorization, "invalid_authorized_arguments")
         except FileNotFoundError:
@@ -1499,21 +1512,13 @@ class ReadOnlyToolExecutor:
                 error_code="shortcut_run_failed",
                 metadata={"return_code": completed.returncode, "source": "macos_shortcuts"},
             )
-        return ToolExecutionResult(
-            call_id=authorization.call_id,
-            tool_name=authorization.tool_name,
-            success=True,
-            output=json.dumps(
-                {"name": arguments.name, "completed": True},
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ),
-            metadata={
-                "bytes_read": len(output),
-                "source": "macos_shortcuts",
-                "truncated": len(completed.stdout) > len(output),
-            },
+        result = ReadOnlyToolExecutor._json_result(
+            authorization, {"name": arguments.name, "completed": True}, "macos_shortcuts"
         )
+        return result.model_copy(update={"metadata": {
+            **result.metadata, "bytes_read": len(output),
+            "truncated": len(completed.stdout) > len(output),
+        }})
 
     @staticmethod
     def _run_jxa(payload: dict[str, object], script: str, context: PolicyContext) -> object:
@@ -1530,22 +1535,23 @@ class ReadOnlyToolExecutor:
             ("/usr/bin/osascript", "-l", "JavaScript"),
             cwd=workspace,
             env={"LC_ALL": "C", "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"},
-            input=source.encode("utf-8"),
+            input=bounded_jxa_program(source).encode("utf-8"),
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             timeout=_AUTOMATION_TIMEOUT_SECONDS,
             check=False,
         )
         if completed.returncode != 0:
-            raise PermissionError("macOS automation was denied or failed")
+            raise AutomationExecutionError("automation_failed")
         if len(completed.stdout) > _AUTOMATION_OUTPUT_MAX_BYTES:
-            raise OSError("macOS automation output exceeded its limit")
+            raise AutomationExecutionError("automation_output_limit")
         try:
-            output = json.loads(completed.stdout.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError) as error:
-            raise OSError("macOS automation returned invalid output") from error
+            output = decode_native_json(completed.stdout.decode("utf-8"))
+        except (ValueError, RecursionError) as error:
+            raise AutomationExecutionError("automation_invalid_response") from error
+        raise_for_automation_error(output)
         if not isinstance(output, (dict, list)):
-            raise OSError("macOS automation returned an invalid value")
+            raise AutomationExecutionError("automation_invalid_response")
         return output
 
     @staticmethod
@@ -1610,6 +1616,23 @@ class ReadOnlyToolExecutor:
     def _json_result(
         authorization: ToolAuthorization, output: object, source: str
     ) -> ToolExecutionResult:
+        metadata: dict[str, str | int | bool] = {"source": source}
+        if authorization.tool_name in NATIVE_RECEIPT_SOURCES:
+            accepted = (
+                source == NATIVE_RECEIPT_SOURCES[authorization.tool_name]
+                and native_receipt_is_valid(
+                    authorization.tool_name, output, authorization.normalized_arguments
+                )
+            )
+            metadata.update({"verified": accepted, "goal_verified": False,
+                             "verification_scope": NATIVE_RECEIPT_SCOPE})
+            if not accepted:
+                # The command may already have changed the app. Keep the uncertain
+                # outcome bounded and never dispatch a second mutation to repair it.
+                return ToolExecutionResult(
+                    call_id=authorization.call_id, tool_name=authorization.tool_name,
+                    success=False, error_code="automation_invalid_response", metadata=metadata,
+                )
         serialized = json.dumps(
             output,
             ensure_ascii=False,
@@ -1621,10 +1644,7 @@ class ReadOnlyToolExecutor:
             tool_name=authorization.tool_name,
             success=True,
             output=serialized,
-            metadata={
-                "bytes_read": len(serialized.encode("utf-8")),
-                "source": source,
-            },
+            metadata={**metadata, "bytes_read": len(serialized.encode("utf-8"))},
         )
 
     @staticmethod
@@ -1655,13 +1675,7 @@ class ReadOnlyToolExecutor:
                 error_code="application_open_failed",
                 metadata={"return_code": completed.returncode},
             )
-        return ToolExecutionResult(
-            call_id=authorization.call_id,
-            tool_name=authorization.tool_name,
-            success=True,
-            output=json.dumps(payload, separators=(",", ":"), sort_keys=True),
-            metadata={"source": "macos_open"},
-        )
+        return ReadOnlyToolExecutor._json_result(authorization, payload, "macos_open")
 
     @staticmethod
     def _run_terminal_template(

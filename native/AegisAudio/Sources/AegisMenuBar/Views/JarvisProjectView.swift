@@ -75,7 +75,7 @@ extension JarvisChatStore {
 struct JarvisProjectView: View {
     let model: MenuBarModel
     let projectID: String
-    @State private var chats: [ChatConversationSummary] = []
+    @State private var projectChats = ProjectConversationStore()
     @State private var instructions = ""
     @State private var editing = false
     @State private var importing = false
@@ -173,11 +173,12 @@ struct JarvisProjectView: View {
                     .buttonStyle(JarvisButtonStyle(compact: true)).disabled(project.files.count >= 8)
             }
             card(String(localized: "Chats", bundle: .module), detail: nil) {
-                if chats.isEmpty {
+                if projectChats.conversations.isEmpty && !projectChats.loading
+                    && projectChats.error == nil {
                     Text(String(localized: "Aún no hay chats. Empieza uno con «Nuevo chat» o mueve uno desde Recientes.", bundle: .module))
                         .font(.system(size: 12.5)).foregroundStyle(JarvisTheme.inkMuted)
                 }
-                ForEach(chats) { entry in
+                ForEach(projectChats.conversations) { entry in
                     Button { Task { await chat.open(entry, model: model) } } label: {
                         HStack {
                             Text(entry.title).font(.system(size: 13)).lineLimit(1)
@@ -185,6 +186,24 @@ struct JarvisProjectView: View {
                         }
                     }.buttonStyle(JarvisRowButtonStyle())
                 }
+                if projectChats.loading { ProgressView().controlSize(.small) }
+                if let error = projectChats.error {
+                    Text(error).font(.system(size: 12)).foregroundStyle(JarvisTheme.warning)
+                }
+                HStack {
+                    if projectChats.nextCursor != nil {
+                        Button(String(localized: "Cargar más chats", bundle: .module)) {
+                            Task { await loadChats(append: true) }
+                        }
+                        .buttonStyle(JarvisButtonStyle(compact: true))
+                    }
+                    Spacer()
+                    Button(String(localized: "Actualizar", bundle: .module), systemImage: "arrow.clockwise") {
+                        Task { await loadChats() }
+                    }
+                    .buttonStyle(JarvisButtonStyle(compact: true))
+                }
+                .disabled(projectChats.loading)
             }
         }
         .frame(maxWidth: 700, alignment: .leading).frame(maxWidth: .infinity)
@@ -202,10 +221,10 @@ struct JarvisProjectView: View {
         .overlay(RoundedRectangle(cornerRadius: JarvisTheme.radiusCard, style: .continuous).strokeBorder(JarvisTheme.hairline))
     }
 
-    private func loadChats() async {
-        guard let data = await model.performChatIPC("projects.conversations", payload: ["project_id": projectID]),
-              let page = try? ChatConversationSummary.page(data) else { return }
-        chats = page.0
+    private func loadChats(append: Bool = false) async {
+        await projectChats.load(projectID: projectID, append: append) { payload in
+            await model.performChatIPC("projects.conversations", payload: payload)
+        }
     }
 
     private func addFiles(_ urls: [URL]) async {

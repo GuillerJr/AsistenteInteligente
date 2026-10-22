@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from aegis_core.tools.computer_workflow import ComputerWorkflowState
 
@@ -81,6 +81,16 @@ class TaskRecovery(BaseModel):
     request_text: str = Field(max_length=2_048)
     tool_name: str = Field(max_length=256)
     call_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
-    status: Literal["awaiting_confirmation", "executing", "observed", "completed"]
+    status: Literal["awaiting_confirmation", "executing", "not_dispatched", "observed", "completed"]
     observation: VerifiedTaskResult | None = None
     computer_workflow: ComputerWorkflowState | None = None
+
+    @model_validator(mode="after")
+    def no_dispatch_is_a_single_computer_action(self) -> TaskRecovery:
+        if self.status == "not_dispatched" and (
+            self.tool_name != "computer_use"
+            or self.observation is not None
+            or self.computer_workflow is not None
+        ):
+            raise ValueError("no-dispatch evidence is limited to a single computer action")
+        return self

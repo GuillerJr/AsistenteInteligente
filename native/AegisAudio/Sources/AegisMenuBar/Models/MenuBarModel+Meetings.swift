@@ -26,12 +26,13 @@ extension MenuBarModel {
             formatter.dateFormat = "dd/MM HH:mm"
             let stamp = formatter.string(from: started)
             chat.newConversation()
-            chat.attachments = ChatAttachment.meetingTranscript(transcript, title: String(localized: "Reunión \(stamp)", bundle: .module))
+            let attachments = ChatAttachment.meetingTranscript(transcript, title: String(localized: "Reunión \(stamp)", bundle: .module))
+            chat.attachments = attachments
             logger.info("meeting_notes_submitted")
-            _ = await sendChatMessage(
-                String(localized: "Estas son las notas de mi reunión del \(stamp). Resúmela: temas, decisiones, ", bundle: .module)
-                + String(localized: "tareas con su responsable y fecha si aparecen, y lo que quedó pendiente.", bundle: .module)
-            )
+            _ = await submitChatMessage(.init(
+                text: String(localized: "Estas son las notas de mi reunión del \(stamp). Resúmela: temas, decisiones, ", bundle: .module)
+                    + String(localized: "tareas con su responsable y fecha si aparecen, y lo que quedó pendiente.", bundle: .module),
+                attachments: attachments, planMode: chat.planMode))
             return
         }
         guard userSessionAvailable, !voiceState.isBusy, !chat.isBusy else { return }

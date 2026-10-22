@@ -135,14 +135,14 @@ async def test_exact_textedit_request_types_only_its_literal_and_verifies_the_fi
     assert request["postconditions"] == [CONDITION.model_dump(exclude_none=True)]
 
 
-async def test_exact_textedit_append_request_preserves_existing_text_and_restrictions():
+@pytest.mark.parametrize("verb", ["añadir", "agrega", "agregar", "inserta", "insertar"])
+async def test_exact_textedit_append_request_preserves_existing_text_and_restrictions(verb):
     bridge = SyntheticTextEditBridge()
     bridge.value = VALUE
     provider = SyntheticVision({"action": "type", "text": APPEND_VALUE})
 
-    report = await run_request(
-        bridge, provider, objective=APPEND_REQUEST, condition=APPEND_CONDITION,
-    )
+    objective = APPEND_REQUEST.replace("añadir", verb)
+    report = await run_request(bridge, provider, objective=objective, condition=APPEND_CONDITION)
 
     assert report.status == "completed"
     assert report.reason_code == "objective_complete"
@@ -154,23 +154,43 @@ async def test_exact_textedit_append_request_preserves_existing_text_and_restric
     assert check.reason_code == "observed"
     assert len(provider.requests) == 1
     request = json.loads(provider.requests[0]["messages"][1]["content"][0]["text"])
-    assert request["objective"] == APPEND_REQUEST
+    assert request["objective"] == objective
 
 
-async def test_negated_textedit_append_is_rejected_before_vision_or_actions():
+@pytest.mark.parametrize("verb", ["añadir", "agregar", "insertar"])
+async def test_negated_textedit_append_is_rejected_before_vision_or_actions(verb):
     bridge = SyntheticTextEditBridge()
     bridge.value = VALUE
     provider = SyntheticVision({"action": "type", "text": APPEND_VALUE})
 
     with pytest.raises(ComputerUseError, match=r"^computer_invalid_postcondition$"):
         await run_request(
-            bridge, provider, objective=APPEND_REQUEST.replace("para añadir", "para no añadir"),
+            bridge, provider, objective=APPEND_REQUEST.replace("para añadir", f"para no {verb}"),
             condition=APPEND_CONDITION,
         )
 
     assert provider.requests == []
     assert bridge.actions == []
     assert bridge.value == VALUE
+
+
+@pytest.mark.parametrize("verb", ["agregar", "insertar"])
+@pytest.mark.parametrize("action", ["type", "replace_text"])
+async def test_append_authorizes_only_exact_payload_and_never_implicit_replacement(verb, action):
+    bridge = SyntheticTextEditBridge()
+    bridge.value = VALUE
+    response = {"action": action, "text": FIELD if action == "type" else APPEND_VALUE}
+    if action == "replace_text":
+        response.update(target=FIELD, x=500, y=300)
+    provider = SyntheticVision(response)
+
+    report = await run_request(
+        bridge, provider, objective=APPEND_REQUEST.replace("añadir", verb),
+        condition=APPEND_CONDITION,
+    )
+
+    assert report.status == "blocked" and report.reason_code == "unsupported_action"
+    assert bridge.actions == [] and bridge.value == VALUE
 
 
 async def test_exact_textedit_field_target_does_not_fuzzy_match_a_compound_label():

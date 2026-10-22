@@ -231,7 +231,9 @@ def create_route_node(
                 content=content,
             )
             return update
-        if related_recovery and recovery.get("status") == "awaiting_confirmation":
+        if related_recovery and recovery.get("status") in {
+            "awaiting_confirmation", "not_dispatched",
+        }:
             resumed = request.model_copy(update={"text": recovery["request_text"]})
             update["tool_scope_request"] = resumed
             update["route"] = _route_request(resumed, skill)

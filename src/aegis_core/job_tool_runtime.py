@@ -18,7 +18,7 @@ from aegis_core.job_tool_presenter import JobToolPresenter
 from aegis_core.tools.audit import AuditSink
 from aegis_core.tools.broker import PolicyContext, ToolBroker, VoiceConfirmationEvidence
 from aegis_core.tools.confirmations import ConfirmationError, OneTimeConfirmationStore
-from aegis_core.tools.verification import result_is_verified
+from aegis_core.tools.verification import result_goal_is_verified, result_is_verified
 
 
 class ConfirmationConsumptionError(JobConfirmationError):
@@ -45,6 +45,10 @@ class ApprovedToolOutcome:
     @property
     def verified(self) -> bool:
         return result_is_verified(self.result)
+
+    @property
+    def goal_verified(self) -> bool:
+        return result_goal_is_verified(self.result)
 
 
 class JobToolRuntime:

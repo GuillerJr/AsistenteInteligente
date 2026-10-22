@@ -2413,6 +2413,18 @@
       },
       "generatesSymbol": false
     },
+    "Cerrar aviso de permiso": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar aviso de permiso"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Cerrar chat lateral": {
       "extractionState": "manual",
       "localizations": {
@@ -4477,6 +4489,18 @@
       },
       "generatesSymbol": false
     },
+    "El borrador anterior superaba el límite de memoria y no se conservó al cambiar de chat.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El borrador anterior superaba el límite de memoria y no se conservó al cambiar de chat."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "El canal se detuvo para evitar repetir operaciones. Puedes conservar el archivo dañado y restablecer únicamente su cola de transporte.": {
       "extractionState": "manual",
       "localizations": {
@@ -5264,6 +5288,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Enviar mensaje de ejemplo"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Envía los adjuntos cuando termine la respuesta actual.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envía los adjuntos cuando termine la respuesta actual."
           }
         }
       },
@@ -11888,6 +11924,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Se creó una bifurcación desde este mensaje. El chat original se conserva."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Se descartaron los borradores menos recientes para limitar el uso de memoria. Los borradores solo se conservan mientras Jarvis está abierto.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se descartaron los borradores menos recientes para limitar el uso de memoria. Los borradores solo se conservan mientras Jarvis está abierto."
           }
         }
       },

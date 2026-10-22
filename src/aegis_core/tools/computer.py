@@ -17,7 +17,7 @@ from aegis_core.activity import SwarmActivityTracker
 from aegis_core.async_tasks import run_blocking_owned
 from aegis_core.bundle_paths import installed_app_path
 from aegis_core.contracts import AgentRole, ImageInput
-from aegis_core.providers.base import ChatProvider
+from aegis_core.providers.base import ChatProvider, IncompleteModelResponseError
 from aegis_core.tools.background_automation import (
     QuietActionVerification,
     QuietBackgroundAutomation,
@@ -224,6 +224,10 @@ class ComputerUseError(RuntimeError):
     def __init__(self, code: str) -> None:
         super().__init__(code)
         self.code = code
+
+
+class ComputerVisionNotDispatchedError(IncompleteModelResponseError):
+    """The controller observed an incomplete decision before any action dispatch."""
 
 
 class ComputerActionSummary(BaseModel):
@@ -913,6 +917,7 @@ class ComputerUseController:
         native_action_verified = False
         baseline: ComputerPerception | None = None
         write_acknowledged = False
+        dispatch_started = False
 
         def condition_checks(
             current: ComputerObservation,
@@ -1057,6 +1062,7 @@ class ComputerUseController:
                                     reason_code=local_action.reason_code,
                                 )
                             last_action = local_action
+                            dispatch_started = True
                             (
                                 acting_observation,
                                 acted,
@@ -1115,23 +1121,30 @@ class ComputerUseController:
                             application_bundle_identifier=application_bundle_identifier,
                             reason_code="objective_complete",
                         )
-                    action = await self._decide(
-                        objective=objective,
-                        application_bundle_identifier=application_bundle_identifier,
-                        step=steps + 1,
-                        max_steps=max_steps,
-                        observation=observation,
-                        completion_evidence=self._completion_evidence_candidates(
-                            observation.perception,
-                            previous_completion_evidence=(
-                                previous_completion_evidence
-                                if previous_action is not None
-                                else None
+                    try:
+                        action = await self._decide(
+                            objective=objective,
+                            application_bundle_identifier=application_bundle_identifier,
+                            step=steps + 1,
+                            max_steps=max_steps,
+                            observation=observation,
+                            completion_evidence=self._completion_evidence_candidates(
+                                observation.perception,
+                                previous_completion_evidence=(
+                                    previous_completion_evidence
+                                    if previous_action is not None
+                                    else None
+                                ),
+                                previous_observation_state=previous_observation_state,
                             ),
-                            previous_observation_state=previous_observation_state,
-                        ),
-                        postconditions=conditions,
-                    )
+                            postconditions=conditions,
+                        )
+                    except IncompleteModelResponseError as error:
+                        if not dispatch_started:
+                            raise ComputerVisionNotDispatchedError(
+                                "computer vision incomplete before action dispatch"
+                            ) from error
+                        raise
                     if action.action == "done":
                         return finish(
                             status="completed",
@@ -1190,6 +1203,9 @@ class ComputerUseController:
                         )
                     try:
                         last_action = action
+                        # Once dispatch is attempted, even a stale-context response
+                        # cannot certify that no native effect occurred.
+                        dispatch_started = True
                         verification = await self._background_automation.dispatch(
                             self._bridge,
                             action,
@@ -1293,6 +1309,8 @@ class ComputerUseController:
                 application_bundle_identifier=application_bundle_identifier,
                 reason_code="user_takeover",
             )
+        except ComputerVisionNotDispatchedError:
+            raise
         except (OSError, RuntimeError):
             if not steps:
                 raise

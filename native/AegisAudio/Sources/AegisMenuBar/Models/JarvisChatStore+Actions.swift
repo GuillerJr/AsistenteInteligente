@@ -54,7 +54,9 @@ extension JarvisChatStore {
                 notice = String(localized: "Se creó una bifurcación desde este mensaje. El chat original se conserva.", bundle: .module)
             }
             if regenerate && replay.missingImage == nil && replay.text.utf8.count <= 4_096 {
-                await sendReplayPreservingDraft(replay.text) { await model.sendChatMessage(replay.text) }
+                let submission = ChatSubmission(text: replay.text, attachments: replay.attachments,
+                                                planMode: planMode)
+                await sendReplayPreservingDraft(replay.text) { await model.submitChatMessage(submission) }
             } else {
                 composerDraft = replay.text
             }
@@ -117,9 +119,10 @@ extension JarvisChatStore {
         guard transcript.jobID == jobID, scope == "conversation" || scope == "always" else { return }
         guard confirmed else {
             notice = nil
-            error = String(localized: "No pude confirmar que se guardara el permiso para esta app. Revisa la aprobación antes de volver a intentarlo.", bundle: .module)
+            appGrantWarning = String(localized: "No pude confirmar que se guardara el permiso para esta app. Revisa la aprobación antes de volver a intentarlo.", bundle: .module)
             return
         }
+        appGrantWarning = nil
         notice = scope == "conversation"
             ? String(localized: "Permiso guardado para esta conversación.", bundle: .module)
             : String(localized: "Permiso permanente guardado. Puedes quitarlo en Ajustes → Memoria y privacidad.", bundle: .module)

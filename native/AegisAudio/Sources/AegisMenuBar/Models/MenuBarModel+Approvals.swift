@@ -8,10 +8,19 @@ import OSLog
 import SwiftUI
 import UserNotifications
 
+private let approvalLogger = Logger(subsystem: "ai.aegis.menubar", category: "Approvals")
+
 // Behavior for Approvals; observable storage remains in MenuBarModel.
 extension MenuBarModel {
     func approvePending(expected: PendingApproval? = nil, always: Bool = false,
                         appScope: String? = nil) async {
+        let requestedScope: String = switch appScope {
+        case "conversation": "conversation"
+        case "always": "always"
+        case nil: always ? "always" : "once"
+        default: "invalid"
+        }
+        approvalLogger.info("approval_attempt scope=\(requestedScope, privacy: .public)")
         guard
             userSessionAvailable,
             let sessionPermit = userSessionExecutionGate.permit,
@@ -22,6 +31,10 @@ extension MenuBarModel {
             appScope == nil || pendingApproval.confirmation.appGrantBundle != nil,
             let secret = ipcSecret
         else {
+            let stale = expected != nil && self.pendingApproval != expected
+            let reason = stale ? "stale" : "guard"
+            let gateAvailable = userSessionExecutionGate.permit != nil
+            approvalLogger.info("approval_rejected scope=\(requestedScope, privacy: .public) reason=\(reason, privacy: .public) session=\(self.userSessionAvailable, privacy: .public) gate=\(gateAvailable, privacy: .public) expected=\(expected != nil, privacy: .public) in_progress=\(self.approvalActionInProgress, privacy: .public)")
             if userSessionAvailable, userSessionExecutionGate.permit != nil,
                let appScope, appScope == "conversation" || appScope == "always",
                let expected, self.pendingApproval != expected {
@@ -35,13 +48,12 @@ extension MenuBarModel {
         cancelDualAuthorization()
         approvalActionInProgress = true
         defer { approvalActionInProgress = false }
-        logger.info(
-            "tool_confirmation_approved tool=\(pendingApproval.confirmation.toolName, privacy: .public)"
-        )
         let accepted = await Task.detached(priority: .userInitiated) {
             Self.approveJob(pendingApproval, always: always, appScope: appScope, secret: secret)
         }.value
+        approvalLogger.info("approval_result scope=\(requestedScope, privacy: .public) accepted=\(accepted, privacy: .public)")
         guard userSessionExecutionGate.isCurrent(sessionPermit) else {
+            approvalLogger.info("approval_rejected scope=\(requestedScope, privacy: .public) reason=session_changed")
             if accepted {
                 _ = await Task.detached(priority: .userInitiated) {
                     Self.cancelJob(pendingApproval.jobID, secret: secret)
@@ -54,7 +66,6 @@ extension MenuBarModel {
                                       confirmed: accepted)
         }
         guard accepted else {
-            logger.error("tool_confirmation_failed stage=approve")
             let outcome = await awaitJob(pendingApproval.jobID, secret: secret)
             handleJobOutcome(outcome, jobID: pendingApproval.jobID)
             return

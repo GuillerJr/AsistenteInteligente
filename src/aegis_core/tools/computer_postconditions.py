@@ -29,10 +29,10 @@ _FIELD_ROLES = frozenset({"ComboBox", "SearchField", "TextArea", "TextField"})
 _NEGATION = re.compile(
     r"\b(?:no|not|never|nunca|don't|do not|ni|nor|sin|without)\b", re.IGNORECASE
 )
-_TYPE_OPERATION = re.compile(
-    r"\b(?:escribe|escribir|type|write|añade|añadir|agrega|agregar|append|insert|inserta)\b",
-    re.IGNORECASE,
-)
+_APPEND_VERBS = r"añade|añadir|agrega|agregar|append|insert|inserta|insertar"
+_TYPE_VERBS = rf"escribe|escribir|type|write|{_APPEND_VERBS}"
+_APPEND_OPERATION = re.compile(rf"\b(?:{_APPEND_VERBS})\b", re.IGNORECASE)
+_TYPE_OPERATION = re.compile(rf"\b(?:{_TYPE_VERBS})\b", re.IGNORECASE)
 _TYPE_LITERAL = re.compile(
     r"\s+(?:(?:únicamente|unicamente|solamente|solo|sólo|literalmente|exactamente|"
     r"only|literally|exactly|el texto|the text)\s+)*"
@@ -203,15 +203,14 @@ class ComputerPostconditionCheck(BaseModel):
 
 
 def postcondition_requires_change(condition: ComputerPostcondition, objective: str) -> bool:
+    if condition.kind not in {"field_contains", "field_value"}:
+        return False
     instructions = mask_quoted_text(_fold(objective))
-    append = r"\b(?:añade|añadir|agrega|agregar|append|insert|inserta|insertar)\b"
-    return condition.kind in {"field_contains", "field_value"} and bool(
-        re.search(
-            append
-            if condition.kind == "field_value"
-            else append + r"|\b(?:escribe|escribir|type)\b",
-            instructions,
-        )
+    negations = _negated_clauses(instructions)
+    operations = _APPEND_OPERATION if condition.kind == "field_value" else _TYPE_OPERATION
+    return any(
+        not any(start <= operation.start() < end for start, end in negations)
+        for operation in operations.finditer(instructions)
     )
 
 
@@ -242,8 +241,8 @@ def postconditions_are_bound(
     for negation in re.finditer(
         r"\b(?:no|not|never|nunca|don't|do not|ni|nor|sin|without)\s+"
         r"(?P<operation>selecciona|selecciones|seleccionar|select|expande|expand|"
-        r"activa|actives|activar|enable|abre|abrir|open|abras|escribe|escribas|"
-        r"escribir|type|write|reemplaza|reemplace|reemplaces|replace)\b", instructions,
+        r"activa|actives|activar|enable|abre|abrir|open|abras|escribas|añadas|agregues|insertes|"
+        rf"{_TYPE_VERBS}|reemplaza|reemplace|reemplaces|replace)\b", instructions,
     ):
         # A prohibition on opening other documents does not prohibit the separate
         # requested field edit. No other negated operation is relaxed here.
@@ -344,10 +343,12 @@ def postconditions_are_bound(
                 folded,
             ):
                 return False
-        if condition.kind in {"field_value", "field_contains"} and not re.search(
-            r"\b(?:escribe|escribir|type|reemplaza|replace|establece|set|busca|find|"
-            r"comprueba|verifica|check|verify|añade|añadir|agrega|append|insert|inserta)\b",
-            instructions,
+        if condition.kind in {"field_value", "field_contains"} and not (
+            _TYPE_OPERATION.search(instructions)
+            or re.search(
+                r"\b(?:reemplaza|replace|establece|set|busca|find|comprueba|verifica|check|verify)\b",
+                instructions,
+            )
         ):
             return False
         if condition.kind == "navigation_url" and not re.search(

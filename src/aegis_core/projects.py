@@ -12,8 +12,12 @@ a credential is refused, as with chat attachments.
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
+import hmac
 import json
 import os
+import re
 import shutil
 import threading
 from collections.abc import Callable
@@ -22,7 +26,7 @@ from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError
 
 from aegis_core.memory.errors import MemoryNotFoundError
 from aegis_core.secrets import contains_likely_secret_material
@@ -220,6 +224,17 @@ class _ProjectId(_Payload):
     project_id: UUID
 
 
+class _ConversationPage(_ProjectId):
+    cursor: str | None = Field(default=None, min_length=1, max_length=1_024, strict=True)
+    limit: int = Field(default=30, ge=1, le=50, strict=True)
+
+
+class _ConversationCursor(_ProjectId):
+    version: Literal["1"] = "1"
+    updated_at: AwareDatetime
+    conversation_id: UUID
+
+
 class _AddFile(_ProjectId):
     name: str = Field(min_length=1, max_length=200)
     text: str = Field(min_length=1, max_length=MAX_FILE_BYTES)
@@ -243,6 +258,30 @@ class ProjectIpcService:
     def __init__(self, store: ProjectStore, conversations: Any) -> None:
         self._store = store
         self._conversations = conversations
+        # Cursors are local to this owner/service lifetime and contain no chat text.
+        self._cursor_key = os.urandom(32)
+
+    def _cursor_signature(self, encoded: str) -> str:
+        message = (self._conversations.namespace + "\0" + encoded).encode("utf-8")
+        return hmac.new(self._cursor_key, message, hashlib.sha256).hexdigest()
+
+    def _encode_cursor(self, project_id: UUID, record: Any) -> str:
+        cursor = _ConversationCursor(project_id=project_id, updated_at=record.updated_at,
+                                     conversation_id=record.conversation_id)
+        encoded = base64.urlsafe_b64encode(cursor.model_dump_json().encode()).decode().rstrip("=")
+        return encoded + "." + self._cursor_signature(encoded)
+
+    def _decode_cursor(self, token: str, project_id: UUID) -> tuple[datetime, UUID]:
+        if re.fullmatch(r"[A-Za-z0-9_-]{1,900}\.[0-9a-f]{64}", token) is None:
+            raise ValueError("invalid project cursor")
+        encoded, signature = token.split(".")
+        if not hmac.compare_digest(signature, self._cursor_signature(encoded)):
+            raise ValueError("invalid project cursor")
+        raw = base64.b64decode(encoded + "=" * (-len(encoded) % 4), altchars=b"-_", validate=True)
+        cursor = _ConversationCursor.model_validate_json(raw)
+        if cursor.project_id != project_id:
+            raise ValueError("invalid project cursor")
+        return cursor.updated_at, cursor.conversation_id
 
     def handlers(self) -> dict[str, Any]:
         return {method: self.handle for method in self.METHODS}
@@ -300,11 +339,21 @@ class ProjectIpcService:
                     raise ProjectError("Ese proyecto ya no existe.")
                 await self._conversations.set_project(change.conversation_id, change.project_id)
             else:
-                target = _ProjectId.model_validate(raw).project_id
-                chats = sorted((await self._chats_by_project()).get(target, []),
-                               key=lambda record: record.updated_at, reverse=True)
+                page = _ConversationPage.model_validate(raw)
+                boundary = (
+                    self._decode_cursor(page.cursor, page.project_id) if page.cursor else None
+                )
+                if await asyncio.to_thread(self._store.get, page.project_id) is None:
+                    return IpcHandlerResult(ok=False, error_code="project_not_found")
+                chats, has_more = await self._conversations.project_records(
+                    page.project_id, before=boundary, limit=page.limit,
+                )
                 return IpcHandlerResult(ok=True, payload={
-                    "conversations": [public_record(record) for record in chats[:50]]})
+                    "project_id": str(page.project_id),
+                    "conversations": [public_record(record) for record in chats],
+                    "next_cursor": self._encode_cursor(page.project_id, chats[-1])
+                    if has_more else None,
+                })
             return IpcHandlerResult(ok=True, payload=await self._listing())
         except ProjectError as error:
             return IpcHandlerResult(ok=True, payload={**(await self._listing()),

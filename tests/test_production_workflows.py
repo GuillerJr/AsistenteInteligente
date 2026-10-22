@@ -21,6 +21,8 @@ from aegis_core.production_workflows import (
     WorkflowProbe,
 )
 from aegis_core.tools.background_automation import QuietActionVerification
+from aegis_core.tools.native_receipts import NATIVE_RECEIPT_SCOPE
+from aegis_core.tools.verification import result_goal_is_verified, result_is_verified
 
 
 def test_manifest_has_four_unique_multi_checkpoint_flows_per_category(
@@ -74,6 +76,56 @@ async def test_production_gate_proves_every_checkpoint_without_network_or_user_d
     assert "owner@example.com" not in serialized
     assert "nvapi-" not in serialized
     assert str(tmp_path).casefold() not in serialized
+
+
+@pytest.mark.asyncio
+async def test_production_native_fixtures_do_not_turn_acknowledgements_into_verified_goals(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = JarvisProductionWorkflowBenchmark._execution
+    receipts = []
+
+    def recording(authorization, **kwargs):
+        result = original(authorization, **kwargs)
+        if result.success and authorization.tool_name in {"application_open", "browser_search"}:
+            receipts.append(result)
+        return result
+
+    monkeypatch.setattr(JarvisProductionWorkflowBenchmark, "_execution", staticmethod(recording))
+    report = await JarvisProductionWorkflowBenchmark(temporary_root=tmp_path).run()
+    assert report.gate_passed and len(receipts) == 3
+    assert all(result_is_verified(receipt) and not result_goal_is_verified(receipt)
+               for receipt in receipts)
+    assert all(receipt.metadata["verification_scope"] == NATIVE_RECEIPT_SCOPE
+               and receipt.metadata["goal_verified"] is False for receipt in receipts)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tampering", ["empty_receipt", "different_target", "invented_goal"])
+async def test_production_gate_rejects_invalid_or_overclaimed_native_receipts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tampering: str,
+) -> None:
+    original = JarvisProductionWorkflowBenchmark._execution
+
+    def corrupted(authorization, **kwargs):
+        result = original(authorization, **kwargs)
+        if not result.success or authorization.tool_name != "application_open":
+            return result
+        changes = {
+            "empty_receipt": {"output": "{}"},
+            "different_target": {"output": json.dumps({
+                "opened": True, "bundle_identifier": "ai.aegis.other",
+            })},
+            "invented_goal": {"metadata": {**result.metadata, "goal_verified": True}},
+        }
+        return result.model_copy(update=changes[tampering])
+
+    monkeypatch.setattr(JarvisProductionWorkflowBenchmark, "_execution", staticmethod(corrupted))
+    report = await JarvisProductionWorkflowBenchmark(temporary_root=tmp_path).run()
+    failed = {result.workflow_id: result for result in report.results if not result.passed}
+    assert not report.gate_passed
+    assert set(failed) == {"orchestration.three_step_contract", "orchestration.denied_step_pruned"}
+    assert all(result.failure_code == "expectation_failed" for result in failed.values())
 
 
 @pytest.mark.asyncio

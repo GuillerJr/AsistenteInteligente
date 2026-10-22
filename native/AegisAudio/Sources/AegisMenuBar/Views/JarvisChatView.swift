@@ -6,7 +6,6 @@ struct JarvisChatView: View {
     let model: MenuBarModel
     var interactive = true
     var previewBrowser = false
-    @State private var draft = ""
     @State private var selectingFiles = false
     @State private var attachmentDropTarget = false
     @State private var renameEntry: ChatConversationSummary?
@@ -21,6 +20,10 @@ struct JarvisChatView: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
     private var chat: JarvisChatStore { model.chat }
+    private var draft: String {
+        get { chat.composerDraft ?? "" }
+        nonmutating set { chat.composerDraft = newValue.isEmpty ? nil : newValue }
+    }
     private var browserVisible: Bool { (showBrowser || previewBrowser) && chat.pane == .chat }
     private var sideChatVisible: Bool { showSideChat && chat.pane == .chat }
     private var accent: Color { HUDStyle.accent(for: .active) }
@@ -74,11 +77,10 @@ struct JarvisChatView: View {
             if chat.deletePending { confirmingDelete = true; chat.deletePending = false }
         }
         .onChange(of: chat.conversationID) { _, _ in
-            draft = chat.composerDraft ?? ""; composerFocused = true
+            composerFocused = true
         }
         .onChange(of: chat.composerDraft) { _, text in
-            if let text { draft = text; composerFocused = true }
-            else if chat.transcript.messages.isEmpty { draft = "" }
+            if text != nil { composerFocused = true }
         }
         .onChange(of: chat.browserRequest) { _, _ in showBrowser = true; chat.browserPending = false }
         .onChange(of: chat.searchFocusRequest) { _, _ in showBrowser = false; showSideChat = false }
@@ -126,12 +128,12 @@ struct JarvisChatView: View {
         var commands = [
             JarvisPaletteCommand(id: "new", title: String(localized: "Nueva conversación", bundle: .module), symbol: "square.and.pencil",
                                  shortcut: "⌘N", keywords: ["chat", "nuevo"], enabled: manage) {
-                chat.newConversation(); draft = ""; composerFocused = true
+                chat.newConversation(); composerFocused = true
             },
             JarvisPaletteCommand(id: "temporary", title: String(localized: "Chat temporal", bundle: .module), symbol: "eye.slash",
                                  keywords: ["privado", "incognito", String(localized: "sin memoria", bundle: .module)],
                                  enabled: manage && !chat.temporary) {
-                chat.newTemporaryConversation(); draft = ""; composerFocused = true
+                chat.newTemporaryConversation(); composerFocused = true
             },
             JarvisPaletteCommand(id: "browser", title: showBrowser ? String(localized: "Cerrar navegador", bundle: .module) : String(localized: "Abrir navegador", bundle: .module),
                                  symbol: "globe", keywords: ["web", "pagina", "internet", "url"],
@@ -230,6 +232,14 @@ struct JarvisChatView: View {
                         .buttonStyle(.plain).accessibilityLabel(String(localized: "Cerrar confirmación", bundle: .module))
                 }.foregroundStyle(accent).padding(.horizontal, 20).padding(.top, 12)
             }
+            if let warning = chat.appGrantWarning {
+                HStack(alignment: .top, spacing: 8) {
+                    Label(warning, systemImage: "exclamationmark.triangle").font(.system(size: 12))
+                    Spacer()
+                    Button { chat.appGrantWarning = nil } label: { Image(systemName: "xmark") }
+                        .buttonStyle(.plain).accessibilityLabel(String(localized: "Cerrar aviso de permiso", bundle: .module))
+                }.foregroundStyle(HUDStyle.accent(for: .warning)).padding(.horizontal, 20).padding(.top, 12)
+            }
             if model.daemonState != .online {
                 Label(String(localized: "Jarvis está sin conexión. Tu borrador se conserva mientras se restablece el servicio.", bundle: .module),
                       systemImage: "wifi.slash")
@@ -327,7 +337,6 @@ struct JarvisChatView: View {
                 .accessibilityLabel(model.meetingRecording ? String(localized: "Terminar notas de reunión", bundle: .module) : String(localized: "Notas de reunión", bundle: .module))
             Button {
                 chat.newTemporaryConversation()
-                draft = ""
                 composerFocused = true
             } label: { Image(systemName: "eye.slash").frame(width: 16) }
                 .buttonStyle(JarvisIconButtonStyle())
@@ -343,7 +352,6 @@ struct JarvisChatView: View {
     private func newConversationButton(compact: Bool) -> some View {
         Button {
             chat.newConversation()
-            draft = ""
             composerFocused = true
         } label: {
             if compact { Image(systemName: "square.and.pencil").frame(width: 16) }
@@ -476,7 +484,8 @@ struct JarvisChatView: View {
                 ZStack(alignment: .topLeading) {
                     if draft.isEmpty { Text(attachmentDropTarget ? String(localized: "Suelta aquí tus archivos…", bundle: .module) : String(localized: "Pregúntale a Jarvis…", bundle: .module))
                         .font(.system(size: 14)).foregroundStyle(JarvisTheme.inkMuted).padding(.top, 8).padding(.leading, 5) }
-                    TextEditor(text: $draft).font(.system(size: 14)).scrollContentBackground(.hidden)
+                    TextEditor(text: Binding(get: { draft }, set: { draft = $0 }))
+                        .font(.system(size: 14)).scrollContentBackground(.hidden)
                         .frame(minHeight: 40, maxHeight: 120).fixedSize(horizontal: false, vertical: true)
                         .focused($composerFocused)
                         .accessibilityLabel(String(localized: "Mensaje para Jarvis", bundle: .module))
@@ -514,10 +523,14 @@ struct JarvisChatView: View {
                                 .keyboardShortcut(.return, modifiers: .command)
                             Button {
                                 let correction = draft
-                                draft = ""
+                                let conversationID = chat.conversationID
+                                let revision = chat.transcriptRevision
                                 Task {
-                                    if !(await model.steerChatResponse(correction)) && draft.isEmpty {
-                                        draft = correction
+                                    guard chat.conversationID == conversationID,
+                                          chat.transcriptRevision == revision else { return }
+                                    if !(await model.steerChatResponse(correction)) {
+                                        chat.restoreRejectedComposer(correction,
+                                            conversationID: conversationID, revision: revision)
                                     }
                                 }
                             } label: { Label(String(localized: "Corregir", bundle: .module), systemImage: "arrow.uturn.right") }
@@ -532,14 +545,13 @@ struct JarvisChatView: View {
                             let text = draft
                             let conversationID = chat.conversationID
                             let revision = chat.transcriptRevision
-                            draft = ""
                             Task {
                                 guard chat.conversationID == conversationID,
                                       chat.transcriptRevision == revision else { return }
-                                let accepted = await model.sendChatMessage(text)
-                                if !accepted && draft.isEmpty && chat.conversationID == conversationID
-                                    && chat.transcriptRevision == revision && model.canSendChatMessage {
-                                    draft = text
+                                let accepted = await model.sendChatMessage(text, consumingComposer: true)
+                                if !accepted && model.canSendChatMessage {
+                                    chat.restoreRejectedComposer(text,
+                                        conversationID: conversationID, revision: revision)
                                 }
                             }
                         } label: {
@@ -568,7 +580,9 @@ struct JarvisChatView: View {
                 return true
             } isTargeted: { attachmentDropTarget = $0 }
             if !chat.attachments.isEmpty {
-                Text(String(localized: "Al enviar, NVIDIA recibe el contenido de los adjuntos. Los documentos quedan en este chat; las imágenes se usan en este turno.", bundle: .module))
+                Text(chat.transcript.jobID != nil
+                     ? String(localized: "Envía los adjuntos cuando termine la respuesta actual.", bundle: .module)
+                     : String(localized: "Al enviar, NVIDIA recibe el contenido de los adjuntos. Los documentos quedan en este chat; las imágenes se usan en este turno.", bundle: .module))
                     .font(.system(size: 11)).foregroundStyle(JarvisInterfaceStyle.secondaryText)
             }
         }.padding(.horizontal, 20).padding(.bottom, 16).padding(.top, 6)

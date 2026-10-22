@@ -135,6 +135,46 @@ class ConversationRepository:
                 break
         return tuple(records[:limit]), len(records) > limit
 
+    def list_project_records(
+        self, connection: sqlite3.Connection, *, namespace: str, project_id: UUID,
+        before: tuple[datetime, UUID] | None = None, limit: int = 30,
+    ) -> tuple[tuple[ConversationRecord, ...], bool]:
+        """Read an authenticated project page without the global listing's offset cap."""
+        if type(limit) is not int or not 1 <= limit <= 50:
+            raise MemoryQueryError("project conversation page is out of range")
+        parameters: list[object] = [namespace]
+        boundary = ""
+        if before is not None:
+            date, conversation_id = before
+            if date.tzinfo is None or date.utcoffset() is None:
+                raise MemoryQueryError("project conversation boundary is invalid")
+            boundary = " AND (updated_at < ? OR (updated_at = ? AND conversation_id < ?))"
+            parameters.extend([date.isoformat(), date.isoformat(), str(conversation_id)])
+        rows = connection.execute(
+            "SELECT * FROM conversations WHERE namespace = ?" + boundary
+            + " ORDER BY updated_at DESC, conversation_id DESC", parameters,
+        )
+        records = []
+        for row in rows:
+            record = self._row_codec.conversation_from_row(row)
+            if (record.archived or record.context_checkpoints.get("temporary_chat") is True
+                    or record.context_checkpoints.get("project_id") != str(project_id)):
+                continue
+            if record.title in (None, "Chat de Jarvis"):
+                first = connection.execute(
+                    "SELECT * FROM conversation_turns WHERE conversation_id = ? AND sequence = 1",
+                    (str(record.conversation_id),),
+                ).fetchone()
+                if first is not None:
+                    turn = self._row_codec.turn_from_row(first, namespace=namespace)
+                    title = " ".join(turn.content.split())[:128]
+                    if title:
+                        record = record.model_copy(update={"title": title})
+            records.append(record)
+            if len(records) > limit:
+                break
+        return tuple(records[:limit]), len(records) > limit
+
     def archive(
         self, connection: sqlite3.Connection, *, namespace: str,
         conversation_id: UUID, archived: bool,

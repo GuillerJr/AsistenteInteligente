@@ -6,26 +6,54 @@ from uuid import UUID
 
 from aegis_core.contracts import PolicyDecision, ToolAuthorization, ToolExecutionResult
 from aegis_core.tools.computer import ComputerUseReport
+from aegis_core.tools.native_receipts import (
+    NATIVE_RECEIPT_SOURCES,
+    decode_native_json,
+    native_receipt_is_valid,
+    native_result_is_acknowledged,
+    smart_tv_receipt_is_valid,
+    smart_tv_result_is_acknowledged,
+)
 
 
 def result_matches_authorization(
     authorization: ToolAuthorization,
     result: ToolExecutionResult,
 ) -> bool:
-    return (
+    matched = (
         authorization.decision is PolicyDecision.ALLOW
         and result.call_id == authorization.call_id
         and result.tool_name == authorization.tool_name
     )
+    if not matched:
+        return False
+    if result.success and (result.tool_name in NATIVE_RECEIPT_SOURCES
+                           or result.tool_name == "smart_tv_control"):
+        try:
+            payload = decode_native_json(result.output)
+        except (ValueError, RecursionError):
+            return False
+        if result.tool_name == "smart_tv_control":
+            return smart_tv_receipt_is_valid(payload, authorization.normalized_arguments)
+        return native_receipt_is_valid(
+            result.tool_name, payload, authorization.normalized_arguments
+        )
+    return True
 
 
 def result_is_verified(result: ToolExecutionResult) -> bool:
-    """Require real boolean evidence; UI automation also needs terminal completion."""
+    """Verify evidence within its declared scope, not necessarily the user's goal."""
     if not result.success or result.error_code is not None:
         return False
     if "verified" in result.metadata and result.metadata["verified"] is not True:
         return False
     status = result.metadata.get("status")
+    if result.tool_name in NATIVE_RECEIPT_SOURCES:
+        return (status not in {"blocked", "partial", "failed", "step_limit"}
+                and native_result_is_acknowledged(result))
+    if result.tool_name == "smart_tv_control":
+        return (status not in {"blocked", "partial", "failed", "step_limit"}
+                and smart_tv_result_is_acknowledged(result))
     if result.tool_name in {"browser_task_open", "browser_task_action", "browser_task_close"}:
         if result.metadata.get("verified") is not True:
             return False
@@ -71,6 +99,13 @@ def result_is_verified(result: ToolExecutionResult) -> bool:
             and all(check.satisfied for check in report.postcondition_checks)
         )
     return status not in {"blocked", "partial", "failed", "step_limit"}
+
+
+def result_goal_is_verified(result: ToolExecutionResult) -> bool:
+    """An acknowledged command/access grant must not become a verified external goal."""
+    return (result_is_verified(result)
+            and ("goal_verified" not in result.metadata
+                 or result.metadata["goal_verified"] is True))
 
 
 def result_is_recoverable_ui_block(result: ToolExecutionResult) -> bool:

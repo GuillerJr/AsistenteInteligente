@@ -17,6 +17,64 @@ from aegis_core.contracts import (
 from aegis_core.orchestration.routing import (
     PLANNER_LOCAL_READ_TOOLS,
 )
+from aegis_core.tools.native_receipts import (
+    NATIVE_RECEIPT_SOURCES,
+    native_receipt_is_valid,
+    native_receipt_summary,
+)
+from aegis_core.tools.verification import result_is_verified
+
+
+def _deterministic_automation_error_response(
+    authorizations: tuple[ToolAuthorization, ...],
+    tool_results: tuple[ToolExecutionResult, ...],
+) -> str | None:
+    if len(authorizations) != 1 or len(tool_results) != 1:
+        return None
+    authorization, result = authorizations[0], tool_results[0]
+    if (
+        authorization.decision is not PolicyDecision.ALLOW
+        or result.call_id != authorization.call_id
+        or result.tool_name != authorization.tool_name
+        or result.success
+        or result.output != ""
+        or result.tool_name not in {
+            "mail_list_recent", "mail_send_message", "calendar_list_events",
+            "calendar_create_event", "reminders_list", "reminder_create",
+            "reminder_complete", "contacts_search", "contact_create", "media_control",
+        }
+    ):
+        return None
+    if result.tool_name in {
+        "mail_send_message", "calendar_create_event", "reminder_create",
+        "reminder_complete", "contact_create", "media_control",
+    } and result.error_code in {
+        "automation_target_unavailable", "automation_target_ambiguous",
+        "automation_output_limit", "automation_invalid_response", "automation_failed",
+    }:
+        # Native calls can fail while reading back AFTER a mutation succeeded.
+        # An error category is not proof that it is safe to repeat that mutation.
+        return (
+            "No pude comprobar el resultado de la acción en la app. "
+            "Revisa si se aplicó algún cambio antes de repetirla."
+        )
+    return {
+        "automation_target_unavailable": "No encontré el destino solicitado en la app.",
+        "automation_target_ambiguous": (
+            "No pude identificar un único destino. Indica la app o la lista concreta."
+        ),
+        "automation_output_limit": (
+            "La consulta superó el límite de elementos. Acota la lista o el intervalo."
+        ),
+        "automation_invalid_response": (
+            "La app devolvió una respuesta que no pude validar. "
+            "Revisa su estado antes de repetir una acción que cambie datos."
+        ),
+        "automation_failed": (
+            "La automatización de macOS falló. No pude comprobar el resultado; "
+            "revisa la app antes de repetir una acción que cambie datos."
+        ),
+    }.get(result.error_code)
 
 
 def _deterministic_smart_tv_discovery_response(
@@ -800,6 +858,19 @@ def _deterministic_native_control_response(
     }
     if direct_call is None or direct_call.tool_name not in supported:
         return None
+    if direct_call.tool_name in NATIVE_RECEIPT_SOURCES:
+        failure = ("No pude comprobar el resultado de la acción en la app. "
+                   "Revisa si se aplicó algún cambio antes de repetirla.")
+        if len(tool_results) != 1:
+            return failure
+        result = tool_results[0]
+        if (result.call_id != direct_call.call_id or result.tool_name != direct_call.tool_name
+                or not result_is_verified(result)):
+            return failure
+        payload = json.loads(result.output)  # The receipt verifier checked the JSON shape.
+        if not native_receipt_is_valid(result.tool_name, payload, direct_call.arguments):
+            return failure
+        return native_receipt_summary(result.tool_name, payload)
     failures = {
         "application_open": "No pude abrir la aplicación.",
         "browser_open_url": "No pude abrir la dirección web.",
@@ -833,20 +904,6 @@ def _deterministic_native_control_response(
         state = "silenciado" if payload["output_muted"] else "con sonido"
         return f"Audio del Mac {state}, volumen al {payload['output_volume_percent']} %."
 
-    if result.tool_name == "media_control":
-        if (
-            set(payload) != {"action", "bundle_identifier"}
-            or payload["action"] != direct_call.arguments.get("action")
-            or not isinstance(payload["bundle_identifier"], str)
-        ):
-            return failures[result.tool_name]
-        action = {
-            "play_pause": "Alterné reproducción y pausa",
-            "next": "Pasé a la siguiente pista",
-            "previous": "Volví a la pista anterior",
-        }.get(payload["action"])
-        return f"{action}." if action is not None else failures[result.tool_name]
-
     if result.tool_name == "spotlight_search":
         results = payload.get("results")
         query = payload.get("query")
@@ -876,36 +933,6 @@ def _deterministic_native_control_response(
             return failures[result.tool_name]
         return f"Abrí {name} desde Spotlight."
 
-    if result.tool_name == "application_open":
-        bundle_identifier = payload.get("bundle_identifier")
-        if (
-            set(payload) != {"bundle_identifier", "opened"}
-            or payload.get("opened") is not True
-            or bundle_identifier != direct_call.arguments.get("bundle_identifier")
-        ):
-            return failures[result.tool_name]
-        return "Abrí la aplicación solicitada."
-
-    if result.tool_name == "browser_search":
-        browser = payload.get("browser")
-        query = payload.get("query")
-        if (
-            set(payload) != {"browser", "opened", "query"}
-            or payload.get("opened") is not True
-            or browser != direct_call.arguments.get("browser")
-            or query != direct_call.arguments.get("query")
-        ):
-            return failures[result.tool_name]
-        browser_name = {
-            "default": "el navegador predeterminado",
-            "safari": "Safari",
-            "chrome": "Chrome",
-            "firefox": "Firefox",
-        }.get(browser)
-        if browser_name is None:
-            return failures[result.tool_name]
-        return f"Abrí la búsqueda solicitada en {browser_name}."
-
     if result.tool_name == "browser_play_media":
         if (
             set(payload) != {"browser", "channel", "playing", "provider", "query"}
@@ -918,14 +945,7 @@ def _deterministic_native_control_response(
             return failures[result.tool_name]
         return "Inicié la reproducción solicitada en YouTube con Chrome."
 
-    url = payload.get("url")
-    if (
-        set(payload) != {"opened", "url"}
-        or payload.get("opened") is not True
-        or url != direct_call.arguments.get("url")
-    ):
-        return failures[result.tool_name]
-    return "Abrí la dirección web solicitada."
+    return failures[result.tool_name]
 
 
 def _deterministic_mail_unread_status_response(

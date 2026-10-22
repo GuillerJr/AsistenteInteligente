@@ -29,6 +29,7 @@ from aegis_core.orchestration.private_context import (
     _shared_context_instruction,
 )
 from aegis_core.orchestration.response_rendering import (
+    _deterministic_automation_error_response,
     _deterministic_calendar_list_response,
     _deterministic_calendar_today_status_response,
     _deterministic_empty_read_response,
@@ -138,6 +139,11 @@ def create_synthesize_node(
 
         # A plan is written from the evidence; a canned read result is not a plan.
         if not plan_mode(state["request"]):
+            automation_error = _deterministic_automation_error_response(
+                authorizations, tool_results
+            )
+            if automation_error is not None:
+                return deterministic_result(automation_error, "local/automation-error")
             if (authorizations and not tool_results and all(
                 authorization.tool_name == "computer_use"
                 and authorization.decision is PolicyDecision.DENY
