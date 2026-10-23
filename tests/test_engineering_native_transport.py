@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -167,8 +168,21 @@ def test_invalid_read_proposals_cannot_reach_broker(tmp_path: Path, content: str
 
 
 @pytest.mark.asyncio
-async def test_oversized_request_is_explicit_not_silent_truncation(tmp_path: Path) -> None:
-    client = AppleLocalModelClient(helper(tmp_path, 'raise AssertionError("must not generate")'))
+async def test_oversized_request_is_explicit_not_silent_truncation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    executable = helper(tmp_path, 'raise AssertionError("must not generate")')
+    client = AppleLocalModelClient(executable)
+
+    def available(command, **kwargs):
+        # This case tests request size, not interpreter startup under suite load.
+        # test_first_request_negotiates_without_preflight covers the real status probe.
+        assert command == (str(executable), "--status")
+        return subprocess.CompletedProcess(
+            command, 0, stdout=b'{"available":true,"protocol_version":"2.2"}',
+        )
+
+    monkeypatch.setattr("historical.apple.subprocess.run", available)
     with pytest.raises(ModelContextLimitError):
         await client.complete(role=AgentRole.CODE_SECURITY, messages=messages("a" * 25_000))
     assert client._process is None
