@@ -60,7 +60,8 @@ Hecha con Claude Code sobre la app instalada, que coincide con `46e8b75` (versi�
   - Los informes de cobertura REA (`docs/quality/CODEX_REA_*_COVERAGE.json`, unas 50.000 líneas y 1,4 MB) se versionan junto a la documentación; el paquete git pasó de 14 a 17 MB en un día.
   - Dejar en el repositorio el resumen `.md` y mover los JSON a un artefacto de CI o a `dist/` (ignorado).
   - `Localizable.xcstrings` y `es.lproj/Localizable.strings` contienen los mismos textos. Confirmar que el `.strings` se genera siempre desde el catálogo (`docs/LOCALIZACION.md`) y que una prueba falla si se desincronizan.
-- [ ] **R2-8. El historial de chats y los proyectos están vacíos** en el Mac del dueño, papelera incluida; `projects.json` y `memory.sqlite3` se modificaron el 22-10 a las 16:25. La auditoría no registra borrados de conversaciones, así que no se puede saber desde aquí si fue la limpieza del punto 6 o una pérdida de datos. **El dueño debe confirmar si los borró él.** Si no fue así, es un bloqueo P0 y hay que investigarlo antes de cualquier otra cosa. En cualquier caso, conviene auditar los borrados masivos (solo metadatos: cuántos y cuándo).
+- [x] **R2-8. El historial de chats y los proyectos están vacíos** en el Mac del dueño, papelera incluida. **Resuelto el 22-10:** el dueño confirmó que los borró él (limpieza del punto 6); no hubo pérdida de datos.
+- [ ] **R2-9. Auditar los borrados de chats y proyectos (P2).** Al revisar R2-8 no había forma de distinguir un borrado del dueño de una pérdida de datos, porque la auditoría no registra esos borrados. Registrar solo metadatos (tipo, cuántos, cuándo; nunca títulos ni contenido) al eliminar, vaciar la papelera o borrar un proyecto.
 
 **Sigue pendiente del dueño:** P0-1 (Developer ID y notarización), y con él P0-2 (publicar la primera actualización y probar 1.0.0 → 1.0.1), además del recorrido con VoiceOver de P1-12.
 
