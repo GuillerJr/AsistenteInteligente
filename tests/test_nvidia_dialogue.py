@@ -265,6 +265,27 @@ async def test_approved_google_result_is_summarized_and_persisted_exactly_once()
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("tool, reply, expected", [
+    # Live 22-10-2026: the draft existed, the reply said Jarvis could not create drafts.
+    ("mcp_google_workspace__draft_gmail_message",
+     "Soy un modelo de lenguaje, no tengo acceso a tu cuenta de Gmail ni a tus contactos, "
+     "por lo que no puedo crear ni enviar borradores de mensajes.",
+     "Creé el borrador en Gmail. No lo envié: lo tienes en Borradores."),
+    (TOOL, "No puedo revisar tus correos.", "Resultado técnico verificado."),
+])
+async def test_summary_never_denies_an_action_that_already_ran(tool, reply, expected):
+    outcome = approved_outcome()
+    outcome = ApprovedToolOutcome(
+        result=outcome.result.model_copy(update={"tool_name": tool}),
+        rendered_result=outcome.rendered_result,
+    )
+    result = await NvidiaToolResultSummarizer(NvidiaBrainClient(Provider([answer(reply)])))(
+        ApprovedToolContext(uuid4(), REQUEST, None), outcome,
+    )
+    assert result == expected
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("overrides", [{"verified": False}, {"integration": "github"},
                                        {"success": False}])
 async def test_unverified_failed_or_other_provider_results_do_not_go_to_nvidia(overrides):

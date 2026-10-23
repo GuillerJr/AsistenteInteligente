@@ -37,6 +37,31 @@ _NUMBERED_ID = re.compile(r"(?m)^(\s*\d+\.\s*)" + _MESSAGE_ID + r"[ \t]*\n\s*[-*
 _MESSAGE_ID_LINE = re.compile(r"[ \t*_-]*" + _MESSAGE_ID + r"[ \t]*(?:\n|$)", re.IGNORECASE)
 
 
+# The tool already ran and was verified, so a reply that says Jarvis cannot or may not do
+# it contradicts what happened. Seen live: a Gmail draft was created and the summary said
+# "no tengo acceso a tu cuenta de Gmail … no puedo crear ni enviar borradores".
+_DENIES_THE_ACTION = re.compile(
+    r"\b(?:no\s+puedo|no\s+tengo\s+(?:acceso|la\s+capacidad|permiso)|"
+    r"no\s+(?:me\s+)?es\s+posible|(?:soy|como)\s+un\s+modelo\s+de\s+lenguaje)\b",
+    re.IGNORECASE,
+)
+# What a verified Google write did, said plainly when the model's summary cannot be used.
+_WRITE_RECEIPTS = {
+    "__draft_gmail_message": "Creé el borrador en Gmail. No lo envié: lo tienes en Borradores.",
+    "__create_drive_file": "Creé el archivo en Google Drive.",
+    "__create_drive_folder": "Creé la carpeta en Google Drive.",
+    "__update_drive_file": "Actualicé el archivo en Google Drive.",
+    "__manage_event": "Hice el cambio en tu calendario.",
+}
+
+
+def _what_happened(outcome: ApprovedToolOutcome) -> str:
+    for suffix, receipt in _WRITE_RECEIPTS.items():
+        if outcome.result.tool_name.endswith(suffix):
+            return receipt
+    return outcome.rendered_result or "La consulta se completó."
+
+
 def _without_message_ids(text: str) -> str:
     cleaned = _MESSAGE_ID_LINE.sub("", _NUMBERED_ID.sub(r"\1", text)).strip()
     return cleaned or text
@@ -90,6 +115,10 @@ class NvidiaToolResultSummarizer:
                     role=AgentRole.SYNTHESIZER, messages=messages, max_tokens=1_536,
                     temperature=0.0, request_id=context.request_id,
                 )
+            if _DENIES_THE_ACTION.search(result.content):
+                LOGGER.warning("approved_result_summary_denied_action tool=%s",
+                               outcome.result.tool_name)
+                return _what_happened(outcome)
             # A successful first phase cannot claim a compound task is complete.
             if len(progress.steps) > 1 and progress.next_action:
                 return result.content + "\n\nPendiente: " + progress.next_action + "."

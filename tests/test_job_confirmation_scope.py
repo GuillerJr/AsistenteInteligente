@@ -117,6 +117,9 @@ async def test_nvidia_reused_wire_id_requires_new_approval_without_reapplying_ol
             voice_confirmation_verifier=VoiceVerifier(),
             tool_executor=ReadOnlyToolExecutor(tcp_connector=connector),
         )
+        # Which actions a voice may approve is covered in test_voice_approval_scope;
+        # here the voice channel only has to reach the replay check.
+        jobs._reads_only = lambda tool_name: True
 
         async def approve(job_id, digest):
             if channel == "telegram":

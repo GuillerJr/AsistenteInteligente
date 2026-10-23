@@ -120,6 +120,8 @@
 "Aplicación" = "Aplicación";
 "Aplicar y reiniciar" = "Aplicar y reiniciar";
 "Apps que Jarvis puede usar" = "Apps que Jarvis puede usar";
+"Aprobación por voz" = "Aprobación por voz";
+"Aprobar con la voz las acciones de solo lectura" = "Aprobar con la voz las acciones de solo lectura";
 "Aprobar en los ajustes de macOS" = "Aprobar en los ajustes de macOS";
 "Aprobar siempre" = "Aprobar siempre";
 "Aprueba Jarvis en los ítems de inicio de macOS." = "Aprueba Jarvis en los ítems de inicio de macOS.";
@@ -354,6 +356,7 @@
 "Datos ficticios · sin micrófono ni conexión al servicio" = "Datos ficticios · sin micrófono ni conexión al servicio";
 "Decisión de Jarvis" = "Decisión de Jarvis";
 "Dejará de ejecutarse. Su chat con los resultados se conserva." = "Dejará de ejecutarse. Su chat con los resultados se conserva.";
+"Desactivada por defecto. Si la activas, al pedirte una aprobación Jarvis escucha unos segundos y acepta un «sí» de tu voz solo en acciones que leen, como buscar correos. Lo que escribe, envía, borra o usa el Mac siempre pide el botón o Touch ID." = "Desactivada por defecto. Si la activas, al pedirte una aprobación Jarvis escucha unos segundos y acepta un «sí» de tu voz solo en acciones que leen, como buscar correos. Lo que escribe, envía, borra o usa el Mac siempre pide el botón o Touch ID.";
 "Desactivado" = "Desactivado";
 "Desactivar" = "Desactivar";
 "Desactivar %@" = "Desactivar %@";
@@ -908,6 +911,7 @@
 "Perfil local de voz" = "Perfil local de voz";
 "Perfil propietario" = "Perfil propietario";
 "Perfiles de hablante" = "Perfiles de hablante";
+"Perfiles para personalización y contexto privado." = "Perfiles para personalización y contexto privado.";
 "Perfiles para personalización y contexto privado. No aprueban acciones." = "Perfiles para personalización y contexto privado. No aprueban acciones.";
 "Perfiles para personalización y contexto privado. No autentican ni aprueban acciones. Espera a “Grabando” antes de hablar; cada muestra dura 3 segundos." = "Perfiles para personalización y contexto privado. No autentican ni aprueban acciones. Espera a “Grabando” antes de hablar; cada muestra dura 3 segundos.";
 "Permiso guardado para esta conversación." = "Permiso guardado para esta conversación.";

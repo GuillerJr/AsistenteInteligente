@@ -16,6 +16,7 @@ let speakerOwnerDefaultsKey = "ai.aegis.voice.owner-speaker-id"
 let speakerOwnerModelDefaultsKey = "ai.aegis.voice.owner-model-sha256"
 let wakeWordOptInDefaultsKey = "ai.aegis.voice.wake-word-enabled"
 let proactiveAlertsDefaultsKey = "ai.aegis.proactive-alerts-enabled"
+let voiceApprovalDefaultsKey = "ai.aegis.voice.approval-enabled"
 let screenCaptureRequestDefaultsKey = "ai.aegis.privacy.screen-requested"
 let systemSettingsBundleIdentifier = "com.apple.systempreferences"
 
@@ -195,6 +196,10 @@ final class MenuBarModel {
     var proactiveAlertsEnabled = UserDefaults.standard.bool(
         forKey: proactiveAlertsDefaultsKey
     )
+    /// Off unless the owner turns it on: with it off, an approval never opens the microphone.
+    var voiceApprovalEnabled = UserDefaults.standard.bool(forKey: voiceApprovalDefaultsKey) {
+        didSet { UserDefaults.standard.set(voiceApprovalEnabled, forKey: voiceApprovalDefaultsKey) }
+    }
     var pendingApproval: PendingApproval?
     var pendingBrowserSelection: PendingBrowserSelection?
     var pendingInput: PendingInput?

@@ -245,6 +245,8 @@ public struct IPCPendingConfirmation: Equatable, Sendable {
     public let preview: IPCActionPreview?
     /// The tool only reads data, so the owner may always allow it.
     public let standingGrantAvailable: Bool
+    /// The tool only reads, so the daemon accepts a spoken approval for it.
+    public let voiceApprovalAvailable: Bool
     /// A computer-use action in this app: it may be allowed for the chat or always.
     public let appGrantBundle: String?
 
@@ -272,6 +274,7 @@ public struct IPCPendingConfirmation: Equatable, Sendable {
         self.summary = summary
         self.expiresAt = expiresAt
         standingGrantAvailable = object["standing_grant_available"] as? Bool ?? false
+        voiceApprovalAvailable = object["voice_approval_available"] as? Bool ?? false
         appGrantBundle = (object["app_grant_bundle"] as? String).flatMap { $0.utf8.count <= 255 ? $0 : nil }
         if let raw = object["preview"], !(raw is NSNull) {
             guard let preview = IPCActionPreview(object: raw) else { return nil }

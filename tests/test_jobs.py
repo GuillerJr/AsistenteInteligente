@@ -1547,6 +1547,7 @@ async def test_voice_approval_rechecks_job_after_slow_verification(
 
     jobs, audit = _approval_jobs(tmp_path, monotonic_clock=lambda: clock[0])
     jobs._authorization._voice_verifier = Verifier()
+    jobs._reads_only = lambda tool_name: True  # Voice scope: test_voice_approval_scope.
     approval = None
     try:
         queued = await jobs.submit(UserRequest(text="Escanea loopback"))

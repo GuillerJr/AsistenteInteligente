@@ -1453,6 +1453,30 @@
       },
       "generatesSymbol": false
     },
+    "Aprobación por voz": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aprobación por voz"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Aprobar con la voz las acciones de solo lectura": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aprobar con la voz las acciones de solo lectura"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Aprobar en los ajustes de macOS": {
       "extractionState": "manual",
       "localizations": {
@@ -4256,6 +4280,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dejará de ejecutarse. Su chat con los resultados se conserva."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Desactivada por defecto. Si la activas, al pedirte una aprobación Jarvis escucha unos segundos y acepta un «sí» de tu voz solo en acciones que leen, como buscar correos. Lo que escribe, envía, borra o usa el Mac siempre pide el botón o Touch ID.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desactivada por defecto. Si la activas, al pedirte una aprobación Jarvis escucha unos segundos y acepta un «sí» de tu voz solo en acciones que leen, como buscar correos. Lo que escribe, envía, borra o usa el Mac siempre pide el botón o Touch ID."
           }
         }
       },
@@ -10904,6 +10940,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Perfiles de hablante"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Perfiles para personalización y contexto privado.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perfiles para personalización y contexto privado."
           }
         }
       },

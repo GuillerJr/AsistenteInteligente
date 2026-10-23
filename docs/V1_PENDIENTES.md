@@ -47,7 +47,7 @@ Hecha con Claude Code sobre la app instalada, que coincide con `46e8b75` (versi�
 - `MenuBarModel.swift` quedó en 337 líneas y `graph.py` en 732.
 
 **Hallazgos nuevos (resolver antes de la 1.0):**
-- [ ] **R2-1. Prueba intermitente en la interfaz.**
+- [x] **R2-1. Prueba intermitente en la interfaz.** **Resuelto el 22-10:** la prueba volvía a asignar la misma vista y SwiftUI no estaba obligada a redibujarla. Ahora simula el cambio de chat con una identidad de borrador nueva, como la app real, y pasó 6 de 6 ejecuciones completas.
   - `ChatComposerKeyboardTests.testDraftBindingAndConversationReplacementClearPreviousUndo` (`Tests/AegisMenuBarTests/ChatComposerTests.swift:148-150`) falló en 1 de 3 ejecuciones completas de `./script/test_native.sh`: «Deshacer» recuperó el borrador de otro chat. Sola pasa siempre.
   - Puede ser un problema real del gestor de deshacer compartido o del foco entre pruebas. Hay que aislarlo; si no, el pre-push fallará al azar.
   - **Hecho cuando:** 10 ejecuciones completas seguidas pasan.
@@ -62,6 +62,39 @@ Hecha con Claude Code sobre la app instalada, que coincide con `46e8b75` (versi�
   - `Localizable.xcstrings` y `es.lproj/Localizable.strings` contienen los mismos textos. Confirmar que el `.strings` se genera siempre desde el catálogo (`docs/LOCALIZACION.md`) y que una prueba falla si se desincronizan.
 - [x] **R2-8. El historial de chats y los proyectos están vacíos** en el Mac del dueño, papelera incluida. **Resuelto el 22-10:** el dueño confirmó que los borró él (limpieza del punto 6); no hubo pérdida de datos.
 - [ ] **R2-9. Auditar los borrados de chats y proyectos (P2).** Al revisar R2-8 no había forma de distinguir un borrado del dueño de una pérdida de datos, porque la auditoría no registra esos borrados. Registrar solo metadatos (tipo, cuántos, cuándo; nunca títulos ni contenido) al eliminar, vaciar la papelera o borrar un proyecto.
+
+- [x] **R2-10. Una aprobación por voz se concedió sola (P0 de seguridad).**
+  - **Qué pasó:** el 22-10 a las 20:39, en una prueba, Jarvis creó un borrador en Gmail 5 segundos después de mostrar la tarjeta. Nadie lo aprobó.
+  - **Por qué:**
+    - Cada tarjeta abría el micrófono 3 segundos.
+    - El modelo de voz solo distingue entre fondo y «guiller», así que toma cualquier voz por la del dueño.
+    - El reconocedor de Apple tiene «sí» y «ok» como pistas.
+    - Con una sola palabra bastaba.
+  - **Resuelto el mismo día:**
+    - La aprobación por voz está desactivada por defecto, con un interruptor en Ajustes › Voz.
+    - El daemon rechaza la voz en toda acción que no sea de solo lectura (`voice_confirmation_refused`), incluidos el uso del Mac y los flujos de varios pasos.
+    - La app no abre el micrófono si el daemon no marca `voice_approval_available`.
+    - La respuesta posterior a una acción ya no puede negarla: si el modelo dice «no puedo…», Jarvis usa un recibo fijo («Creé el borrador en Gmail. No lo envié…»).
+  - **Pendiente:**
+    - Sustituir el clasificador de dos clases por una verificación de hablante real.
+    - Quitar las pistas «sí/ok» del reconocedor.
+    - Exigir una frase que nombre la acción.
+- [ ] **R2-11. Los modelos elegidos en Ajustes no gobiernan las decisiones.**
+  - La selección de herramientas, la intención y la interpretación de tareas usan `INTERPRETATION_MODEL_IDS` (`models.py:23`, Lightning y GPT-OSS 20B), que ignora Ajustes.
+  - Al configurar DeepSeek V4 Pro, ninguna llamada lo usó y no hubo aviso. Probablemente falló y Jarvis cayó al respaldo en silencio.
+  - **Hecho cuando:** esas decisiones usan el modelo configurado y Diagnóstico avisa cuando un modelo cae a su respaldo.
+- [ ] **R2-12. La búsqueda web no devuelve nada.**
+  - Desde este Mac, `html.duckduckgo.com` responde 202 con una página anti-robots y el RSS de Bing llega vacío (`tools/web.py:257-258`).
+  - `web_research` termina «con éxito» con 68 bytes y Jarvis responde «No encontré resultados públicos».
+  - **Hecho cuando:** una búsqueda real devuelve fuentes, o el fallo del proveedor se informa como error y no como «sin resultados».
+- [ ] **R2-13. Elección de herramientas con el modelo actual.** En una batería fija con chats temporales, Jarvis propuso herramientas equivocadas en 4 de 7 turnos:
+  - programar una tarea ante «solo confírmame que lo anotaste»;
+  - buscar en Gmail para ordenar una lista que estaba en el chat;
+  - crear un archivo en Drive o un borrador ante «escribe un mensaje»;
+  - Drive en vez de TextEdit.
+
+  Se resolverá en parte con R2-11. También hay que revisar los atajos de `direct_actions.py`, ampliar el contexto (hoy 12 mensajes y 16 KB, y el selector de herramientas solo ve 2 mensajes) y no ofrecer herramientas de escritura cuando la petición solo pide redactar.
+- [ ] **R2-14. Al rechazar una acción**, la ventana «Decisión de Jarvis» sigue abierta (ver R2-2) y la barra lateral mantiene «Requiere tu atención 1».
 
 **Sigue pendiente del dueño:** P0-1 (Developer ID y notarización), y con él P0-2 (publicar la primera actualización y probar 1.0.0 → 1.0.1), además del recorrido con VoiceOver de P1-12.
 

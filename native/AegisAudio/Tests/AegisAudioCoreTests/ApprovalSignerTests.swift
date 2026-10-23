@@ -129,6 +129,11 @@ private struct InMemoryApprovalSigner: ApprovalSigning {
     readOnly["standing_grant_available"] = true
     #expect(IPCPendingConfirmation(object: readOnly)?.standingGrantAvailable == true)
     #expect(IPCPendingConfirmation(object: base)?.standingGrantAvailable == false)
+    var spoken = base
+    spoken["voice_approval_available"] = true
+    #expect(IPCPendingConfirmation(object: spoken)?.voiceApprovalAvailable == true)
+    // An older daemon that does not say so never lets a voice approve.
+    #expect(IPCPendingConfirmation(object: base)?.voiceApprovalAvailable == false)
 }
 
 @Test func actionHistoryDeletionBindsItsOwnMethodSnapshotAndScope() throws {

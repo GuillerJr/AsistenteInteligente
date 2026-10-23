@@ -62,7 +62,12 @@ from aegis_core.memory.conversations import ConversationCoordinator
 from aegis_core.memory.errors import MemoryStoreError
 from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.social import SocialMemory
-from aegis_core.standing_grants import StandingGrant, StandingGrantError, StandingGrantStore
+from aegis_core.standing_grants import (
+    STANDING_GRANT_CAPABILITIES,
+    StandingGrant,
+    StandingGrantError,
+    StandingGrantStore,
+)
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 from aegis_core.tools.broker import PolicyContext, ToolBroker
 from aegis_core.tools.computer import ComputerUseReport, ComputerVisionNotDispatchedError
@@ -403,6 +408,11 @@ class SwarmJobManager:
             )
             return snapshot, tool_name
 
+    def _reads_only(self, tool_name: str) -> bool:
+        broker = self._workflow_broker
+        definition = broker.definition(tool_name) if broker is not None else None
+        return definition is not None and definition.capability in STANDING_GRANT_CAPABILITIES
+
     def _record_standing(
         self, snapshot: JobSnapshot, event_type: str, tool_name: str, channel: str,
     ) -> None:
@@ -432,6 +442,18 @@ class SwarmJobManager:
             confirmation = self._lifecycle.confirmation_context(job_id)
             if call_digest != confirmation.expected_call_digest:
                 raise JobConfirmationError("confirmation is unavailable")
+            job = self._registry.get(job_id)
+            if (not self._reads_only(confirmation.call.tool_name)
+                    or (job is not None and job.computer_workflow is not None)):
+                # Nearby speech once approved a Gmail draft on its own: a voice can
+                # only stand in for the button on actions that read.
+                self._audit.record_system_event(
+                    job.request_id if job is not None else uuid4(),
+                    event_type="voice_confirmation_refused",
+                    component="job_authorization",
+                    data={"job_id": str(job_id), "reason": "action_changes_data"},
+                )
+                raise JobConfirmationError("this action cannot be approved by voice")
         grant = await self._authorization.verified_voice_grant(
             pcm,
             speaker_identifier=speaker_identifier,
@@ -639,6 +661,7 @@ class SwarmJobManager:
                 summary=summary,
                 now=now,
                 standing_grant_available=eligible and workflow is None,
+                voice_approval_available=self._reads_only(call.tool_name) and workflow is None,
                 app_grant_bundle=app_bundle,
             )
             if self._lifecycle.snapshot(job_id).status is not JobStatus.AWAITING_CONFIRMATION:

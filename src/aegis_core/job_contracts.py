@@ -147,6 +147,9 @@ class PendingToolConfirmation(BaseModel):
     preview: ActionPreview | None = None
     # The tool only reads, so the owner may approve it once and for all.
     standing_grant_available: bool = False
+    # The tool only reads, so a spoken approval may stand in for the button. Writes,
+    # sends, deletes and computer use always need the button or Touch ID.
+    voice_approval_available: bool = False
     # A computer-use action in this application: the owner may allow Jarvis to keep
     # working in it for this conversation or always.
     app_grant_bundle: str | None = Field(default=None, max_length=255)

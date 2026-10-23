@@ -201,7 +201,14 @@ extension MenuBarModel {
         else {
             return
         }
-        let ownerIdentifier = effectiveSpeakerOwnerIdentifier
+        // Without an owner the authorizer never opens the microphone and only asks for
+        // Touch ID: voice stays off unless the owner enabled it, and the daemon only
+        // lets a voice approve actions that read.
+        let ownerIdentifier = Self.voiceApprovalOwner(
+            effectiveSpeakerOwnerIdentifier,
+            enabled: voiceApprovalEnabled,
+            confirmation: approval.confirmation
+        )
         let modelFingerprint = speakerIdentityModelFingerprint
         dualAuthorizationTask = Task { @MainActor [weak self] in
             guard let self else { return }
@@ -250,6 +257,14 @@ extension MenuBarModel {
                 }
             }
         }
+    }
+
+    nonisolated static func voiceApprovalOwner(
+        _ owner: String?,
+        enabled: Bool,
+        confirmation: IPCPendingConfirmation
+    ) -> String? {
+        enabled && confirmation.voiceApprovalAvailable ? owner : nil
     }
 
     func cancelDualAuthorization() {

@@ -43,6 +43,13 @@ final class ChatComposerAvailabilityTests: XCTestCase {
 
 @MainActor
 final class ChatComposerKeyboardTests: XCTestCase {
+    private func waitUntil(_ condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now + .seconds(2)
+        while !condition(), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
     private func descendants(_ view: NSView) -> [NSView] {
         [view] + view.subviews.flatMap(descendants)
     }
@@ -134,7 +141,11 @@ final class ChatComposerKeyboardTests: XCTestCase {
         let host = NSHostingView(rootView: view)
         window.contentView = host
         window.setContentSize(NSSize(width: 400, height: 100))
-        try await Task.sleep(for: .milliseconds(150))
+        // SwiftUI applies updates on its own schedule; a fixed 150 ms wait failed under
+        // the full parallel suite, so wait for the change itself (bounded).
+        try await waitUntil {
+            self.descendants(host).contains { $0 is JarvisComposerNativeTextView }
+        }
         let editor = try XCTUnwrap(descendants(host).compactMap { $0 as? JarvisComposerNativeTextView }.first)
         XCTAssertEqual(editor.string, draft)
         XCTAssertGreaterThan(editor.bounds.width, 200)
@@ -143,8 +154,15 @@ final class ChatComposerKeyboardTests: XCTestCase {
         XCTAssertEqual(draft, "Primer borrador sintético añadido")
         XCTAssertTrue(editor.undoManager?.canUndo == true)
         draft = "Segundo chat sintético"
-        host.rootView = view
-        try await Task.sleep(for: .milliseconds(150))
+        // A conversation switch renders the composer with the new chat's draft identity.
+        // Reassigning the identical view left the update to SwiftUI's discretion, which
+        // made this test fail about one run in three.
+        host.rootView = JarvisComposerTextEditor(
+            text: Binding(get: { draft }, set: { draft = $0 }),
+            focused: Binding(get: { focused }, set: { focused = $0 }),
+            draftIdentity: UUID(),
+            interactive: true, onSubmit: {})
+        try await waitUntil { editor.string == "Segundo chat sintético" }
         XCTAssertEqual(editor.string, "Segundo chat sintético")
         XCTAssertFalse(editor.undoManager?.canUndo == true, "Deshacer no debe recuperar texto de otro chat")
         XCTAssertEqual(editor.selectedRange().location, (draft as NSString).length)
