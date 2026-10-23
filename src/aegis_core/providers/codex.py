@@ -573,20 +573,6 @@ class CodexChatProvider:
             raise
 
     async def _complete(self, role, messages, extra, perception_only, *, model_ids, short):
-        account = await self._request("account/read", {"refreshToken": False})
-        if (
-            not isinstance(account.get("account"), dict)
-            or account["account"].get("type") != "chatgpt"
-        ):
-            raise ProviderError(
-                "Inicia sesión en Codex con ChatGPT.", status_code=401, terminal=True,
-            )
-        if not self._models:
-            await self.list_models()
-        model = model_ids[0] if model_ids else self._selected()
-        selected = next((item for item in self._models if item["id"] == model), None)
-        if selected is None:
-            raise ProviderError("El modelo elegido no está disponible en Codex.", terminal=True)
         tools = extra.get("tools", [])
         functions = [item.get("function", {}) for item in tools if isinstance(item, dict)]
         names = [item.get("name") for item in functions]
@@ -601,6 +587,26 @@ class CodexChatProvider:
             if target not in names:
                 raise ProviderError("La herramienta solicitada no está disponible.")
             names = [target]
+        must_call = choice == "required" or isinstance(choice, Mapping)
+        if must_call and not names:
+            raise ProviderError("La solicitud requiere una herramienta disponible.")
+        # Validate the requested tool contract before account, model or turn RPC.
+        # Optional/auto calls retain their ordinary text-response alternative.
+        tool_choices = names if must_call else ["", *names]
+        account = await self._request("account/read", {"refreshToken": False})
+        if (
+            not isinstance(account.get("account"), dict)
+            or account["account"].get("type") != "chatgpt"
+        ):
+            raise ProviderError(
+                "Inicia sesión en Codex con ChatGPT.", status_code=401, terminal=True,
+            )
+        if not self._models:
+            await self.list_models()
+        model = model_ids[0] if model_ids else self._selected()
+        selected = next((item for item in self._models if item["id"] == model), None)
+        if selected is None:
+            raise ProviderError("El modelo elegido no está disponible en Codex.", terminal=True)
         base, developer, inputs = self._prompt(messages)
         if len(inputs) > 1 and not selected["images"]:
             raise ProviderError("El modelo de Codex elegido no admite imágenes.")
@@ -617,7 +623,7 @@ class CodexChatProvider:
         )
         schema = {"type": "object", "additionalProperties": False,
                   "properties": {"content": {"type": "string"},
-                                 "tool_name": {"type": "string", "enum": ["", *names]},
+                                 "tool_name": {"type": "string", "enum": tool_choices},
                                  "arguments_json": {"type": "string"}},
                   "required": ["content", "tool_name", "arguments_json"]}
         thread = await self._request("thread/start", {

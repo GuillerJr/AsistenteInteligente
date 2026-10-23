@@ -39,6 +39,9 @@ _TV_DISCOVERY_RESTRICTION = re.compile(
 )
 _NATIVE_UI_REQUEST = re.compile(
     _PREFIX + r"(?:por favor )?(?:"
+    r"(?:en|dentro de) (?:(?:la|el) (?:app|aplicacion|ventana) )?"
+    r"(?P<leading_textedit_target>textedit|editor de texto)\b[ ,:]+"
+    r"(?:por favor )?(?:escribe|escribir|pega|pegar|selecciona|seleccionar)\b|"
     r"(?:controla|controlar|maneja|manejar)(?: visualmente)? "
     r"(?:(?:la|el|mi|esta) )?(?:app|aplicacion|programa|ventana)\b|"
     r"(?:interactua|interactuar)(?: visualmente)? con "
@@ -177,6 +180,9 @@ def native_ui_target_prefix(text: str) -> str | None:
         return None
     command = folded_request(mask_quoted_text(text))
     match = _NATIVE_UI_REQUEST.match(command)
+    if match is not None and match.group("leading_textedit_target") is not None:
+        # Keep the Spanish app name bound to the same bundle as TextEdit.
+        return "textedit"
     return command[match.end():].lstrip(" :").removeprefix("de ") if match is not None else None
 
 

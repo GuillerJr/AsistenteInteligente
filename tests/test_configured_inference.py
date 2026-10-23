@@ -178,3 +178,52 @@ def test_codex_runtime_does_not_reuse_or_modify_previous_provider_app_grants(tmp
     selected.grant("com.apple.TextEdit", conversation_id=None)
     assert selected.allows("com.apple.TextEdit", None)
     assert old_path.read_bytes() == before
+
+
+@pytest.mark.parametrize(("choice", "expected"), [("auto", "auto"),
+    ({"type": "function", "function": {"name": "private_tool_name"}}, "named")])
+async def test_tool_diagnostics_record_counts_without_private_names_or_arguments(choice, expected):
+    class Audit:
+        def __init__(self):
+            self.events = []
+
+        def record_system_event(self, request_id, **event):
+            self.events.append(event)
+
+    call = ToolCall(call_id="synthetic", tool_name="private_tool_name",
+                    arguments={"secret": "PRIVATE_ARGUMENT"}, requested_by=AgentRole.PLANNER)
+    transport = SyntheticCodexTransport(answer("", calls=(call,)))
+    audit = Audit()
+    await InferenceBrainClient(transport, audit_sink=audit).complete_inference(
+        role=AgentRole.PLANNER, messages=[{"role": "user", "content": "PRIVATE_PROMPT"}],
+        extra_body={"tools": [{"type": "function", "function": {"name": "private_tool_name"}}],
+                    "tool_choice": choice},
+    )
+    data = audit.events[0]["data"]
+    assert data["offered_tools_count"] == 1
+    assert data["proposed_tools_count"] == 1
+    assert data["tool_choice"] == expected
+    assert "PRIVATE" not in json.dumps(audit.events)
+    assert "private_tool_name" not in json.dumps(audit.events)
+
+
+async def test_tool_diagnostics_distinguish_optional_decline_from_no_catalogue():
+    class Audit:
+        def __init__(self):
+            self.events = []
+
+        def record_system_event(self, request_id, **event):
+            self.events.append(event)
+
+    audit = Audit()
+    transport = SyntheticCodexTransport(answer("No tengo disponible esa lectura."), answer())
+    brain = InferenceBrainClient(transport, audit_sink=audit)
+    await brain.complete_inference(
+        role=AgentRole.PLANNER, messages=[], extra_body={
+            "tools": [{"type": "function", "function": {"name": "synthetic_status"}}],
+            "tool_choice": "auto",
+        },
+    )
+    await brain.complete_inference(role=AgentRole.PLANNER, messages=[])
+    assert [(e["data"]["offered_tools_count"], e["data"]["proposed_tools_count"])
+            for e in audit.events] == [(1, 0), (0, 0)]

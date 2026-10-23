@@ -42,6 +42,10 @@ DOCUMENT_REQUEST = (
     "Escribe exactamente «PRUEBA JARVIS SIEMPRE A» en el documento nuevo y vacío de TextEdit. "
     "No guardes ni cierres el documento."
 )
+DESTINATION_FIRST_REQUEST = (
+    "En TextEdit, escribe exactamente «PRUEBA JARVIS CODEX A» en el documento vacío. "
+    "No lo guardes ni lo cierres y no uses otras aplicaciones."
+)
 DRIVE_TOOL = "mcp_google_workspace__create_drive_file"
 CATALOGUE = ((DRIVE_TOOL, "Crea un archivo en Google Drive"),)
 
@@ -215,13 +219,14 @@ class TextOnlyUiProvider(UiProvider):
         )
 
 
-async def test_text_only_gui_approval_imitation_is_incomplete_and_never_executed(tmp_path):
+@pytest.mark.parametrize("text", [REQUEST, DESTINATION_FIRST_REQUEST])
+async def test_text_only_gui_approval_imitation_is_incomplete_and_never_executed(tmp_path, text):
     provider = TextOnlyUiProvider()
     chunks = []
 
     with pytest.raises(IncompleteModelResponseError, match="requested action has no tool proposal"):
         await make_graph(tmp_path, provider).ainvoke({
-            "request": UserRequest(text=REQUEST), "stream_callback": chunks.append,
+            "request": UserRequest(text=text), "stream_callback": chunks.append,
         })
 
     assert [item["role"] for item in provider.requests] == [AgentRole.PLANNER]
@@ -232,11 +237,12 @@ async def test_text_only_gui_approval_imitation_is_incomplete_and_never_executed
 
 
 @pytest.mark.parametrize("metadata", [{PLAN_MODE_METADATA: True}, {UNSIGNED_PEER_METADATA: True}])
-async def test_text_only_response_does_not_force_unavailable_gui_tools(tmp_path, metadata):
+@pytest.mark.parametrize("text", [REQUEST, DESTINATION_FIRST_REQUEST])
+async def test_text_only_response_does_not_force_unavailable_gui_tools(tmp_path, metadata, text):
     provider = TextOnlyUiProvider()
 
     state = await make_graph(tmp_path, provider).ainvoke({
-        "request": UserRequest(text=REQUEST, metadata=metadata),
+        "request": UserRequest(text=text, metadata=metadata),
     })
 
     assert all(not (item.get("extra_body") or {}).get("tools") for item in provider.requests)
@@ -267,11 +273,12 @@ async def test_unexpected_drive_write_is_denied_before_owner_approval(tmp_path, 
 
 
 @pytest.mark.parametrize("metadata", [{PLAN_MODE_METADATA: True}, {UNSIGNED_PEER_METADATA: True}])
-async def test_ui_scope_does_not_bypass_plan_or_unsigned_restrictions(tmp_path, metadata):
+@pytest.mark.parametrize("text", [REQUEST, DESTINATION_FIRST_REQUEST])
+async def test_ui_scope_does_not_bypass_plan_or_unsigned_restrictions(tmp_path, metadata, text):
     provider = UiProvider()
 
     state = await make_graph(tmp_path, provider, dynamic=True).ainvoke({
-        "request": UserRequest(text=REQUEST, metadata=metadata),
+        "request": UserRequest(text=text, metadata=metadata),
     })
 
     planning = next(item for item in provider.requests if item["role"] is AgentRole.PLANNER)
@@ -412,4 +419,37 @@ async def test_textedit_document_destination_rejects_another_app_bundle(tmp_path
     authorization, = state["tool_authorizations"]
     assert authorization.decision is PolicyDecision.DENY
     assert authorization.reason_code == "computer_destination_not_requested"
+    assert not state.get("tool_results")
+
+
+@pytest.mark.parametrize("destination", ["TextEdit", "Editor de Texto"])
+@pytest.mark.parametrize("bundle", ["com.apple.TextEdit", "com.apple.Safari"])
+async def test_destination_first_textedit_requires_the_bound_app_and_owner_approval(
+    tmp_path, destination, bundle,
+):
+    text = DESTINATION_FIRST_REQUEST.replace("TextEdit", destination)
+    provider = UiProvider(objective=text, literal="PRUEBA JARVIS CODEX A")
+    provider.call = provider.call.model_copy(update={"arguments": {
+        **provider.call.arguments, "application_bundle_identifier": bundle,
+    }})
+
+    state = await make_graph(tmp_path, provider, dynamic=True).ainvoke({
+        "request": UserRequest(text=text),
+    })
+
+    planning, = provider.requests
+    assert planning["role"] is AgentRole.PLANNER
+    assert [tool["function"]["name"] for tool in planning["extra_body"]["tools"]] == [
+        "computer_use",
+    ]
+    assert planning["extra_body"]["tool_choice"] == {
+        "type": "function", "function": {"name": "computer_use"},
+    }
+    authorization, = state["tool_authorizations"]
+    if bundle == "com.apple.TextEdit":
+        assert authorization.decision is PolicyDecision.REQUIRE_CONFIRMATION
+        assert authorization.normalized_arguments["objective"] == text
+    else:
+        assert authorization.decision is PolicyDecision.DENY
+        assert authorization.reason_code == "computer_destination_not_requested"
     assert not state.get("tool_results")

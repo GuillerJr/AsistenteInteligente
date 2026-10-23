@@ -36,7 +36,9 @@ Codex con ChatGPT mediante el cliente oficial, con sesión propia y herramientas
 sujetas al broker de Jarvis. Los embeddings usan Apple local; voz y notas de audio
 quedan sin configurar. Ver [ADR-0235](architecture/ADR-0235-configured-inference-and-codex-chatgpt.md).
 
-- [ ] Completar el inicio de sesión del dueño y la prueba de conexión desde la app firmada.
+- [x] Inicio de sesión del dueño y prueba de conexión desde la app firmada: verificados
+  el 23-10 con la revisión `291d0c6`. También pasaron texto, visión sintética y una
+  lectura real `system_power_status` con resultado verificado.
 - [ ] Repetir el recorrido TextEdit «Siempre», uso en otro chat y revocación con Codex.
   P1-5/R2-3 siguen abiertos: el cambio de modelo no acredita por sí solo la ejecución.
 - [ ] Incorporar una alternativa de audio y volver a certificar la voz.

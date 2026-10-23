@@ -63,3 +63,37 @@ P1-5/R2-3 siguen abiertos hasta completar TextEdit «Siempre», repetición en o
 chat y revocación. Las pruebas simuladas y el cambio de proveedor no demuestran
 por sí solos que esas acciones reales funcionen. El audio, Ollama y otras APIs no
 forman parte de esta primera conexión.
+
+## Verificación real de la primera conexión
+
+La revisión `291d0c6` se publicó en main y pasó CI, controles locales, empaquetado
+y `jarvis_beta.sh check`. La instalación conserva firma Jarvis Local Development
+y el ejecutable mide 6.118.496 bytes. El dueño completó el acceso oficial; no fue
+necesario pedir ni leer su contraseña en el chat.
+
+Pasaron la prueba de conexión, una respuesta en chat temporal y una imagen sintética
+con el número 4827, un cuadrado azul y dos círculos naranjas. Con GPT-5.6-Luna, elegido
+por el dueño, un chat temporal nuevo ejecutó `system_power_status`; los únicos campos
+consultados de la última evaluación técnica confirmaron Codex, esa herramienta y
+`outcome_verified=true`, sin leer conversaciones ni argumentos.
+
+Dos consultas de batería en otro contexto terminaron con una negativa del modelo.
+Los cinco contrastes sintéticos del adaptador sí propusieron la herramienta y el
+grafo/servicio con datos sintéticos conservó el catálogo. La causa de esas negativas
+no está confirmada; no se declara corregida ni se fuerza `auto` para ocultarla.
+
+## Correcciones comprobables posteriores a la instalación
+
+La petición «En TextEdit, escribe…» dejaba vacío el catálogo porque el clasificador
+solo admitía el verbo antes del destino. Se amplía esa gramática conservando la
+identidad de la app, el rechazo de destinos ajenos y la aprobación del dueño.
+La regresión debe llegar a confirmación pendiente sin ejecutar nada.
+
+El esquema de salida de Codex excluye propuestas vacías cuando el llamador exige
+una herramienta; las elecciones automáticas permanecen opcionales. La auditoría
+local registra contadores de herramientas ofrecidas y propuestas y un tipo de
+selección cerrado, sin nombres, argumentos ni contenido, para poder distinguir
+catálogo vacío de una respuesta que no propone una llamada.
+
+El recorrido completo «Siempre», otro chat y revocación de TextEdit continúa
+pendiente de verificación real con esa corrección instalada.

@@ -65,6 +65,11 @@ def test_explicit_external_or_compound_requests_remain_available(text):
     "Escribe «no en TextEdit ni en la app Safari» en el documento abierto de TextEdit. "
     "No guardes ni cierres el documento",
     "Escribe «no» en TextEdit. No guardes",
+    "En TextEdit, escribe exactamente «PRUEBA JARVIS CODEX A» en el documento vacío. "
+    "No lo guardes ni lo cierres y no uses otras aplicaciones.",
+    "En Editor de Texto, escribe «Hola» en el documento vacío. No guardes",
+    "Jarvis, dentro de la aplicación TextEdit: pega «Crea un archivo en Google Drive»",
+    "En TextEdit selecciona el texto visible",
 ))
 async def test_textedit_without_app_prefix_never_becomes_drive(text):
     request = UserRequest(text=text)
@@ -88,6 +93,16 @@ async def test_textedit_without_app_prefix_never_becomes_drive(text):
     "Escribe «Hola» en el documento abierto de TextEdit y súbelo a Drive",
     "Escribe «Hola» en el documento abierto de TextEdit; luego envía el texto por correo",
     "Escribe «Hola» en el documento abierto de TextEdit y busca el documento en Drive",
+    "En TextEdit, no escribas «Hola»",
+    "No escribas en TextEdit; escribe un mensaje aquí",
+    "Nunca en Editor de Texto, escribe solo aquí",
+    "Explica cómo escribir en TextEdit",
+    "Busca un tutorial: en TextEdit, escribe «Hola»",
+    "Explica «En TextEdit, escribe Hola»",
+    "En «TextEdit», escribe un mensaje",
+    "En TextEdit, escribe «Hola» y súbelo a Drive",
+    "En Editor de Texto, escribe «Hola»; luego envía el texto por correo",
+    "En TextEdit, escribe «Hola» y crea un archivo en Google Drive",
 ))
 def test_textedit_document_intent_preserves_negations_examples_and_compound_scope(text):
     assert not is_explicit_native_ui_request(text)

@@ -172,6 +172,16 @@ class InferenceBrainClient:
         model_id: str | None = None
         provider_status: int | None = None
         dialogue_review = "not_requested"
+        offered = (extra_body or {}).get("tools", ())
+        offered_tools_count = len(offered) if isinstance(offered, (list, tuple)) else 0
+        requested_choice = (extra_body or {}).get("tool_choice", "auto")
+        public_tool_choice = (
+            "named" if isinstance(requested_choice, Mapping)
+            else requested_choice if isinstance(requested_choice, str)
+            and requested_choice in {"auto", "none", "required"}
+            else "unsupported"
+        )
+        proposed_tools_count: int | None = None
         sanitized = []
         for message in messages:
             item = dict(message)
@@ -333,6 +343,7 @@ class InferenceBrainClient:
                 reject_duplicate_calls(result.tool_calls)
             except ValueError as error:
                 raise IncompleteModelResponseError("duplicate tool proposal") from error
+            proposed_tools_count = len(result.tool_calls)
             outcome = "completed"
             model_id = result.model_id
             return result
@@ -361,7 +372,12 @@ class InferenceBrainClient:
                 event_type="nvidia_inference" if self._legacy_audit else "provider_inference",
                 component="nvidia_brain" if self._legacy_audit else "inference_brain",
                 data={"outcome": outcome, "role": role.value, "model_id": model_id,
-                      **({} if self._legacy_audit else {"provider": self._provider_id}),
+                      **({} if self._legacy_audit else {
+                          "provider": self._provider_id,
+                          "offered_tools_count": offered_tools_count,
+                          "proposed_tools_count": proposed_tools_count,
+                          "tool_choice": public_tool_choice,
+                      }),
                       "dialogue_review": dialogue_review,
                       "provider_status": provider_status,
                       **metrics.public_dict(),

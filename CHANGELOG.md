@@ -2,6 +2,9 @@
 
 ## 1.0.0
 
+- Solicitudes de TextEdit con el destino al principio, sin perder la confirmación del dueño.
+- Propuestas obligatorias de Codex con esquema estricto y contadores locales de herramientas sin contenido privado.
+
 - Conexión mediante Codex con la cuenta de ChatGPT, inicio de sesión oficial y selección de modelos del catálogo disponible.
 - Inferencia aislada de las herramientas: el broker de Jarvis conserva las aprobaciones y la ejecución.
 - Embeddings locales de Apple; NVIDIA deja de usarse en producción. La voz y las notas de audio quedan sin configurar durante la migración.

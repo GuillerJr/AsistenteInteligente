@@ -308,8 +308,63 @@ async def test_tool_is_only_a_local_proposal_and_arguments_are_validated_by_jarv
     assert call.arguments == {"objective": "PRUEBA JARVIS B"}
     assert call.requested_by is AgentRole.PLANNER
     turn = next(params for method, params in rpc.calls if method == "turn/start")
-    assert turn["outputSchema"]["properties"]["tool_name"]["enum"] == ["", "computer_use"]
+    assert turn["outputSchema"]["properties"]["tool_name"]["enum"] == ["computer_use"]
     assert not any(method.startswith("item/") for method, _ in rpc.calls)
+
+
+async def test_named_tool_schema_offers_only_the_explicitly_selected_proposal(client):
+    provider, rpc = client
+    rpc.reply = json.dumps({"content": "", "tool_name": "computer_use",
+                            "arguments_json": '{"objective":"PRUEBA JARVIS B"}'})
+    extra_tool = {"type": "function", "function": {
+        "name": "synthetic_status", "description": "Propuesta ficticia, sin ejecución.",
+        "parameters": {"type": "object", "properties": {}},
+    }}
+    result = await provider.complete(role=AgentRole.PLANNER, messages=MESSAGES, extra_body={
+        "tools": [*TOOLS, extra_tool],
+        "tool_choice": {"type": "function", "function": {"name": "computer_use"}},
+    })
+    assert [call.tool_name for call in result.tool_calls] == ["computer_use"]
+    turn = next(params for method, params in rpc.calls if method == "turn/start")
+    assert turn["outputSchema"]["properties"]["tool_name"]["enum"] == ["computer_use"]
+
+
+@pytest.mark.parametrize("extra", [
+    {"tool_choice": "required"}, {"tools": [], "tool_choice": "required"},
+])
+async def test_required_tool_without_any_functions_is_rejected_before_rpc(client, extra):
+    provider, rpc = client
+    with pytest.raises(ProviderError, match="herramienta disponible"):
+        await provider.complete(role=AgentRole.PLANNER, messages=MESSAGES, extra_body=extra)
+    assert rpc.calls == []
+
+
+@pytest.mark.parametrize("choice", [
+    "required", {"type": "function", "function": {"name": "computer_use"}},
+])
+async def test_required_tool_parser_still_rejects_empty_choice_if_decoder_contract_is_broken(
+    client, choice,
+):
+    provider, rpc = client
+    # The protocol double intentionally violates outputSchema with a text reply.
+    with pytest.raises(IncompleteModelResponseError):
+        await provider.complete(role=AgentRole.PLANNER, messages=MESSAGES,
+                                extra_body={"tools": TOOLS, "tool_choice": choice})
+    assert rpc.closed >= 1
+
+
+@pytest.mark.parametrize("extra, expected", [
+    ({}, [""]),
+    ({"tools": []}, [""]),
+    ({"tools": TOOLS, "tool_choice": "auto"}, ["", "computer_use"]),
+    ({"tools": TOOLS, "tool_choice": "none"}, [""]),
+])
+async def test_optional_tool_contract_keeps_text_response_available(client, extra, expected):
+    provider, rpc = client
+    result = await provider.complete(role=AgentRole.PLANNER, messages=MESSAGES, extra_body=extra)
+    assert result.content == "4" and result.tool_calls == ()
+    turn = next(params for method, params in rpc.calls if method == "turn/start")
+    assert turn["outputSchema"]["properties"]["tool_name"]["enum"] == expected
 
 
 @pytest.mark.parametrize("reply", [
