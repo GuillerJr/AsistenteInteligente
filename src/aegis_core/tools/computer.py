@@ -262,6 +262,7 @@ class ComputerUseReport(BaseModel):
             "missing_postcondition",
             "postcondition_failed",
             "no_progress",
+            "model_blocked",
             "action_binding",
             "sensitive_state",
             "user_takeover",
@@ -1161,6 +1162,11 @@ class ComputerUseController:
                             steps=steps,
                             application_bundle_identifier=application_bundle_identifier,
                             reason_code=action.reason_code,
+                            failed_check=(
+                                "model_blocked"
+                                if action.reason_code == "uncertain_state"
+                                else None
+                            ),
                         )
                     if action.action == "wait":
                         assert action.duration_ms is not None
@@ -1180,6 +1186,7 @@ class ComputerUseController:
                             steps=steps,
                             application_bundle_identifier=application_bundle_identifier,
                             reason_code="uncertain_state",
+                            failed_check="action_binding",
                         )
                     if not self._text_field_action_is_bound(action, observation.perception):
                         return finish(
@@ -1187,6 +1194,7 @@ class ComputerUseController:
                             steps=steps,
                             application_bundle_identifier=application_bundle_identifier,
                             reason_code="uncertain_state",
+                            failed_check="action_binding",
                         )
                     observation_state = self._observation_state(observation)
                     if (

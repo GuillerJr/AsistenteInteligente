@@ -207,6 +207,20 @@ class NvidiaNimClient:
         ):
             attempt["chat_template_kwargs"] = {"enable_thinking": False}
         if (
+            perception_only
+            and role is AgentRole.VISION
+            and model_id == "meta/muse-glimmer-30b"
+        ):
+            # Muse shares its budget between reasoning and the final JSON. The
+            # former 256-token cap truncated even a single action; NVIDIA's
+            # documented low-reasoning profile also uses nonzero sampling.
+            # Adapt this attempt without changing the caller's payload or Omni.
+            attempt.setdefault("chat_template_kwargs", {"reasoning_strength": "low"})
+            limit = attempt.get("max_tokens")
+            attempt["max_tokens"] = max(2048, limit) if type(limit) is int else 2048
+            attempt["temperature"] = 0.95
+            attempt["top_p"] = 1.0
+        if (
             role in {AgentRole.ROUTER, AgentRole.PLANNER, AgentRole.SYNTHESIZER}
             and "chat_template_kwargs" not in attempt
         ):

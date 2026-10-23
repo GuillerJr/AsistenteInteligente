@@ -152,3 +152,39 @@ de última acción para `computer_use` de origen nativo. Se validan tipos y enum
 cerrados; no se copian objetivos, valores, etiquetas, coordenadas ni imágenes.
 Los mensajes parciales explican el motivo permitido sin afirmar que se escribió.
 Estas comprobaciones no cierran P1-5 hasta repetir la prueba real instalada.
+
+Con `90b1b70` instalado se acreditó el permiso permanente: recibo de la app,
+evento `computer_app_grant_created` con canal `always` y comprobación persistente
+de TextEdit. Después de una detención por intervención del usuario, el reintento
+completó `focus → type`, verificó la postcondición y el documento real contenía A.
+Los chats temporales nuevos reutilizaron el permiso, pero B no se escribió. Se
+observaron un bloqueo antes de despachar, una propuesta inválida y una respuesta
+incompleta; no se atribuyen todos a la misma causa.
+
+La cobertura anterior simulaba decisiones válidas de visión. No acreditaba la
+fiabilidad del modelo real ni el contrato del respaldo. Tres reproducciones con
+NVIDIA y un campo ficticio no vacío completaron dos escrituras B conservando A;
+la tercera recibió HTTP 503 de Omni y `length` con 256 tokens de Muse. Esa ruta
+reproduce la respuesta incompleta sin ninguna acción real. No demuestra la causa
+del bloqueo previo de la app ni permite identificar retrospectivamente el modelo
+que respondió en su turno fallido. Se suspenden los reintentos en la interfaz y
+las reinstalaciones hasta validar la corrección con el caso reproducido. La
+revocación y la escritura B real siguen pendientes; P1-5 y R2-3 permanecen abiertos.
+
+Un preflight separado forzó el HTTP 503 del principal solo en el transporte de
+prueba y ejercitó el respaldo real con su perfil documentado: Muse con
+`reasoning_strength=low`, 2.048 tokens, temperatura 0,95 y `top_p=1`. Completó
+dos escrituras ficticias en 5,55 y 6,23 segundos, con 366 y 371 tokens de salida,
+conservando A y verificando B. El presupuesto anterior de 256 era insuficiente
+para esas dos respuestas. Este perfil se aplica exclusivamente a las decisiones
+cerradas de visión de Muse; no cambia modelos, preferencias ni el perfil de Omni.
+El límite temporal y el rechazo de respuestas truncadas se conservan. Dos casos
+no acreditan fiabilidad general ni éxito de la app instalada.
+
+Los diagnósticos distinguen ahora `model_blocked` (negativa de visión por estado
+incierto), `action_binding` (acción sin enlace válido al elemento AX) y
+`no_progress` (repetición sin avance). Se mantienen las mismas barreras de
+ejecución y la auditoría solo acepta valores cerrados; no registra contenido.
+
+Contrato usado para el perfil del respaldo:
+[API de Muse en NVIDIA](https://docs.api.nvidia.com/nim/reference/meta-muse-glimmer-30b-infer).

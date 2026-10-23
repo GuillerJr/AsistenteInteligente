@@ -2,14 +2,19 @@
 
 import hashlib
 import json
+from uuid import uuid4
 
 import httpx
 import pytest
 from test_computer_textedit_request import FIELD, VALUE, SyntheticTextEditBridge
 from test_computer_vision_inference import run_controller
 
+from aegis_core.contracts import PolicyDecision, ToolAuthorization
+from aegis_core.tools.audit import HashChainAuditLog
 from aegis_core.tools.background_automation import QuietActionVerification
 from aegis_core.tools.computer import ComputerAction
+from aegis_core.tools.defaults import default_policy_context
+from aegis_core.tools.execution import ReadOnlyToolExecutor
 
 DESCRIPTOR = f"{FIELD} área de texto"
 FOCUS = {"action": "focus", "x": 500, "y": 300, "target": DESCRIPTOR}
@@ -102,6 +107,7 @@ async def test_focus_must_bind_full_accessibility_text_not_only_its_label(tmp_pa
     )
 
     assert report.status == "blocked" and report.steps == 0
+    assert report.failed_check == "action_binding"
     assert bridge.actions == [] and bridge.value == ""
     assert not report.postcondition_checks[0].satisfied
 
@@ -115,3 +121,68 @@ async def test_verified_focus_receipt_does_not_certify_text_was_written(tmp_path
     assert report.failed_check == "postcondition_failed"
     assert bridge.actions == [ComputerAction(**FOCUS)]
     assert bridge.value == "" and not report.postcondition_checks[0].satisfied
+
+
+@pytest.mark.parametrize(("action", "expected_check", "expected_steps"), [
+    ({"action": "blocked", "reason_code": "uncertain_state"}, "model_blocked", 0),
+    ({**FOCUS, "target": FIELD}, "action_binding", 0),
+    ({
+        "action": "click", "x": 500, "y": 300, "target": DESCRIPTOR,
+        "button": "left", "click_count": 1,
+    }, "action_binding", 0),
+    (FOCUS, "no_progress", 1),
+])
+async def test_remote_block_binding_failure_and_repeated_focus_keep_distinct_diagnostics(
+    tmp_path, action, expected_check, expected_steps,
+):
+    bridge = FocusTextEditBridge(focused=True)
+    report = await run_controller(tmp_path, lambda _: response(action), bridge)
+
+    assert report.reason_code == "uncertain_state"
+    assert report.failed_check == expected_check and report.steps == expected_steps
+    assert report.status == ("partial" if expected_steps else "blocked")
+    assert bridge.actions == ([ComputerAction(**FOCUS)] if expected_steps else [])
+    assert bridge.value == "" and not report.postcondition_checks[0].satisfied
+
+    class SyntheticController:
+        async def run(self, **kwargs):
+            return report
+
+    authorization = ToolAuthorization(
+        call_id="synthetic-computer", tool_name="computer_use", call_digest="a" * 64,
+        decision=PolicyDecision.ALLOW, reason_code="confirmation_consumed",
+        normalized_arguments={
+            "objective": "Escribe «SYNTHETIC_PRIVATE_VALUE» en TextEdit",
+            "application_bundle_identifier": "com.apple.TextEdit", "max_steps": 3,
+        },
+    )
+    result = await ReadOnlyToolExecutor(computer_controller=SyntheticController()).execute_async(
+        authorization, default_policy_context(tmp_path),
+    )
+    assert result.metadata["failed_check"] == expected_check
+    assert result.metadata["verified"] is False
+    audit = HashChainAuditLog(tmp_path / "audit.jsonl")
+    audit.record_execution(uuid4(), result)
+    record, = audit.verify()
+    assert record.data["computer_failed_check"] == expected_check
+    assert record.data["computer_steps"] == expected_steps
+    assert all(private not in audit.path.read_text() for private in (
+        FIELD, DESCRIPTOR, VALUE, "SYNTHETIC_PRIVATE_VALUE",
+    ))
+
+
+@pytest.mark.parametrize(("reason", "expected_check"), [
+    ("sensitive_action", "sensitive_state"),
+    ("unsupported_action", "action_binding"),
+])
+async def test_other_remote_block_reasons_preserve_their_existing_diagnostic(
+    tmp_path, reason, expected_check,
+):
+    bridge = FocusTextEditBridge(focused=True)
+    report = await run_controller(
+        tmp_path, lambda _: response({"action": "blocked", "reason_code": reason}), bridge,
+    )
+
+    assert report.failed_check == expected_check
+    assert report.steps == 0 and report.status == "blocked"
+    assert bridge.actions == [] and bridge.value == ""
