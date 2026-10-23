@@ -463,6 +463,178 @@ async def test_cancellation_closes_child_without_publishing_an_answer(client):
     assert rpc.closed >= 1 and deltas == []
 
 
+class PausingCloseRpc(RpcDouble):
+    def __init__(self, state):
+        super().__init__(state)
+        self.close_started = asyncio.Event()
+        self.allow_close = asyncio.Event()
+        self.turn_started = asyncio.Event()
+        self.closing = False
+        self.calls_during_close = []
+
+    async def request(self, method, params):
+        if self.closing:
+            self.calls_during_close.append(method)
+            raise ProviderError("synthetic transport is closing")
+        if method == "turn/start":
+            self.turn_started.set()
+        return await super().request(method, params)
+
+    async def aclose(self):
+        self.closing = True
+        self.close_started.set()
+        await self.allow_close.wait()
+        self.closed += 1
+        self.closing = False
+
+
+def provider_with_pausing_close(tmp_path):
+    executable = tmp_path / "codex"
+    executable.write_text("synthetic")
+    executable.chmod(0o700)
+    rpc = PausingCloseRpc(tmp_path / "state")
+    provider = CodexChatProvider(executable, tmp_path / "state", tmp_path / "empty",
+                                 lambda: None, timeout_seconds=2, transport=rpc)
+    return provider, rpc
+
+
+@pytest.mark.parametrize("interruption", ["cancel", "cancel_twice", "timeout"])
+async def test_cancelled_turn_cleanup_finishes_before_queued_turn_uses_transport(
+    tmp_path, interruption,
+):
+    provider, rpc = provider_with_pausing_close(tmp_path)
+    rpc.wait_forever = True
+    first = asyncio.create_task(provider.complete(
+        role=AgentRole.SYNTHESIZER, messages=MESSAGES,
+        timeout_seconds=0.02 if interruption == "timeout" else 2,
+    ))
+    await asyncio.wait_for(rpc.turn_started.wait(), timeout=1)
+    second = asyncio.create_task(provider.complete(role=AgentRole.PLANNER, messages=MESSAGES))
+    await asyncio.sleep(0)  # The new call is queued behind the first inference.
+    if interruption != "timeout":
+        first.cancel()
+    await asyncio.wait_for(rpc.close_started.wait(), timeout=1)
+    if interruption == "cancel_twice":
+        first.cancel()
+    rpc.wait_forever = False
+    for _ in range(10):
+        await asyncio.sleep(0)
+    calls_during_close = list(rpc.calls_during_close)
+    rpc.allow_close.set()
+    outcomes = await asyncio.wait_for(
+        asyncio.gather(first, second, return_exceptions=True), timeout=2,
+    )
+    if interruption == "timeout":
+        assert isinstance(outcomes[0], ProviderError) and "tiempo" in str(outcomes[0])
+    else:
+        assert isinstance(outcomes[0], asyncio.CancelledError)
+    assert calls_during_close == []
+    assert outcomes[1].content == "4"
+    assert rpc.closed == 1
+
+
+async def test_status_waits_for_public_close_then_reinitializes_the_transport(tmp_path):
+    provider, rpc = provider_with_pausing_close(tmp_path)
+    assert (await provider.status())["state"] == "ready"
+    closing = asyncio.create_task(provider.aclose())
+    await asyncio.wait_for(rpc.close_started.wait(), timeout=1)
+    status = asyncio.create_task(provider.status())
+    for _ in range(10):
+        await asyncio.sleep(0)
+    calls_during_close = list(rpc.calls_during_close)
+    rpc.allow_close.set()
+    await asyncio.wait_for(closing, timeout=1)
+    result = await asyncio.wait_for(status, timeout=1)
+    assert calls_during_close == []
+    assert result["state"] == "ready" and provider._started
+
+
+async def test_repeated_cancellation_waits_for_cleanup_admission_behind_status(tmp_path):
+    provider, rpc = provider_with_pausing_close(tmp_path)
+    rpc.wait_forever = True
+    inference = asyncio.create_task(provider.complete(
+        role=AgentRole.SYNTHESIZER, messages=MESSAGES,
+    ))
+    await asyncio.wait_for(rpc.turn_started.wait(), timeout=1)
+    account_started, allow_account = asyncio.Event(), asyncio.Event()
+    request = rpc.request
+
+    async def held_request(method, params):
+        if method == "account/read":
+            account_started.set()
+            await allow_account.wait()
+        return await request(method, params)
+
+    rpc.request = held_request
+    status = asyncio.create_task(provider.status())
+    await asyncio.wait_for(account_started.wait(), timeout=1)
+    inference.cancel()
+    for _ in range(10):
+        await asyncio.sleep(0)
+    assert not rpc.close_started.is_set()
+    inference.cancel()
+    for _ in range(10):
+        await asyncio.sleep(0)
+    cleanup_finished_early = inference.done()
+    allow_account.set()
+    rpc.allow_close.set()
+    outcomes = await asyncio.wait_for(
+        asyncio.gather(inference, status, return_exceptions=True), timeout=2,
+    )
+    assert isinstance(outcomes[0], asyncio.CancelledError)
+    assert not cleanup_finished_early
+    assert rpc.closed == 1 and rpc.calls_during_close == []
+    assert outcomes[1]["state"] == "ready"
+
+
+@pytest.mark.parametrize("interruption", ["cancel", "timeout"])
+async def test_interrupted_queued_turn_does_not_close_another_turn(tmp_path, interruption):
+    provider, rpc = provider_with_pausing_close(tmp_path)
+    rpc.wait_forever = True
+    first = asyncio.create_task(provider.complete(role=AgentRole.SYNTHESIZER, messages=MESSAGES))
+    await asyncio.wait_for(rpc.turn_started.wait(), timeout=1)
+    waiter = asyncio.create_task(provider.complete(
+        role=AgentRole.PLANNER, messages=MESSAGES,
+        timeout_seconds=0.02 if interruption == "timeout" else 2,
+    ))
+    await asyncio.sleep(0)
+    if interruption == "cancel":
+        waiter.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await waiter
+    else:
+        with pytest.raises(ProviderError, match="tiempo"):
+            await asyncio.wait_for(waiter, timeout=1)
+    assert not rpc.close_started.is_set() and not first.done()
+    assert sum(method == "turn/start" for method, _ in rpc.calls) == 1
+    first.cancel()
+    await asyncio.wait_for(rpc.close_started.wait(), timeout=1)
+    rpc.allow_close.set()
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(first, timeout=1)
+
+
+async def test_public_close_waits_for_active_inference_without_interrupting_it(tmp_path):
+    provider, rpc = provider_with_pausing_close(tmp_path)
+    rpc.wait_forever = True
+    inference = asyncio.create_task(provider.complete(
+        role=AgentRole.SYNTHESIZER, messages=MESSAGES,
+    ))
+    await asyncio.wait_for(rpc.turn_started.wait(), timeout=1)
+    closing = asyncio.create_task(provider.aclose())
+    for _ in range(10):
+        await asyncio.sleep(0)
+    assert not rpc.close_started.is_set() and not closing.done()
+    await rpc.events.put({"method": "turn/completed", "params": {
+        "threadId": "thread-test", "turn": {"id": "turn-test", "status": "completed",
+            "items": [{"type": "agentMessage", "id": "answer", "text": rpc.reply}]}}})
+    assert (await asyncio.wait_for(inference, timeout=1)).content == "4"
+    await asyncio.wait_for(rpc.close_started.wait(), timeout=1)
+    rpc.allow_close.set()
+    await asyncio.wait_for(closing, timeout=1)
+    assert rpc.calls_during_close == [] and not provider._started
+
+
 async def test_local_launch_uses_only_dedicated_home_and_disabled_capabilities(
     tmp_path, monkeypatch,
 ):

@@ -59,10 +59,10 @@ Tras instalar la app firmada: Ajustes › Modelos de IA › Iniciar sesión con 
 Abrir inicio de sesión. El dueño completa el acceso oficial. Después se ejecuta
 «Probar conexión» y se verifica un chat temporal sintético desde la app.
 
-P1-5/R2-3 siguen abiertos hasta completar TextEdit «Siempre», repetición en otro
-chat y revocación. Las pruebas simuladas y el cambio de proveedor no demuestran
-por sí solos que esas acciones reales funcionen. El audio, Ollama y otras APIs no
-forman parte de esta primera conexión.
+El dueño elige los permisos de TextEdit y los retira desde Ajustes. El recorrido
+real de «Siempre», otro chat y revocación se completó con `36bcc60`, como se detalla
+abajo. Las pruebas simuladas y el cambio de proveedor no sustituyen esa comprobación.
+El audio, Ollama y otras APIs no forman parte de esta primera conexión.
 
 ## Verificación real de la primera conexión
 
@@ -95,5 +95,33 @@ local registra contadores de herramientas ofrecidas y propuestas y un tipo de
 selección cerrado, sin nombres, argumentos ni contenido, para poder distinguir
 catálogo vacío de una respuesta que no propone una llamada.
 
-El recorrido completo «Siempre», otro chat y revocación de TextEdit continúa
-pendiente de verificación real con esa corrección instalada.
+## TextEdit: permiso permanente y revocación verificados
+
+En la app firmada `36bcc60`, con GPT-5.6-Luna y el historial oculto, el dueño eligió
+«Siempre» en la tarjeta nativa. Apareció el recibo de permiso guardado. El primer
+intento se detuvo por `user_takeover`; se observó el documento todavía vacío, sin
+atribuir esa actividad a una persona o proceso concreto.
+
+Un chat temporal nuevo reutilizó el permiso sin volver a pedirlo y, tras un reintento
+de conexión, escribió exactamente «PRUEBA JARVIS CODEX A». El árbol de accesibilidad
+del único documento sintético mostró ese literal. Los campos técnicos de la evaluación
+del 23-10 a las 20:19:54 UTC confirmaron `brain=codex`, `tool_name=computer_use`,
+`succeeded=true` y `outcome_verified=true`.
+
+El dueño retiró TextEdit en Ajustes y cerró esa pantalla sin que el agente la leyera.
+Otra petición explícita de escritura mostró de nuevo la aprobación pendiente; el
+documento conservó solo A. Se detuvo la solicitud sin conceder autorización. Esto
+cierra P1-5/R2-3 para el recorrido de TextEdit y conserva la revocación del dueño.
+
+La variante «En TextEdit, añade al final una nueva línea…» quedó fuera de la gramática
+y no ofreció herramientas; esa negativa no sirve como prueba de revocación. El control
+actual tampoco admite el salto de línea en `type`, y `field_contains` no certifica la
+posición final ni la conservación íntegra del texto. Se deja esa función como pendiente
+específico, sin ampliar solo el enrutador para prometer una operación incompleta.
+
+También se identificó una carrera: al cancelar una síntesis, el cierre ocurría después
+de liberar el bloqueo de inferencia y podía interrumpir el planificador del mensaje nuevo.
+Ahora la limpieza conserva ese bloqueo y se coordina con arranque, consultas y cierre
+explícito. Las regresiones con tareas y eventos reproducen el fallo previo, prueban la
+cancelación repetida y comprueban que cancelar una petición en espera no cierre la activa.
+No se debilitan las aprobaciones ni la detección de actividad.

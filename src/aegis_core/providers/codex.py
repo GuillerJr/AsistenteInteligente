@@ -330,7 +330,7 @@ class CodexChatProvider:
                         raise ProviderError("Codex no admite el perfil de inferencia aislado.")
                 self._started = True
             except BaseException:
-                await self._transport.aclose()
+                await self._finish_transport_close()
                 raise
 
     def _check_configuration(self, config: dict[str, Any]) -> None:
@@ -379,18 +379,52 @@ class CodexChatProvider:
                                 terminal=True)
 
     async def aclose(self) -> None:
-        await self._transport.aclose()
+        async with self._inference_lock:
+            await self._close_transport()
+
+    async def _close_transport(self) -> None:
+        async def close() -> None:
+            async with self._start_lock:
+                await self._finish_transport_close()
+
+        # Admission can itself wait behind a status RPC. A second cancellation
+        # must not release inference_lock before that pending close finishes.
+        await self._wait_for_close(asyncio.create_task(close()))
+
+    async def _finish_transport_close(self) -> None:
         self._started = False
+        await self._wait_for_close(asyncio.create_task(self._transport.aclose()))
+
+    @staticmethod
+    async def _wait_for_close(closing: asyncio.Task[None]) -> None:
+        # Keep lifecycle/inference locks through repeated cancellation until
+        # the old process has stopped. Restore cancellation afterwards.
+        cancelled = None
+        while not closing.done():
+            try:
+                await asyncio.shield(closing)
+            except asyncio.CancelledError as error:
+                cancelled = error
+        closing.result()
+        if cancelled is not None:
+            raise cancelled
 
     async def _request(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
-        await self.start()
-        if not self._started:
-            raise ProviderError("Codex CLI no está instalado.", terminal=True)
-        try:
-            async with asyncio.timeout(self._timeout):
-                return await self._transport.request(method, params)
-        except TimeoutError as error:
-            raise ProviderError("Codex superó el tiempo de espera.") from error
+        # A close may win admission after start() returns. Retry admission only;
+        # an RPC that has actually been dispatched is never replayed.
+        for _ in range(2):
+            await self.start()
+            async with self._start_lock:
+                if not self._started:
+                    if not self.executable_path.is_file():
+                        raise ProviderError("Codex CLI no está instalado.", terminal=True)
+                    continue
+                try:
+                    async with asyncio.timeout(self._timeout):
+                        return await self._transport.request(method, params)
+                except TimeoutError as error:
+                    raise ProviderError("Codex superó el tiempo de espera.") from error
+        raise ProviderError("Codex no está disponible.")
 
     async def list_models(self) -> list[dict[str, Any]]:
         models, reasoning, defaults, cursor = [], {}, {}, None
@@ -550,27 +584,21 @@ class CodexChatProvider:
         )
         if not 0 < budget <= 120:
             raise ValueError("Codex timeout is out of range")
-        owned = False
         try:
             async with asyncio.timeout(budget):
                 async with self._inference_lock:
-                    owned = True
-                    return await self._complete(
-                        role, messages, extra_body or {}, perception_only,
-                        model_ids=model_ids, short=max_tokens is not None and max_tokens <= 1024,
-                    )
+                    try:
+                        return await self._complete(
+                            role, messages, extra_body or {}, perception_only,
+                            model_ids=model_ids,
+                            short=max_tokens is not None and max_tokens <= 1024,
+                        )
+                    except (asyncio.CancelledError, ProviderError, IncompleteModelResponseError,
+                            OSError, ValueError):
+                        await self._close_transport()
+                        raise
         except TimeoutError as error:
-            if owned:
-                await self.aclose()
             raise ProviderError("Codex superó el tiempo de inferencia.") from error
-        except asyncio.CancelledError:
-            if owned:
-                await self.aclose()
-            raise
-        except (ProviderError, IncompleteModelResponseError, OSError, ValueError):
-            if owned:
-                await self.aclose()
-            raise
 
     async def _complete(self, role, messages, extra, perception_only, *, model_ids, short):
         tools = extra.get("tools", [])
@@ -646,7 +674,7 @@ class CodexChatProvider:
             or thread.get("instructionSources", [])
             or thread.get("modelProvider") != "openai" or thread.get("model") != model
         ):
-            await self.aclose()
+            await self._close_transport()
             raise ProviderError("Codex no confirmó el aislamiento de la inferencia.", terminal=True)
         thread_id = thread.get("thread", {}).get("id")
         if not isinstance(thread_id, str) or not thread_id:
@@ -716,7 +744,7 @@ class CodexChatProvider:
                     async with asyncio.timeout(2):
                         await self._transport.request("thread/unsubscribe", {"threadId": thread_id})
                 except (ProviderError, OSError, TimeoutError):
-                    await self.aclose()
+                    await self._close_transport()
                 return result
             except (ValueError, ValidationError, RecursionError, KeyError, TypeError) as error:
                 raise IncompleteModelResponseError(
