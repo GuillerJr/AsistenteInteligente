@@ -38,6 +38,10 @@ REQUEST = (
     "Controla la app TextEdit para escribir únicamente «PRUEBA JARVIS A» "
     "en el documento nuevo vacío abierto. No abras otros documentos ni guardes."
 )
+DOCUMENT_REQUEST = (
+    "Escribe exactamente «PRUEBA JARVIS SIEMPRE A» en el documento nuevo y vacío de TextEdit. "
+    "No guardes ni cierres el documento."
+)
 DRIVE_TOOL = "mcp_google_workspace__create_drive_file"
 CATALOGUE = ((DRIVE_TOOL, "Crea un archivo en Google Drive"),)
 
@@ -50,14 +54,14 @@ class DriveArguments(BaseModel):
 
 
 class UiProvider:
-    def __init__(self, tool_name="computer_use", objective=REQUEST):
+    def __init__(self, tool_name="computer_use", objective=REQUEST, literal="PRUEBA JARVIS A"):
         self.requests = []
         arguments = (
             {"content": "PRUEBA JARVIS A", "file_name": "PRUEBA JARVIS A.txt"}
             if tool_name == DRIVE_TOOL else {
                 "application_bundle_identifier": "com.apple.TextEdit", "objective": objective,
                 "max_steps": 3,
-                "postconditions": [{"kind": "field_contains", "value": "PRUEBA JARVIS A"}],
+                "postconditions": [{"kind": "field_contains", "value": literal}],
             }
         )
         self.call = ToolCall(call_id="synthetic-proposal", tool_name=tool_name,
@@ -92,7 +96,7 @@ def make_graph(tmp_path, provider, *, dynamic=False, skill=False):
         registry.learn(SkillDraft(
             skill_id="synthetic-cloud-starter", name="Propuesta sintética",
             description="Prueba de un starter ajeno al destino actual.",
-            role=AgentRole.PLANNER, trigger_phrases=("controla la app",),
+            role=AgentRole.PLANNER, trigger_phrases=("controla la app", "escribe exactamente"),
             trigger_terms=frozenset({"controla", "textedit"}), priority=95,
             instructions=("Prepara la operación usando el servicio conectado.",),
             allowed_tools=frozenset({DRIVE_TOOL}), starter_tools=frozenset({DRIVE_TOOL}),
@@ -170,6 +174,7 @@ async def test_exact_request_offers_only_gui_and_keeps_owner_confirmation(tmp_pa
     instruction = planning["messages"][0]["content"]
     assert "already open, new, unsaved document" in instruction
     assert "field_contains with the exact literal and omit target" in instruction
+    assert json.dumps({"kind": "field_contains", "value": "PRUEBA JARVIS A"}) in instruction
     assert "Never use it to open, read, save or change existing files" in instruction
     authorization, = state["tool_authorizations"]
     assert authorization.tool_name == "computer_use"
@@ -178,6 +183,26 @@ async def test_exact_request_offers_only_gui_and_keeps_owner_confirmation(tmp_pa
     assert not state.get("tool_results")
     if skill:
         assert any(s.manifest.skill_id == "synthetic-cloud-starter" for s in state["skills"])
+
+
+@pytest.mark.parametrize("condition", [
+    {"kind": "text_present", "value": "PRUEBA JARVIS A"},
+    {"kind": "field_contains", "target": "PRUEBA JARVIS A", "value": True},
+])
+async def test_literal_write_example_cannot_relax_postcondition_validation(tmp_path, condition):
+    provider = UiProvider()
+    provider.call = provider.call.model_copy(update={"arguments": {
+        **provider.call.arguments, "postconditions": [condition],
+    }})
+
+    state = await make_graph(tmp_path, provider, dynamic=True).ainvoke({
+        "request": UserRequest(text=REQUEST),
+    })
+
+    authorization, = state["tool_authorizations"]
+    assert authorization.decision is PolicyDecision.DENY
+    assert authorization.reason_code == "invalid_arguments"
+    assert not state.get("tool_results")
 
 
 class TextOnlyUiProvider(UiProvider):
@@ -344,3 +369,47 @@ async def test_browser_destination_keeps_its_gate_but_a_url_in_textedit_is_data(
     assert authorization.tool_name == expected
     assert authorization.decision is PolicyDecision.REQUIRE_CONFIRMATION
     assert not state.get("tool_results") and not browser.calls
+
+
+@pytest.mark.parametrize("skill", [False, True])
+@pytest.mark.parametrize("proposed_tool", ["computer_use", DRIVE_TOOL])
+async def test_textedit_document_destination_survives_dynamic_catalogue_and_skill(
+    tmp_path, skill, proposed_tool,
+):
+    provider = UiProvider(
+        proposed_tool, objective=DOCUMENT_REQUEST, literal="PRUEBA JARVIS SIEMPRE A",
+    )
+    state = await make_graph(tmp_path, provider, dynamic=True, skill=skill).ainvoke({
+        "request": UserRequest(text=DOCUMENT_REQUEST),
+    })
+    planning = next(item for item in provider.requests if item["role"] is AgentRole.PLANNER)
+    assert [tool["function"]["name"] for tool in planning["extra_body"]["tools"]] == [
+        "computer_use",
+    ]
+    if skill:
+        assert any(item.manifest.skill_id == "synthetic-cloud-starter" for item in state["skills"])
+    authorization, = state["tool_authorizations"]
+    if proposed_tool == "computer_use":
+        assert authorization.decision is PolicyDecision.REQUIRE_CONFIRMATION
+        assert authorization.normalized_arguments["objective"] == DOCUMENT_REQUEST
+        assert authorization.normalized_arguments["application_bundle_identifier"] == (
+            "com.apple.TextEdit"
+        )
+    else:
+        assert authorization.decision is PolicyDecision.DENY
+        assert authorization.reason_code == "tool_not_offered"
+    assert not state.get("tool_results")
+
+
+async def test_textedit_document_destination_rejects_another_app_bundle(tmp_path):
+    provider = UiProvider(objective=DOCUMENT_REQUEST, literal="PRUEBA JARVIS SIEMPRE A")
+    provider.call = provider.call.model_copy(update={"arguments": {
+        **provider.call.arguments, "application_bundle_identifier": "com.apple.Safari",
+    }})
+    state = await make_graph(tmp_path, provider, dynamic=True).ainvoke({
+        "request": UserRequest(text=DOCUMENT_REQUEST),
+    })
+    authorization, = state["tool_authorizations"]
+    assert authorization.decision is PolicyDecision.DENY
+    assert authorization.reason_code == "computer_destination_not_requested"
+    assert not state.get("tool_results")

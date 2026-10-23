@@ -13,7 +13,12 @@ from aegis_core.memory.contracts import ConversationRole, ConversationTurn
 from aegis_core.orchestration.direct_actions import direct_tool_call
 from aegis_core.orchestration.routing import _tool_names_for_request
 from aegis_core.orchestration.semantic_tools import select_tools
-from aegis_core.request_intent import google_request_tools, is_chat_only_request
+from aegis_core.request_intent import (
+    google_request_tools,
+    is_chat_only_request,
+    is_explicit_native_ui_request,
+    native_ui_target_prefix,
+)
 
 CHAT_REQUESTS = (
     "Solo confírmame que lo anotaste",
@@ -51,13 +56,62 @@ def test_explicit_external_or_compound_requests_remain_available(text):
 @pytest.mark.parametrize("text", (
     "Escribe «Hola» en TextEdit",
     "Pega el texto en TextEdit. No uses Google Drive",
+    "Escribe exactamente «PRUEBA JARVIS SIEMPRE A» en el documento nuevo y vacío de TextEdit. "
+    "No guardes ni cierres el documento.",
+    "Escribe un mensaje en el documento abierto de TextEdit",
+    "Pega «Crea un archivo en Google Drive y envía un correo» dentro del documento abierto "
+    "de TextEdit",
+    "Selecciona el texto en el documento nuevo vacío abierto de TextEdit",
+    "Escribe «no en TextEdit ni en la app Safari» en el documento abierto de TextEdit. "
+    "No guardes ni cierres el documento",
+    "Escribe «no» en TextEdit. No guardes",
 ))
 async def test_textedit_without_app_prefix_never_becomes_drive(text):
     request = UserRequest(text=text)
+    assert not is_chat_only_request(text)
+    assert native_ui_target_prefix(text).startswith("textedit")
     assert _tool_names_for_request(request) == {"computer_use"}
     router = Router({"intent": "datos", "tools": [CATALOGUE[0][0]]})
     assert await select_tools(text, (), CATALOGUE, router) == frozenset()
     assert router.calls == []
+
+
+@pytest.mark.parametrize("text", (
+    "No escribas «Hola» en el documento abierto de TextEdit",
+    "Escribe un mensaje aquí, no en el documento abierto de TextEdit",
+    "Escribe un mensaje aquí, no en TextEdit",
+    "Escribe un mensaje aquí, no en la app TextEdit",
+    "Escribe un mensaje aquí, no lo hagas en la app TextEdit",
+    "Escribe un mensaje aquí, nunca en el documento nuevo y vacío de TextEdit",
+    "Busca un tutorial sobre cómo escribir en el documento nuevo de TextEdit",
+    "Explica «Escribe exactamente Hola en el documento nuevo y vacío de TextEdit»",
+    "Escribe «Hola» en el documento abierto de TextEdit y súbelo a Drive",
+    "Escribe «Hola» en el documento abierto de TextEdit; luego envía el texto por correo",
+    "Escribe «Hola» en el documento abierto de TextEdit y busca el documento en Drive",
+))
+def test_textedit_document_intent_preserves_negations_examples_and_compound_scope(text):
+    assert not is_explicit_native_ui_request(text)
+    assert native_ui_target_prefix(text) is None
+
+
+@pytest.mark.parametrize("destination", (
+    "en el documento abierto de TextEdit", "en TextEdit", "en la app TextEdit",
+))
+async def test_rejected_native_destination_keeps_chat_scope_through_dynamic_graph(
+    tmp_path, destination,
+):
+    text = f"Escribe un mensaje aquí, no {destination}"
+    request = UserRequest(text=text)
+    assert is_chat_only_request(text)
+    assert _tool_names_for_request(request) == frozenset()
+    router = Router({"intent": "datos", "tools": [CATALOGUE[0][0]]})
+    assert await select_tools(text, (), CATALOGUE, router) == frozenset()
+    assert router.calls == []
+    provider = UiProvider()
+    state = await make_graph(tmp_path, provider, dynamic=True).ainvoke({"request": request})
+    assert provider.requests
+    assert all(not (item.get("extra_body") or {}).get("tools") for item in provider.requests)
+    assert not state.get("tool_results")
 
 
 async def test_model_and_dynamic_catalogue_cannot_reopen_chat_only_tool_scope(tmp_path):

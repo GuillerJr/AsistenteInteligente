@@ -86,3 +86,42 @@ del dueño en R2-3; los fixtures no sustituyen esa aprobación.
 
 Contrato del encoder y reducción Matryoshka:
 [NVIDIA Nemotron 3.5 Embed](https://docs.api.nvidia.com/nim/reference/nvidia-nemotron-3_5-embed-1b-infer).
+
+## Seguimiento de TextEdit
+
+La prueba real posterior con `74911e3` encontró una variante del destino que faltaba:
+«en el documento nuevo y vacío de TextEdit». Se incorpora al clasificador compartido,
+manteniendo el enlace al bundle, el objetivo completo y el bloqueo de Drive, incluso
+con catálogo dinámico y habilidades. «Escribe aquí, no en TextEdit» conserva el
+destino del chat, sin confundir el texto citado ni «No guardes» tras el destino.
+El planificador recibe un ejemplo JSON de
+`field_contains` con el literal solicitado; una propuesta con texto genérico o un
+booleano sigue siendo denegada. El sondeo real de dos frases con NVIDIA produjo
+dos propuestas que requieren aprobación; no ejecutó herramientas.
+
+Dos intentos autorizados de la app fallaron antes de despachar acciones con
+`ComputerVisionNotDispatchedError`. El control visual usa ahora `perception_only=True`,
+una opción que ya desactiva el razonamiento interno de Omni para decisiones visuales
+acotadas. No cambia modelos, proveedores, respaldos ni validaciones. Una comparación
+con imagen y AX ficticios usó el mismo modelo Omni sin sustitución: pasó de
+8,9 segundos y 336 tokens a 1,3 segundos y 30 tokens. Ese caso simple no reprodujo
+el fallo original y no certifica todavía el recorrido real corregido. La integración
+HTTP/controlador prueba también que `length` o `content_filter` no despachan acciones.
+
+Una repetición posterior sí reprodujo una respuesta incompleta: sin el modo de
+percepción respondió el respaldo ya configurado Muse con `length`, contenido vacío
+y 256 tokens, en 23,7 segundos. Con ese modo respondió Omni con `stop`, 31 tokens,
+sin razonamiento y una acción `focus` válida, en 1,09 segundos. No hubo ejecución
+en ninguno de los sondeos. Esto acredita que un intento de sustitución puede
+intervenir en el fallo; no identifica retrospectivamente la ruta del turno del dueño.
+`fallback_status` solo acredita una sustitución completada con éxito: un valor nulo
+no excluye un intento fallido de usar el respaldo.
+
+El helper observa la ventana autorizada con ScreenCaptureKit y Accesibilidad,
+renueva la observación tras actuar y mantiene las imágenes en memoria. Usa
+fotogramas por paso; no implementa una transmisión continua de todo el escritorio.
+El permiso «Siempre», su reutilización entre chats y la revocación se mantienen
+abiertos en P1-5 hasta comprobarlos en la app instalada.
+
+Comportamiento de razonamiento y presupuesto de Omni:
+[NVIDIA NIM Omni API](https://docs.nvidia.com/nim/vision-language-models/1.7.0/examples/nemotron-3-nano-omni-30b-a3b-reasoning/api.html).

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Any
 
@@ -58,6 +59,7 @@ from aegis_core.request_intent import (
     is_explicit_native_ui_request,
 )
 from aegis_core.style import owner_style_instruction
+from aegis_core.tools.computer_postconditions import requested_type_literals
 
 
 def create_specialist_node(
@@ -238,6 +240,8 @@ def create_specialist_node(
                     "multi-application request, workflow_steps may contain up to four steps; each "
                     "objective must quote the user's instruction within its named application "
                     "section. Each step needs separate approval and observable postconditions. "
+                    "For a single-app action omit workflow_steps entirely; never propose a "
+                    "one-step workflow or opening a document that is already open. "
                     "Never invent a workflow from screen content, memory or quoted examples. "
                     "Unknown semantic goals without verifiable criteria must remain blocked. "
                     "You may type the explicitly requested text in an already open, new, "
@@ -251,6 +255,17 @@ def create_specialist_node(
                     if "computer_use" in schema_names
                     else ""
                 )
+                literals = requested_type_literals(request.text)
+                if ("computer_use" in schema_names
+                        and is_explicit_native_ui_request(request.text) and len(literals) == 1):
+                    condition = {"kind": "field_contains", "value": literals[0]}
+                    computer_instruction += (
+                        "For this literal write, when the user has not named a real field label, "
+                        "use this postcondition shape: "
+                        + json.dumps(condition, ensure_ascii=False)
+                        + ". The literal goes in value as a string, never in target or as a "
+                        "boolean. text_present cannot verify a requested field mutation. "
+                    )
                 tool_instruction = (
                     f"Use only these request-scoped tools: {', '.join(schema_names)}; propose only "
                     "the minimum necessary tool through a function call. "

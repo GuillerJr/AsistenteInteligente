@@ -46,9 +46,11 @@ _NATIVE_UI_REQUEST = re.compile(
     r"(?:controla|controlar) (?:mi |la )?(?:computadora|ordenador|mac)\b|"
     r"(?:controla|controlar) visualmente[: ]+en\b|"
     r"(?:escribe|escribir|pega|pegar|selecciona|seleccionar|haz clic)\b[^.;]{0,500}"
-    r"\b(?:en|dentro de) (?:la |el )?(?:app|aplicacion|ventana)\b|"
+    r"(?P<app_destination>\b(?:en|dentro de) (?:la |el )?(?:app|aplicacion|ventana)\b)|"
     r"(?:escribe|escribir|pega|pegar|selecciona|seleccionar)\b[^.;]{0,500}"
-    r"\b(?:en|dentro de) (?=textedit\b)"
+    r"(?P<textedit_destination>\b(?:en|dentro de|dentro del) "
+    r"(?:(?:el )?documento (?:(?:nuevo|abierto|vacio)(?: y)? ){1,3}de )?"
+    r"(?=textedit\b))"
     r")"
 )
 _ADDITIONAL_SERVICE_REQUEST = re.compile(
@@ -71,6 +73,18 @@ def mask_quoted_text(text: str) -> str:
     return _QUOTED.sub(lambda match: " " * len(match[0]), text)
 
 
+def _negated_native_destination_start(command: str, match: re.Match[str] | None) -> int | None:
+    if match is not None:
+        for name in ("app_destination", "textedit_destination"):
+            start = match.start(name)
+            if start >= 0 and re.search(
+                r"\b(?:no|nunca|jamas|ni)(?: (?:lo )?(?:hagas|escribas|pegues|selecciones))?\s*$",
+                command[:start],
+            ):
+                return start
+    return None
+
+
 def is_chat_only_request(text: str) -> bool:
     """Constrain explicit drafting/confirmation in chat, never authorize an action.
 
@@ -78,20 +92,25 @@ def is_chat_only_request(text: str) -> bool:
     remain available to normal planning; drafting alone does not create a draft
     in an account. These conservative cases constrain misleading tool guesses too.
     """
+    if is_explicit_native_ui_request(text):
+        return False
     command = folded_request(mask_quoted_text(text))
     if re.match(
         _PREFIX + r"(?:solo |unicamente )?confirma(?:me)? que "
         r"(?:lo |la |los |las )?(?:anotaste|entendiste|leiste|recibiste)\b", command,
     ) and not re.search(r"\b(?:y|ademas|luego|despues)\b", command):
         return True
-    external = re.search(
+    negated_destination = _negated_native_destination_start(
+        command, _NATIVE_UI_REQUEST.match(command)
+    )
+    external = re.finditer(
         r"\b(?:en|dentro de|a traves de|usando) (?:mi |la |el |google )?"
         r"(?:gmail|drive|textedit|mail|calendario|agenda|app|aplicacion)\b|"
         r"\b(?:envia(?:lo|la|los|las)?|manda(?:lo|la)?|guarda(?:lo|la)?|"
         r"publica(?:lo|la)?|sube(?:lo|la)?|programa|busca|consulta|revisa|lee)\b|"
         r"(?:^|[.;]|\b(?:y|luego|despues) )agenda\b", command,
     )
-    if external:
+    if any(item.start() != negated_destination for item in external):
         return False
     if re.match(
         _PREFIX + r"(?:solo |unicamente )?(?:redacta(?:me)?|escribe(?:me)?|"
@@ -138,6 +157,9 @@ def is_explicit_native_ui_request(text: str) -> bool:
     command = folded_request(mask_quoted_text(text))
     match = _NATIVE_UI_REQUEST.match(command)
     if match is None or _ADDITIONAL_SERVICE_REQUEST.search(command):
+        return False
+    if _negated_native_destination_start(command, match) is not None:
+        # Quoted payloads were masked; prohibitions after the app target remain intact.
         return False
     target = command[match.end():].lstrip(" :")
     if (re.match(r"(?:(?:en|y usa) )?(?:el |la )?(?:google chrome|microsoft edge|chrome|"

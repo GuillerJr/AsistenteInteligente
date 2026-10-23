@@ -1594,6 +1594,10 @@ class ComputerUseController:
                     ],
                     max_tokens=256,
                     temperature=0.0,
+                    # One bounded action, not an open reasoning answer. Omni's
+                    # default thinking can consume the short output budget before
+                    # producing JSON. NVIDIA applies this only to compatible models.
+                    perception_only=True,
                     extra_body={"response_format": {"type": "json_object"}},
                 )
                 try:

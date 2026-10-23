@@ -33,6 +33,7 @@ class ChatProvider(Protocol):
         max_tokens: int | None = None,
         temperature: float | None = None,
         extra_body: Mapping[str, Any] | None = None,
+        perception_only: bool = False,
     ) -> AgentResult: ...
 
 
