@@ -1,7 +1,7 @@
 import AegisAudioCore
 import SwiftUI
 
-/// What the daemon's `health.status` reports: NVIDIA, integrations and recent failures.
+/// Privacy-safe status of inference, integrations and recent failures.
 struct JarvisHealthReport: Decodable, Sendable, Equatable {
     struct Nvidia: Decodable, Sendable, Equatable {
         struct Fallback: Decodable, Sendable, Equatable {
@@ -42,7 +42,14 @@ struct JarvisHealthReport: Decodable, Sendable, Equatable {
     }
 
     let window_hours: Int
-    let nvidia: Nvidia
+    struct Inference: Decodable, Sendable, Equatable {
+        let provider: String
+        let state: String
+        let model_id: String?
+    }
+
+    let nvidia: Nvidia?
+    let inference: Inference?
     let mcp: [Server]
     let failures: [Failure]
     let memory: Memory?
@@ -63,29 +70,39 @@ extension JarvisHealthReport {
         func add(_ text: String, _ value: String = "", _ tone: JarvisHealthLine.Tone) {
             lines.append((text, value, tone))
         }
-        let ai = nvidia
-        add("NVIDIA", "", .heading)
-        add(String(localized: "Clave", bundle: .module), ai.credential == "configured" ? String(localized: "Configurada", bundle: .module) : String(localized: "No disponible", bundle: .module),
-            ai.credential == "configured" ? .good : .warning)
-        add(String(localized: "Respuestas (últimas \(window_hours) h)", bundle: .module),
-            ai.calls == 0 ? String(localized: "Sin llamadas", bundle: .module) : String(localized: "\(ai.answered) de \(ai.calls)", bundle: .module),
-            ai.calls == 0 || ai.answered * 10 >= ai.calls * 9 ? .good : .warning)
-        if ai.rate_limited > 0 {
-            add(String(localized: "Límite de frecuencia", bundle: .module), String(localized: "\(ai.rate_limited) veces", bundle: .module),
-                ai.rate_limited * 20 < max(ai.calls, 1) ? .good : .warning)
+        if let inference {
+            add(inference.provider == "codex" ? "Codex · ChatGPT" : String(localized: "Proveedor de IA", bundle: .module), "", .heading)
+            let ready = inference.provider == "codex" && inference.state == "ready"
+            add(String(localized: "Chat", bundle: .module),
+                ready ? String(localized: "Listo", bundle: .module)
+                    : String(localized: "Revisa la conexión en Modelos de IA", bundle: .module),
+                ready ? .good : .warning)
+            if let model = inference.model_id { add(String(localized: "Modelo", bundle: .module), model, .detail) }
         }
-        if ai.failed > 0 { add(String(localized: "Fallos", bundle: .module), "\(ai.failed)", .warning) }
-        if let latency = ai.median_latency_ms {
-            add(String(localized: "Tiempo típico de respuesta", bundle: .module), String(format: "%.1f s", Double(latency) / 1_000),
-                latency < 15_000 ? .good : .warning)
-        }
-        if ai.cooldown_seconds > 0 {
-            add(String(localized: "Pausa por límite", bundle: .module), String(format: "%.0f s", ai.cooldown_seconds), .warning)
-        }
-        if let last = ai.last_success_at { add(String(localized: "Última respuesta", bundle: .module), Self.relative(last), .good) }
-        if let fallback = ai.last_fallback {
-            add(String(localized: "Se usó un modelo de respaldo", bundle: .module), "", .warning)
-            add("\(fallback.requested_model_id) → \(fallback.actual_model_id)", "", .detail)
+        if let ai = nvidia {
+            add("NVIDIA", "", .heading)
+            add(String(localized: "Clave", bundle: .module), ai.credential == "configured" ? String(localized: "Configurada", bundle: .module) : String(localized: "No disponible", bundle: .module),
+                ai.credential == "configured" ? .good : .warning)
+            add(String(localized: "Respuestas (últimas \(window_hours) h)", bundle: .module),
+                ai.calls == 0 ? String(localized: "Sin llamadas", bundle: .module) : String(localized: "\(ai.answered) de \(ai.calls)", bundle: .module),
+                ai.calls == 0 || ai.answered * 10 >= ai.calls * 9 ? .good : .warning)
+            if ai.rate_limited > 0 {
+                add(String(localized: "Límite de frecuencia", bundle: .module), String(localized: "\(ai.rate_limited) veces", bundle: .module),
+                    ai.rate_limited * 20 < max(ai.calls, 1) ? .good : .warning)
+            }
+            if ai.failed > 0 { add(String(localized: "Fallos", bundle: .module), "\(ai.failed)", .warning) }
+            if let latency = ai.median_latency_ms {
+                add(String(localized: "Tiempo típico de respuesta", bundle: .module), String(format: "%.1f s", Double(latency) / 1_000),
+                    latency < 15_000 ? .good : .warning)
+            }
+            if ai.cooldown_seconds > 0 {
+                add(String(localized: "Pausa por límite", bundle: .module), String(format: "%.0f s", ai.cooldown_seconds), .warning)
+            }
+            if let last = ai.last_success_at { add(String(localized: "Última respuesta", bundle: .module), Self.relative(last), .good) }
+            if let fallback = ai.last_fallback {
+                add(String(localized: "Se usó un modelo de respaldo", bundle: .module), "", .warning)
+                add("\(fallback.requested_model_id) → \(fallback.actual_model_id)", "", .detail)
+            }
         }
         if let memory {
             add(String(localized: "Recuperación de memoria", bundle: .module), "", .heading)
@@ -145,9 +162,7 @@ extension JarvisHealthReport {
     }
 }
 
-/// Claude's and Codex's usage panel, as a health panel: NVIDIA has no quota to show,
-/// so this shows whether it answers, how often it is rate limited, which integrations
-/// are connected and what failed lately, with a way to reconnect them.
+/// Health panel with connection evidence and recent failures; never infers response success.
 struct JarvisHealthView: View {
     let model: MenuBarModel
     let restart: @MainActor () async throws -> Void

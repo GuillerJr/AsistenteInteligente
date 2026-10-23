@@ -452,7 +452,7 @@ class SpeechSynthesisIpcService:
 
     def __init__(
         self,
-        synthesizer: Callable[[str], Awaitable[bytes]],
+        synthesizer: Callable[[str], Awaitable[bytes]] | None,
         store: SpeechArtifactStore,
         stream_synthesizer: Callable[[str], AsyncIterator[bytes]] | None = None,
     ) -> None:
@@ -467,7 +467,7 @@ class SpeechSynthesisIpcService:
             self.SYNTHESIZE_METHOD: self.handle,
             self.RELEASE_METHOD: self.handle,
         }
-        if self._streams is not None:
+        if self._streams is not None or self._synthesize is None:
             handlers.update(
                 {
                     self.STREAM_OPEN_METHOD: self.handle,
@@ -480,6 +480,16 @@ class SpeechSynthesisIpcService:
 
     async def handle(self, request: IpcRequest) -> IpcHandlerResult:
         try:
+            if self._synthesize is None and request.method in {
+                self.SYNTHESIZE_METHOD, self.STREAM_OPEN_METHOD, self.STREAM_NEXT_METHOD,
+            }:
+                return IpcHandlerResult(ok=False, error_code="speech_provider_unconfigured")
+            if self._synthesize is None and request.method == self.STREAM_CLOSE_METHOD:
+                ReleaseSpeechPayload.model_validate(request.payload)
+                return IpcHandlerResult(ok=True, payload={"closed": False})
+            if self._synthesize is None and request.method == self.STREAM_CANCEL_METHOD:
+                CancelSpeechStreamsPayload.model_validate(request.payload)
+                return IpcHandlerResult(ok=True, payload={"cancelled": 0})
             if request.method == self.SYNTHESIZE_METHOD:
                 payload = SynthesizeSpeechPayload.model_validate(request.payload)
                 if self._streams is not None:
@@ -495,6 +505,7 @@ class SpeechSynthesisIpcService:
                         ok=True,
                         payload={**event, "group_token": group_token},
                     )
+                assert self._synthesize is not None
                 audio = await self._synthesize(payload.text)
                 artifact = await asyncio.to_thread(self._store.create, audio)
                 return IpcHandlerResult(

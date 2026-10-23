@@ -6,6 +6,7 @@ import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from aegis_core.contracts import DocumentInput, ToolAuthorization, ToolCall, UserRequest
@@ -57,6 +58,7 @@ class MutableJob:
     confirmation_started_monotonic: float | None = None
     confirmation_wait_ms: int = 0
     model_id: str | None = None
+    inference_provider: Literal["codex"] | None = None
     tool_name: str | None = None
     action_verified: bool = False
     voice_request: bool = False

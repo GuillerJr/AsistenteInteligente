@@ -112,7 +112,7 @@ struct JarvisSettingsView: View {
         case .general: JarvisGeneralSettingsView(model: model, store: store, interactive: interactive)
         case .accounts: JarvisAccountsSettingsView(store: store, present: { presentedSheet = $0 })
         case .telegram: JarvisTelegramSettingsView()
-        case .models: JarvisModelsSettingsView(store: store, openAddModel: { presentedSheet = .addModel })
+        case .models: JarvisCodexSettingsView(store: store.inference)
         case .extensions: JarvisExtensionsSettingsView(store: store, present: {
             presentedSheet = .extensionReview($0)
         })

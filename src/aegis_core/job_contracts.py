@@ -85,6 +85,7 @@ class JobStatus(StrEnum):
 class BrainTarget(StrEnum):
     LOCAL = "local"
     NVIDIA = "nvidia"
+    CODEX = "codex"
     DETERMINISTIC = "deterministic"
     UNKNOWN = "unknown"
 

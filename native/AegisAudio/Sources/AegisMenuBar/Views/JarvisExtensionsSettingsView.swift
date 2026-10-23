@@ -95,7 +95,7 @@ struct JarvisExtensionsSettingsView: View {
             Toggle(String(localized: "Usar esta skill", bundle: .module), isOn: Binding(get: { skill.enabled }, set: { enabled in
                 present(.init(content: .confirm(
                     title: enabled ? String(localized: "Activar \(skill.name)", bundle: .module) : String(localized: "Desactivar \(skill.name)", bundle: .module),
-                    detail: enabled ? String(localized: "Jarvis podrá seleccionarla en tareas compatibles. Revisa y autoriza por separado sus instrucciones para NVIDIA.", bundle: .module)
+                    detail: enabled ? String(localized: "Jarvis podrá seleccionarla en tareas compatibles. Revisa y autoriza por separado sus instrucciones para Codex (OpenAI).", bundle: .module)
                         : String(localized: "Jarvis dejará de seleccionarla para tareas nuevas.", bundle: .module),
                     method: "extensions.skill.set_enabled", payload: skillPayload(skill, ["enabled": enabled]),
                     success: enabled ? String(localized: "Skill activada.", bundle: .module) : String(localized: "Skill desactivada.", bundle: .module))))

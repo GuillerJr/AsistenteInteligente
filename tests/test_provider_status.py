@@ -72,3 +72,23 @@ async def test_provider_status_rejects_payload_and_unknown_method() -> None:
     assert payload.error_code == "invalid_payload"
     assert method.ok is False
     assert method.error_code == "method_not_found"
+
+
+@pytest.mark.parametrize("payload", [
+    {"provider": "codex", "credential": "PRIVATE"},
+    {"provider": "unexpected", "credential": "configured"},
+])
+async def test_selected_connection_status_is_bounded_and_does_not_probe_nvidia(payload):
+    async def probe():
+        return payload
+
+    def forbidden_legacy_probe():
+        pytest.fail("The selected connection must not inspect NVIDIA credentials")
+
+    result = await ProviderStatusIpcService(
+        forbidden_legacy_probe, status_probe=probe,
+    ).status_payload()
+    assert result == {
+        "provider": "codex", "credential": "unavailable", "voice_output": "unconfigured",
+    }
+    assert "PRIVATE" not in repr(result)

@@ -70,13 +70,15 @@ public enum LocalVoiceTurnFeedback {
         case "job_timeout", "swarm_execution_timeout":
             "La respuesta tardó demasiado. Inténtalo otra vez."
         case "brain_unavailable":
-            "El servicio de inteligencia no está disponible. Revisa la configuración de NVIDIA."
+            "El servicio de inteligencia no está disponible. Revisa la conexión con Codex."
         case "remote_provider_unavailable":
-            "NVIDIA no pudo responder. Inténtalo de nuevo."
+            "Codex no pudo responder. Inténtalo de nuevo."
         case "remote_rate_limited":
-            "NVIDIA limitó temporalmente las consultas. Espera unos segundos y vuelve a intentarlo."
+            "El servicio de Codex limitó temporalmente las consultas. Espera unos segundos y vuelve a intentarlo."
         case "remote_authentication_failed":
-            "NVIDIA rechazó la credencial. Revisa la conexión en Configuración."
+            "Codex requiere que revises la sesión en Configuración."
+        case "speech_provider_unconfigured":
+            "La salida de voz no está configurada. Puedes seguir usando el chat por escrito."
         case "tcc_permission_denied":
             "macOS retiró un permiso necesario. Detuve la acción sin reintentar."
         case "security_compromised":
@@ -86,7 +88,7 @@ public enum LocalVoiceTurnFeedback {
         case "empty_agent_response", "job_result_invalid", "job_stream_invalid":
             "La respuesta llegó incompleta. Inténtalo otra vez."
         case "incomplete_model_response":
-            "NVIDIA no completó la respuesta. Inténtalo otra vez o dilo con otras palabras."
+            "Codex no completó la respuesta. Inténtalo otra vez o dilo con otras palabras."
         case "model_context_limit":
             "La conversación es demasiado larga para continuar. Empieza una conversación nueva."
         case "confirmation_tool_unsupported":
@@ -120,13 +122,15 @@ public enum LocalVoiceTurnFeedback {
         case "brain_unavailable":
             "Inteligencia no disponible"
         case "remote_provider_unavailable":
-            "NVIDIA no disponible"
+            "Codex no disponible"
         case "browser_task_chrome_connection_failed":
             "Chrome no disponible"
         case "remote_rate_limited":
-            "Límite temporal de NVIDIA"
+            "Límite temporal de Codex"
         case "remote_authentication_failed":
-            "Credencial de NVIDIA no válida"
+            "Sesión de Codex no válida"
+        case "speech_provider_unconfigured":
+            "Voz sin configurar"
         case "job_timeout", "swarm_execution_timeout":
             "Tiempo de respuesta agotado"
         case "tcc_permission_denied":

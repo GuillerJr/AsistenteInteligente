@@ -17,7 +17,7 @@ REQUIRED_CAPABILITIES = frozenset(
     {
         "active_vision",
         "engineering_cli",
-        "nvidia_inference",
+        "inference",
         "conversation",
         "memory",
         "native_automation",
@@ -88,7 +88,7 @@ class ChangePolicy(BaseModel):
 class ReleaseInferencePolicy(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    provider: Literal["nvidia"]
+    provider: Literal["codex"]
     network_required: Literal[True]
     local_fallback: Literal[False]
 
@@ -116,11 +116,11 @@ class ReleaseScopeManifest(BaseModel):
             raise ValueError("release scope omits a required capability")
         if {"local_conversation", "hybrid_brain"}.intersection(identifiers):
             raise ValueError("release scope contains retired inference capabilities")
-        remote_capabilities = {"conversation", "nvidia_inference", "active_vision",
+        remote_capabilities = {"conversation", "inference", "active_vision",
                                "voice_interaction", "plan_mode"}
         if any(item.network != "required_authenticated" for item in self.capabilities
                if item.capability_id in remote_capabilities):
-            raise ValueError("inference capabilities require authenticated NVIDIA access")
+            raise ValueError("inference capabilities require the selected authenticated connection")
         if len(set(self.principles)) != len(self.principles):
             raise ValueError("release principles contain duplicates")
         if len(set(self.prohibited_expansion)) != len(self.prohibited_expansion):

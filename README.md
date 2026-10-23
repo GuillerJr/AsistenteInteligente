@@ -1,11 +1,12 @@
 # Jarvis
 
-Asistente personal para **macOS Apple Silicon**. Conversa por texto o voz, organiza
+Asistente personal para **macOS Apple Silicon**. Conversa por texto, organiza
 proyectos y tareas, y trabaja con tus apps mediante acciones que tú apruebas.
-La interfaz está en español. La inferencia usa **NVIDIA exclusivamente** y requiere
-internet; la ejecución de herramientas, los permisos y la memoria cifrada viven en el Mac.
-La recuperación semántica también usa NVIDIA: envía consultas y fragmentos de memoria
-con secretos redactados para obtener embeddings; el índice permanece en el Mac.
+La interfaz está en español. La inferencia usa **Codex con tu cuenta de ChatGPT**
+y requiere internet; la ejecución de herramientas, los permisos y la memoria
+cifrada viven en el Mac. Los embeddings se calculan localmente con Apple.
+La salida de voz y las notas de audio de Telegram están pendientes de configurar
+tras retirar NVIDIA NIM. Ollama y otras APIs quedan para conexiones posteriores.
 
 ## Instalar y empezar
 
@@ -21,8 +22,10 @@ Con el entorno de desarrollo preparado:
 ./script/menu_bar_service.sh install
 ```
 
-Abre Jarvis, sigue la bienvenida e introduce tú mismo la clave NVIDIA en su campo
-seguro. Puedes saltar los permisos opcionales y escribir tu primera pregunta.
+Abre Jarvis y entra en Ajustes › Modelos. Pulsa «Iniciar sesión con ChatGPT» y
+abre el enlace oficial; completa tú el inicio de sesión en el navegador. Elige
+un modelo disponible y pulsa «Probar conexión» antes de tu primera pregunta.
+No hace falta introducir una clave de NVIDIA. Puedes saltar los permisos opcionales.
 Ajustes › General permite volver a abrir la bienvenida.
 
 ## Desarrollar

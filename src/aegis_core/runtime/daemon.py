@@ -24,7 +24,7 @@ from aegis_core.biometric_training_service import (
     BiometricTrainingService,
     VoiceConfirmationVerifier,
 )
-from aegis_core.brain.nvidia_client import NvidiaBrainClient
+from aegis_core.brain.inference_client import InferenceBrainClient
 from aegis_core.brain.nvidia_summary import NvidiaToolResultSummarizer
 from aegis_core.brain.vision_fallback import LocalizedVisionAnalyzer, VisionFallbackIpcService
 from aegis_core.brain.vision_processor import ActiveVisionIpcService
@@ -54,6 +54,8 @@ from aegis_core.goals import (
     nvidia_step_judge,
 )
 from aegis_core.health import HealthIpcService
+from aegis_core.inference_service import InferenceIpcService
+from aegis_core.inference_settings import load_inference_preferences
 from aegis_core.ipc.peer_identity import (
     JARVIS_CLIENT_METHODS,
     UNSIGNED_PEER_METHODS,
@@ -81,7 +83,6 @@ from aegis_core.memory import (
 )
 from aegis_core.memory.conversation_context import ConversationContextManager
 from aegis_core.memory.crypto import MemoryRowCipher
-from aegis_core.memory.embedding import NvidiaMemoryEmbeddingClient
 from aegis_core.memory.errors import MemoryStoreError
 from aegis_core.memory.retrieval import EmbeddingBackfillWorker
 from aegis_core.memory.retrieval_planning import NvidiaRetrievalPlanner
@@ -109,11 +110,10 @@ from aegis_core.plugins.store import PluginStore
 from aegis_core.projects import ProjectIpcService, ProjectStore
 from aegis_core.provider_status import ProviderStatusIpcService
 from aegis_core.providers.apple_embedding import AppleLocalEmbeddingClient
+from aegis_core.providers.codex import CodexChatProvider
 from aegis_core.providers.mlx_provider import (
     MLXWhisperTranscriber,
 )
-from aegis_core.providers.nvidia import NvidiaNimClient
-from aegis_core.providers.nvidia_asr import transcribe as transcribe_telegram_voice
 from aegis_core.runtime.lifecycle import BackgroundTaskSupervisor, serve_until_shutdown
 from aegis_core.runtime_preflight import RuntimePreflightIpcService
 from aegis_core.runtime_state import RuntimeSuspensionController
@@ -135,7 +135,6 @@ from aegis_core.secrets import (
     MacOSAuditAnchor,
     MacOSGenericSecret,
     MacOSIpcSecret,
-    MacOSKeychain,
     MacOSMemorySecret,
     SecretNotFoundError,
 )
@@ -183,6 +182,25 @@ from aegis_core.tools.ios_bridge import (
 from aegis_core.tools.smart_tv import SmartTVController, SmartTVToolService
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _inference_provider(settings: Settings) -> CodexChatProvider:
+    """One explicitly configured transport; account files remain owned by Codex."""
+    return CodexChatProvider(
+        executable_path=settings.codex_executable_path,
+        state_directory=settings.codex_state_directory,
+        working_directory=settings.codex_working_directory,
+        model_id=lambda: load_inference_preferences(settings.inference_preferences_path).model_id,
+        timeout_seconds=min(settings.request_timeout_seconds, 120),
+    )
+
+
+def _computer_app_grants(settings: Settings) -> ComputerAppGrantStore:
+    # An app grant also covers the observation's inference destination. Selecting
+    # Codex must never import a standing NVIDIA-era screen-control consent.
+    return ComputerAppGrantStore(
+        settings.computer_app_grants_path.with_name("computer_app_grants_codex.json"),
+    )
 
 
 def _ipc_authenticator(settings: Settings) -> IpcAuthenticator:
@@ -280,7 +298,7 @@ async def run_daemon() -> int:
 
 
 async def _run_daemon(shutdown: asyncio.Event) -> int:
-    from aegis_core.orchestration.graph import build_nvidia_swarm_graph
+    from aegis_core.orchestration.graph import build_swarm_graph
 
     settings = Settings()
     mcp_host: McpHostManager | None = None
@@ -427,18 +445,18 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
         application_qualification_service = ApplicationQualificationIpcService(
             JarvisApplicationQualification(bridge=relayed_computer_bridge)
         )
-        nvidia_keychain = MacOSKeychain(
-            service=settings.nvidia_keychain_service,
-            account=settings.nvidia_keychain_account,
-        )
-        # Inference is NVIDIA-only; the on-device helper only finds personal names so
-        # they can be masked before a request leaves the Mac.
+        # The helper provides the existing Apple encoder space and on-device name
+        # detection. Neither operation needs the chat provider or a remote API key.
         local_embedding_client = AppleLocalEmbeddingClient(
             settings.local_embedding_executable_path,
             timeout_seconds=settings.local_embedding_timeout_seconds,
         )
+        inference_client = _inference_provider(settings)
+        inference_service = InferenceIpcService(
+            inference_client, settings.inference_preferences_path,
+        )
         provider_status_service = ProviderStatusIpcService(
-            nvidia_keychain.is_configured,
+            status_probe=inference_service.provider_status_payload,
         )
         runtime_preflight_service = RuntimePreflightIpcService(
             provider_status_service,
@@ -473,8 +491,8 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             thermal_probe=runtime_state.snapshot,
         )
         performance_service = PerformanceIpcService(performance_profiler, audit_sink)
-        async with NvidiaNimClient(settings, nvidia_keychain.get) as nvidia_client:
-            nvidia_brain = NvidiaBrainClient(nvidia_client, audit_sink=audit_sink)
+        async with inference_client:
+            inference_brain = InferenceBrainClient(inference_client, audit_sink=audit_sink)
             device_tool_handlers = {
                 **smart_tv_service.handlers(),
                 **android_service.handlers(),
@@ -490,7 +508,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             )
             tool_executor = ReadOnlyToolExecutor(
                 computer_controller=ComputerUseController(
-                    nvidia_client,
+                    inference_client,
                     bridge=relayed_computer_bridge,
                     activity_tracker=activity_tracker,
                 ),
@@ -501,7 +519,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     **SkillTeachHandlers(
                         skill_registry,
                         choose_tools=nvidia_tool_chooser(
-                            nvidia_brain, mcp_host.explicit_request_catalogue),
+                            inference_brain, mcp_host.explicit_request_catalogue),
                     ).handlers(),
                     **foreign_plugin_tools.handlers(),
                     **mcp_host.handlers(),
@@ -546,9 +564,9 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 max_turns=settings.conversation_max_turns,
             )
             conversations.context_manager = ConversationContextManager(
-                memory_store, conversations, nvidia_brain,
+                memory_store, conversations, inference_brain,
             )
-            conversations.retrieval_planner = NvidiaRetrievalPlanner(nvidia_brain)
+            conversations.retrieval_planner = NvidiaRetrievalPlanner(inference_brain)
             try:
                 purged = await conversations.purge_temporary()
                 if purged:
@@ -558,7 +576,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             graph_service = GraphRAGService(memory_store)
             memory_retriever = HybridMemoryRetriever(
                 memory_store,
-                embedding_provider=NvidiaMemoryEmbeddingClient(nvidia_client),
+                embedding_provider=local_embedding_client,
                 background_gate=runtime_state,
                 graph_service=graph_service,
             )
@@ -610,7 +628,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             owner_profile = OwnerProfile(
                 memory_store,
                 namespace=settings.memory_rag_namespace,
-                interpreter=nvidia_memory_interpreter(nvidia_brain),
+                interpreter=nvidia_memory_interpreter(inference_brain),
                 interpret_delay_seconds=15.0,
             )
             social_memory = SocialMemory(
@@ -622,9 +640,8 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             )
             capability_learning = CapabilityLearningCoordinator(capability_store)
             capability_service = CapabilityLearningIpcService(capability_store)
-            graph = build_nvidia_swarm_graph(
-                nvidia_brain,
-                inference_nvidia_only=True,
+            graph = build_swarm_graph(
+                inference_brain,
                 tool_broker=tool_broker,
                 policy_context=policy_context,
                 tool_executor=tool_executor,
@@ -674,8 +691,9 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             )
             jobs = SwarmJobManager(
                 graph,
+                inference_provider="codex",
                 standing_grants=standing_grants,
-                app_grants=ComputerAppGrantStore(settings.computer_app_grants_path),
+                app_grants=_computer_app_grants(settings),
                 max_jobs=settings.ipc_max_jobs,
                 execution_timeout_seconds=settings.job_timeout_seconds,
                 conversations=conversations,
@@ -690,12 +708,15 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 evaluation_store=evaluation_store,
                 action_history=action_history,
                 voice_confirmation_verifier=voice_confirmation_verifier,
-                approved_result_summarizer=NvidiaToolResultSummarizer(nvidia_brain),
+                approved_result_summarizer=NvidiaToolResultSummarizer(inference_brain),
                 request_cleanup=browser_tasks.finish_request,
                 confirmation_summaries={
                     "jarvis_plugin_install": lambda authorization: (
                         foreign_plugin_confirmation_summary(authorization, foreign_plugins)),
                 },
+            )
+            inference_service.jobs_busy = lambda: jobs.has_active_jobs or bool(
+                jobs.pending_approvals()
             )
             attention.approvals = jobs.pending_approvals
             telegram_service = TelegramService(
@@ -708,12 +729,10 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     settings.telegram_configuration_path.with_name("telegram-transport.json"),
                     MemoryRowCipher(memory_secret),
                 ),
-                transcriber=lambda data: transcribe_telegram_voice(nvidia_client, data),
                 attention=attention.text,
-                synthesizer=nvidia_client.synthesize_speech,
             )
             mascot_service = MascotAutonomyService(
-                nvidia_brain,
+                inference_brain,
                 blocked=lambda: security_state.compromised or runtime_state.suspended,
                 foreground_busy=lambda: jobs.has_active_jobs,
             )
@@ -743,13 +762,14 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             )
             system_audit_service = SystemAuditIpcService(audit_sink)
             speech_service = SpeechSynthesisIpcService(
-                nvidia_client.synthesize_speech,
+                None,
                 SpeechArtifactStore(settings.ipc_socket_path.parent / "speech"),
-                nvidia_client.stream_speech,
             )
-            settings_service = SettingsIpcService(settings, mcp_host, nvidia_keychain)
+            settings_service = SettingsIpcService(settings, mcp_host, None)
             localized_vision_service = VisionFallbackIpcService(
-                LocalizedVisionAnalyzer(nvidia_client, timeout_seconds=5.0, audit_sink=audit_sink)
+                LocalizedVisionAnalyzer(
+                    inference_client, timeout_seconds=5.0, audit_sink=audit_sink,
+                )
             )
             extensions_service = ExtensionsIpcService(
                 skill_registry,
@@ -788,7 +808,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 jobs=jobs,
                 conversations=conversations,
                 deliver=(deliver_to_app, deliver_to_telegram),
-                judge_new=nvidia_novelty_judge(nvidia_brain),
+                judge_new=nvidia_novelty_judge(inference_brain),
                 audit_sink=audit_sink,
                 paused=dot_pause.is_paused,
             )
@@ -799,7 +819,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                 goal_store,
                 jobs=jobs,
                 conversations=conversations,
-                judge=nvidia_step_judge(nvidia_brain),
+                judge=nvidia_step_judge(inference_brain),
                 deliver=(deliver_to_app, deliver_to_telegram),
                 audit_sink=audit_sink,
                 paused=dot_pause.is_paused,
@@ -836,8 +856,8 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     **HealthIpcService(
                         audit_sink.path, mcp_status=mcp_host.status,
                         credential=provider_status_service.status_payload,
-                        cooldown=nvidia_client.cooldown_remaining,
-                        fallback=nvidia_client.fallback_status,
+                        cooldown=lambda: 0.0,
+                        fallback=lambda: None,
                         memory_status=lambda: memory_retriever.status(
                             namespace=settings.memory_rag_namespace,
                         )).handlers(),
@@ -852,6 +872,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     **system_audit_service.handlers(),
                     **speech_service.handlers(),
                     **provider_status_service.handlers(),
+                    **inference_service.handlers(),
                     **settings_service.handlers(),
                     **extensions_service.handlers(),
                     **ForeignPluginIpcService(foreign_plugins).handlers(),
@@ -878,6 +899,10 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     ),
                 },
                 handler_timeout_overrides={
+                    # Login/catalogue operations may exceed the default 4 s, but
+                    # must finish before the native client's 25 s deadline.
+                    **{method: 20 for method in InferenceIpcService.METHODS},
+                    "provider.status": 10,
                     "memory.search": 25,
                     "memory.put": 25,
                     "conversations.search": 4,
@@ -903,9 +928,9 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     browser_qualification_service.METHOD: (
                         browser_qualification_service.MAXIMUM_HANDLER_SECONDS
                     ),
-                    speech_service.SYNTHESIZE_METHOD: settings.nvidia_tts_timeout_seconds + 2,
-                    speech_service.STREAM_OPEN_METHOD: settings.nvidia_tts_timeout_seconds + 2,
-                    speech_service.STREAM_NEXT_METHOD: settings.nvidia_tts_timeout_seconds + 2,
+                    speech_service.SYNTHESIZE_METHOD: 20,
+                    speech_service.STREAM_OPEN_METHOD: 20,
+                    speech_service.STREAM_NEXT_METHOD: 20,
                 },
                 response_sent_hooks={
                     runtime_preflight_service.METHOD: lambda: (
@@ -942,7 +967,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     background_tasks.create(goal_runner.run(), name="goal-runner")
                     background_tasks.create(
                         embedding_backfill_worker.run_continuously(),
-                        name="nvidia-memory-embedding-backfill",
+                        name="apple-memory-embedding-backfill",
                     )
                     background_tasks.create(
                         memory_decay_worker.run(),
@@ -970,7 +995,8 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     cleanup.push_async_callback(
                         asyncio.get_running_loop().shutdown_default_executor
                     )
-                    cleanup.push_async_callback(nvidia_client.aclose)
+                    cleanup.push_async_callback(inference_client.aclose)
+                    cleanup.push_async_callback(inference_service.close)
                     cleanup.push_async_callback(mcp_host.close)
                     cleanup.push_async_callback(browser_tasks.close)
                     cleanup.push_async_callback(settings_service.close)

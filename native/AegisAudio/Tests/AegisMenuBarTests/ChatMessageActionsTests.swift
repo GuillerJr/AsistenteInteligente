@@ -98,7 +98,7 @@ final class ChatMessageActionsTests: XCTestCase {
         chat.activeSubmission = ChatSubmission(text: "Pregunta", attachments: [], planMode: true)
         chat.recordFailure("remote_authentication_failed")
         XCTAssertTrue(chat.retryAvailable)
-        XCTAssertTrue(chat.error?.contains("clave") == true)
+        XCTAssertTrue(chat.error?.contains("sesión") == true)
         XCTAssertEqual(chat.retrySubmission?.text, "Pregunta")
         XCTAssertEqual(chat.retrySubmission?.planMode, true)
         chat.recordFailure("job_status_unavailable")

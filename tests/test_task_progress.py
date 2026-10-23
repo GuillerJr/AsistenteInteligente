@@ -569,6 +569,26 @@ async def test_compound_summary_explicitly_reports_pending_phase():
 
 
 @pytest.mark.asyncio
+async def test_summary_failure_preserves_verified_data_without_misattributing_the_provider():
+    from aegis_core.brain.errors import RemoteProviderUnavailableError
+    from aegis_core.brain.inference_client import InferenceBrainClient
+
+    provider = Provider([RemoteProviderUnavailableError("synthetic private error")])
+    provider.provider_id = "codex"
+    summarizer = NvidiaToolResultSummarizer(InferenceBrainClient(provider))
+    context = ApprovedToolContext(
+        request_id=UserRequest(text=REQUEST).request_id,
+        request_text=REQUEST, conversation_id=None,
+    )
+    text = await summarizer(context, ApprovedToolOutcome(result(), "Datos verificados."))
+
+    assert text.startswith("Datos verificados.")
+    assert "No pude resumir el resultado" in text
+    assert "NVIDIA" not in text and "synthetic private error" not in text
+    assert len(provider.calls) == 1
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("judgment,fulfilled", [
     ('{"fulfilled":true,"reason":"Las dos fases tienen evidencia."}', True),
     ('{"fulfilled":false,"reason":"No consta el destinatario del borrador."}', False),

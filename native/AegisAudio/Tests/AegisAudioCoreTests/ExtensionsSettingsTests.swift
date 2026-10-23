@@ -26,7 +26,7 @@ struct ExtensionsSettingsTests {
         let decoded = try JSONDecoder().decode(JarvisExtensionSkill.self, from: Data(active.utf8))
         #expect(decoded.active)
         #expect(!decoded.remote_allowed)
-        #expect(decoded.statusTitle == "Requiere autorización para NVIDIA")
+        #expect(decoded.statusTitle == "Requiere autorización para Codex")
     }
 
     @Test func missingSharingDecisionDoesNotDecode() {

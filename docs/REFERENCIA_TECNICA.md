@@ -1,5 +1,11 @@
 # Referencia técnica anterior a la preparación de la 1.0
 
+> Actualización del 23-10-2026: la inferencia activa pasó a Codex con ChatGPT y
+> los embeddings al encoder local de Apple. Las secciones NVIDIA de esta referencia
+> conservan antecedentes y pruebas heredadas; no describen la conexión activa.
+> Consulta [ADR-0235](architecture/ADR-0235-configured-inference-and-codex-chatgpt.md)
+> y el [manual vigente](MANUAL_INSTALACION_CONFIGURACION.md).
+
 Documento conservado como referencia histórica de implementación. Para el comportamiento
 vigente consulta el [manual único](MANUAL_INSTALACION_CONFIGURACION.md). Las rutas
 híbridas y los LaunchAgents descritos más abajo no forman parte del flujo instalado actual.

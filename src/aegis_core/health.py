@@ -1,11 +1,4 @@
-"""How Jarvis is doing, for the owner (Claude's and Codex's usage panel, as a health panel).
-
-NVIDIA has no quota to show, so the panel shows what the owner can act on: whether
-NVIDIA answers and how often it is rate limited, which integrations are connected or
-quarantined, and the latest failures. It reads only the tail of the audit log, whose
-technical events carry no user content, plus the live MCP status and cooldown; it
-changes nothing.
-"""
+"""Content-free health of the selected inference connection and integrations."""
 
 from __future__ import annotations
 
@@ -33,7 +26,7 @@ _FAILURE_EVENTS = {
 }
 _CODE_KEYS = ("error_code", "reason_code", "server_id", "tool")
 _FAILURE_TITLES = {
-    "incomplete_model_response": "NVIDIA devolvió una respuesta incompleta",
+    "incomplete_model_response": "El proveedor de IA devolvió una respuesta incompleta",
     "web_access_failed": "No se pudieron consultar las fuentes web",
     "web_search_unavailable": "Los proveedores de búsqueda no están disponibles",
     "confirmation_expired": "La aprobación caducó antes de ejecutar la acción",
@@ -72,7 +65,7 @@ def _when(record: dict[str, Any]) -> datetime | None:
 
 def health_report(events: Iterable[dict[str, Any]], *, now: datetime,
                   mcp_status: dict[str, Any] | None, credential: str | None,
-                  cooldown_seconds: float) -> dict[str, Any]:
+                  cooldown_seconds: float, provider: str = "nvidia_nim") -> dict[str, Any]:
     since = now - WINDOW
     outcomes: Counter[str] = Counter()
     latencies: list[int] = []
@@ -84,7 +77,11 @@ def health_report(events: Iterable[dict[str, Any]], *, now: datetime,
             continue
         data = record.get("data") if isinstance(record.get("data"), dict) else {}
         kind = record["event_type"]
-        if kind == "nvidia_inference":
+        inference_event = (
+            kind == "nvidia_inference" if provider == "nvidia_nim"
+            else kind == "provider_inference" and data.get("provider") in {provider, "configured"}
+        )
+        if inference_event:
             outcome = str(data.get("outcome") or "unknown")
             outcomes[outcome] += 1
             if outcome == "completed":
@@ -108,9 +105,7 @@ def health_report(events: Iterable[dict[str, Any]], *, now: datetime,
         for item in (mcp_status or {}).get("servers", ())
         if isinstance(item, dict)
     ]
-    return {
-        "window_hours": int(WINDOW.total_seconds() // 3_600),
-        "nvidia": {
+    metrics = {
             "credential": credential or "unavailable",
             "calls": attempted,
             "answered": answered,
@@ -120,7 +115,15 @@ def health_report(events: Iterable[dict[str, Any]], *, now: datetime,
             "last_success_at": last_success.isoformat() if last_success else None,
             "last_problem_at": last_problem.isoformat() if last_problem else None,
             "cooldown_seconds": round(max(0.0, cooldown_seconds), 1),
-        },
+        }
+    state = (
+        "ready" if credential == "configured" else "signed_out"
+        if credential == "missing" else "unavailable"
+    )
+    return {
+        "window_hours": int(WINDOW.total_seconds() // 3_600),
+        **({"nvidia": metrics} if provider == "nvidia_nim" else {}),
+        "inference": {"provider": provider, "state": state, **metrics},
         "mcp": servers,
         "failures": sorted(failures, key=lambda item: item["at"], reverse=True)[:MAX_FAILURES],
     }
@@ -171,12 +174,15 @@ class HealthIpcService:
         report = health_report(
             events, now=self._clock(), mcp_status=mcp,
             credential=(credential or {}).get("credential") if isinstance(credential, dict)
-            else None, cooldown_seconds=cooldown)
+            else None, cooldown_seconds=cooldown,
+            provider=("codex" if isinstance(credential, dict)
+                      and credential.get("provider") == "codex" else "nvidia_nim"))
+        inference_metrics = report.get("nvidia", report["inference"])
         try:
-            report["nvidia"]["last_fallback"] = self._fallback()
+            inference_metrics["last_fallback"] = self._fallback()
         except Exception as error:
             record_boundary_error(error)
-            report["nvidia"]["last_fallback"] = None
+            inference_metrics["last_fallback"] = None
         if self._memory_status is not None:
             try:
                 report["memory"] = await self._memory_status()

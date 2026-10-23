@@ -12,7 +12,7 @@ struct ActionReviewPresentation {
         case "computer_use":
             title = String(localized: "Control visual autónomo", bundle: .module)
             icon = "cursorarrow.motionlines"
-            warning = String(localized: "Jarvis enviará capturas acotadas al modelo NVIDIA y controlará solo la ", bundle: .module)
+            warning = String(localized: "Jarvis enviará capturas acotadas a Codex (OpenAI) y controlará solo la ", bundle: .module)
                 + String(localized: "aplicación indicada. Se detendrá antes de acciones sensibles.", bundle: .module)
         case "terminal_run_template":
             title = String(localized: "Diagnóstico de terminal", bundle: .module)

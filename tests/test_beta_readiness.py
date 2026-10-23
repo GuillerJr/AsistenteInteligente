@@ -17,7 +17,8 @@ def test_daily_beta_gate_is_local_private_and_complete() -> None:
     assert "long-horizon-reliability" in script
     assert "daemon-status" in script
     assert "runtime-readiness.json" in script
-    assert 'value["schema_version"] != "2.0"' in script
+    assert 'value["schema_version"] != "3.0"' in script
+    assert '"voice_output"' in script
     assert '"build_revision"' in script
     assert "native_build_mismatch" in script
     assert "AegisBuildRevision" in script

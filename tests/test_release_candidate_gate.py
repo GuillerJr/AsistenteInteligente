@@ -38,7 +38,8 @@ def test_rc3_rc8_gate_covers_every_nonvoice_release_block() -> None:
     assert "jarvis_beta.sh check" in script
     assert '--request "Hola"' in script
     assert '--workspace "$AEGIS_PROJECT_ROOT"' not in script
-    assert "--inference-policy nvidia_only" in script
+    assert "--inference-policy configured" in script
+    assert "--inference-policy nvidia_only" not in script
     assert "acceptance-benchmark" in script
     assert "production-workflows" in script
     assert "daemon-recovery" in script

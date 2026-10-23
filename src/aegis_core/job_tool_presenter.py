@@ -97,7 +97,8 @@ class JobToolPresenter:
                 mode, "el navegador configurado"
             )
             return (
-                "Permitir a Jarvis analizar con NVIDIA el contenido del sitio y las instrucciones "
+                "Permitir a Jarvis analizar con Codex (OpenAI) el contenido del sitio "
+                "y las instrucciones "
                 f"de esta tarea. Acceso usando {browser}, sólo para esta tarea "
                 "(10 min, hasta 24 acciones). "
                 f"Destino: {url}"

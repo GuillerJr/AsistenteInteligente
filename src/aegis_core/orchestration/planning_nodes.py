@@ -22,6 +22,7 @@ from aegis_core.engineering import (
     ENGINEERING_WORKSPACE_METADATA,
     EngineeringInferencePolicy,
     engineering_system_instruction,
+    engineering_uses_configured_provider,
     engineering_uses_nvidia,
     is_engineering_request,
 )
@@ -175,7 +176,7 @@ def create_specialist_node(
             )
             inventory = request.metadata.get(ENGINEERING_MANIFEST_METADATA)
             if (
-                engineering_uses_nvidia(request)
+                (engineering_uses_configured_provider(request) or engineering_uses_nvidia(request))
                 and isinstance(inventory, dict)
                 and inventory.get("sample_complete") is True
                 and inventory.get("observed_file_count") == 0
@@ -517,6 +518,7 @@ def create_specialist_node(
                             is_engineering_request(request)
                             and request.metadata.get(ENGINEERING_INFERENCE_METADATA)
                             in {
+                                EngineeringInferencePolicy.CONFIGURED.value,
                                 EngineeringInferencePolicy.LOCAL_ONLY.value,
                                 EngineeringInferencePolicy.NVIDIA_ONLY.value,
                             }

@@ -22,6 +22,24 @@ AUTHENTICATOR = IpcAuthenticator(bytes.fromhex("77" * 32))
 STREAM_GROUP = "ab" * 16
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("method", "payload"), [
+    ("speech.synthesize", {"text": "Prueba sintética"}),
+    ("speech.stream.open", {"text": "Prueba sintética", "group_token": STREAM_GROUP}),
+    ("speech.stream.next", {"token": STREAM_GROUP, "after_sequence": 1}),
+])
+async def test_unconfigured_speech_has_an_explicit_error_without_network_or_artifacts(
+    tmp_path, method, payload,
+):
+    directory = tmp_path / "speech"
+    service = SpeechSynthesisIpcService(None, SpeechArtifactStore(directory))
+    assert method in service.handlers()
+    response = await service.handle(AUTHENTICATOR.create_request(method, payload))
+    assert not response.ok and response.error_code == "speech_provider_unconfigured"
+    assert not list(directory.iterdir())
+    await service.close()
+
+
 def _wav_bytes(*, frames: int = 441) -> bytes:
     output = io.BytesIO()
     with wave.open(output, "wb") as wav:

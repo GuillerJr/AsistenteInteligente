@@ -10,6 +10,7 @@ final class JarvisSettingsStore {
     enum FailureSource { case configurationRead, operation }
 
     var snapshot: JarvisSettingsSnapshot?
+    let inference: JarvisCodexSettingsStore
     var loading = false
     var busy = false
     var message: String?
@@ -38,6 +39,7 @@ final class JarvisSettingsStore {
 
     init(transport: (@MainActor (String, [String: Any], TimeInterval) async throws -> Data)? = nil) {
         self.transport = transport
+        self.inference = JarvisCodexSettingsStore(transport: transport)
     }
 
     func refresh() async {

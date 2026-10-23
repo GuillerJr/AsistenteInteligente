@@ -29,6 +29,23 @@ recuperación y proyectos se documentan en
 [quality/CODEX_REA_TOOL_REVIEW.md](quality/CODEX_REA_TOOL_REVIEW.md), con cobertura
 y límites explícitos. No sustituye las comprobaciones manuales que siguen abiertas.
 
+## Cambio de inferencia del 23-10-2026
+
+Por indicación del dueño, se retira la exclusividad NVIDIA. La primera conexión es
+Codex con ChatGPT mediante el cliente oficial, con sesión propia y herramientas
+sujetas al broker de Jarvis. Los embeddings usan Apple local; voz y notas de audio
+quedan sin configurar. Ver [ADR-0235](architecture/ADR-0235-configured-inference-and-codex-chatgpt.md).
+
+- [ ] Completar el inicio de sesión del dueño y la prueba de conexión desde la app firmada.
+- [ ] Repetir el recorrido TextEdit «Siempre», uso en otro chat y revocación con Codex.
+  P1-5/R2-3 siguen abiertos: el cambio de modelo no acredita por sí solo la ejecución.
+- [ ] Incorporar una alternativa de audio y volver a certificar la voz.
+- [ ] Ampliar proveedores (local con Ollama, OpenAI API o Anthropic) en cambios posteriores
+  según la elección del dueño, sin respaldos automáticos.
+
+La cobertura y sus límites están en [quality/CODEX_CONNECTION_20261023.md](quality/CODEX_CONNECTION_20261023.md).
+Los párrafos NVIDIA anteriores describen pruebas históricas, no la conexión activa.
+
 ## 0. Segunda revisión (22-10-2026, commit `46e8b75`)
 
 Hecha con Claude Code sobre la app instalada, que coincide con `46e8b75` (versión 1.0.0, build 214865395).

@@ -210,7 +210,7 @@ enum JarvisSettingsSection: String, CaseIterable, Identifiable {
         case .general: String(localized: "Preferencias de Jarvis en este Mac.", bundle: .module)
         case .accounts: String(localized: "Administra las conexiones y la cuenta que utiliza Jarvis.", bundle: .module)
         case .telegram: String(localized: "Conversa con Jarvis desde tu móvil.", bundle: .module)
-        case .models: String(localized: "Elige un modelo principal y una alternativa para cada tarea.", bundle: .module)
+        case .models: String(localized: "Conecta tu cuenta de ChatGPT y elige el modelo de Codex para Jarvis.", bundle: .module)
         case .extensions: String(localized: "Revisa y administra las skills y los plugins que utiliza Jarvis.", bundle: .module)
         case .voice: String(localized: "Identidad y activación local con la voz actual de Jarvis.", bundle: .module)
         case .privacy: String(localized: "Revisa los permisos y consulta los recuerdos guardados.", bundle: .module)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable, Iterable
+from typing import Literal
 
 from aegis_core.conversation_quality import (
     ConversationQualityEvaluator,
@@ -25,13 +26,16 @@ QUALITY_REPAIR_RECOVERY_MINIMUM_SAMPLES = 3
 _CONVERSATION_QUALITY_EVALUATOR = ConversationQualityEvaluator()
 
 
-def brain_target(model_id: str | None, tool_name: str | None) -> BrainTarget:
+def brain_target(
+    model_id: str | None, tool_name: str | None, *,
+    inference_provider: Literal["codex"] | None = None,
+) -> BrainTarget:
     if model_id == "apple/system-language-model":
         return BrainTarget.LOCAL
     if model_id is not None and model_id.startswith("local/"):
         return BrainTarget.DETERMINISTIC
     if model_id:
-        return BrainTarget.NVIDIA
+        return BrainTarget.CODEX if inference_provider == "codex" else BrainTarget.NVIDIA
     if tool_name:
         return BrainTarget.DETERMINISTIC
     return BrainTarget.UNKNOWN
@@ -64,7 +68,7 @@ def evaluate_job(
     )
     return JobEvaluation(
         request_id=job.request_id,
-        brain=brain_target(model_id, job.tool_name),
+        brain=brain_target(model_id, job.tool_name, inference_provider=job.inference_provider),
         model_id=model_id,
         total_latency_ms=max(0, wall_latency - job.confirmation_wait_ms),
         wall_latency_ms=wall_latency,
@@ -106,7 +110,11 @@ def evaluate_job(
 
 def build_job_metrics(evaluations: Iterable[JobEvaluation]) -> dict[str, object]:
     samples = tuple(evaluations)
-    brains = tuple(brain_target(item.model_id, item.tool_name) for item in samples)
+    brains = tuple(
+        item.brain if item.brain is BrainTarget.CODEX
+        else brain_target(item.model_id, item.tool_name)
+        for item in samples
+    )
     latencies = sorted(item.total_latency_ms for item in samples)
     wall_latencies = sorted(
         item.wall_latency_ms if item.wall_latency_ms is not None else item.total_latency_ms

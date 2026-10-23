@@ -85,7 +85,7 @@ class EngineeringCLI:
         workspace: Path | None,
         domain: EngineeringDomain = EngineeringDomain.AUTO,
         research_policy: EngineeringResearchPolicy = EngineeringResearchPolicy.OFFLINE,
-        inference_policy: EngineeringInferencePolicy = EngineeringInferencePolicy.NVIDIA_ONLY,
+        inference_policy: EngineeringInferencePolicy = EngineeringInferencePolicy.CONFIGURED,
         stdin: TextIO | None = None,
         stdout: TextIO | None = None,
         stderr: TextIO | None = None,
@@ -96,8 +96,8 @@ class EngineeringCLI:
             raise ValueError("engineering workspace must be a directory")
         self._domain = domain
         self._research_policy = research_policy
-        if inference_policy is not EngineeringInferencePolicy.NVIDIA_ONLY:
-            raise ValueError("Jarvis inference is NVIDIA-only")
+        if inference_policy is not EngineeringInferencePolicy.CONFIGURED:
+            raise ValueError("Jarvis uses the configured inference provider")
         self._inference_policy = inference_policy
         self._conversation_id: UUID | None = None
         self._stdin = stdin if stdin is not None else sys.stdin
@@ -418,14 +418,15 @@ class EngineeringCLI:
             if (
                 health.get("runtime_state") not in ("active", "suspended")
                 or security.get("state") != "intact"
-                or provider.get("provider") != "nvidia_nim"
+                or provider.get("provider") not in {"codex", "nvidia_nim"}
                 or provider.get("credential") not in ("configured", "missing", "unavailable")
             ):
                 raise ProtocolError("invalid runtime status")
             self._ui.notice(
                 f"Daemon: {health.get('runtime_state', 'desconocido')} · "
                 f"Seguridad: {security.get('state', 'desconocida')} · "
-                f"NVIDIA: {provider['credential']} · Inferencia: nvidia_only"
+                f"Proveedor: {provider['provider']} · Acceso: {provider['credential']} · "
+                "Inferencia: configured"
             )
             return 0
         if command == "/workspace":
@@ -490,8 +491,8 @@ class EngineeringCLI:
                 self._research_policy = EngineeringResearchPolicy(parts[1].casefold())
             elif command == "/inference":
                 policy = EngineeringInferencePolicy(parts[1].casefold())
-                if policy is not EngineeringInferencePolicy.NVIDIA_ONLY:
-                    raise ValueError("Jarvis inference is NVIDIA-only")
+                if policy is not EngineeringInferencePolicy.CONFIGURED:
+                    raise ValueError("Jarvis uses the configured inference provider")
                 self._inference_policy = policy
             else:
                 raise ValueError
@@ -527,7 +528,7 @@ class EngineeringCLI:
         for line in (
             "/domain <perfil>       especialidad técnica",
             "/research <modo>       offline | public_web (fuentes públicas)",
-            "/inference nvidia_only inferencia mediante la API de NVIDIA",
+            "/inference configured inferencia mediante el proveedor elegido",
             '/workspace "carpeta"   cambiar dentro del límite autorizado del daemon',
             "/status                estado local y consulta autenticada del daemon",
             "/resume                retomar una tarea tras desconexión, sin reenviarla",

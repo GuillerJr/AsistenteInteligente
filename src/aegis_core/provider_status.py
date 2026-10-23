@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 
 from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.ipc.protocol import IpcRequest
@@ -13,11 +13,16 @@ class ProviderStatusIpcService:
 
     def __init__(
         self,
-        credential_probe: Callable[[], bool],
+        credential_probe: Callable[[], bool] | None = None,
         local_model_probe: Callable[[], bool] | None = None,
+        *,
+        status_probe: Callable[[], Awaitable[dict[str, str]]] | None = None,
     ) -> None:
+        if credential_probe is None and status_probe is None:
+            raise ValueError("provider status needs a probe")
         self._credential_probe = credential_probe
         self._local_model_probe = local_model_probe
+        self._status_probe = status_probe
 
     def handlers(self) -> dict[str, IpcMethodHandler]:
         return {self.METHOD: self.handle}
@@ -31,6 +36,22 @@ class ProviderStatusIpcService:
             return None
 
     async def status_payload(self) -> dict[str, str]:
+        if self._status_probe is not None:
+            try:
+                async with asyncio.timeout(6):
+                    status = await self._status_probe()
+                if (
+                    status.get("provider") != "codex"
+                    or status.get("credential") not in {"configured", "missing", "unavailable"}
+                ):
+                    raise ValueError("invalid selected provider status")
+                return {"provider": "codex", "credential": status["credential"],
+                        "voice_output": "unconfigured"}
+            except Exception as error:
+                record_boundary_error(error)
+                return {"provider": "codex", "credential": "unavailable",
+                        "voice_output": "unconfigured"}
+        assert self._credential_probe is not None
         if self._local_model_probe is None:
             configured = await self._probe(self._credential_probe)
             local_available = None

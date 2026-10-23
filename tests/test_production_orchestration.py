@@ -47,12 +47,18 @@ def test_installed_mlx_module_only_retains_voice_transcription():
         assert not hasattr(mlx_provider, retired)
 
 
-@pytest.mark.parametrize("builder", [build_swarm_graph, build_nvidia_swarm_graph])
-def test_production_graph_rejects_hybrid_configuration(builder):
+def test_legacy_nvidia_factory_preserves_explicit_provider_policy():
+    builder = build_nvidia_swarm_graph
     with pytest.raises(ValueError, match="NVIDIA exclusively"):
         builder(object(), inference_nvidia_only=False)
     with pytest.raises(ValueError, match="NVIDIA exclusively"):
         builder(object(), local_provider=object())
+
+
+def test_configured_graph_has_no_nvidia_requirement_or_implicit_fallback():
+    assert build_swarm_graph(object(), inference_nvidia_only=False) is not None
+    with pytest.raises(ValueError, match="one configured inference provider"):
+        build_swarm_graph(object(), local_provider=object())
 
 
 def test_production_factory_rejects_provider_without_nvidia_contract():

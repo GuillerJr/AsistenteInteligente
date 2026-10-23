@@ -21,7 +21,7 @@ from aegis_core.bundle_paths import installed_app_path
 from aegis_core.ipc.client import IpcClient
 
 QUALIFICATION_SCHEMA_VERSION = "1.0"
-READINESS_SCHEMA_VERSION = "2.0"
+READINESS_SCHEMA_VERSION = "3.0"
 EVIDENCE_SCHEMA_VERSION = "2.0"
 QUALIFICATION_CHECKS = 5
 ModelT = TypeVar("ModelT", bound=BaseModel)
@@ -41,7 +41,7 @@ class QualificationStatus(StrEnum):
 class ReadinessSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal["2.0"] = READINESS_SCHEMA_VERSION
+    schema_version: Literal["3.0"] = READINESS_SCHEMA_VERSION
     build_revision: str = Field(
         default="legacy",
         pattern=r"^(legacy|development|[0-9a-f]{40})$",
@@ -52,6 +52,7 @@ class ReadinessSnapshot(BaseModel):
     )
     provider: str = Field(pattern=r"^(configured|missing|unavailable|checking|unknown)$")
     local_brain_available: bool
+    voice_output: Literal["ready", "unconfigured", "unavailable"]
     microphone: str = Field(pattern=r"^(authorized|denied|restricted|not_determined)$")
     speech_recognition: str = Field(pattern=r"^(authorized|denied|restricted|not_determined)$")
     screen_capture_authorized: bool
@@ -431,6 +432,7 @@ class MacOSQualificationGate:
             and readiness.speech_recognition == "authorized"
             and readiness.wake_word == "ready"
             and readiness.speaker_identity == "ready"
+            and readiness.voice_output == "ready"
         )
         observed = jobs.quality.observed
         owner_rate = observed.owner_recognition_rate

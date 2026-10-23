@@ -29,14 +29,15 @@ from aegis_core.telegram.experience import TelegramExperience
 from aegis_core.telegram.journal import InboxEntry, MessageReference, TransportState
 
 HELP = (
-    "Soy Jarvis. Escríbeme lo que necesitas; usaré tu configuración de NVIDIA y tus herramientas. "
+    "Soy Jarvis. Escríbeme lo que necesitas; usaré Codex con ChatGPT y tus herramientas. "
     "Recupero automáticamente lo relevante de tus chats del Mac y tu memoria compartida. "
     "Las acciones que requieran aprobación mostrarán botones para aprobar una vez o rechazar.\n\n"
     "/nuevo — nueva conversación\n/cancelar — cancelar la tarea\n/estado — estado del servicio\n"
     "/chats — ver conversaciones del Mac\n/continuar ID — retomar un chat\n"
     "/pendientes — lo que requiere tu atención\n"
     "/ayuda — esta ayuda\n\n"
-    "Recibo texto, notas de voz, imágenes y archivos de texto o PDF. "
+    "Recibo texto, imágenes y archivos de texto o PDF. "
+    "Las notas de voz y la lectura en voz alta necesitan un proveedor de audio configurado. "
     "Puedes responder a un mensaje concreto y usar sus botones. "
     "Tu Mac debe estar encendido, conectado y con Jarvis activo."
 )

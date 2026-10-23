@@ -20,7 +20,7 @@ def test_checked_in_release_scope_is_frozen_and_complete() -> None:
     assert {item.capability_id for item in manifest.capabilities} == {
         "active_vision",
         "engineering_cli",
-        "nvidia_inference",
+        "inference",
         "conversation",
         "memory",
         "native_automation",
@@ -45,7 +45,7 @@ def test_scope_report_contains_no_user_content() -> None:
     assert report["gate_passed"] is True
     assert report["capabilities"] == 13
     assert report["inference"] == {
-        "provider": "nvidia", "network_required": True, "local_fallback": False,
+        "provider": "codex", "network_required": True, "local_fallback": False,
     }
     assert report["privacy"] == {
         "contains_credentials": False,
@@ -64,9 +64,10 @@ def test_scope_loader_rejects_symbolic_links(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("field,value", [
-    ("provider", "local"), ("local_fallback", True), ("network_required", False),
+    ("provider", "local"), ("provider", "nvidia"),
+    ("local_fallback", True), ("network_required", False),
 ])
-def test_scope_rejects_non_nvidia_inference(tmp_path: Path, field: str, value: object) -> None:
+def test_scope_rejects_unconfigured_inference_providers(tmp_path, field, value):
     payload = json.loads(SCOPE_PATH.read_text())
     payload["inference"][field] = value
     path = tmp_path / "scope.json"
@@ -76,7 +77,7 @@ def test_scope_rejects_non_nvidia_inference(tmp_path: Path, field: str, value: o
 
 
 @pytest.mark.parametrize("capability", [
-    "conversation", "nvidia_inference", "active_vision", "voice_interaction", "plan_mode",
+    "conversation", "inference", "active_vision", "voice_interaction", "plan_mode",
 ])
 def test_inference_cannot_claim_to_work_offline(tmp_path: Path, capability: str) -> None:
     payload = json.loads(SCOPE_PATH.read_text())

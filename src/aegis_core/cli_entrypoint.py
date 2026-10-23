@@ -112,9 +112,9 @@ def build_parser(*, program_name: str | None = None) -> argparse.ArgumentParser:
             "Ejemplos:\n"
             "  jarvis\n"
             '  jarvis --domain backend --request "Revisa la concurrencia"\n'
-            "  jarvis --request - --inference-policy nvidia_only < consulta.txt\n\n"
+            "  jarvis --request - --inference-policy configured < consulta.txt\n\n"
             "Dentro de la sesión: /help · /status · /resume · /cancel · /new\n"
-            "NVIDIA es el modo por defecto. Offline limita solo la investigación web.\n"
+            "Se usa el proveedor elegido en Jarvis. Offline limita solo la investigación web.\n"
             "El repositorio autorizado es de lectura; no hay escritura ni shell libre."
         ),
     )
@@ -167,9 +167,9 @@ def build_parser(*, program_name: str | None = None) -> argparse.ArgumentParser:
     )
     engineering.add_argument(
         "--inference-policy",
-        choices=[EngineeringInferencePolicy.NVIDIA_ONLY.value],
-        default=EngineeringInferencePolicy.NVIDIA_ONLY.value,
-        help="inferencia exclusivamente mediante la API de NVIDIA",
+        choices=[EngineeringInferencePolicy.CONFIGURED.value],
+        default=EngineeringInferencePolicy.CONFIGURED.value,
+        help="inferencia mediante el proveedor elegido en Jarvis",
     )
     return parser
 

@@ -1,6 +1,6 @@
 # Modelo de amenazas de Jarvis Desktop
 
-- Versión del modelo: 1.1
+- Versión del modelo: 1.2
 - Responsable: Guillermo (`gzambrano27`)
 - Perfil de distribución: Desktop mediante Developer ID; no App Store
 - Principio: local-first, mínimo privilegio y fallo cerrado
@@ -19,8 +19,10 @@ no forman parte de la autoridad implícita del agente.
 3. `aegis.sock` acepta únicamente mensajes acotados y autenticados por HMAC desde el usuario local.
 4. Keychain conserva claves; SQLite y `audit.jsonl` se tratan como almacenamiento manipulable.
 5. AX, ScreenCaptureKit, Vision, SoundAnalysis y Apple Events permanecen sujetos a TCC.
-6. NVIDIA es la frontera remota obligatoria para inferencia; no existe respaldo local ni otro
-   proveedor. La web es opcional según la tarea. Reciben contexto reducido y redactado; abrir
+6. Codex (OpenAI), conectado mediante la cuenta de ChatGPT, es la frontera remota de inferencia
+   elegida por el dueño (ADR-0235). No hay respaldo automático ni conexión NVIDIA productiva.
+   Los embeddings usan el encoder local de Apple; el audio remoto está sin configurar.
+   La web es opcional según la tarea. Reciben contexto reducido y redactado; abrir
    una URL explícita usa el navegador predeterminado, mientras que operar dentro de una página
    conserva la aprobación de sesión y su vínculo con destino y observación.
 7. MCP, plugins, páginas, correo, documentos y salida de herramientas son entrada no confiable.
@@ -31,7 +33,8 @@ no forman parte de la autoridad implícita del agente.
 |---|---|---|
 | Proceso local falsifica IPC o desborda RAM | HMAC por frame, secuencia estricta, 16 KiB por chunk y 256 KiB por mensaje; los métodos privilegiados exigen que el audit token del proceso cumpla el requisito de firma de Jarvis | Un proceso sin firmar que lea la clave IPC conserva los métodos de estado y calificación y puede lanzar jobs de `engineering` sin contexto privado, limitados a lectura del workspace e investigación; cada helper firmado solo alcanza sus métodos y el daemon congelado no cuenta como cliente; mientras el llavero de firma está desbloqueado durante un build, un proceso local podría usar `codesign` con la clave; las identidades creadas antes del llavero propio siguen expuestas hasta ejecutar `local_codesign_identity.sh migrate` |
 | Proceso local con la clave IPC aprueba acciones críticas | `jobs.approve*` exige firma ECDSA P-256 de Jarvis.app (clave en su ACL de Keychain) sobre job, digest, nonce de un uso, hora ±30 s y SHA-256 del audio; clave pública fijada en el primer registro, que la app hace al conectar | Un proceso que se registre antes que la app, o que borre el pin y lo reemplace, gana el control hasta que la app detecte `approval_signer_mismatch`; la biometría de voz sigue declarada por la app firmada |
-| Secreto visible en la lista de procesos | Escritura en Keychain por stdin con `security -i`, nunca como argumento | Las claves IPC, de memoria y NVIDIA siguen siendo legibles por cualquier proceso del usuario mediante `security`; protegen frente a otros usuarios, copias del disco y backups, no frente a malware de la misma cuenta |
+| Secreto visible en la lista de procesos | Escritura en Keychain por stdin con `security -i`, nunca como argumento | Las claves IPC, de memoria y las credenciales NVIDIA heredadas siguen siendo legibles por cualquier proceso del usuario mediante `security`; protegen frente a otros usuarios, copias del disco y backups, no frente a malware de la misma cuenta |
+| Codex ejecuta herramientas fuera del broker o accede a datos de otras apps | Estado y HOME propios, cwd vacío, perfil de solo lectura sin red para comandos, herramientas nativas desactivadas y rechazo de peticiones de ejecución; verificación del perfil efectivo antes de inferir | El cliente oficial administra sus propias credenciales; Jarvis no las importa ni las expone. La cuenta de ChatGPT y su servicio remoto reciben el contexto autorizado. El perfil no impide el tráfico de autenticación e inferencia del cliente |
 | Prompt injection indirecta | Resultados marcados como datos no confiables, poda de tools y broker por schema/política | El contenido puede degradar calidad; no debe ampliar capacidades |
 | MCP stdio amplía o sustituye herramientas | Nombres exactos y huella de inputSchema aprobados localmente; ámbito explícito por app; cuarentena ante deriva; confirmación de cada llamada | La huella no fija implementación; `readOnlyHint` no acredita ausencia de efectos |
 | MCP defectuoso interrumpe Jarvis | Fallo aislado por peer, revocación de disponibilidad y cierre al cancelar; diagnóstico autenticado sin contenido | Un proceso stdio conserva permisos de la cuenta; solo se deben iniciar ejecutables revisados |
@@ -41,7 +44,7 @@ no forman parte de la autoridad implícita del agente.
 | Robo o edición de memoria | AES-GCM con AAD por namespace, blind indices, digest de contenido con HMAC en columnas en claro (schema v10) y permisos privados | Una sesión ya desbloqueada hereda la seguridad de la cuenta macOS; los embeddings de 384 dimensiones se guardan sin cifrar para la búsqueda vectorial y admiten inversión aproximada; los blind indices revelan igualdad y frecuencia de términos |
 | Rollback o truncado de auditoría | Hash chain, ancla Keychain y bloqueo ante divergencia; segmentos sellados de solo lectura enlazados por hash y SHA-256 del archivo anterior | Compromiso simultáneo de cuenta y Keychain queda fuera del adversario local limitado; la poda retira los segmentos más antiguos y el más antiguo conservado pasa a ser la raíz de confianza |
 | Captura visual o acústica persistente | Búferes en memoria, límites estrictos y cero archivos transitorios de visión | Crash dumps del sistema operativo dependen de la política del host |
-| SSRF/exfiltración | Allowlist HTTPS pública, bloqueo de destinos privados y redacción previa al proveedor | Una fuente pública autorizada sigue pudiendo observar la IP pública; la redacción por patrones cubre credenciales, tarjetas (Luhn), IBAN, cédula/RUC, SSN, DNI/NIE, teléfonos, coordenadas, emails y rutas de usuario, nombres (pistas como "mi esposa Ana" y NLTagger on-device cuando hay contexto personal) y direcciones con número; los temas sensibles en primera persona (salud, finanzas, orientación, antecedentes) sin herramientas se responden solo en local | Nombres sin contexto personal, direcciones sin número y datos sensibles en peticiones que requieren herramientas siguen llegando a NVIDIA; si el helper de NLTagger falla, solo quedan las pistas y patrones |
+| SSRF/exfiltración | Allowlist HTTPS pública, bloqueo de destinos privados y redacción previa al proveedor | Una fuente pública autorizada sigue pudiendo observar la IP pública; la redacción por patrones cubre credenciales, tarjetas (Luhn), IBAN, cédula/RUC, SSN, DNI/NIE, teléfonos, coordenadas, emails y rutas de usuario, nombres (pistas como "mi esposa Ana" y NLTagger on-device cuando hay contexto personal) y direcciones con número; los temas sensibles en primera persona (salud, finanzas, orientación, antecedentes) sin herramientas se responden solo en local | Nombres sin contexto personal, direcciones sin número y datos sensibles en peticiones que requieren herramientas pueden llegar al proveedor de inferencia elegido; si el helper de NLTagger falla, solo quedan las pistas y patrones |
 | Helper o ZIP sustituido | Codesign, Hardened Runtime, revisión exacta, SHA-256, SBOM y manifest de provenance | La distribución pública requiere notarización real de Apple |
 | Modelo biométrico filtrado en un ZIP | El build de distribución excluye modelos personales y el inspector rechaza sus rutas | El propietario conserva esos modelos únicamente en su instalación privada |
 | Instalación defectuosa | Staging, verificación antes del reemplazo y rollback automático si no arranca | Un fallo simultáneo del bundle anterior se conserva, pero no se ejecuta sin firma válida |

@@ -48,6 +48,7 @@
 "Abrir bot y vincular" = "Abrir bot y vincular";
 "Abrir chat" = "Abrir chat";
 "Abrir en tu navegador" = "Abrir en tu navegador";
+"Abrir inicio de sesión" = "Abrir inicio de sesión";
 "Abrir navegador" = "Abrir navegador";
 "Abrir panel de Jarvis" = "Abrir panel de Jarvis";
 "Abrir privacidad de macOS" = "Abrir privacidad de macOS";
@@ -77,6 +78,7 @@
 "Actividad registrada desde esta versión de Jarvis" = "Actividad registrada desde esta versión de Jarvis";
 "Actualiza el estado para cargar la selección de modelos." = "Actualiza el estado para cargar la selección de modelos.";
 "Actualiza el estado para cargar tus integraciones." = "Actualiza el estado para cargar tus integraciones.";
+"Actualiza el estado para comprobar la conexión" = "Actualiza el estado para comprobar la conexión";
 "Actualiza el servicio para cargar las preferencias del navegador." = "Actualiza el servicio para cargar las preferencias del navegador.";
 "Actualizando estado" = "Actualizando estado";
 "Actualizando perfiles locales…" = "Actualizando perfiles locales…";
@@ -102,6 +104,7 @@
 "Ajustar acceso a la voz" = "Ajustar acceso a la voz";
 "Ajustes" = "Ajustes";
 "Al aplicar los cambios, Jarvis iniciará esta conexión con sus %lld herramientas revisadas y los permisos de su perfil." = "Al aplicar los cambios, Jarvis iniciará esta conexión con sus %lld herramientas revisadas y los permisos de su perfil.";
+"Al enviar, Codex (OpenAI) recibe el contenido de los adjuntos. Los documentos quedan en este chat; las imágenes se usan en este turno." = "Al enviar, Codex (OpenAI) recibe el contenido de los adjuntos. Los documentos quedan en este chat; las imágenes se usan en este turno.";
 "Al enviar, NVIDIA recibe el contenido de los adjuntos. Los documentos quedan en este chat; las imágenes se usan en este turno." = "Al enviar, NVIDIA recibe el contenido de los adjuntos. Los documentos quedan en este chat; las imágenes se usan en este turno.";
 "Alertas proactivas" = "Alertas proactivas";
 "Alternativa" = "Alternativa";
@@ -143,13 +146,17 @@
 "Automatización" = "Automatización";
 "Automático" = "Automático";
 "Autorización de NVIDIA revocada." = "Autorización de NVIDIA revocada.";
+"Autorización de envío a Codex revocada." = "Autorización de envío a Codex revocada.";
 "Autorizada; esperando resultado" = "Autorizada; esperando resultado";
 "Autorizar cuenta" = "Autorizar cuenta";
 "Autorizar en Google" = "Autorizar en Google";
 "Autorizar en NVIDIA" = "Autorizar en NVIDIA";
+"Autorizar envío a Codex" = "Autorizar envío a Codex";
 "Autorizar esta cuenta…" = "Autorizar esta cuenta…";
 "Autorizar memoria privada de Jarvis durante 30 minutos" = "Autorizar memoria privada de Jarvis durante 30 minutos";
+"Autorizar permite enviar estas instrucciones y recursos a Codex (OpenAI) cuando Jarvis seleccione la skill. La autorización corresponde a esta versión y deberá repetirse si cambia." = "Autorizar permite enviar estas instrucciones y recursos a Codex (OpenAI) cuando Jarvis seleccione la skill. La autorización corresponde a esta versión y deberá repetirse si cambia.";
 "Autorizar permite enviar estas instrucciones y recursos a la API de NVIDIA cuando Jarvis seleccione la skill. La autorización corresponde a esta versión y deberá repetirse si cambia." = "Autorizar permite enviar estas instrucciones y recursos a la API de NVIDIA cuando Jarvis seleccione la skill. La autorización corresponde a esta versión y deberá repetirse si cambia.";
+"Autorizarás a %@, ID %@, para enviar instrucciones y aprobar acciones. Las instrucciones, notas de voz, imágenes, documentos, contexto y resultados solicitados se procesarán con Codex (OpenAI); las respuestas se enviarán por Telegram. El acceso funcionará también con la pantalla bloqueada mientras Jarvis siga activo." = "Autorizarás a %@, ID %@, para enviar instrucciones y aprobar acciones. Las instrucciones, notas de voz, imágenes, documentos, contexto y resultados solicitados se procesarán con Codex (OpenAI); las respuestas se enviarán por Telegram. El acceso funcionará también con la pantalla bloqueada mientras Jarvis siga activo.";
 "Autorizarás a %@, ID %@, para enviar instrucciones y aprobar acciones. Las instrucciones, notas de voz, imágenes, documentos, contexto y resultados solicitados se procesarán con NVIDIA; las respuestas se enviarán por Telegram. El acceso funcionará también con la pantalla bloqueada mientras Jarvis siga activo." = "Autorizarás a %@, ID %@, para enviar instrucciones y aprobar acciones. Las instrucciones, notas de voz, imágenes, documentos, contexto y resultados solicitados se procesarán con NVIDIA; las respuestas se enviarán por Telegram. El acceso funcionará también con la pantalla bloqueada mientras Jarvis siga activo.";
 "Avisarme solo si hay algo nuevo" = "Avisarme solo si hay algo nuevo";
 "Avisos" = "Avisos";
@@ -215,6 +222,7 @@
 "Cambios aplicados." = "Cambios aplicados.";
 "Cancelar" = "Cancelar";
 "Cancelar escucha" = "Cancelar escucha";
+"Cancelar operación" = "Cancelar operación";
 "Cargando conversación" = "Cargando conversación";
 "Cargando historial…" = "Cargando historial…";
 "Cargando proyectos" = "Cargando proyectos";
@@ -235,12 +243,14 @@
 "Cerrar pestaña actual" = "Cerrar pestaña actual";
 "Cerrar pestaña: %@" = "Cerrar pestaña: %@";
 "Cerrar revisión de extensión" = "Cerrar revisión de extensión";
+"Chat" = "Chat";
 "Chat con Jarvis" = "Chat con Jarvis";
 "Chat lateral" = "Chat lateral";
 "Chat lateral: una pregunta rápida sin interrumpir esta conversación" = "Chat lateral: una pregunta rápida sin interrumpir esta conversación";
 "Chat temporal" = "Chat temporal";
 "Chat temporal · no se guarda ni usa tu memoria" = "Chat temporal · no se guarda ni usa tu memoria";
 "Chat temporal: no se guarda en el historial ni usa ni crea recuerdos" = "Chat temporal: no se guarda en el historial ni usa ni crea recuerdos";
+"ChatGPT conectado" = "ChatGPT conectado";
 "Chats" = "Chats";
 "Chrome directo" = "Chrome directo";
 "Cierra el panel sin cancelar la tarea en curso." = "Cierra el panel sin cancelar la tarea en curso.";
@@ -254,6 +264,10 @@
 "Clave guardada en el llavero." = "Clave guardada en el llavero.";
 "Clave no disponible" = "Clave no disponible";
 "Codex" = "Codex";
+"Codex no está disponible en este Mac" = "Codex no está disponible en este Mac";
+"Codex requiere que revises la sesión. Abre Configuración › Modelos de IA y pulsa Reintentar después de conectar." = "Codex requiere que revises la sesión. Abre Configuración › Modelos de IA y pulsa Reintentar después de conectar.";
+"Codex respondió a la prueba de conexión." = "Codex respondió a la prueba de conexión.";
+"Codex tardó demasiado. Comprueba su estado y vuelve a intentarlo." = "Codex tardó demasiado. Comprueba su estado y vuelve a intentarlo.";
 "Codex y Claude" = "Codex y Claude";
 "Color %@" = "Color %@";
 "Compilación" = "Compilación";
@@ -261,16 +275,22 @@
 "Complemento instalado." = "Complemento instalado.";
 "Complemento quitado." = "Complemento quitado.";
 "Complementos de Codex y Claude" = "Complementos de Codex y Claude";
+"Completa el inicio de sesión en el navegador" = "Completa el inicio de sesión en el navegador";
 "Completa la autorización en tu navegador" = "Completa la autorización en tu navegador";
 "Completa la información para que Jarvis pueda continuar." = "Completa la información para que Jarvis pueda continuar.";
 "Completar la información pendiente" = "Completar la información pendiente";
+"Comprobando Codex…" = "Comprobando Codex…";
 "Comprobar conexión" = "Comprobar conexión";
 "Comprobar estado" = "Comprobar estado";
 "Comprueba el resultado en la aplicación o servicio antes de volver a solicitar la acción. Jarvis no la repetirá automáticamente." = "Comprueba el resultado en la aplicación o servicio antes de volver a solicitar la acción. Jarvis no la repetirá automáticamente.";
 "Comprueba que este ID corresponde a tu cuenta de Telegram antes de autorizar." = "Comprueba que este ID corresponde a tu cuenta de Telegram antes de autorizar.";
 "Con extensión" = "Con extensión";
 "Conecta al Chrome que ya tienes abierto, sin extensión ni puerto manual. En Chrome, abre chrome://inspect/#remote-debugging y activa «Allow remote debugging for this browser instance». Chrome puede pedirte autorizar la conexión." = "Conecta al Chrome que ya tienes abierto, sin extensión ni puerto manual. En Chrome, abre chrome://inspect/#remote-debugging y activa «Allow remote debugging for this browser instance». Chrome puede pedirte autorizar la conexión.";
+"Conecta con ChatGPT" = "Conecta con ChatGPT";
 "Conecta con NVIDIA" = "Conecta con NVIDIA";
+"Conecta tu cuenta de ChatGPT en Ajustes › Modelos de IA antes de enviar el mensaje de ejemplo." = "Conecta tu cuenta de ChatGPT en Ajustes › Modelos de IA antes de enviar el mensaje de ejemplo.";
+"Conecta tu cuenta de ChatGPT mediante Codex. El inicio de sesión se completa en el navegador; Jarvis no te pide contraseñas ni claves de API." = "Conecta tu cuenta de ChatGPT mediante Codex. El inicio de sesión se completa en el navegador; Jarvis no te pide contraseñas ni claves de API.";
+"Conecta tu cuenta de ChatGPT y elige el modelo de Codex para Jarvis." = "Conecta tu cuenta de ChatGPT y elige el modelo de Codex para Jarvis.";
 "Conectada · %lld herramientas" = "Conectada · %lld herramientas";
 "Conectado" = "Conectado";
 "Conectado · %lld herramientas" = "Conectado · %lld herramientas";
@@ -310,6 +330,7 @@
 "Consultar la agenda para los avisos que actives." = "Consultar la agenda para los avisos que actives.";
 "Contactos" = "Contactos";
 "Contactos disponibles." = "Contactos disponibles.";
+"Contenido de la skill autorizado para Codex (OpenAI)." = "Contenido de la skill autorizado para Codex (OpenAI).";
 "Contenido de la skill autorizado para NVIDIA." = "Contenido de la skill autorizado para NVIDIA.";
 "Contexto del chat" = "Contexto del chat";
 "Contexto privado" = "Contexto privado";
@@ -374,6 +395,8 @@
 "Descargando y verificando la actualización…" = "Descargando y verificando la actualización…";
 "Descartar" = "Descartar";
 "Desconectada (%@)" = "Desconectada (%@)";
+"Desconectar" = "Desconectar";
+"Desconectar cuenta…" = "Desconectar cuenta…";
 "Desconectar y revocar" = "Desconectar y revocar";
 "Desconectar…" = "Desconectar…";
 "Describe lo que necesitas para este proyecto…" = "Describe lo que necesitas para este proyecto…";
@@ -417,6 +440,7 @@
 "El Mac está bajo presión térmica; Jarvis reducirá el trabajo en segundo plano." = "El Mac está bajo presión térmica; Jarvis reducirá el trabajo en segundo plano.";
 "El Mac perdió la conexión de red." = "El Mac perdió la conexión de red.";
 "El almacenamiento local no es seguro" = "El almacenamiento local no es seguro";
+"El análisis del contenido con Codex (OpenAI) se aprobará al iniciar cada tarea. Las pantallas de credenciales permanecen protegidas." = "El análisis del contenido con Codex (OpenAI) se aprobará al iniciar cada tarea. Las pantallas de credenciales permanecen protegidas.";
 "El análisis del contenido con NVIDIA se aprobará al iniciar cada tarea. Las pantallas de credenciales permanecen protegidas." = "El análisis del contenido con NVIDIA se aprobará al iniciar cada tarea. Las pantallas de credenciales permanecen protegidas.";
 "El archivo contiene posibles credenciales. Retíralas antes de importar." = "El archivo contiene posibles credenciales. Retíralas antes de importar.";
 "El audio y el modelo no salen del equipo." = "El audio y el modelo no salen del equipo.";
@@ -424,6 +448,7 @@
 "El canal se detuvo para evitar repetir operaciones. Puedes conservar el archivo dañado y restablecer únicamente su cola de transporte." = "El canal se detuvo para evitar repetir operaciones. Puedes conservar el archivo dañado y restablecer únicamente su cola de transporte.";
 "El componente local JarvisComputerHelper no está disponible" = "El componente local JarvisComputerHelper no está disponible";
 "El contenido cambió desde la revisión. Actualiza y revisa la versión actual." = "El contenido cambió desde la revisión. Actualiza y revisa la versión actual.";
+"El contenido de tus solicitudes y las capturas que autorices se procesará con Codex (OpenAI). Jarvis mantiene sus propias aprobaciones para controlar apps y ejecutar herramientas." = "El contenido de tus solicitudes y las capturas que autorices se procesará con Codex (OpenAI). Jarvis mantiene sus propias aprobaciones para controlar apps y ejecutar herramientas.";
 "El dataset no superó el entrenamiento o la validación local" = "El dataset no superó el entrenamiento o la validación local";
 "El entrenador firmado no está disponible en esta instalación" = "El entrenador firmado no está disponible en esta instalación";
 "El estado refleja el informe de la herramienta; no siempre verifica el efecto externo." = "El estado refleja el informe de la herramienta; no siempre verifica el efecto externo.";
@@ -435,6 +460,8 @@
 "El micrófono requiere permiso" = "El micrófono requiere permiso";
 "El modelo de voz cambió; confirma de nuevo a %@" = "El modelo de voz cambió; confirma de nuevo a %@";
 "El modelo generado no es compatible con identidad de voz" = "El modelo generado no es compatible con identidad de voz";
+"El modelo guardado no está disponible o no admite imágenes. Elige y guarda un modelo compatible para continuar." = "El modelo guardado no está disponible o no admite imágenes. Elige y guarda un modelo compatible para continuar.";
+"El modelo no admite las capacidades necesarias. Elige otro modelo disponible." = "El modelo no admite las capacidades necesarias. Elige otro modelo disponible.";
 "El modelo no superó la prueba de conexión o de capacidades. Revisa su ID y la clave de NVIDIA." = "El modelo no superó la prueba de conexión o de capacidades. Revisa su ID y la clave de NVIDIA.";
 "El modelo respondió correctamente a la prueba." = "El modelo respondió correctamente a la prueba.";
 "El objetivo agotó su límite de pasos y no puede reanudarse. Revisa el resultado y crea otro objetivo si necesitas continuar." = "El objetivo agotó su límite de pasos y no puede reanudarse. Revisa el resultado y crea otro objetivo si necesitas continuar.";
@@ -445,6 +472,7 @@
 "El servicio de tareas no está disponible ahora. Vuelve a intentarlo cuando esté listo." = "El servicio de tareas no está disponible ahora. Vuelve a intentarlo cuando esté listo.";
 "El servicio está conectado; falta verificar su seguridad para continuar." = "El servicio está conectado; falta verificar su seguridad para continuar.";
 "El servicio local sigue sin conexión. Revisa Diagnóstico en Configuración." = "El servicio local sigue sin conexión. Revisa Diagnóstico en Configuración.";
+"El servicio todavía no está listo. Comprueba la conexión con Codex y vuelve a intentarlo." = "El servicio todavía no está listo. Comprueba la conexión con Codex y vuelve a intentarlo.";
 "El servicio todavía no está listo. Comprueba la conexión y la clave de NVIDIA y vuelve a intentarlo." = "El servicio todavía no está listo. Comprueba la conexión y la clave de NVIDIA y vuelve a intentarlo.";
 "El temporizador está pausado. Quedan" = "El temporizador está pausado. Quedan";
 "El temporizador terminó." = "El temporizador terminó.";
@@ -454,6 +482,7 @@
 "El tono con que Jarvis te responde. Las indicaciones solo cambian cómo habla: no le dan permisos." = "El tono con que Jarvis te responde. Las indicaciones solo cambian cómo habla: no le dan permisos.";
 "Elegir navegador" = "Elegir navegador";
 "Elegir proyecto" = "Elegir proyecto";
+"Elige cómo abrir las tareas web. El acceso y el análisis con Codex (OpenAI) se aprobarán para cada tarea." = "Elige cómo abrir las tareas web. El acceso y el análisis con Codex (OpenAI) se aprobarán para cada tarea.";
 "Elige cómo abrir las tareas web. El acceso y el análisis con NVIDIA se aprobarán para cada tarea." = "Elige cómo abrir las tareas web. El acceso y el análisis con NVIDIA se aprobarán para cada tarea.";
 "Elige los permisos" = "Elige los permisos";
 "Elige un modelo principal y una alternativa para cada tarea." = "Elige un modelo principal y una alternativa para cada tarea.";
@@ -511,6 +540,7 @@
 "Escuchar cuando decidas hablar." = "Escuchar cuando decidas hablar.";
 "Ese perfil ya existe" = "Ese perfil ya existe";
 "Eso necesita tu aprobación: pídelo en el chat principal." = "Eso necesita tu aprobación: pídelo en el chat principal.";
+"Esperando a Codex…" = "Esperando a Codex…";
 "Esperando a que pulses Iniciar en Telegram…" = "Esperando a que pulses Iniciar en Telegram…";
 "Esperando tu aprobación" = "Esperando tu aprobación";
 "Esta acción no tiene datos adicionales." = "Esta acción no tiene datos adicionales.";
@@ -562,6 +592,7 @@
 "Guarda tu clave de NVIDIA antes de enviar el mensaje de ejemplo." = "Guarda tu clave de NVIDIA antes de enviar el mensaje de ejemplo.";
 "Guardar" = "Guardar";
 "Guardar clave" = "Guardar clave";
+"Guardar modelo" = "Guardar modelo";
 "Guardar modelos" = "Guardar modelos";
 "Guardar preferencias" = "Guardar preferencias";
 "Guardar y ejecutar ahora" = "Guardar y ejecutar ahora";
@@ -611,8 +642,12 @@
 "Indicaciones propias (opcional), p. ej. «llámame Guille y sé breve»" = "Indicaciones propias (opcional), p. ej. «llámame Guille y sé breve»";
 "Inferencia" = "Inferencia";
 "Información adicional del usuario: %@" = "Información adicional del usuario: %@";
+"Inicia sesión con ChatGPT" = "Inicia sesión con ChatGPT";
+"Inicia sesión con ChatGPT para continuar." = "Inicia sesión con ChatGPT para continuar.";
 "Iniciando escucha" = "Iniciando escucha";
+"Iniciar sesión con ChatGPT" = "Iniciar sesión con ChatGPT";
 "Inicio y accesos" = "Inicio y accesos";
+"Instala Codex y vuelve a actualizar el estado. La app necesita su servicio local para usar tu cuenta de ChatGPT." = "Instala Codex y vuelve a actualizar el estado. La app necesita su servicio local para usar tu cuenta de ChatGPT.";
 "Instalando la actualización; Jarvis se reiniciará…" = "Instalando la actualización; Jarvis se reiniciará…";
 "Instalar" = "Instalar";
 "Instalar la extensión oficial" = "Instalar la extensión oficial";
@@ -648,6 +683,7 @@
 "Jarvis ejecutará únicamente la acción descrita. Puede usar un servicio externo; revisa el resumen antes de aprobar." = "Jarvis ejecutará únicamente la acción descrita. Puede usar un servicio externo; revisa el resumen antes de aprobar.";
 "Jarvis en pausa" = "Jarvis en pausa";
 "Jarvis en tu móvil" = "Jarvis en tu móvil";
+"Jarvis enviará capturas acotadas a Codex (OpenAI) y controlará solo la " = "Jarvis enviará capturas acotadas a Codex (OpenAI) y controlará solo la ";
 "Jarvis enviará capturas acotadas al modelo NVIDIA y controlará solo la " = "Jarvis enviará capturas acotadas al modelo NVIDIA y controlará solo la ";
 "Jarvis enviará el mensaje indicado mediante Apple Mail a los destinatarios del resumen." = "Jarvis enviará el mensaje indicado mediante Apple Mail a los destinatarios del resumen.";
 "Jarvis enviará la orden mostrada a Música o Spotify, sin leer tu biblioteca." = "Jarvis enviará la orden mostrada a Música o Spotify, sin leer tu biblioteca.";
@@ -661,13 +697,16 @@
 "Jarvis las sigue en cada chat de este proyecto." = "Jarvis las sigue en cada chat de este proyecto.";
 "Jarvis no está disponible" = "Jarvis no está disponible";
 "Jarvis podrá seguir usando esta app sin volver a preguntar. Puedes revocarlo en Ajustes › Memoria y privacidad." = "Jarvis podrá seguir usando esta app sin volver a preguntar. Puedes revocarlo en Ajustes › Memoria y privacidad.";
+"Jarvis podrá seleccionarla en tareas compatibles. Revisa y autoriza por separado sus instrucciones para Codex (OpenAI)." = "Jarvis podrá seleccionarla en tareas compatibles. Revisa y autoriza por separado sus instrucciones para Codex (OpenAI).";
 "Jarvis podrá seleccionarla en tareas compatibles. Revisa y autoriza por separado sus instrucciones para NVIDIA." = "Jarvis podrá seleccionarla en tareas compatibles. Revisa y autoriza por separado sus instrucciones para NVIDIA.";
 "Jarvis propondrá un plan sin actuar" = "Jarvis propondrá un plan sin actuar";
+"Jarvis requiere un modelo que admita texto e imágenes. La lista muestra los modelos compatibles disponibles en tu conexión de Codex." = "Jarvis requiere un modelo que admita texto e imágenes. La lista muestra los modelos compatibles disponibles en tu conexión de Codex.";
 "Jarvis retomó el objetivo." = "Jarvis retomó el objetivo.";
 "Jarvis retomó «%@»." = "Jarvis retomó «%@».";
 "Jarvis solicitará primero pantalla y después control, sin superponer paneles de macOS" = "Jarvis solicitará primero pantalla y después control, sin superponer paneles de macOS";
 "Jarvis tiene una tarea en curso. Espera a que termine para cambiar extensiones." = "Jarvis tiene una tarea en curso. Espera a que termine para cambiar extensiones.";
 "Jarvis usa modelos de NVIDIA y necesita conexión a internet. Tú eliges los permisos y apruebas las acciones que cambian algo." = "Jarvis usa modelos de NVIDIA y necesita conexión a internet. Tú eliges los permisos y apruebas las acciones que cambian algo.";
+"Jarvis usa tu cuenta de ChatGPT mediante Codex y necesita conexión a internet. Tú eliges los permisos y apruebas las acciones que cambian algo." = "Jarvis usa tu cuenta de ChatGPT mediante Codex y necesita conexión a internet. Tú eliges los permisos y apruebas las acciones que cambian algo.";
 "Jarvis usará esta personalidad desde la próxima respuesta." = "Jarvis usará esta personalidad desde la próxima respuesta.";
 "Jarvis utiliza Silero VAD, ONNX Runtime y componentes Python de código abierto.\n" = "Jarvis utiliza Silero VAD, ONNX Runtime y componentes Python de código abierto.\n";
 "Jarvis utiliza la integración de Home Assistant para acceder a los dispositivos que configures allí." = "Jarvis utiliza la integración de Home Assistant para acceder a los dispositivos que configures allí.";
@@ -702,6 +741,7 @@
 "La política local no permite guardar más cambios. Revisa su integridad y capacidad antes de importar." = "La política local no permite guardar más cambios. Revisa su integridad y capacidad antes de importar.";
 "La presión de memoria es crítica. Conviene cerrar tareas pesadas." = "La presión de memoria es crítica. Conviene cerrar tareas pesadas.";
 "La presión térmica es crítica. Pausa las cargas intensivas." = "La presión térmica es crítica. Pausa las cargas intensivas.";
+"La prueba envía solo un mensaje sintético a Codex, sin conversaciones ni archivos personales." = "La prueba envía solo un mensaje sintético a Codex, sin conversaciones ni archivos personales.";
 "La prueba envía texto y, si corresponde, una imagen sintética a NVIDIA. No utiliza tus conversaciones ni archivos." = "La prueba envía texto y, si corresponde, una imagen sintética a NVIDIA. No utiliza tus conversaciones ni archivos.";
 "La prueba envía un texto sintético a NVIDIA, sin conversaciones ni archivos personales." = "La prueba envía un texto sintético a NVIDIA, sin conversaciones ni archivos personales.";
 "La página intentó abrir otra aplicación. Abre un enlace explícito para revisarlo." = "La página intentó abrir otra aplicación. Abre un enlace explícito para revisarlo.";
@@ -744,10 +784,14 @@
 "Mensaje para Jarvis" = "Mensaje para Jarvis";
 "Micrófono" = "Micrófono";
 "Micrófono y reconocimiento" = "Micrófono y reconocimiento";
+"Modelo" = "Modelo";
+"Modelo de Codex" = "Modelo de Codex";
 "Modelo disponible" = "Modelo disponible";
 "Modelo disponible en este Mac" = "Modelo disponible en este Mac";
+"Modelo guardado. Se usará en la próxima solicitud." = "Modelo guardado. Se usará en la próxima solicitud.";
 "Modelo inválido" = "Modelo inválido";
 "Modelo local activo" = "Modelo local activo";
+"Modelo para Jarvis" = "Modelo para Jarvis";
 "Modelos de IA" = "Modelos de IA";
 "Modelos guardados" = "Modelos guardados";
 "Modelos guardados. Aplica los cambios para reiniciar el servicio." = "Modelos guardados. Aplica los cambios para reiniciar el servicio.";
@@ -795,6 +839,7 @@
 "No escuché nada que guardar de la reunión." = "No escuché nada que guardar de la reunión.";
 "No fue posible guardar la muestra" = "No fue posible guardar la muestra";
 "No hay integraciones configuradas." = "No hay integraciones configuradas.";
+"No hay modelos compatibles con imágenes. Actualiza el estado para volver a consultarlos." = "No hay modelos compatibles con imágenes. Actualiza el estado para volver a consultarlos.";
 "No hay un temporizador activo." = "No hay un temporizador activo.";
 "No hay un temporizador en marcha." = "No hay un temporizador en marcha.";
 "No hay un temporizador pausado." = "No hay un temporizador pausado.";
@@ -811,6 +856,7 @@
 "No pude completar la pregunta (%@)." = "No pude completar la pregunta (%@).";
 "No pude completar la solicitud. Inténtalo de nuevo." = "No pude completar la solicitud. Inténtalo de nuevo.";
 "No pude comunicarme con el servicio local." = "No pude comunicarme con el servicio local.";
+"No pude conectar con Codex. Comprueba tu conexión a Internet y vuelve a intentarlo." = "No pude conectar con Codex. Comprueba tu conexión a Internet y vuelve a intentarlo.";
 "No pude conectar con NVIDIA. Comprueba tu conexión a Internet y vuelve a intentarlo." = "No pude conectar con NVIDIA. Comprueba tu conexión a Internet y vuelve a intentarlo.";
 "No pude confirmar el borrado. Actualiza el historial antes de volver a intentarlo." = "No pude confirmar el borrado. Actualiza el historial antes de volver a intentarlo.";
 "No pude confirmar la cancelación de la acción anterior. La corrección no se envió; revisa el resultado antes de solicitar otro cambio." = "No pude confirmar la cancelación de la acción anterior. La corrección no se envió; revisa el resultado antes de solicitar otro cambio.";
@@ -850,6 +896,7 @@
 "No se pudo cambiar el inicio automático. Revisa Ítems de inicio en macOS." = "No se pudo cambiar el inicio automático. Revisa Ítems de inicio en macOS.";
 "No se pudo cancelar la operación." = "No se pudo cancelar la operación.";
 "No se pudo cargar la personalidad." = "No se pudo cargar la personalidad.";
+"No se pudo completar la conexión con Codex. Actualiza el estado y vuelve a intentarlo." = "No se pudo completar la conexión con Codex. Actualiza el estado y vuelve a intentarlo.";
 "No se pudo comunicar con el servicio. Actualiza el estado antes de volver a intentarlo." = "No se pudo comunicar con el servicio. Actualiza el estado antes de volver a intentarlo.";
 "No se pudo conectar. Comprueba Internet y el servicio de Jarvis." = "No se pudo conectar. Comprueba Internet y el servicio de Jarvis.";
 "No se pudo confirmar el guardado. Cierra este editor y actualiza las tareas antes de reintentar." = "No se pudo confirmar el guardado. Cierra este editor y actualiza las tareas antes de reintentar.";
@@ -869,6 +916,7 @@
 "No se pudo revisar la extensión. Comprueba el formato y los límites del archivo." = "No se pudo revisar la extensión. Comprueba el formato y los límites del archivo.";
 "No se pudo validar la preferencia guardada. Revisa la configuración antes de usar el navegador." = "No se pudo validar la preferencia guardada. Revisa la configuración antes de usar el navegador.";
 "No se pudo verificar el canal de actualizaciones. Comprueba la conexión e inténtalo de nuevo." = "No se pudo verificar el canal de actualizaciones. Comprueba la conexión e inténtalo de nuevo.";
+"No se pudo verificar la conexión con Codex" = "No se pudo verificar la conexión con Codex";
 "Nombre de la conversación" = "Nombre de la conversación";
 "Nombre del perfil · p. ej. guillermo" = "Nombre del perfil · p. ej. guillermo";
 "Nombre del proyecto" = "Nombre del proyecto";
@@ -944,6 +992,7 @@
 "Plan · %lld pasos" = "Plan · %lld pasos";
 "Planificación" = "Planificación";
 "Planificación y herramientas" = "Planificación y herramientas";
+"Plugin activado. Aplica los cambios y revisa la autorización de sus skills para Codex (OpenAI)." = "Plugin activado. Aplica los cambios y revisa la autorización de sus skills para Codex (OpenAI).";
 "Plugin activado. Aplica los cambios y revisa la autorización de sus skills para NVIDIA." = "Plugin activado. Aplica los cambios y revisa la autorización de sus skills para NVIDIA.";
 "Plugin desactivado. Sus herramientas ya no están disponibles." = "Plugin desactivado. Sus herramientas ya no están disponibles.";
 "Plugin importado desactivado. Revisa y activa sus conexiones para aplicarlo." = "Plugin importado desactivado. Revisa y activa sus conexiones para aplicarlo.";
@@ -983,10 +1032,12 @@
 "Probar" = "Probar";
 "Probar conexión" = "Probar conexión";
 "Procedimiento público integrado. Se utiliza con NVIDIA cuando la skill está activa." = "Procedimiento público integrado. Se utiliza con NVIDIA cuando la skill está activa.";
+"Procedimiento público integrado. Se utiliza con el proveedor de IA seleccionado cuando la skill está activa." = "Procedimiento público integrado. Se utiliza con el proveedor de IA seleccionado cuando la skill está activa.";
 "Procedimientos y conexiones" = "Procedimientos y conexiones";
 "Procesando solicitud" = "Procesando solicitud";
 "Programadas" = "Programadas";
 "Proveedor NVIDIA" = "Proveedor NVIDIA";
+"Proveedor de IA" = "Proveedor de IA";
 "Proveedor no disponible" = "Proveedor no disponible";
 "Proyecto" = "Proyecto";
 "Proyecto del próximo chat" = "Proyecto del próximo chat";
@@ -998,10 +1049,12 @@
 "Próximo" = "Próximo";
 "Próximo mensaje" = "Próximo mensaje";
 "Puedes abrir hasta 8 pestañas. Cierra una antes de abrir otra." = "Puedes abrir hasta 8 pestañas. Cierra una antes de abrir otra.";
+"Puedes importar hasta tres archivos de texto del mismo directorio. Después revisa su contenido completo antes de autorizar la skill para Codex (OpenAI). Los enlaces externos permanecen sin abrir." = "Puedes importar hasta tres archivos de texto del mismo directorio. Después revisa su contenido completo antes de autorizar la skill para Codex (OpenAI). Los enlaces externos permanecen sin abrir.";
 "Puedes importar hasta tres archivos de texto del mismo directorio. Después revisa su contenido completo antes de autorizar la skill para NVIDIA. Los enlaces externos permanecen sin abrir." = "Puedes importar hasta tres archivos de texto del mismo directorio. Después revisa su contenido completo antes de autorizar la skill para NVIDIA. Los enlaces externos permanecen sin abrir.";
 "Puedes mantener a Jarvis disponible en la barra de menús al entrar en tu cuenta." = "Puedes mantener a Jarvis disponible en la barra de menús al entrar en tu cuenta.";
 "Puedes revisar las cuentas, los modelos y los permisos en Configuración." = "Puedes revisar las cuentas, los modelos y los permisos en Configuración.";
 "Puedes saltarte cualquier paso y volver desde Ajustes › General › Abrir bienvenida." = "Puedes saltarte cualquier paso y volver desde Ajustes › General › Abrir bienvenida.";
+"Puedes seguir conversando por escrito" = "Puedes seguir conversando por escrito";
 "Puedes seguir sin acceso a contactos." = "Puedes seguir sin acceso a contactos.";
 "Puedes seguir sin acceso al calendario." = "Puedes seguir sin acceso al calendario.";
 "Puedes usar Touch ID o decir «Aprobado»." = "Puedes usar Touch ID o decir «Aprobado».";
@@ -1076,6 +1129,7 @@
 "Resumir un documento" = "Resumir un documento";
 "Retirar" = "Retirar";
 "Retirar %@" = "Retirar %@";
+"Retirar un plugin conserva una copia privada y sus credenciales. Activarlo puede requerir reinicio; sus procedimientos necesitan autorización independiente para Codex (OpenAI)." = "Retirar un plugin conserva una copia privada y sus credenciales. Activarlo puede requerir reinicio; sus procedimientos necesitan autorización independiente para Codex (OpenAI).";
 "Retirar un plugin conserva una copia privada y sus credenciales. Activarlo puede requerir reinicio; sus procedimientos necesitan autorización independiente para NVIDIA." = "Retirar un plugin conserva una copia privada y sus credenciales. Activarlo puede requerir reinicio; sus procedimientos necesitan autorización independiente para NVIDIA.";
 "Reunión %@" = "Reunión %@";
 "Revisa el estado en el menubar" = "Revisa el estado en el menubar";
@@ -1083,6 +1137,7 @@
 "Revisa el servicio y su seguridad" = "Revisa el servicio y su seguridad";
 "Revisa el token o vuelve a vincular la cuenta." = "Revisa el token o vuelve a vincular la cuenta.";
 "Revisa la acción antes de autorizarla. La aprobación vale una sola vez." = "Revisa la acción antes de autorizarla. La aprobación vale una sola vez.";
+"Revisa la conexión en Modelos de IA" = "Revisa la conexión en Modelos de IA";
 "Revisa la configuración del proveedor" = "Revisa la configuración del proveedor";
 "Revisa lo ocurrido antes de continuar." = "Revisa lo ocurrido antes de continuar.";
 "Revisa los permisos y consulta los recuerdos guardados." = "Revisa los permisos y consulta los recuerdos guardados.";
@@ -1101,8 +1156,10 @@
 "Revisión" = "Revisión";
 "Revocar" = "Revocar";
 "Revocar NVIDIA" = "Revocar NVIDIA";
+"Revocar acceso remoto" = "Revocar acceso remoto";
 "Revocar el permiso permanente de %@" = "Revocar el permiso permanente de %@";
 "SHA256 · %@" = "SHA256 · %@";
+"Salida de voz" = "Salida de voz";
 "Salir de Jarvis" = "Salir de Jarvis";
 "Salir del modo plan" = "Salir del modo plan";
 "Salud de Jarvis" = "Salud de Jarvis";
@@ -1114,6 +1171,7 @@
 "Se borrarán las entradas de todas las conversaciones. Esto no deshace acciones ni elimina los registros técnicos de seguridad." = "Se borrarán las entradas de todas las conversaciones. Esto no deshace acciones ni elimina los registros técnicos de seguridad.";
 "Se borrarán las grabaciones de estas muestras. El reconocimiento ya entrenado se conservará." = "Se borrarán las grabaciones de estas muestras. El reconocimiento ya entrenado se conservará.";
 "Se cancelará la tarea de Telegram y se retirará el acceso de tu cuenta. El token permanece en el llavero y tus conversaciones en el historial." = "Se cancelará la tarea de Telegram y se retirará el acceso de tu cuenta. El token permanece en el llavero y tus conversaciones en el historial.";
+"Se cerrará la sesión de Codex usada por Jarvis. La sesión de la app Codex seguirá abierta. Jarvis necesitará que vuelvas a iniciar sesión para responder." = "Se cerrará la sesión de Codex usada por Jarvis. La sesión de la app Codex seguirá abierta. Jarvis necesitará que vuelvas a iniciar sesión para responder.";
 "Se conservan hasta %lld entradas" = "Se conservan hasta %lld entradas";
 "Se conservará un respaldo privado del archivo dañado. Se descartarán las entradas y respuestas pendientes de Telegram para evitar repetir acciones. El acceso quedará desactivado hasta que lo actives nuevamente. Tu token, cuenta autorizada y conversaciones se conservarán." = "Se conservará un respaldo privado del archivo dañado. Se descartarán las entradas y respuestas pendientes de Telegram para evitar repetir acciones. El acceso quedará desactivado hasta que lo actives nuevamente. Tu token, cuenta autorizada y conversaciones se conservarán.";
 "Se conservarán los nombres de perfil. Un modelo ya entrenado no se eliminará." = "Se conservarán los nombres de perfil. Un modelo ya entrenado no se eliminará.";
@@ -1180,6 +1238,7 @@
 "Skill activada." = "Skill activada.";
 "Skill desactivada." = "Skill desactivada.";
 "Skill importada desactivada. Revisa su autorización de NVIDIA y actívala cuando corresponda." = "Skill importada desactivada. Revisa su autorización de NVIDIA y actívala cuando corresponda.";
+"Skill importada desactivada. Revisa su autorización de envío a Codex y actívala cuando corresponda." = "Skill importada desactivada. Revisa su autorización de envío a Codex y actívala cuando corresponda.";
 "Skill retirada y archivada." = "Skill retirada y archivada.";
 "Skills" = "Skills";
 "Solicitar la cancelación activa" = "Solicitar la cancelación activa";
@@ -1215,6 +1274,7 @@
 "Temporizador reanudado. Quedan %@." = "Temporizador reanudado. Quedan %@.";
 "Termina la conversación, grabación o aprobación pendiente antes de enviar el ejemplo." = "Termina la conversación, grabación o aprobación pendiente antes de enviar el ejemplo.";
 "Termina los cambios de configuración y aplícalos desde Ajustes antes de enviar el ejemplo." = "Termina los cambios de configuración y aplícalos desde Ajustes antes de enviar el ejemplo.";
+"Termina o cancela la operación pendiente antes de continuar." = "Termina o cancela la operación pendiente antes de continuar.";
 "Terminar notas de reunión" = "Terminar notas de reunión";
 "Terminar y resumir la reunión" = "Terminar y resumir la reunión";
 "Texto" = "Texto";
@@ -1311,6 +1371,7 @@
 "¿Autorizar esta cuenta de Telegram?" = "¿Autorizar esta cuenta de Telegram?";
 "¿Borrar «%@»?" = "¿Borrar «%@»?";
 "¿Conectar este bot a Jarvis?" = "¿Conectar este bot a Jarvis?";
+"¿Desconectar ChatGPT de Codex?" = "¿Desconectar ChatGPT de Codex?";
 "¿Desconectar Google Workspace?" = "¿Desconectar Google Workspace?";
 "¿Desvincular tu cuenta?" = "¿Desvincular tu cuenta?";
 "¿Elegir %@ como propietario?" = "¿Elegir %@ como propietario?";

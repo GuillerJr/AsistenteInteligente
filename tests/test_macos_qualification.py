@@ -44,12 +44,13 @@ def readiness_payload(
     security: str = "intact",
 ) -> dict[str, Any]:
     return {
-        "schema_version": "2.0",
+        "schema_version": "3.0",
         "build_revision": build_revision,
         "daemon": "online",
         "security": security,
         "provider": "configured",
         "local_brain_available": True,
+        "voice_output": "ready",
         "microphone": "authorized",
         "speech_recognition": "authorized",
         "screen_capture_authorized": True,

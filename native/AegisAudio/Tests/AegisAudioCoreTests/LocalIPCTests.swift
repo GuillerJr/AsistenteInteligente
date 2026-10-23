@@ -311,6 +311,32 @@ import Testing
     #expect(security.integrity == .intact)
 }
 
+@Test func ipcCodexStatusAllowsChatGPTWithoutNvidiaOrLocalModelClaims() throws {
+    for credential in ["configured", "missing", "unavailable"] {
+        let response = LocalIPCResponse(requestID: UUID(), ok: true,
+            payload: ["provider": "codex", "credential": credential], errorCode: nil)
+        let status = try #require(IPCProviderStatusEvent(response: response))
+        #expect(status.credential.rawValue == credential)
+        #expect(status.localModel == .unavailable)
+        #expect(status.voiceOutput == .unconfigured)
+    }
+    let unknown = LocalIPCResponse(requestID: UUID(), ok: true,
+        payload: ["provider": "codex", "credential": "signed_in_but_unverified"], errorCode: nil)
+    #expect(IPCProviderStatusEvent(response: unknown) == nil)
+}
+
+@Test func ipcProviderKeepsChatAvailableWhenVoiceIsUnconfiguredOrInvalid() throws {
+    for (raw, expected) in [("unconfigured", IPCSpeechOutputState.unconfigured),
+                            ("unavailable", .unavailable), ("ready", .ready),
+                            ("future_voice_state", .unavailable)] {
+        let response = LocalIPCResponse(requestID: UUID(), ok: true,
+            payload: ["provider": "codex", "credential": "configured", "voice_output": raw], errorCode: nil)
+        let status = try #require(IPCProviderStatusEvent(response: response))
+        #expect(status.credential == .configured)
+        #expect(status.voiceOutput == expected)
+    }
+}
+
 @Test func ipcConversationEventAcceptsOnlyAValidCreatedConversation() throws {
     let requestID = UUID(uuidString: "01234567-89ab-cdef-0123-456789abcdef")!
     let conversationID = UUID(uuidString: "fedcba98-7654-3210-fedc-ba9876543210")!
@@ -795,6 +821,19 @@ import Testing
         errorCode: nil
     )
     #expect(IPCJobStatusEvent(response: inconsistentLatency) == nil)
+}
+
+@Test func ipcJobEvaluationRecognizesCodexWithoutInventingVerifiedOutcomes() throws {
+    let evaluation = try #require(IPCJobEvaluation(object: [
+        "brain": "codex", "model_id": "synthetic-model", "total_latency_ms": 12,
+        "stream_chunks": 1, "succeeded": true, "outcome_verified": false,
+        "voice_request": false, "owner_verified": false,
+    ]))
+    #expect(evaluation.brain == .codex)
+    #expect(evaluation.modelID == "synthetic-model")
+    #expect(!evaluation.outcomeVerified)
+    #expect(!evaluation.voiceRequest)
+    #expect(!evaluation.ownerVerified)
 }
 
 @Test func ipcJobStatusParsesOnlyExactPendingConfirmation() throws {

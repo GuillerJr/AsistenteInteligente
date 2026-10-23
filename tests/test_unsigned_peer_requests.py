@@ -54,7 +54,7 @@ def _submit(workspace: Path, conversation_id: UUID | None = None) -> SimpleNames
         "workspace_path": str(workspace),
         "domain": "backend",
         "research_policy": "offline",
-        "inference_policy": "nvidia_only",
+        "inference_policy": "configured",
     }
     if conversation_id is not None:
         payload["conversation_id"] = str(conversation_id)

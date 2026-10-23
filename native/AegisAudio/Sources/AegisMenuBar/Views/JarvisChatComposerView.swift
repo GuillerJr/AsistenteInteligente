@@ -185,7 +185,7 @@ struct JarvisChatComposerView: View {
             if !chat.attachments.isEmpty {
                 Text(chat.transcript.jobID != nil
                      ? String(localized: "Envía los adjuntos cuando termine la respuesta actual.", bundle: .module)
-                     : String(localized: "Al enviar, NVIDIA recibe el contenido de los adjuntos. Los documentos quedan en este chat; las imágenes se usan en este turno.", bundle: .module))
+                     : String(localized: "Al enviar, Codex (OpenAI) recibe el contenido de los adjuntos. Los documentos quedan en este chat; las imágenes se usan en este turno.", bundle: .module))
                     .foregroundStyle(JarvisInterfaceStyle.secondaryText)
             }
         }

@@ -144,4 +144,4 @@ class NvidiaToolResultSummarizer:
             # Execution remains verified. Preserve the real data when summarization fails;
             # the presenter already made it readable, so the note goes after it.
             return (outcome.rendered_result or "La consulta se completó.") + \
-                "\n\n(NVIDIA no pudo resumir el resultado a tiempo; te muestro los datos tal cual.)"
+                "\n\n(No pude resumir el resultado a tiempo; te muestro los datos tal cual.)"

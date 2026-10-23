@@ -26,7 +26,7 @@ final class HealthReportTests: XCTestCase {
     func testOldHealthPayloadRemainsDecodable() throws {
         let parsed = try report()
         XCTAssertNil(parsed.memory)
-        XCTAssertNil(parsed.nvidia.last_fallback)
+        XCTAssertNil(parsed.nvidia?.last_fallback)
         XCTAssertFalse(parsed.lines.contains { $0.text == "Se usó un modelo de respaldo" })
     }
 
@@ -48,5 +48,18 @@ final class HealthReportTests: XCTestCase {
         XCTAssertTrue(try report(state: "hybrid_ready").lines.contains {
             $0.text == "Búsqueda híbrida preparada" && $0.tone == .good
         })
+    }
+
+    func testCodexHealthDoesNotRequireOrClaimNvidiaCredentials() throws {
+        for state in ["ready", "signed_out", "unavailable", "future_state"] {
+            let data = try JSONSerialization.data(withJSONObject: [
+                "window_hours": 24, "inference": ["provider": "codex", "state": state],
+                "mcp": [], "failures": [],
+            ] as [String: Any])
+            let parsed = try JSONDecoder().decode(JarvisHealthReport.self, from: data)
+            XCTAssertNil(parsed.nvidia)
+            XCTAssertFalse(parsed.lines.contains { $0.text == "Clave" || $0.text == "NVIDIA" })
+            XCTAssertEqual(parsed.lines.contains { $0.text == "Chat" && $0.value == "Listo" }, state == "ready")
+        }
     }
 }

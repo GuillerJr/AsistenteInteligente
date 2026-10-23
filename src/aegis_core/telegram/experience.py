@@ -16,6 +16,7 @@ from aegis_core.memory.crypto import RowAuthenticationError
 from aegis_core.memory.errors import MemoryNotFoundError, MemoryStoreError
 from aegis_core.memory.task_checkpoint import ResultReference
 from aegis_core.privacy import redact_secrets_for_remote
+from aegis_core.providers.errors import ProviderError
 from aegis_core.providers.nvidia import NvidiaNimError
 from aegis_core.secrets import contains_likely_secret_material
 from aegis_core.telegram.client import TOKEN_PATTERN, TelegramAPIError, text_chunks
@@ -243,9 +244,11 @@ class TelegramExperience:
                 await gate.wait()
             if epoch != self._epoch or self._closed or self._journal_error:
                 return
+            if "voice" in message and self._transcribe is None:
+                raise MediaError("unconfigured")
             self._control = secrets.token_urlsafe(18)
             self._progress_id = await self._send(
-                "Transcribiendo tu nota de voz con NVIDIA…"
+                "Transcribiendo tu nota de voz…"
                 if "voice" in message
                 else "Preparando tu archivo…",
                 buttons=[[{"text": "Cancelar", "callback_data": f"c:{self._control}"}]],
@@ -342,6 +345,7 @@ class TelegramExperience:
             TelegramAPIError,
             MediaError,
             NvidiaNimError,
+            ProviderError,
             ValueError,
             OSError,
             JobError,
@@ -360,7 +364,11 @@ class TelegramExperience:
                                 "su estado. Comprueba el resultado antes de enviarla de nuevo."
                             )
                         else:
-                            await self._reject_media_batch(item)
+                            await self._reject_media_batch(
+                                item, voice_unconfigured=(
+                                    "voice" in message and self._transcribe is None
+                                ),
+                            )
         finally:
             if self._media_task is asyncio.current_task():
                 self._media_task = None
@@ -375,16 +383,21 @@ class TelegramExperience:
                 ):
                     self._consume_inbox((item.update_id,))
 
-    async def _reject_media_batch(self, item: Incoming) -> None:
+    async def _reject_media_batch(
+        self, item: Incoming, *, voice_unconfigured: bool = False,
+    ) -> None:
         """Close a failed attachment batch only after its rejection is durable."""
         pending = tuple(self._incoming)
         retained = [incoming.text for incoming in pending]
         if item.text and not any(incoming.update_id == item.update_id for incoming in pending):
             retained.insert(0, item.text)
         text = (
-            "No pude completar la solicitud con ese archivo o audio. Usa una nota de voz "
-            "de hasta 2 minutos, una imagen, texto o PDF con texto (máximo 10 MB). "
-            "Si fue audio, comprueba la conexión con NVIDIA."
+            "La transcripción de notas de voz aún no está configurada en Jarvis. "
+            "Envía el contenido por escrito para continuar."
+            if voice_unconfigured else
+            "No pude completar la solicitud con ese archivo o audio. "
+            "Puedes enviar una imagen, texto o PDF con texto (máximo 10 MB). "
+            "Las notas de voz requieren un proveedor de audio configurado."
         )
         if retained:
             combined = "\n".join(retained)
@@ -1094,7 +1107,7 @@ class TelegramExperience:
                 await self._send(
                     "Esperando tu aprobación."
                     if snapshot.confirmation
-                    else "La solicitud sigue en proceso con NVIDIA."
+                    else "La solicitud sigue en proceso con Codex (OpenAI)."
                 )
             await self._ack_callback(callback)
             return True
@@ -1136,7 +1149,10 @@ class TelegramExperience:
         if action == "dismiss" and reference.question:
             self._followup = None
             await self._send("Aclaración cancelada.")
-        elif action == "voice" and self._synthesize:
+        elif action == "voice":
+            if self._synthesize is None:
+                await self._ack_callback(callback, "La lectura de voz aún no está configurada")
+                return True
             if self._audio_task:
                 await self._ack_callback(callback, "Ya estoy preparando el audio")
                 return True
@@ -1210,6 +1226,12 @@ class TelegramExperience:
         stage = "prepare"
         notice = "Audio cancelado."
         try:
+            if self._synthesize is None:
+                await self._send(
+                    "La lectura de voz aún no está configurada. "
+                    "La respuesta de texto sigue disponible."
+                )
+                return
             text = speech_content(reference.content)
             if not text:
                 await self._send("Este mensaje no tiene texto que pueda leer en voz alta.")
@@ -1219,7 +1241,7 @@ class TelegramExperience:
                 return
             self._audio_nonce = secrets.token_urlsafe(18)
             self._audio_progress_id = await self._send(
-                "Preparando el audio con NVIDIA…",
+                "Preparando el audio…",
                 buttons=[[{"text": "Detener audio", "callback_data": f"v:{self._audio_nonce}"}]],
             )
             await self._cosmetic(
@@ -1239,6 +1261,7 @@ class TelegramExperience:
             TelegramAPIError,
             MediaError,
             NvidiaNimError,
+            ProviderError,
             OSError,
             MemoryStoreError,
             ValueError,
@@ -1248,12 +1271,12 @@ class TelegramExperience:
                 "telegram audio failed stage=%s error_type=%s status_code=%s",
                 stage,
                 type(error).__name__,
-                error.status_code if isinstance(error, NvidiaNimError) else None,
+                error.status_code if isinstance(error, (NvidiaNimError, ProviderError)) else None,
             )
             notice = (
                 "El chat ya no está disponible. No envié el audio."
                 if isinstance(error, MemoryNotFoundError)
-                else "NVIDIA no pudo generar el audio. "
+                else "El proveedor de voz no pudo generar el audio. "
                 "Vuelve a pulsar «Escuchar» en unos instantes."
                 if stage == "synthesis"
                 else "No pude preparar el archivo de audio. La respuesta de texto sigue disponible."

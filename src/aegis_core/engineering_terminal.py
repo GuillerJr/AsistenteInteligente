@@ -12,12 +12,12 @@ _CLI_ERROR_MESSAGES = {
         "Esa carpeta no existe o no se puede leer. Conservé el proyecto actual."
     ),
     "invalid_input_encoding": "La entrada contiene bytes que no son texto UTF-8 válido.",
-    "brain_unavailable": ("El cerebro local no respondió y no existe una ruta segura disponible."),
+    "brain_unavailable": "La conexión de inferencia no está disponible. La sesión sigue activa.",
     "remote_provider_unavailable": (
-        "NVIDIA no pudo completar la respuesta. La sesión sigue activa."
+        "Codex (OpenAI) no pudo completar la respuesta. La sesión sigue activa."
     ),
-    "remote_rate_limited": "NVIDIA alcanzó su límite de solicitudes o cuota.",
-    "remote_authentication_failed": "NVIDIA no aceptó la credencial o no está disponible.",
+    "remote_rate_limited": "Codex (OpenAI) pidió una pausa por su límite de uso.",
+    "remote_authentication_failed": "La sesión de ChatGPT para Codex necesita atención.",
     "swarm_execution_failed": (
         "El motor no pudo completar esta solicitud. La sesión sigue activa; "
         "puedes intentarlo de nuevo."
@@ -42,13 +42,13 @@ _CLI_ERROR_RECOVERY = {
     ),
     "workspace_unavailable": 'Usa /workspace "subcarpeta" dentro de la raíz autorizada.',
     "invalid_input_encoding": "Convierte el archivo a UTF-8 antes de enviarlo al CLI.",
-    "brain_unavailable": "Comprueba Apple Intelligence y vuelve a ejecutar /status.",
+    "brain_unavailable": "Comprueba la conexión de Codex en Ajustes de Jarvis y ejecuta /status.",
     "remote_provider_unavailable": (
-        "Revisa la conexión y la disponibilidad del endpoint. No se cambió de modelo localmente."
+        "Revisa la conexión y el estado de Codex en Ajustes de Jarvis."
     ),
-    "remote_rate_limited": "Espera al menos 5 segundos y revisa la cuota antes de reintentar.",
+    "remote_rate_limited": "Revisa el estado de tu cuenta de ChatGPT antes de reintentar.",
     "remote_authentication_failed": (
-        "Revisa la clave NVIDIA en el Llavero; no la pegues en el chat."
+        "Abre Ajustes de Jarvis → Codex con ChatGPT y vuelve a iniciar sesión si es necesario."
     ),
     "swarm_execution_failed": (
         "Repite una vez; si persiste, ejecuta ./script/jarvis_beta.sh check."
@@ -167,12 +167,12 @@ class EngineeringTerminal:
         self.notice(f"Carpeta   {workspace}")
         self.notice(f"Consulta web  {research}  ·  Inferencia  {inference}")
         self.notice("Repositorio: lectura autorizada; escritura y shell libre no habilitados.")
-        if inference == "hybrid":
-            self.notice("Hybrid permite enviar texto a especialistas remotos.", color="33")
-        elif inference == "nvidia_only":
-            self.notice("NVIDIA: consultas, historial de esta sesión y código leído van a la API.",
-                        color="33")
-            self.notice("Sin inferencia local ni fallback local; requiere conexión y cuota.")
+        if inference == "configured":
+            self.notice(
+                "Codex (OpenAI) recibe las consultas y el contexto autorizado de esta sesión.",
+                color="33",
+            )
+            self.notice("Conecta tu sesión de ChatGPT en Ajustes de Jarvis.")
         self.notice("─" * self.width)
         self.notice("Enter enviar · Alt+Enter nueva línea · Tab comandos · ↑ historial")
         self.notice("Ctrl-C cancelar tarea/borrador · Ctrl-D salir · /help ayuda")

@@ -1,4 +1,4 @@
-"""NVIDIA completion boundary. There is no local or alternate provider fallback."""
+"""Configured-provider completion boundary; no implicit provider fallback."""
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -20,9 +20,11 @@ def create_completion(provider, activity):
         **kwargs: Any,
     ) -> AgentResult:
         async with activity.track(role):
-            remote_only = getattr(provider, "complete_nvidia_only", None)
+            remote_only = getattr(provider, "complete_inference", None)
             if not callable(remote_only):
-                raise RemoteProviderUnavailableError("NVIDIA-only provider unavailable")
+                remote_only = getattr(provider, "complete_nvidia_only", None)
+            if not callable(remote_only):
+                raise RemoteProviderUnavailableError("configured inference provider unavailable")
             result = await remote_only(
                 role=role, request_id=audit_request_id, on_delta=stream_callback,
                 **({"review_dialogue": True} if review_dialogue else {}), **kwargs,

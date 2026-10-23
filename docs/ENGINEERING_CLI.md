@@ -48,7 +48,7 @@ Una consulta no interactiva se ejecuta así:
 ```bash
 jarvis engineer \
   --domain backend \
-  --inference-policy nvidia_only \
+  --inference-policy configured \
   --request "Revisa los límites de concurrencia de la API"
 
 jarvis --request - < consulta.txt
@@ -76,7 +76,7 @@ Antes de razonar, el daemon construye un inventario de rutas local y acotado. El
 entre los componentes superiores del proyecto (`src`, `native`, `tests`, `docs`, etc.) para que una
 carpeta grande no oculte al resto. El inventario declara `observed_file_count` y `sample_complete`:
 si la muestra está truncada, Jarvis tiene prohibido concluir que un componente ausente no existe.
-En `nvidia_only`, el inventario de rutas relativas se envía a NVIDIA para seleccionar las lecturas.
+En `configured`, el inventario de rutas relativas se envía a Codex (OpenAI) para seleccionar las lecturas.
 Cualquier afirmación sobre una
 implementación concreta exige primero leer el archivo mediante la herramienta local confinada al
 workspace.
@@ -100,7 +100,7 @@ Comandos interactivos:
 ```text
 /domain frontend
 /research public_web
-/inference nvidia_only
+/inference configured
 /workspace "subcarpeta autorizada"
 /status
 /resume
@@ -128,24 +128,21 @@ Jarvis no puede afirmar que verificó información actual. `public_web` habilita
 HTTPS pública y acotada; no entrega cookies, sesiones del navegador ni secretos al buscador y exige
 citar las URLs utilizadas.
 
-**El CLI inicia en `inference=nvidia_only`:** usa los endpoints NVIDIA NIM, sin primera pasada
-Apple/MLX, decodificación especulativa local ni fallback local. Las acciones y el control de permisos
-siguen en el Mac. Un saludo determinista no es inferencia con un modelo local.
+**El CLI inicia en `inference=configured`:** usa la conexión de Codex con ChatGPT
+configurada en Ajustes de Jarvis. La cuenta y el catálogo pertenecen al cliente oficial,
+con un estado separado del de la app Codex. Las acciones y aprobaciones siguen en el
+broker de Jarvis. No hay respaldo automático a NVIDIA ni a otro proveedor.
 
 Se envían el texto de la consulta, un historial acotado de esta conversación, el inventario relativo
 y los fragmentos de código que lea el broker. Se excluyen GraphRAG personal, perfiles biométricos,
-audio e imágenes. El filtro de credenciales es heurístico: **no envíes código confidencial si no
-tienes autorización para procesarlo en NVIDIA**. Solo se admite `/inference nvidia_only`.
+audio e imágenes. El filtro de credenciales es heurístico: procesa únicamente contenido
+autorizado para Codex (OpenAI). Solo se admite `/inference configured` en esta conexión.
 
-La integración utiliza los modelos NVIDIA configurados por rol, con las alternativas remotas
-configuradas ante estados recuperables del endpoint. Los endpoints gratuitos
-de prueba tienen disponibilidad y cuotas externas: no se garantiza servicio ilimitado ni coste cero
-permanente. Un 429 abre el cooldown global antes de cualquier fallback; credenciales rechazadas,
-fallos de red y cuotas se muestran por separado. No se invoca Apple como sustituto silencioso.
-
-`inference=hybrid` y `local_only` ya no están disponibles. El daemon no inicializa ningún
-modelo local de lenguaje, borrador especulativo ni generador local de embeddings.
-**`offline` limita la investigación web; la inferencia sigue necesitando NVIDIA e Internet.**
+La selección guardada en Ajustes se aplica a las siguientes peticiones y se valida
+contra el catálogo disponible. No se elige otro modelo silenciosamente si deja de estar
+disponible. Ollama, OpenAI API y Anthropic quedan para conexiones posteriores.
+El daemon usa embeddings locales de Apple; la voz remota está sin configurar.
+**`offline` limita la investigación web; la inferencia sigue necesitando Codex e Internet.**
 
 ## Conversar sobre una aplicación nueva
 
@@ -155,7 +152,7 @@ el historial para proponer un alcance inicial, sin volver a pedir la informació
 Las propuestas de código o diseño no significan que haya creado archivos.
 
 No hay una lista cerrada de frases de creación: los mensajes, correcciones y respuestas breves
-llegan a NVIDIA con sus roles e historial. Una petición como «puedes revisar» es una
+llegan a Codex con sus roles e historial. Una petición como «puedes revisar» es una
 instrucción de trabajo; solo se pregunta por datos esenciales que falten. El broker valida
 las rutas y los argumentos y decide las aprobaciones; el modelo no ejecuta acciones por su
 cuenta. Los resultados verificados se usan para responder sin inventar evidencia.
@@ -166,7 +163,7 @@ El historial conserva un tramo continuo y señala los fragmentos abreviados.
 `/workspace "subcarpeta"` se resuelve desde el proyecto actual, no desde el directorio donde
 abriste la Terminal. Los errores de ruta y codificación se distinguen de una desconexión IPC.
 
-Un modelo de NVIDIA puede cometer errores técnicos. El CLI no
+El modelo puede cometer errores técnicos. El CLI no
 promete comprensión universal, ejecución de código ni verificación automática de sus propuestas.
 
 El inventario describe el proyecto existente; no debe dominar una conversación de requisitos.

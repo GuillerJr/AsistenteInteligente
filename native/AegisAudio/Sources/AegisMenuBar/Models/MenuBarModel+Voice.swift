@@ -27,6 +27,7 @@ extension MenuBarModel {
             && daemonState == .online
             && securityState == .intact
             && hybridBrainReady
+            && voiceOutputState == .ready
             && microphonePermission == .authorized
             && speechPermission == .authorized
             && !voiceState.isBusy

@@ -1,4 +1,4 @@
-"""NVIDIA-only inference: no local model, speculative draft or local fallback."""
+"""Selected-provider inference with shared privacy, tool and completion guards."""
 
 from __future__ import annotations
 
@@ -31,6 +31,7 @@ from aegis_core.orchestration.task_progress import (
 )
 from aegis_core.privacy import redact_secrets_for_remote, sanitize_remote_reference
 from aegis_core.providers.base import IncompleteModelResponseError, require_complete_response
+from aegis_core.providers.errors import ProviderError, ProviderRateLimitedError
 from aegis_core.providers.inference_metrics import begin_metrics, end_metrics, measure_stage
 from aegis_core.providers.nvidia import NvidiaNimError, NvidiaNimRateLimited
 from aegis_core.request_intent import folded_request, mask_quoted_text
@@ -114,22 +115,28 @@ _RATE_LIMIT_PAUSE = 3.0
 _RATE_LIMIT_JITTER = 1.5
 
 
-class NvidiaBrainClient:
+class InferenceBrainClient:
     def __init__(self, provider: Any, *, audit_sink: AuditSink | None = None,
-                 rate_limit_retries: int | None = None) -> None:
+                 rate_limit_retries: int | None = None, legacy_audit: bool = False) -> None:
         self._provider = provider
         self._audit = audit_sink or NullAuditSink()
         # None follows the module default; budgeted live pilots pass 0 to stop at a 429.
         self._rate_limit_retries = rate_limit_retries
+        self._legacy_audit = legacy_audit
+        configured_id = getattr(provider, "provider_id", "configured")
+        self._provider_id = configured_id if configured_id in {"codex", "configured"} \
+            else "configured"
+
+    @property
+    def provider_id(self) -> str:
+        return "nvidia" if self._legacy_audit else self._provider_id
 
     async def complete_nvidia_only(self, **options: Any) -> AgentResult:
-        """One NVIDIA inference, riding out the rate limit instead of failing the turn.
+        """Compatibility spelling; the configured provider remains authoritative."""
+        return await self.complete_inference(**options)
 
-        The account allowed about four calls in a row (HTTP 429 after that) and every
-        Jarvis turn makes several, so one burst failed whole turns. A rate-limited call
-        waits for the shared cooldown (plus jitter, so parallel calls do not retry
-        together) and tries again a few times; nothing is sent while waiting.
-        """
+    async def complete_inference(self, **options: Any) -> AgentResult:
+        """Use only the selected provider, preserving cancellation and bounded retries."""
         retries = (_RATE_LIMIT_RETRIES if self._rate_limit_retries is None
                    else max(0, self._rate_limit_retries))
         for attempt in range(retries + 1):
@@ -335,22 +342,37 @@ class NvidiaBrainClient:
         except IncompleteModelResponseError:
             outcome = "incomplete"
             raise
-        except NvidiaNimRateLimited as error:
+        except (NvidiaNimRateLimited, ProviderRateLimitedError) as error:
             outcome = "rate_limited"
-            raise RemoteRateLimitedError("NVIDIA cooldown active") from error
-        except NvidiaNimError as error:
+            raise RemoteRateLimitedError("inference provider rate limited") from error
+        except (NvidiaNimError, ProviderError) as error:
             provider_status = error.status_code
+            if error.status_code == 429:
+                outcome = "rate_limited"
+                raise RemoteRateLimitedError("inference provider rate limited") from error
             if error.status_code in {401, 403}:
                 outcome = "authentication_failed"
-                raise RemoteAuthenticationError("NVIDIA credential rejected") from error
-            raise RemoteProviderUnavailableError("NVIDIA inference unavailable") from error
+                raise RemoteAuthenticationError("inference authentication unavailable") from error
+            raise RemoteProviderUnavailableError("inference provider unavailable") from error
         finally:
             end_metrics(metrics_token)
             self._audit.record_system_event(
-                request_id or uuid4(), event_type="nvidia_inference", component="nvidia_brain",
+                request_id or uuid4(),
+                event_type="nvidia_inference" if self._legacy_audit else "provider_inference",
+                component="nvidia_brain" if self._legacy_audit else "inference_brain",
                 data={"outcome": outcome, "role": role.value, "model_id": model_id,
+                      **({} if self._legacy_audit else {"provider": self._provider_id}),
                       "dialogue_review": dialogue_review,
                       "provider_status": provider_status,
                       **metrics.public_dict(),
                       "latency_ms": (time.perf_counter_ns() - started) // 1_000_000},
             )
+
+
+class NvidiaBrainClient(InferenceBrainClient):
+    """Legacy entry point retained for existing integrations and historical tests."""
+
+    def __init__(self, provider: Any, *, audit_sink: AuditSink | None = None,
+                 rate_limit_retries: int | None = None) -> None:
+        super().__init__(provider, audit_sink=audit_sink, rate_limit_retries=rate_limit_retries,
+                         legacy_audit=True)

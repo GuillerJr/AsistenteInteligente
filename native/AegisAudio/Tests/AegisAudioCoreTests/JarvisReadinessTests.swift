@@ -29,11 +29,24 @@ import Testing
     )
     let attributes = try FileManager.default.attributesOfItem(atPath: destination.path)
     #expect(stored == snapshot)
-    #expect(stored.schemaVersion == "2.0")
+    #expect(stored.schemaVersion == "3.0")
     #expect(stored.buildRevision == JarvisBuildIdentity.development)
     #expect(attributes[.posixPermissions] as? Int == 0o600)
     #expect(!String(decoding: try Data(contentsOf: destination), as: UTF8.self)
         .contains("transcript"))
+}
+
+@Test func readinessSeparatesConfiguredChatFromUnconfiguredVoice() throws {
+    let snapshot = JarvisReadinessSnapshot(
+        daemon: "online", security: "intact", provider: "configured", localBrainAvailable: false,
+        microphone: "authorized", speechRecognition: "authorized", screenCaptureAuthorized: true,
+        computerControl: "ready", wakeWord: "ready", wakeWordEnabled: false,
+        speakerIdentity: "ready", voiceOutput: "unconfigured"
+    )
+    let object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(snapshot)) as? [String: Any])
+    #expect(object["schema_version"] as? String == "3.0")
+    #expect(object["provider"] as? String == "configured")
+    #expect(object["voice_output"] as? String == "unconfigured")
 }
 
 @Test func readinessStoreRejectsInvalidBuildRevision() throws {

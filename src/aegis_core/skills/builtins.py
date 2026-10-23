@@ -159,7 +159,7 @@ BUILTIN_SKILLS: tuple[SkillManifest, ...] = (
             ),
             (
                 "La conexión inicial del navegador puede requerir autorizar la extensión. "
-                "El permiso de sitio y el análisis con NVIDIA se aprueban para la tarea; "
+                "El permiso de sitio y el análisis con Codex (OpenAI) se aprueban para la tarea; "
                 "un enlace de la página no amplía ese permiso. No uses control visual para "
                 "credenciales, pagos, "
                 "compras, cargas, descargas ni mensajes."
@@ -555,7 +555,8 @@ BUILTIN_SKILLS: tuple[SkillManifest, ...] = (
             ),
             (
                 "Describe valor, unidad, fuente y momento observado; separa diagnóstico de "
-                "hipótesis. La conectividad local no prueba acceso a Internet o a NVIDIA; memoria "
+                "hipótesis. La conectividad local no prueba acceso a Internet "
+                "o al proveedor de IA; memoria "
                 "y mensajes previos no demuestran el estado actual del Mac."
             ),
             (

@@ -17,13 +17,13 @@ enum JarvisWelcomeState {
         var message: String {
             switch self {
             case .credential:
-                String(localized: "Guarda tu clave de NVIDIA antes de enviar el mensaje de ejemplo.", bundle: .module)
+                String(localized: "Conecta tu cuenta de ChatGPT en Ajustes › Modelos de IA antes de enviar el mensaje de ejemplo.", bundle: .module)
             case .settings:
                 String(localized: "Termina los cambios de configuración y aplícalos desde Ajustes antes de enviar el ejemplo.", bundle: .module)
             case .activity:
                 String(localized: "Termina la conversación, grabación o aprobación pendiente antes de enviar el ejemplo.", bundle: .module)
             case .service:
-                String(localized: "El servicio todavía no está listo. Comprueba la conexión y la clave de NVIDIA y vuelve a intentarlo.", bundle: .module)
+                String(localized: "El servicio todavía no está listo. Comprueba la conexión con Codex y vuelve a intentarlo.", bundle: .module)
             case .submission:
                 String(localized: "El mensaje de ejemplo no se completó. Revisa el chat y vuelve a intentarlo cuando esté disponible.", bundle: .module)
             }
@@ -32,7 +32,9 @@ enum JarvisWelcomeState {
 
     @MainActor
     static func exampleIssue(model: MenuBarModel, store: JarvisSettingsStore) -> ExampleIssue? {
-        guard store.snapshot?.credential == "configured" else { return .credential }
+        let connected = store.inference.status.map(\.ready)
+            ?? (model.hybridBrainReady || store.snapshot?.credential == "configured")
+        guard connected else { return .credential }
         guard !store.busy, !store.restartRequired else { return .settings }
         guard model.activeJobID == nil, model.pendingApproval == nil, model.pendingInput == nil,
               model.pendingBrowserSelection == nil, model.pendingRecovery == nil,
@@ -45,7 +47,7 @@ enum JarvisWelcomeState {
     }
 
     /// Refresh before switching conversations, then recheck: voice or an approval can arrive
-    /// while IPC is suspended. Updating the NVIDIA credential itself needs no daemon restart.
+    /// while IPC is suspended. Refresh the connected account before sending the example.
     @MainActor
     static func sendExample(model: MenuBarModel, store: JarvisSettingsStore,
                             refresh: () async -> Void, send: () async -> Bool) async -> ExampleIssue? {

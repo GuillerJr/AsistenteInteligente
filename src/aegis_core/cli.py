@@ -38,7 +38,6 @@ from aegis_core.capability_review_gate import (
 )
 from aegis_core.capability_reviews import build_capability_review_dossier
 from aegis_core.config import Settings
-from aegis_core.contracts import AgentRole
 from aegis_core.distribution_release_qualification import (
     DistributionReleaseQualificationError,
     DistributionReleaseQualificationGate,
@@ -64,7 +63,6 @@ from aegis_core.macos_qualification import (
 from aegis_core.memory import (
     SQLiteMemoryStore,
 )
-from aegis_core.models import model_for
 from aegis_core.pilot_release_qualification import (
     PilotReleaseQualificationError,
     PilotReleaseQualificationGate,
@@ -80,24 +78,18 @@ from aegis_core.plugins.store import (
 )
 from aegis_core.production_workflows import JarvisProductionWorkflowBenchmark
 from aegis_core.providers.apple_embedding import AppleLocalEmbeddingClient
-from aegis_core.providers.base import EmbeddingInputType
-from aegis_core.providers.nvidia import NvidiaNimClient, NvidiaNimError
 from aegis_core.release_scope import ReleaseScopeError, release_scope_json
 from aegis_core.secrets import (
     InvalidAuditAnchorError,
     InvalidGenericSecretError,
     InvalidIpcSecretError,
     InvalidPluginSecretError,
-    InvalidSecretError,
     MacOSAuditAnchor,
     MacOSGenericSecret,
     MacOSIpcSecret,
-    MacOSKeychain,
     MacOSPluginSecret,
     SecretNotFoundError,
     import_generic_secret_from_file,
-    import_nvidia_key_from_clipboard,
-    import_nvidia_key_from_file,
     import_plugin_secret_from_file,
 )
 from aegis_core.secure_update import (
@@ -125,11 +117,6 @@ from aegis_core.tools.defaults import build_default_tool_broker
 from aegis_core.voice_qualification import (
     VoiceQualificationError,
     VoiceQualificationGate,
-)
-
-_VISION_PROBE_DATA_URI = (
-    "data:image/png;base64,"
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC"
 )
 
 
@@ -762,7 +749,7 @@ def doctor() -> int:
     architecture = platform.machine()
     print(f"architecture={architecture}")
     print(f"python={platform.python_version()}")
-    print(f"nvidia_base_url={settings.nvidia_base_url}")
+    print("inference_provider=codex")
     local_embedding = AppleLocalEmbeddingClient(
         settings.local_embedding_executable_path,
         timeout_seconds=settings.local_embedding_timeout_seconds,
@@ -777,266 +764,49 @@ def doctor() -> int:
         f"{'available' if SQLiteMemoryStore.vector_acceleration_available() else 'unavailable'} "
         "engine=sqlite-vec"
     )
-
     if architecture != "arm64":
         print("status=error reason=non_arm64_runtime")
         return 1
+    installed = settings.codex_executable_path.is_file()
+    print(f"codex_executable={'available' if installed else 'missing'} account=not_checked")
+    return 0 if installed else 2
 
-    keychain = MacOSKeychain(
-        service=settings.nvidia_keychain_service,
-        account=settings.nvidia_keychain_account,
-    )
-    try:
-        keychain.get()
-    except (SecretNotFoundError, InvalidSecretError):
-        print("nvidia_api_key=missing")
-        return 2
-    print("nvidia_api_key=available")
-    return 0
+
+def _retired_nvidia_command() -> int:
+    print("status=error reason=inference_provider_changed provider=codex")
+    return 2
 
 
 def import_nvidia_key() -> int:
-    settings = Settings()
-    keychain = MacOSKeychain(
-        service=settings.nvidia_keychain_service,
-        account=settings.nvidia_keychain_account,
-    )
-    try:
-        import_nvidia_key_from_clipboard(keychain)
-    except (InvalidSecretError, SecretNotFoundError, subprocess.SubprocessError) as error:
-        print(f"status=error reason={type(error).__name__}")
-        return 1
-    print("nvidia_api_key=stored clipboard=cleared")
-    return 0
+    return _retired_nvidia_command()
 
 
 def import_nvidia_key_file(source: Path) -> int:
-    settings = Settings()
-    keychain = MacOSKeychain(
-        service=settings.nvidia_keychain_service,
-        account=settings.nvidia_keychain_account,
-    )
-    try:
-        import_nvidia_key_from_file(keychain, source)
-    except (InvalidSecretError, SecretNotFoundError, OSError, subprocess.SubprocessError) as error:
-        print(f"status=error reason={type(error).__name__}")
-        return 1
-    print("nvidia_api_key=stored temporary_file=destroyed")
-    return 0
+    return _retired_nvidia_command()
 
 
 async def probe_nvidia() -> int:
-    settings = Settings()
-    keychain = MacOSKeychain(
-        service=settings.nvidia_keychain_service,
-        account=settings.nvidia_keychain_account,
-    )
-    try:
-        async with NvidiaNimClient(settings, keychain.get) as client:
-            result = await client.complete(
-                role=AgentRole.ROUTER,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": "Reply with exactly: OK",
-                    }
-                ],
-                max_tokens=8,
-                temperature=0.0,
-                extra_body={"chat_template_kwargs": {"enable_thinking": False}},
-            )
-    except (SecretNotFoundError, InvalidSecretError, NvidiaNimError, OSError) as error:
-        print(f"status=error reason={type(error).__name__}")
-        return 1
-    print(f"status=ok model={result.model_id} credential=keychain")
-    return 0
+    return _retired_nvidia_command()
 
 
 async def probe_nvidia_embedding() -> int:
-    settings = Settings()
-    keychain = MacOSKeychain(
-        service=settings.nvidia_keychain_service,
-        account=settings.nvidia_keychain_account,
-    )
-    try:
-        async with NvidiaNimClient(settings, keychain.get) as client:
-            batch = await client.embed(
-                ["Aegis embedding health probe"],
-                input_type=EmbeddingInputType.QUERY,
-            )
-    except (SecretNotFoundError, InvalidSecretError, NvidiaNimError, OSError, ValueError) as error:
-        print(f"status=error reason={type(error).__name__}")
-        return 1
-    print(f"status=ok model={batch.model_id} dimensions={batch.dimensions} credential=keychain")
-    return 0
+    return _retired_nvidia_command()
 
 
 async def probe_nvidia_tts() -> int:
-    settings = Settings()
-    keychain = MacOSKeychain(
-        service=settings.nvidia_keychain_service,
-        account=settings.nvidia_keychain_account,
-    )
-    try:
-        async with NvidiaNimClient(settings, keychain.get) as client:
-            started_at = time.perf_counter()
-            first_audio_ms: int | None = None
-            audio_bytes = 0
-            chunks = 0
-            async for chunk in client.stream_speech("Sistemas en línea."):
-                if first_audio_ms is None:
-                    first_audio_ms = round((time.perf_counter() - started_at) * 1_000)
-                audio_bytes += len(chunk)
-                chunks += 1
-            if first_audio_ms is None or not audio_bytes or audio_bytes % 2:
-                raise NvidiaNimError("NVIDIA NIM speech returned invalid audio")
-    except (SecretNotFoundError, InvalidSecretError, NvidiaNimError, OSError, ValueError) as error:
-        print(f"status=error reason={type(error).__name__}")
-        return 1
-    print(
-        f"status=ok voice={settings.nvidia_tts_voice} audio_bytes={audio_bytes} "
-        f"chunks={chunks} first_audio_ms={first_audio_ms} mode=stream "
-        "credential=keychain playback=none"
-    )
-    return 0
+    return _retired_nvidia_command()
 
 
 async def probe_nvidia_vision() -> int:
-    settings = Settings()
-    keychain = MacOSKeychain(
-        service=settings.nvidia_keychain_service,
-        account=settings.nvidia_keychain_account,
-    )
-    try:
-        async with NvidiaNimClient(settings, keychain.get) as client:
-            result = await client.complete(
-                role=AgentRole.VISION,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": "Reply with exactly: OK"},
-                            {
-                                "type": "image_url",
-                                "image_url": {"url": _VISION_PROBE_DATA_URI},
-                            },
-                        ],
-                    }
-                ],
-                max_tokens=16,
-                temperature=0.0,
-            )
-    except (SecretNotFoundError, InvalidSecretError, NvidiaNimError, OSError, ValueError) as error:
-        print(f"status=error reason={type(error).__name__}")
-        return 1
-    if not result.content.strip():
-        print("status=error reason=invalid_vision_response")
-        return 1
-    print(f"status=ok model={result.model_id} input=synthetic credential=keychain")
-    return 0
+    return _retired_nvidia_command()
 
 
 async def probe_nvidia_tools() -> int:
-    settings = Settings()
-    keychain = MacOSKeychain(
-        service=settings.nvidia_keychain_service,
-        account=settings.nvidia_keychain_account,
-    )
-    schemas = []
-    for schema in build_default_tool_broker().schemas_for(AgentRole.CODE_SECURITY):
-        function = schema.get("function")
-        if isinstance(function, dict) and function.get("name") == "terminal_run_template":
-            schemas.append(schema)
-    if len(schemas) != 1:
-        print("status=error reason=tool_schema_unavailable")
-        return 1
-    try:
-        async with NvidiaNimClient(settings, keychain.get) as client:
-            result = await client.complete(
-                role=AgentRole.CODE_SECURITY,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "Return exactly one required function call and no prose.",
-                    },
-                    {
-                        "role": "user",
-                        "content": "Request terminal_run_template with security_posture.",
-                    },
-                ],
-                max_tokens=64,
-                temperature=0.0,
-                extra_body={"tools": schemas, "tool_choice": "required"},
-            )
-    except (SecretNotFoundError, InvalidSecretError, NvidiaNimError, OSError, ValueError) as error:
-        print(f"status=error reason={type(error).__name__}")
-        return 1
-    if len(result.tool_calls) != 1:
-        print("status=error reason=invalid_tool_call_response")
-        return 1
-    call = result.tool_calls[0]
-    if call.tool_name != "terminal_run_template" or call.arguments != {
-        "template": "security_posture"
-    }:
-        print("status=error reason=invalid_tool_call_response")
-        return 1
-    print(
-        f"status=ok model={result.model_id} tool={call.tool_name} "
-        "execution=none credential=keychain"
-    )
-    return 0
+    return _retired_nvidia_command()
 
 
 async def probe_nvidia_swarm() -> int:
-    settings = Settings()
-    keychain = MacOSKeychain(
-        service=settings.nvidia_keychain_service,
-        account=settings.nvidia_keychain_account,
-    )
-    roles = (
-        AgentRole.PLANNER,
-        AgentRole.CODE_SECURITY,
-        AgentRole.CRITICAL_REASONER,
-        AgentRole.VISION,
-    )
-    try:
-        async with NvidiaNimClient(settings, keychain.get) as client:
-            for role in roles:
-                content: str | list[dict[str, object]] = "Reply with exactly: OK"
-                if role is AgentRole.VISION:
-                    content = [
-                        {"type": "text", "text": "Reply with exactly: OK"},
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": _VISION_PROBE_DATA_URI},
-                        },
-                    ]
-                result = await client.complete(
-                    role=role,
-                    messages=[{"role": "user", "content": content}],
-                    max_tokens=128,
-                    temperature=0.0,
-                )
-                expected = model_for(role).model_id
-                if result.model_id != expected:
-                    result = await client.complete(
-                        role=role,
-                        messages=[{"role": "user", "content": content}],
-                        max_tokens=128,
-                        temperature=0.0,
-                    )
-                status = "ok" if result.model_id == expected else "degraded"
-                print(
-                    f"status={status} role={role.value} model={result.model_id} "
-                    f"primary={expected} credential=keychain",
-                    flush=True,
-                )
-                if status != "ok":
-                    return 1
-    except (SecretNotFoundError, InvalidSecretError, NvidiaNimError, OSError, ValueError) as error:
-        print(f"status=error reason={type(error).__name__}")
-        return 1
-    return 0
+    return _retired_nvidia_command()
 
 
 def verify_audit(
@@ -1203,7 +973,7 @@ async def daemon_status() -> int:
         return 1
     provider = provider_response.payload.get("provider")
     credential = provider_response.payload.get("credential")
-    if provider != "nvidia_nim" or credential not in {
+    if provider not in {"codex", "nvidia_nim"} or credential not in {
         "configured",
         "missing",
         "unavailable",

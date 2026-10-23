@@ -90,6 +90,9 @@ class MascotAutonomyService:
                  clock: Callable[[], float] = time.monotonic,
                  interval_seconds: float = 30, timeout_seconds: float = 12):
         self._brain = brain
+        provider = getattr(brain, "provider_id", "nvidia")
+        self._provider_id = provider if provider in {"codex", "nvidia", "configured"} \
+            else "configured"
         self._blocked = blocked
         self._busy = foreground_busy
         self._clock = clock
@@ -189,7 +192,7 @@ class MascotAutonomyService:
                 return
             self._recent.append(plan.model_dump(mode="json"))
             self._result = {"status": "ready", "revision": str(world.revision),
-                            "plan": plan.model_dump(mode="json"), "provider": "nvidia",
+                            "plan": plan.model_dump(mode="json"), "provider": self._provider_id,
                             "model_id": result.model_id}
         except asyncio.CancelledError:
             raise

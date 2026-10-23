@@ -66,8 +66,21 @@ def test_incomplete_response_is_explained_in_spanish_with_code_as_detail():
         [event("swarm_execution_failed", 1, error_code="incomplete_model_response")],
         now=NOW, mcp_status=None, credential="configured", cooldown_seconds=0,
     )
-    assert report["failures"][0]["title"] == "NVIDIA devolvió una respuesta incompleta"
+    assert report["failures"][0]["title"] == "El proveedor de IA devolvió una respuesta incompleta"
     assert report["failures"][0]["detail"] == "incomplete_model_response"
+
+
+def test_codex_health_counts_its_own_calls_and_omits_the_retired_provider():
+    report = health_report([
+        event("nvidia_inference", 1, outcome="failed"),
+        event("provider_inference", 1, provider="codex", outcome="completed", latency_ms=700),
+        event("provider_inference", 1, provider="other", outcome="failed"),
+    ], now=NOW, mcp_status=None, credential="configured", cooldown_seconds=0, provider="codex")
+    assert "nvidia" not in report
+    assert report["inference"]["provider"] == "codex"
+    assert report["inference"]["state"] == "ready"
+    assert report["inference"]["answered"] == 1
+    assert report["inference"]["failed"] == 0
 
 
 @pytest.mark.asyncio

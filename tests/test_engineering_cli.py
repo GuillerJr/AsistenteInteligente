@@ -81,19 +81,24 @@ def session(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("credential", ["configured", "missing", "unavailable"])
-async def test_status_accepts_nvidia_only_daemon_without_local_model_field(tmp_path, credential):
+@pytest.mark.parametrize("provider", ["codex", "nvidia_nim"])
+async def test_status_accepts_configured_daemon_without_local_model_field(
+    tmp_path, credential, provider,
+):
     class StatusPeer(ScriptedPeer):
         async def call(self, method, payload):
             return SimpleNamespace(ok=True, payload={
                 "health": {"runtime_state": "active"},
                 "security.status": {"state": "intact"},
-                "provider.status": {"provider": "nvidia_nim", "credential": credential},
+                "provider.status": {"provider": provider, "credential": credential},
             }[method])
 
     cli, output, errors = session(StatusPeer(tmp_path))
     assert await cli._handle_command("/status") == 0
     assert output.getvalue() == ""
-    assert "NVIDIA: " + credential in errors.getvalue()
+    rendered = " ".join(errors.getvalue().split())
+    assert f"Proveedor: {provider}" in rendered
+    assert f"Acceso: {credential}" in rendered
     assert "Modelo local" not in errors.getvalue()
     assert "ipc_invalid_response" not in errors.getvalue()
 
@@ -317,14 +322,14 @@ def test_commands_reject_ignored_arguments(tmp_path: Path, command: str) -> None
 
 def test_local_inference_is_rejected_without_losing_cloud_context(tmp_path: Path) -> None:
     cli, _, _ = session(ScriptedPeer(tmp_path))
-    assert cli._inference_policy.value == "nvidia_only"
+    assert cli._inference_policy.value == "configured"
     current = cli._conversation_id = uuid4()
-    for policy in ("local_only", "hybrid"):
+    for policy in ("local_only", "hybrid", "nvidia_only"):
         with pytest.raises(EngineeringCLIError, match="invalid_command"):
             cli._handle_local_command(f"/inference {policy}")
-        assert cli._inference_policy.value == "nvidia_only"
+        assert cli._inference_policy.value == "configured"
         assert cli._conversation_id == current
-    cli._handle_local_command("/inference nvidia_only")
+    cli._handle_local_command("/inference configured")
     assert cli._conversation_id == current
 
 

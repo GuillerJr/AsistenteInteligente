@@ -12,9 +12,9 @@ enum ChatRecovery {
     static func message(_ code: String) -> String {
         switch code {
         case "remote_authentication_failed":
-            String(localized: "NVIDIA rechazó la clave. Actualízala en Configuración › Cuentas y pulsa Reintentar.", bundle: .module)
+            String(localized: "Codex requiere que revises la sesión. Abre Configuración › Modelos de IA y pulsa Reintentar después de conectar.", bundle: .module)
         case "remote_provider_unavailable":
-            String(localized: "No pude conectar con NVIDIA. Comprueba tu conexión a Internet y vuelve a intentarlo.", bundle: .module)
+            String(localized: "No pude conectar con Codex. Comprueba tu conexión a Internet y vuelve a intentarlo.", bundle: .module)
         case "daemon_unavailable", "job_status_unavailable":
             String(localized: "Se perdió la conexión con Jarvis. Comprueba el estado de la tarea antes de volver a enviarla.", bundle: .module)
         default:

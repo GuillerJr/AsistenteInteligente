@@ -401,7 +401,7 @@ async def test_audio_errors_report_stage_without_logging_private_content(
         if args[0] == "editMessageText"
     ]
     expected = {
-        "synthesis": "NVIDIA no pudo generar",
+        "synthesis": "El proveedor de voz no pudo generar",
         "encoding": "preparar el archivo",
         "delivery": "por Telegram",
     }
@@ -472,6 +472,33 @@ async def test_voice_rejects_limits_and_unlinked_users_before_download(experienc
     await spin_until(lambda: experience._media_task is None)
     experience._client.download.assert_not_called()
     assert not experience._jobs.requests
+
+
+async def test_unconfigured_voice_is_rejected_explicitly_before_download_or_model(experience):
+    experience._transcribe = None
+    await experience.process_update(update(2, None, voice={"file_id": "voice-one", "duration": 3}))
+    await spin_until(lambda: experience._media_task is None)
+
+    experience._client.download.assert_not_called()
+    assert not experience._jobs.requests
+    delivered = "\n".join(item[1] for item in experience._client.sent)
+    assert "transcripción de notas de voz aún no está configurada" in delivered
+    assert "Transcribiendo" not in delivered
+
+
+async def test_old_listen_button_reports_unconfigured_voice_without_starting_audio(experience):
+    await experience.process_update(update(2, "Responde listo"))
+    reference = await complete(experience, "listo")
+    experience._synthesize = None
+    await callback(experience, f"x:{reference.token}:voice", reference.message_ids[0])
+
+    assert experience._audio_task is None
+    assert any(
+        "lectura de voz aún no está configurada" in args[1].get("text", "")
+        for args, _ in experience._client.call.call_args_list
+        if args[0] == "answerCallbackQuery" and len(args) > 1
+    )
+    experience._client.send_voice.assert_not_called()
 
 
 async def test_file_and_following_instruction_share_the_same_request(experience):

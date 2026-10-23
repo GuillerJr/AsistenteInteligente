@@ -307,7 +307,8 @@ async def test_summary_failure_preserves_actual_verified_data(monkeypatch):
     result = await NvidiaToolResultSummarizer(NvidiaBrainClient(provider))(
         ApprovedToolContext(uuid4(), REQUEST, None), approved_outcome(),
     )
-    assert "NVIDIA no pudo resumir" in result
+    assert "No pude resumir el resultado a tiempo" in result
+    assert "NVIDIA" not in result
     assert "Resultado técnico verificado." in result
     assert len(provider.calls) == nvidia_client._RATE_LIMIT_RETRIES + 1
 

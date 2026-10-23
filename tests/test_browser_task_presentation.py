@@ -41,7 +41,7 @@ def test_access_preview_discloses_remote_processing_and_exact_destination(mode):
     presenter = JobToolPresenter(None)
     assert presenter.supports_confirmation("browser_task_open")
     summary = presenter.confirmation_summary(authorization)
-    assert "NVIDIA" in summary and "24 acciones" in summary and "10 min" in summary
+    assert "Codex (OpenAI)" in summary and "24 acciones" in summary and "10 min" in summary
     fields = confirmation_preview(authorization).fields
     assert fields[0].label == "Dirección"
     assert fields[0].value == authorization.normalized_arguments["url"]
@@ -111,7 +111,9 @@ def test_chrome_preview_retains_entire_destination_and_objective_beyond_summary_
     })
     summary = JobToolPresenter(None).confirmation_summary(authorization)
     assert len(summary) == 512
-    assert summary.index("NVIDIA") < summary.index("Chrome directo") < summary.index("Destino")
+    assert (
+        summary.index("Codex (OpenAI)") < summary.index("Chrome directo") < summary.index("Destino")
+    )
     assert "conexión CDP" in summary and "10 min" in summary and "24 acciones" in summary
     fields = {field.label: field.value for field in confirmation_preview(authorization).fields}
     assert fields["Dirección"] == url and fields["Objetivo"] == objective

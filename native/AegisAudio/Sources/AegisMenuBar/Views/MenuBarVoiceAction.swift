@@ -34,12 +34,12 @@ struct MenuBarVoiceAction: View {
     }
 
     private var voicePermissionPending: Bool {
-        model.microphonePermission == .notDetermined || model.speechPermission == .notDetermined
+        model.voiceOutputState == .ready && (model.microphonePermission == .notDetermined || model.speechPermission == .notDetermined)
     }
 
     private var voicePermissionBlocked: Bool {
-        [.denied, .restricted].contains(model.microphonePermission)
-            || [.denied, .restricted].contains(model.speechPermission)
+        model.voiceOutputState == .ready && ([.denied, .restricted].contains(model.microphonePermission)
+            || [.denied, .restricted].contains(model.speechPermission))
     }
 
     private var primaryAvailable: Bool {
@@ -65,6 +65,7 @@ struct MenuBarVoiceAction: View {
         if !model.hybridBrainReady, model.providerState == .unavailable {
             return String(localized: "Proveedor no disponible", bundle: .module)
         }
+        if model.hybridBrainReady, model.voiceOutputState != .ready { return model.voiceOutputState.title }
         return model.voiceState.isBusy ? String(localized: "Jarvis está trabajando", bundle: .module) : String(localized: "Voz no disponible", bundle: .module)
     }
 
@@ -88,6 +89,9 @@ struct MenuBarVoiceAction: View {
         }
         if !model.hybridBrainReady, model.providerState == .unavailable {
             return String(localized: "Revisa el proveedor y el servicio", bundle: .module)
+        }
+        if model.hybridBrainReady, model.voiceOutputState != .ready {
+            return String(localized: "Puedes seguir conversando por escrito", bundle: .module)
         }
         return model.voiceState.isBusy ? String(localized: "Procesando solicitud", bundle: .module) : String(localized: "Revisa el servicio y su seguridad", bundle: .module)
     }

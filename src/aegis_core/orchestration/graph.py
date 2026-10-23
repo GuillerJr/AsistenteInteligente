@@ -119,14 +119,16 @@ def build_swarm_graph(
     focus_priority_provider: Callable[[], dict[str, str | bool]] | None = None,
     dynamic_tool_names: Callable[[UserRequest], frozenset[str]] | None = None,
     semantic_tool_catalogue: Callable[[], Sequence[tuple[str, str]]] | None = None,
-    inference_nvidia_only: bool = True,
+    inference_nvidia_only: bool | None = None,
     runtime_context_provider: Callable[[], Any] | None = None,
     browser_task_context: Callable[[UUID], dict[str, Any] | None] | None = None,
     person_name_detector: Callable[[str], Awaitable[tuple[str, ...]]] | None = None,
     tool_call_preparer: Callable[[ToolCall], ToolCall] | None = None,
 ) -> Any:
-    if not inference_nvidia_only or local_provider is not None:
-        raise ValueError("production inference must use NVIDIA exclusively")
+    if local_provider is not None:
+        raise ValueError(
+            "select one configured inference provider; implicit fallback is unavailable"
+        )
 
     if not 1 <= memory_limit <= 10:
         raise ValueError("memory limit is out of range")

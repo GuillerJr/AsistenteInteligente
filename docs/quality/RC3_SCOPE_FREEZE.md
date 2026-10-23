@@ -16,3 +16,13 @@ datos del usuario.
 
 Esto no desactiva componentes existentes. Evita que el candidato vuelva a degradarse por *scope
 creep* mientras se mide y corrige lo ya construido.
+
+## Cambio de conexión autorizado el 23-10-2026
+
+El dueño retiró expresamente la exclusividad NVIDIA y eligió Codex con su cuenta
+de ChatGPT. [ADR-0235](../architecture/ADR-0235-configured-inference-and-codex-chatgpt.md)
+registra la decisión y sus controles. El alcance ejecutable, modelo de amenazas y
+pruebas se actualizan en el mismo cambio. Las certificaciones físicas pendientes
+siguen abiertas; la voz queda sin configurar y no puede obtener una calificación
+positiva a partir de evidencia anterior. Otros proveedores se incorporarán por
+cambios posteriores; esta conexión no añade respaldos silenciosos.

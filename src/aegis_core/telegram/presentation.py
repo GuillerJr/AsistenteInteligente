@@ -14,13 +14,16 @@ def speech_content(text: str) -> str:
 def failure_message(code: str | None) -> str:
     return {
         "remote_provider_unavailable": (
-            "NVIDIA no pudo responder a esta solicitud. Vuelve a intentarlo en unos instantes."
+            "Codex (OpenAI) no pudo responder a esta solicitud. Inténtalo en unos instantes."
         ),
-        "remote_rate_limited": "NVIDIA pidió una pausa por su límite de uso. Inténtalo más tarde.",
+        "remote_rate_limited": "Codex (OpenAI) pidió una pausa por su límite de uso. "
+        "Inténtalo más tarde.",
         "remote_authentication_failed": (
-            "NVIDIA rechazó la credencial. Revisa su clave en Configuración de Jarvis."
+            "La sesión de ChatGPT para Codex necesita atención. "
+            "Revisa Codex con ChatGPT en Ajustes de Jarvis."
         ),
-        "brain_unavailable": "La conexión con NVIDIA no está disponible. Inténtalo más tarde.",
+        "brain_unavailable": "La conexión con Codex (OpenAI) no está disponible. "
+        "Inténtalo más tarde.",
         "swarm_execution_timeout": (
             "La solicitud superó el tiempo de espera. Comprueba si hubo cambios antes de repetirla."
         ),
@@ -33,10 +36,11 @@ def failure_message(code: str | None) -> str:
         "conversation_not_found": "Esta conversación ya no existe. Usa /nuevo para continuar.",
         "conversation_unavailable": "No pude acceder al historial. Revisa el servicio de Jarvis.",
         "incomplete_model_response": (
-            "NVIDIA devolvió una respuesta incompleta. "
+            "Codex (OpenAI) devolvió una respuesta incompleta. "
             "Comprueba si hubo cambios antes de repetirla."
         ),
-        "empty_agent_response": "NVIDIA devolvió una respuesta vacía. Inténtalo nuevamente.",
+        "empty_agent_response": "Codex (OpenAI) devolvió una respuesta vacía. "
+        "Inténtalo nuevamente.",
         "confirmation_expired": "La aprobación caducó. Envía de nuevo tu solicitud para revisarla.",
         "confirmation_consumption_failed": (
             "No pude validar la aprobación. Envía de nuevo tu solicitud para revisarla."

@@ -96,7 +96,9 @@ class SettingsIpcService:
         }
     )
 
-    def __init__(self, settings: Settings, host: McpHostManager, keychain: MacOSKeychain) -> None:
+    def __init__(
+        self, settings: Settings, host: McpHostManager, keychain: MacOSKeychain | None,
+    ) -> None:
         self.settings = settings
         self.host = host
         self.keychain = keychain
@@ -146,7 +148,10 @@ class SettingsIpcService:
         except (OSError, ValueError):
             preferences, valid = default_model_preferences(), False
         try:
-            configured = await asyncio.to_thread(self.keychain.is_configured)
+            configured = (
+                await asyncio.to_thread(self.keychain.is_configured)
+                if self.keychain is not None else False
+            )
             credential = "configured" if configured else "missing"
         except Exception as error:
             record_boundary_error(error)
@@ -214,6 +219,10 @@ class SettingsIpcService:
             method, payload = request.method, request.payload
             if method not in self.METHODS:
                 return IpcHandlerResult(ok=False, error_code="method_not_found")
+            if self.keychain is None and method in {
+                "settings.models.save", "settings.models.test", "settings.credential.set",
+            }:
+                return IpcHandlerResult(ok=False, error_code="inference_provider_changed")
             if (
                 self.task is not None
                 and not self.task.done()

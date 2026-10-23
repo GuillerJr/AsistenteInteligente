@@ -91,16 +91,16 @@ struct LocalVoiceTurnFeedbackTests {
             ),
             "swarm_execution_timeout": "La respuesta tardó demasiado. Inténtalo otra vez.",
             "brain_unavailable": (
-                "El servicio de inteligencia no está disponible. Revisa la configuración de NVIDIA."
+                "El servicio de inteligencia no está disponible. Revisa la conexión con Codex."
             ),
             "remote_provider_unavailable": (
-                "NVIDIA no pudo responder. Inténtalo de nuevo."
+                "Codex no pudo responder. Inténtalo de nuevo."
             ),
             "remote_rate_limited": (
-                "NVIDIA limitó temporalmente las consultas. Espera unos segundos y vuelve a intentarlo."
+                "El servicio de Codex limitó temporalmente las consultas. Espera unos segundos y vuelve a intentarlo."
             ),
             "remote_authentication_failed": (
-                "NVIDIA rechazó la credencial. Revisa la conexión en Configuración."
+                "Codex requiere que revises la sesión en Configuración."
             ),
             "job_stream_invalid": "La respuesta llegó incompleta. Inténtalo otra vez.",
             "unexpected_private_error_42": "No pude completar la solicitud.",
@@ -131,15 +131,15 @@ struct LocalVoiceTurnFeedbackTests {
         )
         #expect(
             LocalVoiceTurnFeedback.shortJobFailureTitle(for: "remote_provider_unavailable")
-                == "NVIDIA no disponible"
+                == "Codex no disponible"
         )
         #expect(
             LocalVoiceTurnFeedback.shortJobFailureTitle(for: "remote_rate_limited")
-                == "Límite temporal de NVIDIA"
+                == "Límite temporal de Codex"
         )
         #expect(
             LocalVoiceTurnFeedback.shortJobFailureTitle(for: "remote_authentication_failed")
-                == "Credencial de NVIDIA no válida"
+                == "Sesión de Codex no válida"
         )
         #expect(
             LocalVoiceTurnFeedback.shortJobFailureTitle(for: "private_provider_exception")

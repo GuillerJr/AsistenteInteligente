@@ -60,7 +60,7 @@ struct JarvisBrowserSetupView: View {
                     .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Text(String(localized: "El análisis del contenido con NVIDIA se aprobará al iniciar cada tarea. Las pantallas de credenciales permanecen protegidas.", bundle: .module))
+            Text(String(localized: "El análisis del contenido con Codex (OpenAI) se aprobará al iniciar cada tarea. Las pantallas de credenciales permanecen protegidas.", bundle: .module))
                 .font(.system(size: 11)).foregroundStyle(JarvisTheme.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             HStack {

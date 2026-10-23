@@ -2,6 +2,9 @@
 
 Fecha: 2026-10-21. Estado: aceptado por el encargo de continuar `V1_PENDIENTES.md`.
 
+La política de inferencia queda sustituida por [ADR-0235](ADR-0235-configured-inference-and-codex-chatgpt.md)
+por elección expresa del dueño el 23-10-2026. Las demás decisiones se conservan.
+
 ## Contexto
 
 El manifiesto de distribución prometía conversación sin proveedores y un cerebro híbrido,

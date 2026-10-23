@@ -192,6 +192,7 @@ class VoiceQualificationGate:
         capabilities_ready = (
             readiness.daemon == "online"
             and readiness.security == "intact"
+            and readiness.voice_output == "ready"
             and readiness.microphone == "authorized"
             and readiness.speech_recognition == "authorized"
             and readiness.wake_word == "ready"

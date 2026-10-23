@@ -5,6 +5,7 @@ import logging
 import math
 from collections.abc import Callable
 from datetime import datetime
+from typing import Literal
 from uuid import UUID, uuid4
 
 from aegis_core.build_info import runtime_build_revision
@@ -54,6 +55,7 @@ class JobLifecycleCoordinator:
         clock: Callable[[], datetime],
         monotonic_clock: Callable[[], float],
         execution_timeout_seconds: float = 120.0,
+        inference_provider: Literal["codex"] | None = None,
     ) -> None:
         self._registry = registry
         self._admission = admission
@@ -61,6 +63,7 @@ class JobLifecycleCoordinator:
         self._clock = clock
         self._monotonic = monotonic_clock
         self._execution_budget_ms = max(1, math.ceil(execution_timeout_seconds * 1_000))
+        self._inference_provider = inference_provider
 
     def reserve_capacity(self) -> None:
         self._registry.reserve_capacity()
@@ -84,6 +87,7 @@ class JobLifecycleCoordinator:
             request_id=prepared.request.request_id,
             authorization_request=prepared.authorization_request,
             request_text=prepared.request.text,
+            inference_provider=self._inference_provider,
             conversation_id=prepared.conversation_id,
             status=JobStatus.QUEUED,
             created_at=now,

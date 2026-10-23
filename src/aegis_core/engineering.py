@@ -79,6 +79,7 @@ class EngineeringResearchPolicy(StrEnum):
 
 
 class EngineeringInferencePolicy(StrEnum):
+    CONFIGURED = "configured"
     NVIDIA_ONLY = "nvidia_only"
     HYBRID = "hybrid"
     LOCAL_ONLY = "local_only"
@@ -148,7 +149,7 @@ class EngineeringSubmitPayload(BaseModel):
     workspace_path: str = Field(min_length=1, max_length=4_096)
     domain: EngineeringDomain = EngineeringDomain.AUTO
     research_policy: EngineeringResearchPolicy = EngineeringResearchPolicy.OFFLINE
-    inference_policy: EngineeringInferencePolicy = EngineeringInferencePolicy.NVIDIA_ONLY
+    inference_policy: EngineeringInferencePolicy = EngineeringInferencePolicy.CONFIGURED
     conversation_id: UUID | None = None
     persist_conversation: bool = True
 
@@ -222,14 +223,14 @@ class EngineeringIpcService:
                         "available_domains": [domain.value for domain in EngineeringDomain],
                         "research_policies": [policy.value for policy in EngineeringResearchPolicy],
                         "inference_policies": [
-                            EngineeringInferencePolicy.NVIDIA_ONLY.value
+                            EngineeringInferencePolicy.CONFIGURED.value
                         ],
                     },
                 )
             if request.method != self.SUBMIT_METHOD:
                 return IpcHandlerResult(ok=False, error_code="method_not_found")
             payload = EngineeringSubmitPayload.model_validate(request.payload)
-            if payload.inference_policy is not EngineeringInferencePolicy.NVIDIA_ONLY:
+            if payload.inference_policy is not EngineeringInferencePolicy.CONFIGURED:
                 return IpcHandlerResult(ok=False, error_code="inference_policy_unavailable")
             signed_peer = ipc_peer_signed.get()
             if (
@@ -291,6 +292,12 @@ def engineering_uses_nvidia(request: UserRequest) -> bool:
     return is_engineering_request(request) and request.metadata.get(
         ENGINEERING_INFERENCE_METADATA
     ) == EngineeringInferencePolicy.NVIDIA_ONLY.value
+
+
+def engineering_uses_configured_provider(request: UserRequest) -> bool:
+    return is_engineering_request(request) and request.metadata.get(
+        ENGINEERING_INFERENCE_METADATA
+    ) == EngineeringInferencePolicy.CONFIGURED.value
 
 
 def engineering_domain(request: UserRequest) -> EngineeringDomain | None:

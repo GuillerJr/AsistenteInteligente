@@ -170,7 +170,8 @@ extension MenuBarModel {
                     computerControl: computerControlReadinessValue,
                     wakeWord: wakeWordCapability.rawValue,
                     wakeWordEnabled: wakeWordOptedIn,
-                    speakerIdentity: speakerIdentityCapability.rawValue
+                    speakerIdentity: speakerIdentityCapability.rawValue,
+                    voiceOutput: voiceOutputState.rawValue
                 )
             )
         } catch {

@@ -68,10 +68,10 @@ struct JarvisExtensionReviewView: View {
             toolList(skill.allowed_tools)
             digest(details.content_sha256)
             if skill.builtin_public {
-                Text(String(localized: "Procedimiento público integrado. Se utiliza con NVIDIA cuando la skill está activa.", bundle: .module))
+                Text(String(localized: "Procedimiento público integrado. Se utiliza con el proveedor de IA seleccionado cuando la skill está activa.", bundle: .module))
                     .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
             } else {
-                Text(String(localized: "Autorizar permite enviar estas instrucciones y recursos a la API de NVIDIA cuando Jarvis seleccione la skill. La autorización corresponde a esta versión y deberá repetirse si cambia.", bundle: .module))
+                Text(String(localized: "Autorizar permite enviar estas instrucciones y recursos a Codex (OpenAI) cuando Jarvis seleccione la skill. La autorización corresponde a esta versión y deberá repetirse si cambia.", bundle: .module))
                     .font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
                 if !skill.sharingAuthorized {
                     Toggle(String(localized: "He revisado el contenido completo", bundle: .module), isOn: $reviewed)
@@ -92,11 +92,11 @@ struct JarvisExtensionReviewView: View {
         switch item.content {
         case .skill(let skill, let details):
             if !skill.builtin_public {
-                Button(skill.sharingAuthorized ? String(localized: "Revocar NVIDIA", bundle: .module) : String(localized: "Autorizar en NVIDIA", bundle: .module)) {
+                Button(skill.sharingAuthorized ? String(localized: "Revocar acceso remoto", bundle: .module) : String(localized: "Autorizar envío a Codex", bundle: .module)) {
                     mutate("extensions.skill.remote", payload: [
                         "skill_id": skill.id, "content_sha256": details.content_sha256,
                         "approved": !skill.sharingAuthorized, "confirm": true,
-                    ], success: skill.sharingAuthorized ? String(localized: "Autorización de NVIDIA revocada.", bundle: .module) : String(localized: "Contenido de la skill autorizado para NVIDIA.", bundle: .module))
+                    ], success: skill.sharingAuthorized ? String(localized: "Autorización de envío a Codex revocada.", bundle: .module) : String(localized: "Contenido de la skill autorizado para Codex (OpenAI).", bundle: .module))
                 }
                 .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: !skill.sharingAuthorized))
                 .disabled(blocked || skill.loaded == false || (!skill.sharingAuthorized && !reviewed))
@@ -109,7 +109,7 @@ struct JarvisExtensionReviewView: View {
                     "choices": ["role": role, "trigger_phrases": splitPhrases(phrases),
                                 "trigger_terms": splitTerms(terms), "allowed_tools": tools.sorted(),
                                 "starter_tools": starters, "reviewed_resources": resourcePaths.sorted()],
-                ], success: String(localized: "Skill importada desactivada. Revisa su autorización de NVIDIA y actívala cuando corresponda.", bundle: .module))
+                ], success: String(localized: "Skill importada desactivada. Revisa su autorización de envío a Codex y actívala cuando corresponda.", bundle: .module))
             }
             .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: true))
             .disabled(blocked || !reviewed || !validImport)
@@ -131,7 +131,7 @@ struct JarvisExtensionReviewView: View {
                 payload["enabled"] = !plugin.enabled
                 mutate("extensions.plugin.set_enabled", payload: payload,
                        success: plugin.enabled ? String(localized: "Plugin desactivado. Sus herramientas ya no están disponibles.", bundle: .module)
-                        : String(localized: "Plugin activado. Aplica los cambios y revisa la autorización de sus skills para NVIDIA.", bundle: .module))
+                        : String(localized: "Plugin activado. Aplica los cambios y revisa la autorización de sus skills para Codex (OpenAI).", bundle: .module))
             }
             .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .active), prominent: !plugin.enabled))
             .disabled(blocked || (!plugin.enabled && !reviewed))
@@ -187,7 +187,7 @@ struct JarvisExtensionReviewView: View {
             procedure(instructions: preview.instructions, resources: preview.resources)
             if let candidates = preview.resource_candidates, !candidates.isEmpty {
                 Text(String(localized: "Referencias del archivo", bundle: .module)).font(.system(size: 13, weight: .semibold))
-                Text(String(localized: "Puedes importar hasta tres archivos de texto del mismo directorio. Después revisa su contenido completo antes de autorizar la skill para NVIDIA. Los enlaces externos permanecen sin abrir.", bundle: .module))
+                Text(String(localized: "Puedes importar hasta tres archivos de texto del mismo directorio. Después revisa su contenido completo antes de autorizar la skill para Codex (OpenAI). Los enlaces externos permanecen sin abrir.", bundle: .module))
                     .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
                 ForEach(candidates) { candidate in
                     if candidate.supported {
@@ -225,7 +225,7 @@ struct JarvisExtensionReviewView: View {
                 }
             }
             digest(preview.checksum_sha256)
-            Text(String(localized: "Retirar un plugin conserva una copia privada y sus credenciales. Activarlo puede requerir reinicio; sus procedimientos necesitan autorización independiente para NVIDIA.", bundle: .module))
+            Text(String(localized: "Retirar un plugin conserva una copia privada y sus credenciales. Activarlo puede requerir reinicio; sus procedimientos necesitan autorización independiente para Codex (OpenAI).", bundle: .module))
                 .font(.system(size: 12)).foregroundStyle(JarvisTheme.inkSecondary)
         }
     }

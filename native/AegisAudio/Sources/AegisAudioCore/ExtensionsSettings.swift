@@ -48,7 +48,7 @@ public struct JarvisExtensionSkill: Decodable, Identifiable, Sendable {
         if adaptation_required == true { return "Requiere adaptación" }
         if restart_required == true { return "Pendiente de aplicar" }
         if !active { return "Desactivada" }
-        return remote_allowed ? "Disponible en NVIDIA" : "Requiere autorización para NVIDIA"
+        return remote_allowed ? "Disponible en Codex" : "Requiere autorización para Codex"
     }
 }
 

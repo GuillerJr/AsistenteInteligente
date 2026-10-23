@@ -152,6 +152,7 @@ required = {
     "security",
     "provider",
     "local_brain_available",
+    "voice_output",
     "microphone",
     "speech_recognition",
     "screen_capture_authorized",
@@ -160,7 +161,7 @@ required = {
     "wake_word_enabled",
     "speaker_identity",
 }
-if set(value) != required or value["schema_version"] != "2.0":
+if set(value) != required or value["schema_version"] != "3.0":
     print("invalid_readiness_schema")
     raise SystemExit(1)
 if (
@@ -192,13 +193,15 @@ if value["screen_capture_authorized"] is not True:
 # build. P10 la habilita justo antes del flujo físico; P7 solo exige que el
 # modelo de wake word esté instalado y listo.
 if value["provider"] != "configured":
-    failures.append("nvidia=unavailable")
+    failures.append("inference=unavailable")
+if value["voice_output"] not in {"ready", "unconfigured", "unavailable"}:
+    failures.append("voice_output=invalid")
 if failures:
     print(" ".join(failures))
     raise SystemExit(1)
 print(
     f"provider={value['provider']} local_brain={str(value['local_brain_available']).lower()} "
-    "voice=ready computer=ready wake_word=ready speaker=ready"
+    f"voice={value['voice_output']} computer=ready wake_word=ready speaker=ready"
 )
 PY
 )"; then

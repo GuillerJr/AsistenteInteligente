@@ -42,6 +42,14 @@ class Settings(BaseSettings):
     model_preferences_path: Path = (
         Path.home() / "Library/Application Support/Aegis/model_preferences.json"
     )
+    inference_preferences_path: Path = (
+        Path.home() / "Library/Application Support/Aegis/inference.json"
+    )
+    codex_executable_path: Path = Path("/opt/homebrew/bin/codex")
+    codex_state_directory: Path = Path.home() / "Library/Application Support/Aegis/Codex"
+    codex_working_directory: Path = (
+        Path.home() / "Library/Application Support/Aegis/CodexWorkspace"
+    )
     standing_grants_path: Path = (
         Path.home() / "Library/Application Support/Aegis/standing_grants.json"
     )

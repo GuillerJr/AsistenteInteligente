@@ -329,9 +329,9 @@ async def pending_decision(service):
 
 
 @pytest.mark.parametrize("code,expected", [
-    ("remote_provider_unavailable", "NVIDIA no pudo responder"),
+    ("remote_provider_unavailable", "Codex (OpenAI) no pudo responder"),
     ("remote_rate_limited", "límite de uso"),
-    ("remote_authentication_failed", "credencial"),
+    ("remote_authentication_failed", "sesión de ChatGPT"),
     ("conversation_not_found", "/nuevo"),
     ("model_context_limit", "/nuevo"),
     ("approved_tool_execution_failed", "Comprueba si hubo cambios"),

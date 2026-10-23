@@ -11,7 +11,7 @@ struct JarvisAccountsSettingsView: View {
         VStack(alignment: .leading, spacing: 18) {
         if let snapshot = store.snapshot {
             JarvisSettingsCard(title: String(localized: "Navegador", bundle: .module),
-                              detail: String(localized: "Elige cómo abrir las tareas web. El acceso y el análisis con NVIDIA se aprobarán para cada tarea.", bundle: .module)) {
+                              detail: String(localized: "Elige cómo abrir las tareas web. El acceso y el análisis con Codex (OpenAI) se aprobarán para cada tarea.", bundle: .module)) {
                 if let browser = snapshot.browser_automation {
                     Toggle(String(localized: "Usar navegador en tareas", bundle: .module), isOn: Binding(
                         get: { browser.enabled }, set: { value in

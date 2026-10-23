@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -659,108 +658,28 @@ async def test_daemon_soak_uses_safe_health_surface_while_energy_suspended(
 
 
 @pytest.mark.asyncio
-async def test_tool_probe_validates_function_call_without_execution(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    monkeypatch.setattr(cli, "MacOSKeychain", FakeKeychain)
-    monkeypatch.setattr(cli, "NvidiaNimClient", FakeToolClient)
-
-    status = await cli.probe_nvidia_tools()
-
-    assert status == 0
+@pytest.mark.parametrize("probe", [
+    "probe_nvidia", "probe_nvidia_embedding", "probe_nvidia_tts", "probe_nvidia_vision",
+    "probe_nvidia_tools", "probe_nvidia_swarm",
+])
+async def test_retired_nvidia_probes_do_not_load_settings_or_credentials(
+    monkeypatch, capsys, probe,
+):
+    monkeypatch.setattr(cli, "Settings", lambda: pytest.fail("retired provider initialized"))
+    assert await getattr(cli, probe)() == 2
     assert capsys.readouterr().out == (
-        "status=ok model=fake/code-security tool=terminal_run_template "
-        "execution=none credential=keychain\n"
-    )
-    extra_body = FakeToolClient.observed["extra_body"]
-    assert extra_body["tool_choice"] == "required"
-    schemas = extra_body["tools"]
-    assert len(schemas) == 1
-    assert schemas[0]["function"]["name"] == "terminal_run_template"
-
-
-@pytest.mark.asyncio
-async def test_tts_probe_reports_only_bounded_metadata(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    monkeypatch.setattr(cli, "MacOSKeychain", FakeKeychain)
-    monkeypatch.setattr(cli, "NvidiaNimClient", FakeToolClient)
-    timestamps = iter((10.0, 10.125))
-    monkeypatch.setattr(cli.time, "perf_counter", lambda: next(timestamps))
-
-    status = await cli.probe_nvidia_tts()
-
-    assert status == 0
-    assert FakeToolClient.observed == {"text": "Sistemas en línea."}
-    assert capsys.readouterr().out == (
-        "status=ok voice=Magpie-Multilingual.EN-US.Ray.Neutral audio_bytes=44 "
-        "chunks=2 first_audio_ms=125 mode=stream credential=keychain playback=none\n"
+        "status=error reason=inference_provider_changed provider=codex\n"
     )
 
 
-@pytest.mark.asyncio
-async def test_tool_probe_rejects_unexpected_provider_response(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    monkeypatch.setattr(cli, "MacOSKeychain", FakeKeychain)
-    monkeypatch.setattr(cli, "NvidiaNimClient", FakeToolClient)
-    monkeypatch.setattr(
-        FakeToolClient,
-        "result",
-        FakeToolClient.result.model_copy(update={"tool_calls": ()}),
-    )
-
-    status = await cli.probe_nvidia_tools()
-
-    assert status == 1
-    assert capsys.readouterr().out == "status=error reason=invalid_tool_call_response\n"
-
-
-@pytest.mark.asyncio
-async def test_vision_probe_uses_only_inline_synthetic_image(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    monkeypatch.setattr(cli, "MacOSKeychain", FakeKeychain)
-    monkeypatch.setattr(cli, "NvidiaNimClient", FakeToolClient)
-    monkeypatch.setattr(
-        FakeToolClient,
-        "result",
-        AgentResult(
-            role=AgentRole.VISION,
-            model_id="fake/vision",
-            content="OK",
-        ),
-    )
-
-    status = await cli.probe_nvidia_vision()
-
-    assert status == 0
-    output = capsys.readouterr().out
-    assert output == "status=ok model=fake/vision input=synthetic credential=keychain\n"
-    content = FakeToolClient.observed["messages"][0]["content"]
-    assert content[1]["type"] == "image_url"
-    data_uri = content[1]["image_url"]["url"]
-    assert data_uri.startswith("data:image/png;base64,")
-    assert base64.b64decode(data_uri.partition(",")[2])[25] == 2
-    assert data_uri not in output
-
-
-@pytest.mark.asyncio
-async def test_vision_probe_rejects_empty_provider_response(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    monkeypatch.setattr(cli, "MacOSKeychain", FakeKeychain)
-    monkeypatch.setattr(cli, "NvidiaNimClient", FakeToolClient)
-    monkeypatch.setattr(
-        FakeToolClient,
-        "result",
-        AgentResult(role=AgentRole.VISION, model_id="fake/vision", content=""),
-    )
-
-    status = await cli.probe_nvidia_vision()
-
-    assert status == 1
-    assert capsys.readouterr().out == "status=error reason=invalid_vision_response\n"
+def test_retired_nvidia_key_import_never_reads_or_removes_the_input(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "Settings", lambda: pytest.fail("retired credential initialized"))
+    source = tmp_path / "synthetic-secret.txt"
+    source.write_text("synthetic secret")
+    assert cli.import_nvidia_key_file(source) == 2
+    assert cli.import_nvidia_key() == 2
+    assert source.read_text() == "synthetic secret"
+    assert capsys.readouterr().out.count("inference_provider_changed") == 2
 
 
 def test_daemon_recovery_recognizes_smappservice_without_legacy_launchagent(monkeypatch):

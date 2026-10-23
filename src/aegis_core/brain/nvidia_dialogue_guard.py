@@ -23,6 +23,7 @@ from pydantic import (
 from aegis_core.contracts import AgentResult, AgentRole
 from aegis_core.privacy import redact_secrets_for_remote, sanitize_remote_reference
 from aegis_core.providers.base import IncompleteModelResponseError, require_complete_response
+from aegis_core.providers.errors import ProviderError
 from aegis_core.providers.inference_metrics import measure_stage
 from aegis_core.providers.nvidia import NvidiaNimError
 from aegis_core.request_intent import folded_request, mask_quoted_text
@@ -751,7 +752,7 @@ async def review_dialogue(
                         else:
                             result = await provider.complete(role=AgentRole.SYNTHESIZER, **kwargs)
                         break
-                    except NvidiaNimError as error:
+                    except (NvidiaNimError, ProviderError) as error:
                         if (not transport_retries_left or error.terminal
                                 or error.status_code not in {None, 202, 408, 500, 502, 503, 504}):
                             raise

@@ -42,12 +42,13 @@ def write_private_json(path: Path, payload: dict[str, Any]) -> None:
 
 def readiness_payload() -> dict[str, Any]:
     return {
-        "schema_version": "2.0",
+        "schema_version": "3.0",
         "build_revision": BUILD_REVISION,
         "daemon": "online",
         "security": "intact",
         "provider": "configured",
         "local_brain_available": True,
+        "voice_output": "ready",
         "microphone": "authorized",
         "speech_recognition": "authorized",
         "screen_capture_authorized": True,
@@ -235,3 +236,29 @@ def test_calibration_rejects_overlapping_speaker_classes() -> None:
 
     with pytest.raises(ValueError, match="overlap"):
         SpeakerCalibrationReport.model_validate(payload)
+
+
+@pytest.mark.asyncio
+async def test_p10_blocks_unconfigured_audio_despite_existing_voice_evidence(
+    tmp_path: Path,
+) -> None:
+    readiness = tmp_path / "runtime-readiness.json"
+    evidence = tmp_path / "runtime-evidence.json"
+    calibration = tmp_path / "speaker-calibration.json"
+    snapshot = readiness_payload()
+    snapshot["voice_output"] = "unconfigured"
+    write_private_json(readiness, snapshot)
+    write_private_json(evidence, evidence_payload())
+    write_private_json(calibration, calibration_payload())
+
+    report = await VoiceQualificationGate(
+        FakeVoiceClient(live_payloads()),  # type: ignore[arg-type]
+        readiness_path=readiness,
+        evidence_path=evidence,
+        calibration_path=calibration,
+    ).run()
+    runtime = next(check for check in report.checks if check.check_id == "voice.runtime")
+
+    assert report.status is QualificationStatus.BLOCKED
+    assert runtime.reason == "voice_capability_unavailable"
+    assert not report.gate_passed

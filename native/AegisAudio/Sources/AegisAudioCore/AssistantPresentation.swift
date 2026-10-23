@@ -90,7 +90,7 @@ public struct AssistantPresentation: Equatable, Sendable {
                              symbol: "brain", tone: .warning)
             case .missing:
                 return .init(kind: .brainMissing, title: "Inferencia sin configurar", compactTitle: "Configura el cerebro",
-                             detail: "Configura NVIDIA o habilita una ruta local compatible en los ajustes de Jarvis.",
+                             detail: "Conecta tu cuenta de ChatGPT en los ajustes de modelos de Jarvis.",
                              symbol: "brain", tone: .warning)
             case .unavailable:
                 return .init(kind: .brainUnavailable, title: "Inferencia no verificable", compactTitle: "Cerebro no verificable",
@@ -164,7 +164,7 @@ public struct AssistantPresentation: Equatable, Sendable {
 
     private static func failureDetail(for code: String?) -> String {
         switch code {
-        case "speech_output_unavailable", "speech_output_interrupted", "speech_text_invalid":
+        case "speech_provider_unconfigured", "speech_output_unavailable", "speech_output_interrupted", "speech_text_invalid":
             "Consulta la respuesta en el HUD. Jarvis no cambia a otra voz ni vuelve a ejecutar la acción."
         case "speech_replay_unavailable":
             "No hay audio local completo para repetir. No se envió el texto a otro proveedor."

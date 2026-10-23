@@ -14,6 +14,7 @@ extension MenuBarModel {
         daemonState == .online
             && securityState == .intact
             && hybridBrainReady
+            && voiceOutputState == .ready
     }
 
     private var wakeWordMayResume: Bool {

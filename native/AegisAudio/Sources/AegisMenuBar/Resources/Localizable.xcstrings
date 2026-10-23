@@ -589,6 +589,18 @@
       },
       "generatesSymbol": false
     },
+    "Abrir inicio de sesión": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir inicio de sesión"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Abrir navegador": {
       "extractionState": "manual",
       "localizations": {
@@ -937,6 +949,18 @@
       },
       "generatesSymbol": false
     },
+    "Actualiza el estado para comprobar la conexión": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Actualiza el estado para comprobar la conexión"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Actualiza el servicio para cargar las preferencias del navegador.": {
       "extractionState": "manual",
       "localizations": {
@@ -1232,6 +1256,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Al aplicar los cambios, Jarvis iniciará esta conexión con sus %lld herramientas revisadas y los permisos de su perfil."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Al enviar, Codex (OpenAI) recibe el contenido de los adjuntos. Los documentos quedan en este chat; las imágenes se usan en este turno.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al enviar, Codex (OpenAI) recibe el contenido de los adjuntos. Los documentos quedan en este chat; las imágenes se usan en este turno."
           }
         }
       },
@@ -1729,6 +1765,18 @@
       },
       "generatesSymbol": false
     },
+    "Autorización de envío a Codex revocada.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autorización de envío a Codex revocada."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Autorizada; esperando resultado": {
       "extractionState": "manual",
       "localizations": {
@@ -1777,6 +1825,18 @@
       },
       "generatesSymbol": false
     },
+    "Autorizar envío a Codex": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autorizar envío a Codex"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Autorizar esta cuenta…": {
       "extractionState": "manual",
       "localizations": {
@@ -1801,6 +1861,18 @@
       },
       "generatesSymbol": false
     },
+    "Autorizar permite enviar estas instrucciones y recursos a Codex (OpenAI) cuando Jarvis seleccione la skill. La autorización corresponde a esta versión y deberá repetirse si cambia.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autorizar permite enviar estas instrucciones y recursos a Codex (OpenAI) cuando Jarvis seleccione la skill. La autorización corresponde a esta versión y deberá repetirse si cambia."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Autorizar permite enviar estas instrucciones y recursos a la API de NVIDIA cuando Jarvis seleccione la skill. La autorización corresponde a esta versión y deberá repetirse si cambia.": {
       "extractionState": "manual",
       "localizations": {
@@ -1808,6 +1880,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Autorizar permite enviar estas instrucciones y recursos a la API de NVIDIA cuando Jarvis seleccione la skill. La autorización corresponde a esta versión y deberá repetirse si cambia."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Autorizarás a %@, ID %@, para enviar instrucciones y aprobar acciones. Las instrucciones, notas de voz, imágenes, documentos, contexto y resultados solicitados se procesarán con Codex (OpenAI); las respuestas se enviarán por Telegram. El acceso funcionará también con la pantalla bloqueada mientras Jarvis siga activo.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autorizarás a %@, ID %@, para enviar instrucciones y aprobar acciones. Las instrucciones, notas de voz, imágenes, documentos, contexto y resultados solicitados se procesarán con Codex (OpenAI); las respuestas se enviarán por Telegram. El acceso funcionará también con la pantalla bloqueada mientras Jarvis siga activo."
           }
         }
       },
@@ -2593,6 +2677,18 @@
       },
       "generatesSymbol": false
     },
+    "Cancelar operación": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelar operación"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Cargando conversación": {
       "extractionState": "manual",
       "localizations": {
@@ -2833,6 +2929,18 @@
       },
       "generatesSymbol": false
     },
+    "Chat": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chat"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Chat con Jarvis": {
       "extractionState": "manual",
       "localizations": {
@@ -2900,6 +3008,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Chat temporal: no se guarda en el historial ni usa ni crea recuerdos"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "ChatGPT conectado": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ChatGPT conectado"
           }
         }
       },
@@ -3061,6 +3181,54 @@
       },
       "generatesSymbol": false
     },
+    "Codex no está disponible en este Mac": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex no está disponible en este Mac"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Codex requiere que revises la sesión. Abre Configuración › Modelos de IA y pulsa Reintentar después de conectar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex requiere que revises la sesión. Abre Configuración › Modelos de IA y pulsa Reintentar después de conectar."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Codex respondió a la prueba de conexión.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex respondió a la prueba de conexión."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Codex tardó demasiado. Comprueba su estado y vuelve a intentarlo.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codex tardó demasiado. Comprueba su estado y vuelve a intentarlo."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Codex y Claude": {
       "extractionState": "manual",
       "localizations": {
@@ -3145,6 +3313,18 @@
       },
       "generatesSymbol": false
     },
+    "Completa el inicio de sesión en el navegador": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Completa el inicio de sesión en el navegador"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Completa la autorización en tu navegador": {
       "extractionState": "manual",
       "localizations": {
@@ -3176,6 +3356,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Completar la información pendiente"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Comprobando Codex…": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comprobando Codex…"
           }
         }
       },
@@ -3253,6 +3445,18 @@
       },
       "generatesSymbol": false
     },
+    "Conecta con ChatGPT": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conecta con ChatGPT"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Conecta con NVIDIA": {
       "extractionState": "manual",
       "localizations": {
@@ -3260,6 +3464,42 @@
           "stringUnit": {
             "state": "translated",
             "value": "Conecta con NVIDIA"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Conecta tu cuenta de ChatGPT en Ajustes › Modelos de IA antes de enviar el mensaje de ejemplo.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conecta tu cuenta de ChatGPT en Ajustes › Modelos de IA antes de enviar el mensaje de ejemplo."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Conecta tu cuenta de ChatGPT mediante Codex. El inicio de sesión se completa en el navegador; Jarvis no te pide contraseñas ni claves de API.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conecta tu cuenta de ChatGPT mediante Codex. El inicio de sesión se completa en el navegador; Jarvis no te pide contraseñas ni claves de API."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Conecta tu cuenta de ChatGPT y elige el modelo de Codex para Jarvis.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conecta tu cuenta de ChatGPT y elige el modelo de Codex para Jarvis."
           }
         }
       },
@@ -3728,6 +3968,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Contactos disponibles."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Contenido de la skill autorizado para Codex (OpenAI).": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contenido de la skill autorizado para Codex (OpenAI)."
           }
         }
       },
@@ -4501,6 +4753,30 @@
       },
       "generatesSymbol": false
     },
+    "Desconectar": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desconectar"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Desconectar cuenta…": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desconectar cuenta…"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Desconectar y revocar": {
       "extractionState": "manual",
       "localizations": {
@@ -5017,6 +5293,18 @@
       },
       "generatesSymbol": false
     },
+    "El análisis del contenido con Codex (OpenAI) se aprobará al iniciar cada tarea. Las pantallas de credenciales permanecen protegidas.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El análisis del contenido con Codex (OpenAI) se aprobará al iniciar cada tarea. Las pantallas de credenciales permanecen protegidas."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "El análisis del contenido con NVIDIA se aprobará al iniciar cada tarea. Las pantallas de credenciales permanecen protegidas.": {
       "extractionState": "manual",
       "localizations": {
@@ -5096,6 +5384,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "El contenido cambió desde la revisión. Actualiza y revisa la versión actual."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "El contenido de tus solicitudes y las capturas que autorices se procesará con Codex (OpenAI). Jarvis mantiene sus propias aprobaciones para controlar apps y ejecutar herramientas.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El contenido de tus solicitudes y las capturas que autorices se procesará con Codex (OpenAI). Jarvis mantiene sus propias aprobaciones para controlar apps y ejecutar herramientas."
           }
         }
       },
@@ -5233,6 +5533,30 @@
       },
       "generatesSymbol": false
     },
+    "El modelo guardado no está disponible o no admite imágenes. Elige y guarda un modelo compatible para continuar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El modelo guardado no está disponible o no admite imágenes. Elige y guarda un modelo compatible para continuar."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "El modelo no admite las capacidades necesarias. Elige otro modelo disponible.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El modelo no admite las capacidades necesarias. Elige otro modelo disponible."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "El modelo no superó la prueba de conexión o de capacidades. Revisa su ID y la clave de NVIDIA.": {
       "extractionState": "manual",
       "localizations": {
@@ -5353,6 +5677,18 @@
       },
       "generatesSymbol": false
     },
+    "El servicio todavía no está listo. Comprueba la conexión con Codex y vuelve a intentarlo.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El servicio todavía no está listo. Comprueba la conexión con Codex y vuelve a intentarlo."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "El servicio todavía no está listo. Comprueba la conexión y la clave de NVIDIA y vuelve a intentarlo.": {
       "extractionState": "manual",
       "localizations": {
@@ -5456,6 +5792,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Elegir proyecto"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Elige cómo abrir las tareas web. El acceso y el análisis con Codex (OpenAI) se aprobarán para cada tarea.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elige cómo abrir las tareas web. El acceso y el análisis con Codex (OpenAI) se aprobarán para cada tarea."
           }
         }
       },
@@ -6145,6 +6493,18 @@
       },
       "generatesSymbol": false
     },
+    "Esperando a Codex…": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esperando a Codex…"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Esperando a que pulses Iniciar en Telegram…": {
       "extractionState": "manual",
       "localizations": {
@@ -6757,6 +7117,18 @@
       },
       "generatesSymbol": false
     },
+    "Guardar modelo": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardar modelo"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Guardar modelos": {
       "extractionState": "manual",
       "localizations": {
@@ -7345,6 +7717,30 @@
       },
       "generatesSymbol": false
     },
+    "Inicia sesión con ChatGPT": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inicia sesión con ChatGPT"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Inicia sesión con ChatGPT para continuar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inicia sesión con ChatGPT para continuar."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Iniciando escucha": {
       "extractionState": "manual",
       "localizations": {
@@ -7357,6 +7753,18 @@
       },
       "generatesSymbol": false
     },
+    "Iniciar sesión con ChatGPT": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciar sesión con ChatGPT"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Inicio y accesos": {
       "extractionState": "manual",
       "localizations": {
@@ -7364,6 +7772,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Inicio y accesos"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Instala Codex y vuelve a actualizar el estado. La app necesita su servicio local para usar tu cuenta de ChatGPT.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Instala Codex y vuelve a actualizar el estado. La app necesita su servicio local para usar tu cuenta de ChatGPT."
           }
         }
       },
@@ -7789,6 +8209,18 @@
       },
       "generatesSymbol": false
     },
+    "Jarvis enviará capturas acotadas a Codex (OpenAI) y controlará solo la ": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jarvis enviará capturas acotadas a Codex (OpenAI) y controlará solo la "
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Jarvis enviará capturas acotadas al modelo NVIDIA y controlará solo la ": {
       "extractionState": "manual",
       "localizations": {
@@ -7945,6 +8377,18 @@
       },
       "generatesSymbol": false
     },
+    "Jarvis podrá seleccionarla en tareas compatibles. Revisa y autoriza por separado sus instrucciones para Codex (OpenAI).": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jarvis podrá seleccionarla en tareas compatibles. Revisa y autoriza por separado sus instrucciones para Codex (OpenAI)."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Jarvis podrá seleccionarla en tareas compatibles. Revisa y autoriza por separado sus instrucciones para NVIDIA.": {
       "extractionState": "manual",
       "localizations": {
@@ -7964,6 +8408,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Jarvis propondrá un plan sin actuar"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Jarvis requiere un modelo que admita texto e imágenes. La lista muestra los modelos compatibles disponibles en tu conexión de Codex.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jarvis requiere un modelo que admita texto e imágenes. La lista muestra los modelos compatibles disponibles en tu conexión de Codex."
           }
         }
       },
@@ -8024,6 +8480,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Jarvis usa modelos de NVIDIA y necesita conexión a internet. Tú eliges los permisos y apruebas las acciones que cambian algo."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Jarvis usa tu cuenta de ChatGPT mediante Codex y necesita conexión a internet. Tú eliges los permisos y apruebas las acciones que cambian algo.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jarvis usa tu cuenta de ChatGPT mediante Codex y necesita conexión a internet. Tú eliges los permisos y apruebas las acciones que cambian algo."
           }
         }
       },
@@ -8432,6 +8900,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "La presión térmica es crítica. Pausa las cargas intensivas."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "La prueba envía solo un mensaje sintético a Codex, sin conversaciones ni archivos personales.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La prueba envía solo un mensaje sintético a Codex, sin conversaciones ni archivos personales."
           }
         }
       },
@@ -8941,6 +9421,30 @@
       },
       "generatesSymbol": false
     },
+    "Modelo": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modelo"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Modelo de Codex": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modelo de Codex"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Modelo disponible": {
       "extractionState": "manual",
       "localizations": {
@@ -8965,6 +9469,18 @@
       },
       "generatesSymbol": false
     },
+    "Modelo guardado. Se usará en la próxima solicitud.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modelo guardado. Se usará en la próxima solicitud."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Modelo inválido": {
       "extractionState": "manual",
       "localizations": {
@@ -8984,6 +9500,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Modelo local activo"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Modelo para Jarvis": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modelo para Jarvis"
           }
         }
       },
@@ -9553,6 +10081,18 @@
       },
       "generatesSymbol": false
     },
+    "No hay modelos compatibles con imágenes. Actualiza el estado para volver a consultarlos.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hay modelos compatibles con imágenes. Actualiza el estado para volver a consultarlos."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "No hay un temporizador activo.": {
       "extractionState": "manual",
       "localizations": {
@@ -9740,6 +10280,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "No pude comunicarme con el servicio local."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "No pude conectar con Codex. Comprueba tu conexión a Internet y vuelve a intentarlo.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No pude conectar con Codex. Comprueba tu conexión a Internet y vuelve a intentarlo."
           }
         }
       },
@@ -10213,6 +10765,18 @@
       },
       "generatesSymbol": false
     },
+    "No se pudo completar la conexión con Codex. Actualiza el estado y vuelve a intentarlo.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo completar la conexión con Codex. Actualiza el estado y vuelve a intentarlo."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "No se pudo comunicar con el servicio. Actualiza el estado antes de volver a intentarlo.": {
       "extractionState": "manual",
       "localizations": {
@@ -10436,6 +11000,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "No se pudo verificar el canal de actualizaciones. Comprueba la conexión e inténtalo de nuevo."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "No se pudo verificar la conexión con Codex": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo verificar la conexión con Codex"
           }
         }
       },
@@ -11341,6 +11917,18 @@
       },
       "generatesSymbol": false
     },
+    "Plugin activado. Aplica los cambios y revisa la autorización de sus skills para Codex (OpenAI).": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plugin activado. Aplica los cambios y revisa la autorización de sus skills para Codex (OpenAI)."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Plugin activado. Aplica los cambios y revisa la autorización de sus skills para NVIDIA.": {
       "extractionState": "manual",
       "localizations": {
@@ -11809,6 +12397,18 @@
       },
       "generatesSymbol": false
     },
+    "Procedimiento público integrado. Se utiliza con el proveedor de IA seleccionado cuando la skill está activa.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Procedimiento público integrado. Se utiliza con el proveedor de IA seleccionado cuando la skill está activa."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Procedimientos y conexiones": {
       "extractionState": "manual",
       "localizations": {
@@ -11852,6 +12452,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Proveedor NVIDIA"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Proveedor de IA": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Proveedor de IA"
           }
         }
       },
@@ -11989,6 +12601,18 @@
       },
       "generatesSymbol": false
     },
+    "Puedes importar hasta tres archivos de texto del mismo directorio. Después revisa su contenido completo antes de autorizar la skill para Codex (OpenAI). Los enlaces externos permanecen sin abrir.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puedes importar hasta tres archivos de texto del mismo directorio. Después revisa su contenido completo antes de autorizar la skill para Codex (OpenAI). Los enlaces externos permanecen sin abrir."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Puedes importar hasta tres archivos de texto del mismo directorio. Después revisa su contenido completo antes de autorizar la skill para NVIDIA. Los enlaces externos permanecen sin abrir.": {
       "extractionState": "manual",
       "localizations": {
@@ -12032,6 +12656,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Puedes saltarte cualquier paso y volver desde Ajustes › General › Abrir bienvenida."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Puedes seguir conversando por escrito": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puedes seguir conversando por escrito"
           }
         }
       },
@@ -12925,6 +13561,18 @@
       },
       "generatesSymbol": false
     },
+    "Retirar un plugin conserva una copia privada y sus credenciales. Activarlo puede requerir reinicio; sus procedimientos necesitan autorización independiente para Codex (OpenAI).": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retirar un plugin conserva una copia privada y sus credenciales. Activarlo puede requerir reinicio; sus procedimientos necesitan autorización independiente para Codex (OpenAI)."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Retirar un plugin conserva una copia privada y sus credenciales. Activarlo puede requerir reinicio; sus procedimientos necesitan autorización independiente para NVIDIA.": {
       "extractionState": "manual",
       "localizations": {
@@ -13004,6 +13652,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Revisa la acción antes de autorizarla. La aprobación vale una sola vez."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Revisa la conexión en Modelos de IA": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revisa la conexión en Modelos de IA"
           }
         }
       },
@@ -13225,6 +13885,18 @@
       },
       "generatesSymbol": false
     },
+    "Revocar acceso remoto": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revocar acceso remoto"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Revocar el permiso permanente de %@": {
       "extractionState": "manual",
       "localizations": {
@@ -13244,6 +13916,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "SHA256 · %@"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Salida de voz": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salida de voz"
           }
         }
       },
@@ -13376,6 +14060,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Se cancelará la tarea de Telegram y se retirará el acceso de tu cuenta. El token permanece en el llavero y tus conversaciones en el historial."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Se cerrará la sesión de Codex usada por Jarvis. La sesión de la app Codex seguirá abierta. Jarvis necesitará que vuelvas a iniciar sesión para responder.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se cerrará la sesión de Codex usada por Jarvis. La sesión de la app Codex seguirá abierta. Jarvis necesitará que vuelvas a iniciar sesión para responder."
           }
         }
       },
@@ -14173,6 +14869,18 @@
       },
       "generatesSymbol": false
     },
+    "Skill importada desactivada. Revisa su autorización de envío a Codex y actívala cuando corresponda.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skill importada desactivada. Revisa su autorización de envío a Codex y actívala cuando corresponda."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Skill retirada y archivada.": {
       "extractionState": "manual",
       "localizations": {
@@ -14588,6 +15296,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Termina los cambios de configuración y aplícalos desde Ajustes antes de enviar el ejemplo."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Termina o cancela la operación pendiente antes de continuar.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Termina o cancela la operación pendiente antes de continuar."
           }
         }
       },
@@ -15740,6 +16460,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "¿Conectar este bot a Jarvis?"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "¿Desconectar ChatGPT de Codex?": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Desconectar ChatGPT de Codex?"
           }
         }
       },

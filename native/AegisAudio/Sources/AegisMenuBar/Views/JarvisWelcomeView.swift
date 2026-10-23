@@ -9,7 +9,6 @@ struct JarvisWelcomeView: View {
     let restart: @MainActor () async throws -> Void
     var interactive = true
     @State private var step = 0
-    @State private var secret = ""
     @State private var computerUse = false
     @State private var loginEnabled = JarvisLoginItemController.shared.status == .enabled
     @State private var starting = false
@@ -19,7 +18,7 @@ struct JarvisWelcomeView: View {
     @Environment(\.openWindow) private var openWindow
 
     private var title: String {
-        [String(localized: "Bienvenido a Jarvis", bundle: .module), String(localized: "Conecta con NVIDIA", bundle: .module), String(localized: "Elige los permisos", bundle: .module),
+        [String(localized: "Bienvenido a Jarvis", bundle: .module), String(localized: "Conecta con ChatGPT", bundle: .module), String(localized: "Elige los permisos", bundle: .module),
          String(localized: "Jarvis al iniciar sesión", bundle: .module), String(localized: "Tu primera conversación", bundle: .module)][step]
     }
 
@@ -62,35 +61,20 @@ struct JarvisWelcomeView: View {
                 do { try await Task.sleep(for: .seconds(2)) } catch { return }
             }
         }
-        .onDisappear { secret = "" }
+        .onChange(of: store.inference.status?.state) { _, _ in
+            guard interactive else { return }
+            Task { await store.refresh(); await model.refreshDaemon() }
+        }
     }
 
     @ViewBuilder private var content: some View {
         switch step {
         case 0:
             Text(String(localized: "Habla o escribe para organizar tus ideas, consultar información y trabajar con tus apps.", bundle: .module))
-            Text(String(localized: "Jarvis usa modelos de NVIDIA y necesita conexión a internet. Tú eliges los permisos y apruebas las acciones que cambian algo.", bundle: .module))
+            Text(String(localized: "Jarvis usa tu cuenta de ChatGPT mediante Codex y necesita conexión a internet. Tú eliges los permisos y apruebas las acciones que cambian algo.", bundle: .module))
             Text(String(localized: "Puedes saltarte cualquier paso y volver desde Ajustes › General › Abrir bienvenida.", bundle: .module))
         case 1:
-            Text(String(localized: "Introduce tu clave. Se guarda en el llavero de macOS; Jarvis no vuelve a mostrarla.", bundle: .module))
-            Link(String(localized: "Obtener una clave de NVIDIA", bundle: .module), destination: URL(string: "https://build.nvidia.com/")!)
-            SecureField(String(localized: "Clave de NVIDIA", bundle: .module), text: $secret).textFieldStyle(.roundedBorder)
-                .accessibilityLabel(String(localized: "Clave de la API de NVIDIA", bundle: .module))
-            HStack {
-                Button(String(localized: "Guardar clave", bundle: .module)) {
-                    let value = secret.trimmingCharacters(in: .whitespacesAndNewlines)
-                    secret = ""
-                    Task { await store.perform("settings.credential.set", payload: ["secret": value],
-                                               success: String(localized: "Clave guardada en el llavero.", bundle: .module)) }
-                }.disabled(secret.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                           || store.snapshot == nil || store.busy)
-                Button(String(localized: "Probar conexión", bundle: .module)) { testConnection() }
-                    .disabled(store.snapshot?.credential != "configured" || store.busy)
-            }
-            Label(store.snapshot?.credential == "configured" ? String(localized: "Clave configurada", bundle: .module) : String(localized: "Sin clave configurada", bundle: .module),
-                  systemImage: "key")
-            Text(String(localized: "La prueba envía un texto sintético a NVIDIA, sin conversaciones ni archivos personales.", bundle: .module))
-                .font(.caption).foregroundStyle(JarvisTheme.inkSecondary)
+            JarvisCodexSettingsView(store: store.inference, interactive: interactive)
         case 2:
             Text(String(localized: "Todos son opcionales. Puedes conversar por escrito sin concederlos. macOS te pedirá confirmar cada acceso.", bundle: .module))
             permission(String(localized: "Micrófono", bundle: .module), detail: String(localized: "Escuchar cuando decidas hablar.", bundle: .module)) {
@@ -165,13 +149,6 @@ struct JarvisWelcomeView: View {
         }
     }
 
-    private func testConnection() {
-        guard let models = store.snapshot?.models,
-              let id = models.roles["conversation"]?.primary ?? models.models.first?.id else { return }
-        Task { await store.perform("settings.models.test", payload: ["model_id": id, "images": false, "tools": false],
-                                   success: String(localized: "Conexión con NVIDIA verificada.", bundle: .module)) }
-    }
-
     private func setLogin(_ enabled: Bool) {
         do {
             let status = try JarvisLoginItemController.shared.setEnabled(enabled)
@@ -187,7 +164,6 @@ struct JarvisWelcomeView: View {
     }
 
     private func finish(openChat: Bool = false) {
-        secret = ""
         completedVersion = JarvisWelcomeState.version
         dismissWindow(id: "welcome")
         if openChat { RequestedWindowFocus.open("chat") { openWindow(id: "chat") } }

@@ -7,13 +7,14 @@ private let readinessLogger = Logger(
 )
 
 public struct JarvisReadinessSnapshot: Codable, Equatable, Sendable {
-    public static let schemaVersion = "2.0"
+    public static let schemaVersion = "3.0"
 
     public let schemaVersion: String
     public let buildRevision: String
     public let daemon: String
     public let security: String
     public let provider: String
+    public let voiceOutput: String
     public let localBrainAvailable: Bool
     public let microphone: String
     public let speechRecognition: String
@@ -35,6 +36,7 @@ public struct JarvisReadinessSnapshot: Codable, Equatable, Sendable {
         wakeWord: String,
         wakeWordEnabled: Bool,
         speakerIdentity: String,
+        voiceOutput: String = "unavailable",
         buildRevision: String = JarvisBuildIdentity.current()
     ) {
         schemaVersion = Self.schemaVersion
@@ -42,6 +44,7 @@ public struct JarvisReadinessSnapshot: Codable, Equatable, Sendable {
         self.daemon = daemon
         self.security = security
         self.provider = provider
+        self.voiceOutput = voiceOutput
         self.localBrainAvailable = localBrainAvailable
         self.microphone = microphone
         self.speechRecognition = speechRecognition
@@ -58,6 +61,7 @@ public struct JarvisReadinessSnapshot: Codable, Equatable, Sendable {
         case daemon
         case security
         case provider
+        case voiceOutput = "voice_output"
         case localBrainAvailable = "local_brain_available"
         case microphone
         case speechRecognition = "speech_recognition"

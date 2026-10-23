@@ -162,6 +162,7 @@ extension MenuBarModel {
         }
         securityState = result.security
         providerState = result.provider
+        voiceOutputState = result.voiceOutput
         localBrainAvailable = result.localBrainAvailable
         ipcSecret = result.secret
         persistReadinessSnapshot()
@@ -293,6 +294,7 @@ extension MenuBarModel {
                     state: state,
                     security: .compromised,
                     provider: provider,
+                    voiceOutput: providerEvent?.voiceOutput ?? .unavailable,
                     localBrainAvailable: providerEvent?.localModel == .available,
                     runtimePowerStateKnown: runtimePowerStateKnown,
                     secret: resolvedSecret
@@ -302,6 +304,7 @@ extension MenuBarModel {
                 state: state,
                 security: security.integrity == .intact ? .intact : .compromised,
                 provider: provider,
+                voiceOutput: providerEvent?.voiceOutput ?? .unavailable,
                 localBrainAvailable: providerEvent?.localModel == .available,
                 runtimePowerStateKnown: runtimePowerStateKnown,
                 runtimePower: runtimePower,
@@ -351,6 +354,7 @@ extension MenuBarModel {
         let state: DaemonConnectionState
         let security: SecurityMonitorState
         let provider: ProviderReadinessState
+        let voiceOutput: IPCSpeechOutputState
         let localBrainAvailable: Bool
         let runtimePowerStateKnown: Bool
         let runtimePower: IPCRuntimePowerStatus?
@@ -360,6 +364,7 @@ extension MenuBarModel {
             state: DaemonConnectionState,
             security: SecurityMonitorState,
             provider: ProviderReadinessState = .unknown,
+            voiceOutput: IPCSpeechOutputState = .unavailable,
             localBrainAvailable: Bool = false,
             runtimePowerStateKnown: Bool = false,
             runtimePower: IPCRuntimePowerStatus? = nil,
@@ -368,6 +373,7 @@ extension MenuBarModel {
             self.state = state
             self.security = security
             self.provider = provider
+            self.voiceOutput = voiceOutput
             self.localBrainAvailable = localBrainAvailable
             self.runtimePowerStateKnown = runtimePowerStateKnown
             self.runtimePower = runtimePower

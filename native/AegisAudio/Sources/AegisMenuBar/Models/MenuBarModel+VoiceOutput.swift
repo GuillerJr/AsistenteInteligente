@@ -17,12 +17,17 @@ extension MenuBarModel {
     func preflightFailureMessage(
         screenCaptureRequired: Bool = false
     ) -> String {
-        LocalVoiceTurnFeedback.spokenPreflightFailure(
+        if voiceOutputState == .unconfigured {
+            return LocalVoiceTurnFeedback.spokenJobFailure(for: "speech_provider_unconfigured")
+                ?? voiceOutputState.title
+        }
+        return LocalVoiceTurnFeedback.spokenPreflightFailure(
             microphoneAuthorized: microphonePermission == .authorized,
             speechRecognitionAuthorized: speechPermission == .authorized,
             runtimeAvailable: daemonState == .online
                 && securityState == .intact
                 && hybridBrainReady
+                && voiceOutputState == .ready
                 && ipcSecret != nil,
             screenCaptureAuthorized: screenCaptureRequired ? screenCaptureAuthorized : nil
         )
@@ -53,6 +58,10 @@ extension MenuBarModel {
         let normalized = result.split(whereSeparator: { $0.isWhitespace })
             .joined(separator: " ")
         voiceOutputText = String(normalized.prefix(2_000))
+        guard voiceOutputState == .ready else {
+            preserveTextWithoutVoice(normalized)
+            return
+        }
         if speechStreamOpen {
             let chunks = speechStreamChunker.finish(normalized)
             guard !speechStreamChunker.isInvalid else {
@@ -98,6 +107,10 @@ extension MenuBarModel {
         replayOnly: Bool = false,
         completion: @escaping () -> Void
     ) {
+        guard replayOnly || voiceOutputState == .ready else {
+            preserveTextWithoutVoice(text)
+            return
+        }
         // Bind diagnostics to this playback; a later timer/replay must not inherit an old error.
         lastVoiceFailureCode = nil
         voiceOutputText = String(text.prefix(2_000))
@@ -242,6 +255,12 @@ extension MenuBarModel {
         let chunks = speechStreamChunker.consume(normalized)
         guard !speechStreamChunker.isInvalid else { return false }
         voiceOutputText = String(normalized.prefix(2_000))
+        guard voiceOutputState == .ready else {
+            // Keep receiving the existing job's text; an absent voice is not a
+            // reason to cancel an action or repeat it with a different provider.
+            if speechStreamOpen { speechOutput.stop(); speechStreamOpen = false }
+            return true
+        }
         guard !chunks.isEmpty else { return true }
         if !speechStreamOpen {
             speechStreamOpen = true
@@ -261,6 +280,16 @@ extension MenuBarModel {
             speechOutput.enqueue(chunk)
         }
         return true
+    }
+
+    private func preserveTextWithoutVoice(_ text: String) {
+        speechOutput.stop()
+        speechStreamOpen = false
+        speechStreamChunker.reset()
+        voiceOutputText = String(text.prefix(2_000))
+        lastVoiceFailureCode = voiceOutputState == .unconfigured
+            ? "speech_provider_unconfigured" : "speech_output_unavailable"
+        voiceState = .failed
     }
 
     nonisolated static func recordAcousticAuditEvent(

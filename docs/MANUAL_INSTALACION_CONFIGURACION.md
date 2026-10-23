@@ -6,19 +6,20 @@ apunta a este mismo documento y la app incluye una copia en Ayuda › Manual de 
 ## Qué necesitas
 
 - Mac Apple Silicon con macOS 14 o posterior.
-- Conexión a internet y una clave de NVIDIA obtenida en [NVIDIA Build](https://build.nvidia.com/).
+- Conexión a internet, Codex instalado y una cuenta de ChatGPT con acceso a Codex.
 - Para compilar desde código: Git, Xcode completo con Swift 6.2 o posterior, Python 3.11
   y `uv`. Usa las herramientas nativas arm64; compruébalo con `uname -m`.
 
-Jarvis usa NVIDIA exclusivamente para la inferencia. Si NVIDIA no está disponible,
-muestra el problema y permite reintentar. No activa un modelo local. El reconocimiento
-de voz, la detección de actividad de voz, la biometría y las herramientas nativas
-siguen ejecutándose en el Mac.
+Jarvis usa Codex con ChatGPT para la inferencia. El inicio de sesión se completa
+en el navegador oficial. Si la conexión no está disponible, informa el problema;
+no cambia de proveedor automáticamente. La salida de voz y las notas de audio de
+Telegram están sin configurar tras retirar NIM. Las herramientas nativas y sus
+aprobaciones siguen ejecutándose en el Mac.
 
-La búsqueda semántica de recuerdos obtiene embeddings en NVIDIA. Para ello envía
-las consultas y fragmentos de los recuerdos, después de ocultar patrones de secretos;
-esa redacción no anonimiza todo el texto personal. Los recuerdos y el índice siguen
-almacenados en el Mac. Los chats temporales no consultan esa memoria. Si la búsqueda
+La búsqueda semántica obtiene embeddings localmente con el encoder de Apple.
+Los recuerdos y el índice permanecen en el Mac. Los fragmentos de contexto que una
+petición autorice sí pueden enviarse a Codex para preparar la respuesta; la redacción
+de credenciales no anonimiza todo el texto personal. Los chats temporales no consultan esa memoria. Si la búsqueda
 semántica falla, se conserva la búsqueda local por palabras clave. Diagnóstico indica
 si el índice está preparado, indexándose o temporalmente degradado.
 
@@ -55,9 +56,10 @@ diálogo de macOS que las solicite. No se pasan en comandos, chats ni archivos.
 ## La primera ejecución
 
 1. Abre Jarvis desde Aplicaciones o Spotlight. La bienvenida se muestra la primera vez
-   y cuando no hay una clave configurada.
-2. En **Conecta con NVIDIA**, escribe la clave en el campo seguro, pulsa **Guardar clave**
-   y luego **Probar conexión**. La clave se almacena en el llavero de macOS. La prueba
+   y cuando no hay una sesión de Codex conectada.
+2. En **Ajustes › Modelos**, pulsa **Iniciar sesión con ChatGPT** y después
+   **Abrir inicio de sesión**. Completa tú el acceso y consentimiento en el navegador.
+   Vuelve a Jarvis, elige un modelo disponible y pulsa **Probar conexión**. La prueba
    usa texto sintético, sin conversaciones ni documentos personales.
 3. Revisa cada permiso opcional. Puedes continuar por escrito sin concederlos.
 4. Elige si quieres abrir Jarvis al iniciar sesión. Si macOS lo solicita, aprueba el
@@ -65,8 +67,9 @@ diálogo de macOS que las solicite. No se pasan en comandos, chats ni archivos.
 5. Envía el mensaje de ejemplo o abre el chat para escribir tu propia pregunta.
 
 Puedes **Omitir por ahora** y volver desde **Ajustes › General › Abrir bienvenida**.
-La clave también se cambia desde **Ajustes › Modelos de IA**. Para aplicar cambios de
-modelos o integraciones, utiliza **Aplicar y reiniciar** cuando aparezca.
+La conexión y el modelo se cambian desde **Ajustes › Modelos de IA**. El cambio de
+modelo se aplica a las siguientes peticiones y se bloquea mientras haya tareas activas.
+Las integraciones conservan **Aplicar y reiniciar** cuando sea necesario.
 
 ## Permisos opcionales
 
@@ -126,6 +129,9 @@ técnicos de seguridad. Un éxito informado por una herramienta no siempre verif
 el efecto externo.
 
 ## Voz y acciones
+
+La salida hablada está sin configurar en esta migración. El chat por escrito y
+las acciones aprobadas no necesitan una voz configurada.
 
 El atajo configurado en Ajustes › General inicia un turno de voz. También puedes
 mantenerlo pulsado y soltarlo para terminar. ⌃⇧J abre una pregunta rápida por escrito.
@@ -188,8 +194,8 @@ uv sync --all-groups --no-editable --python 3.11
 
 ## Diagnóstico y datos
 
-Revisa Ajustes › Diagnóstico y el estado de Modelos de IA. Si NVIDIA falla, comprueba
-la conexión y la clave desde la interfaz y usa **Reintentar**. Un fallo de conexión
+Revisa Ajustes › Diagnóstico y el estado de Modelos de IA. Si Codex falla, comprueba
+la sesión y prueba la conexión desde la interfaz antes de usar **Reintentar**. Un fallo de conexión
 no habilita otros proveedores ni ejecuta una herramienta por su cuenta.
 
 ```bash

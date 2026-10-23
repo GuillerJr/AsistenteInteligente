@@ -5,7 +5,7 @@
   "product_name": "Jarvis",
   "target": "macos-apple-silicon",
   "principles": [
-    "local_data_nvidia_inference",
+    "local_data_selected_inference",
     "fail_closed",
     "bounded_resources",
     "explicit_authorization",
@@ -14,18 +14,18 @@
   "capabilities": [
     {
       "capability_id": "engineering_cli",
-      "state": "stable",
+      "state": "conditional",
       "surfaces": [
         "cli",
         "uds"
       ],
       "acceptance_gate": "production-workflows",
       "network": "required_authenticated",
-      "reason": "Deterministic commands run locally; planning and generated responses require NVIDIA."
+      "reason": "Deterministic commands run locally; planning and generated responses require Codex (OpenAI)."
     },
     {
       "capability_id": "conversation",
-      "state": "stable",
+      "state": "conditional",
       "surfaces": [
         "chat",
         "cli",
@@ -34,18 +34,18 @@
       ],
       "acceptance_gate": "acceptance-benchmark",
       "network": "required_authenticated",
-      "reason": "Generated conversation requires an authenticated NVIDIA connection. There is no local inference fallback."
+      "reason": "Generated conversation requires an authenticated Codex (OpenAI) connection. There is no local inference fallback."
     },
     {
-      "capability_id": "nvidia_inference",
-      "state": "stable",
+      "capability_id": "inference",
+      "state": "conditional",
       "surfaces": [
         "daemon",
         "uds"
       ],
-      "acceptance_gate": "tests/test_nvidia_dialogue.py",
+      "acceptance_gate": "tests/test_codex_provider.py",
       "network": "required_authenticated",
-      "reason": "NVIDIA is the exclusive inference provider; unavailable credentials or service produce an explicit error."
+      "reason": "Codex requiere inicio de sesión oficial con ChatGPT; las herramientas conservan la aprobación y verificación de Jarvis."
     },
     {
       "capability_id": "memory",
@@ -79,7 +79,7 @@
       ],
       "acceptance_gate": "application-qualification",
       "network": "required_authenticated",
-      "reason": "Owner-authorized captures require Screen Recording permission. Selected image context is sent to NVIDIA for analysis."
+      "reason": "Owner-authorized captures require Screen Recording permission. Selected image context is sent to Codex (OpenAI) for analysis."
     },
     {
       "capability_id": "security_broker",
@@ -102,18 +102,18 @@
       ],
       "acceptance_gate": "P10-owner-voice",
       "network": "required_authenticated",
-      "reason": "Capture, VAD, identity checks and on-device recognition are local; generated responses require NVIDIA. Owner voice certification remains pending."
+      "reason": "La voz y las notas de audio de Telegram están sin configurar tras retirar NIM. Falta configurar y certificar su alternativa."
     },
     {
       "capability_id": "projects",
-      "state": "stable",
+      "state": "conditional",
       "surfaces": [
         "chat",
         "daemon"
       ],
       "acceptance_gate": "tests/test_projects.py",
       "network": "required_authenticated",
-      "reason": "Project instructions and selected files provide context to NVIDIA; the owner manages local project data."
+      "reason": "Project instructions and selected files provide context to Codex (OpenAI); the owner manages local project data."
     },
     {
       "capability_id": "scheduled_tasks",
@@ -125,7 +125,7 @@
       ],
       "acceptance_gate": "tests/test_scheduling.py",
       "network": "required_authenticated",
-      "reason": "Bounded scheduled work uses NVIDIA and the existing approval broker. Approval-dependent runs still require manual retry."
+      "reason": "Bounded scheduled work uses Codex (OpenAI) and the existing approval broker. Approval-dependent runs still require manual retry."
     },
     {
       "capability_id": "foreign_plugins",
@@ -147,18 +147,18 @@
       ],
       "acceptance_gate": "p9_browser_gate.sh",
       "network": "optional_authenticated",
-      "reason": "The embedded browser opens public pages; sharing a page with Jarvis sends selected context to NVIDIA. Service access depends on its setup."
+      "reason": "The embedded browser opens public pages; sharing a page with Jarvis sends selected context to Codex (OpenAI). Service access depends on its setup."
     },
     {
       "capability_id": "plan_mode",
-      "state": "stable",
+      "state": "conditional",
       "surfaces": [
         "chat",
         "daemon"
       ],
       "acceptance_gate": "tests/test_plan_mode.py",
       "network": "required_authenticated",
-      "reason": "NVIDIA proposes a plan with read-only tools. Implementing it starts a separate request subject to normal tool approvals."
+      "reason": "Codex (OpenAI) proposes a plan with read-only tools. Implementing it starts a separate request subject to normal tool approvals."
     }
   ],
   "prohibited_expansion": [
@@ -179,7 +179,7 @@
     "feature_additions_frozen": true
   },
   "inference": {
-    "provider": "nvidia",
+    "provider": "codex",
     "network_required": true,
     "local_fallback": false
   }

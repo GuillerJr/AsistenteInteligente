@@ -6,6 +6,8 @@ from uuid import uuid4
 
 import pytest
 
+from aegis_core.brain.inference_client import InferenceBrainClient
+from aegis_core.contracts import AgentResult, AgentRole
 from aegis_core.ipc.protocol import IpcAuthenticator
 from aegis_core.mascot import MascotAutonomyService
 
@@ -59,6 +61,24 @@ async def test_admission_is_nonblocking_with_only_numeric_spatial_context_and_no
     assert references == {"world": snapshot, "recent_decisions": []}
     assert "tools" not in args and len(args["messages"]) == 2
     await service.close()
+
+
+@pytest.mark.asyncio
+async def test_mascot_reports_codex_provenance_from_the_configured_brain():
+    transport = SimpleNamespace(provider_id="codex", complete=AsyncMock(return_value=AgentResult(
+        role=AgentRole.PLANNER, model_id="shared-model-id", content=json.dumps(PLAN),
+        finish_reason="stop",
+    )))
+    service = MascotAutonomyService(InferenceBrainClient(transport))
+    snapshot = world()
+    try:
+        await call(service, "request", snapshot)
+        result = await settled(service, snapshot)
+        assert result["status"] == "ready" and result["provider"] == "codex"
+        assert result["model_id"] == "shared-model-id"
+        assert transport.complete.await_count == 1
+    finally:
+        await service.close()
 
 
 @pytest.mark.asyncio

@@ -166,6 +166,7 @@ public enum IPCJobState: String, Sendable {
 public enum IPCBrainTarget: String, Sendable {
     case local
     case nvidia
+    case codex
     case deterministic
     case unknown
 }
@@ -503,20 +504,40 @@ public enum IPCLocalModelState: String, Sendable {
     case unavailable
 }
 
+public enum IPCSpeechOutputState: String, Codable, Sendable {
+    case ready, unconfigured, unavailable
+
+    public var title: String {
+        switch self {
+        case .ready: "Voz preparada"
+        case .unconfigured: "Voz sin configurar"
+        case .unavailable: "Voz no verificable"
+        }
+    }
+}
+
 public struct IPCProviderStatusEvent: Equatable, Sendable {
     public let credential: IPCProviderCredentialState
     public let localModel: IPCLocalModelState
+    public let voiceOutput: IPCSpeechOutputState
 
     public init?(response: LocalIPCResponse) {
         guard
             response.ok,
-            response.payload["provider"] as? String == "nvidia_nim",
+            let provider = response.payload["provider"] as? String,
+            ["codex", "nvidia_nim"].contains(provider),
             let rawCredential = response.payload["credential"] as? String,
             let credential = IPCProviderCredentialState(rawValue: rawCredential)
         else {
             return nil
         }
         self.credential = credential
+        if let raw = response.payload["voice_output"] {
+            voiceOutput = (raw as? String).flatMap(IPCSpeechOutputState.init(rawValue:)) ?? .unavailable
+        } else {
+            // A connected ChatGPT account is not evidence of an audio service.
+            voiceOutput = provider == "nvidia_nim" && credential == .configured ? .ready : .unconfigured
+        }
         localModel = (response.payload["local_model"] as? String)
             .flatMap(IPCLocalModelState.init(rawValue:)) ?? .unavailable
     }

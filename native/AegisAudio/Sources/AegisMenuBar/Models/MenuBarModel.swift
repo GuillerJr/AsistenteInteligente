@@ -136,6 +136,7 @@ final class MenuBarModel {
     var daemonState = DaemonConnectionState.unknown
     var securityState = SecurityMonitorState.unknown
     var providerState = ProviderReadinessState.unknown
+    var voiceOutputState = IPCSpeechOutputState.unavailable
     var localBrainAvailable = false
     var runtimeProbeInProgress = false
     var voiceState = VoiceTurnState.idle

@@ -7,7 +7,7 @@ import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import replace
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from aegis_core.action_history import ActionHistoryStore
@@ -114,11 +114,14 @@ class SwarmJobManager:
         app_grants: ComputerAppGrantStore | None = None,
         confirmation_summaries: Mapping[str, Callable[[ToolAuthorization], str]] | None = None,
         action_history: ActionHistoryStore | None = None,
+        inference_provider: Literal["codex"] | None = None,
     ) -> None:
         if max_jobs < 1:
             raise ValueError("max jobs must be positive")
         if not 0 < execution_timeout_seconds <= 600:
             raise ValueError("execution timeout is out of range")
+        if inference_provider not in {None, "codex"}:
+            raise ValueError("unsupported inference provider provenance")
         registry = JobRegistry(max_jobs)
         self._registry = registry
         self._max_jobs = max_jobs
@@ -133,6 +136,7 @@ class SwarmJobManager:
             clock=clock,
             monotonic_clock=monotonic_clock,
             execution_timeout_seconds=execution_timeout_seconds,
+            inference_provider=inference_provider,
         )
         self._execution = JobExecutionPipeline(
             graph,

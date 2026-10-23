@@ -14,7 +14,7 @@ La lista de trabajo pendiente para la 1.0 está en [`docs/V1_PENDIENTES.md`](doc
 - **Rama:** trabaja solo en `main`, sin ramas ni PRs. Después de cada cambio terminado, haz commit y `git push` a `main`.
 - **Pruebas:** ejecútalas tú. Si algo falla, corrígelo, reinstala y vuelve a probar hasta que funcione.
 - **Interfaz:** está en español. Los textos nuevos también van en español, con el tono de los existentes.
-- **Inferencia:** usa NVIDIA en exclusiva (`inference_nvidia_only=True`). No añadas proveedores ni respaldos locales. El endpoint de NVIDIA es gratuito, así que no hace falta advertir de cuotas.
+- **Inferencia:** el dueño retiró la restricción de NVIDIA exclusivo el 23-10-2026. La primera conexión elegida es **Codex con ChatGPT**, mediante el cliente oficial y su inicio de sesión. No envíes inferencia, memoria ni audio a NVIDIA desde la app. Las alternativas Ollama, OpenAI API y Anthropic quedan para conexiones independientes posteriores; no actives respaldos entre proveedores sin elección explícita. Conserva las aprobaciones y verificaciones de Jarvis.
 - **Inspiración externa:** de ChatGPT, Codex y Claude toma solo ideas. Nunca copies su código ni sus recursos.
 - **Lo que hace el dueño:**
   - escribe las contraseñas y la del llavero;

@@ -21,6 +21,7 @@ from aegis_core.providers.base import (
     IncompleteModelResponseError,
     require_complete_response,
 )
+from aegis_core.providers.errors import ProviderError
 from aegis_core.providers.nvidia import NvidiaNimError
 from aegis_core.tools.audit import AuditSink, NullAuditSink
 
@@ -70,7 +71,7 @@ def _failure_details(error: BaseException) -> tuple[LocalizedVisionFailure, int 
             category = LocalizedVisionFailure.INCOMPLETE_RESPONSE
         elif isinstance(current, (TimeoutError, httpx.TimeoutException)):
             category = LocalizedVisionFailure.TIMEOUT
-        elif isinstance(current, NvidiaNimError):
+        elif isinstance(current, (NvidiaNimError, ProviderError)):
             code = current.status_code
             if type(code) is int and 100 <= code <= 599:
                 status_code = code

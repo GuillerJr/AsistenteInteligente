@@ -75,7 +75,7 @@ class RecoverableFailureCLI(EngineeringCLI):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("policy", ["local_only", "hybrid"])
+@pytest.mark.parametrize("policy", ["local_only", "hybrid", "nvidia_only"])
 async def test_engineering_daemon_rejects_legacy_local_policy(tmp_path, policy):
     jobs = FakeJobs()
     service = EngineeringIpcService(jobs, tmp_path)
@@ -88,7 +88,7 @@ async def test_engineering_daemon_rejects_legacy_local_policy(tmp_path, policy):
     preflight = await service.handle(SimpleNamespace(method="engineering.preflight", payload={
         "workspace_path": str(tmp_path),
     }))
-    assert preflight.payload["inference_policies"] == ["nvidia_only"]
+    assert preflight.payload["inference_policies"] == ["configured"]
 
 
 @pytest.mark.asyncio
@@ -105,7 +105,7 @@ async def test_engineering_service_confines_and_marks_workspace(tmp_path: Path) 
             "workspace_path": str(workspace),
             "domain": "backend",
             "research_policy": "offline",
-            "inference_policy": "nvidia_only",
+            "inference_policy": "configured",
         },
     )
 
@@ -119,7 +119,7 @@ async def test_engineering_service_confines_and_marks_workspace(tmp_path: Path) 
         ENGINEERING_DOMAIN_METADATA: "backend",
         ENGINEERING_WORKSPACE_METADATA: "company-project",
         ENGINEERING_RESEARCH_METADATA: "offline",
-        ENGINEERING_INFERENCE_METADATA: "nvidia_only",
+        ENGINEERING_INFERENCE_METADATA: "configured",
         ENGINEERING_MANIFEST_METADATA: {
             "schema_version": "1.0",
             "observed_file_count": 1,
@@ -185,8 +185,10 @@ def test_engineering_cli_renders_actionable_bounded_provider_failure(tmp_path: P
     session._render_error("brain_unavailable")
 
     rendered = output.getvalue()
-    assert "cerebro local" in rendered.lower()
-    assert "Apple Intelligence" in rendered
+    assert "conexión de inferencia" in rendered.lower()
+    assert "Codex" in rendered
+    assert "/status" in rendered
+    assert "Apple Intelligence" not in rendered
     assert "private provider exception" not in rendered
 
 
@@ -294,13 +296,13 @@ def test_engineering_cli_commands_update_only_local_session(tmp_path: Path) -> N
 
     assert session._handle_local_command("/domain frontend") == 0
     assert session._handle_local_command("/research public_web") == 0
-    assert session._handle_local_command("/inference nvidia_only") == 0
+    assert session._handle_local_command("/inference configured") == 0
     assert session._handle_local_command("/status") == 0
 
     rendered = output.getvalue()
     assert "frontend" in rendered
     assert "public_web" in rendered
-    assert "nvidia_only" in rendered
+    assert "configured" in rendered
 
 
 @pytest.mark.asyncio

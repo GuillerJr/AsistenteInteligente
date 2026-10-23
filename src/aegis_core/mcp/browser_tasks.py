@@ -435,13 +435,13 @@ class BrowserTaskService:
                 requires_confirmation=confirm,
                 argument_guard=guard,
                 provider_label="Navegador por tarea",
-                external_destination="NVIDIA / navegador local",
+                external_destination="Codex (OpenAI) / navegador local",
             )
             for name, description, model, risk, confirm, guard in (
                 (
                     "browser_task_open",
                     "Approve the exact URL and original objective for this task. "
-                    "Read page content with NVIDIA; find/open the tab automatically. "
+                    "Read page content with Codex (OpenAI); find/open the tab automatically. "
                     "No persistent access.",
                     BrowserTaskOpenArguments,
                     RiskLevel.HIGH,

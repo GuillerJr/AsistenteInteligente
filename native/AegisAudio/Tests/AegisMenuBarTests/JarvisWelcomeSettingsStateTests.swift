@@ -138,4 +138,27 @@ final class JarvisWelcomeSettingsStateTests: XCTestCase {
         store.reconcileModelDraft(previous: original, current: edited)
         XCTAssertEqual(store.modelDraft, edited, "La selección guardada se reconoce por los datos")
     }
+
+    func testConnectedChatDoesNotRequireANvidiaKeyInWelcome() async {
+        let (model, store) = readyState()
+        store.snapshot = JarvisSettingsSnapshot(models: preferences("synthetic/model"),
+            models_valid: true, credential: "missing", servers: [], restart_required: false,
+            memory_namespace: "synthetic-test")
+        XCTAssertNil(JarvisWelcomeState.exampleIssue(model: model, store: store))
+        model.providerState = .missing
+        XCTAssertEqual(JarvisWelcomeState.exampleIssue(model: model, store: store), .credential)
+        XCTAssertTrue(JarvisWelcomeState.ExampleIssue.credential.message.contains("ChatGPT"))
+        XCTAssertFalse(JarvisWelcomeState.ExampleIssue.credential.message.contains("NVIDIA"))
+    }
+
+    func testKnownSignedOutCodexOverridesCachedConfiguredProvider() async {
+        let (model, oldStore) = readyState()
+        let store = JarvisSettingsStore { _, _, _ in
+            Data("{\"provider\":\"codex\",\"state\":\"signed_out\",\"installed\":true,\"models\":[]}".utf8)
+        }
+        store.snapshot = oldStore.snapshot
+        await store.inference.refresh()
+        XCTAssertEqual(model.providerState, .configured)
+        XCTAssertEqual(JarvisWelcomeState.exampleIssue(model: model, store: store), .credential)
+    }
 }
