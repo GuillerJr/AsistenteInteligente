@@ -26,6 +26,44 @@ recuperación y proyectos se documentan en
 [quality/CODEX_REA_TOOL_REVIEW.md](quality/CODEX_REA_TOOL_REVIEW.md), con cobertura
 y límites explícitos. No sustituye las comprobaciones manuales que siguen abiertas.
 
+## 0. Segunda revisión (22-10-2026, commit `46e8b75`)
+
+Hecha con Claude Code sobre la app instalada, que coincide con `46e8b75` (versión 1.0.0, build 214865395).
+
+**Comprobado y correcto:**
+- Python: 4.633 pruebas pasan y 46 se omiten (las de diálogo NVIDIA real, que piden activación expresa). Ruff limpio.
+- Swift: 389 pruebas del núcleo y 202 de la interfaz.
+- CI en verde en `main`.
+- Tamaño: la app pasó de 427 a 310 MB.
+  - El ejecutable `Jarvis` pesa 5,8 MB (antes 24).
+  - Los helpers pesan unos 2 MB cada uno; ONNX vive solo en `jarvis-vad-helper` (20 MB).
+  - `jarvis-local-brain` salió del bundle.
+  - El daemon sigue en 268 MB por `mlx-whisper` (punto P3).
+- Menús del sistema en español; Ayuda abre el «Manual de Jarvis».
+- Menú Conversación completo.
+- Chat temporal de prueba: respondió «42». Las respuestas tienen copiar, regenerar, 👍 y 👎, y los mensajes propios tienen «Editar desde este mensaje».
+- Ajustes › General › «Acerca de y actualizaciones»: «Buscar actualizaciones» responde «Todavía no hay una actualización publicada en el canal estable», que es correcto porque el repositorio es público y aún no tiene releases.
+- `NSLocalNetworkUsageDescription` presente.
+- `MenuBarModel.swift` quedó en 337 líneas y `graph.py` en 732.
+
+**Hallazgos nuevos (resolver antes de la 1.0):**
+- [ ] **R2-1. Prueba intermitente en la interfaz.**
+  - `ChatComposerKeyboardTests.testDraftBindingAndConversationReplacementClearPreviousUndo` (`Tests/AegisMenuBarTests/ChatComposerTests.swift:148-150`) falló en 1 de 3 ejecuciones completas de `./script/test_native.sh`: «Deshacer» recuperó el borrador de otro chat. Sola pasa siempre.
+  - Puede ser un problema real del gestor de deshacer compartido o del foco entre pruebas. Hay que aislarlo; si no, el pre-push fallará al azar.
+  - **Hecho cuando:** 10 ejecuciones completas seguidas pasan.
+- [ ] **R2-2. Reabierto P1-1.** La ventana «Decisión de Jarvis» seguía existiendo, vacía («Sin decisiones pendientes»), en otro Escritorio con la build actual. El cierre solo ocurre cuando `interactionID` pasa a `nil` (`AegisMenuBarApp.swift:240`). Si la ventana se abre o se restaura sin decisión pendiente, nadie la cierra. Cerrarla también al aparecer sin decisión y desactivar la restauración de esa escena.
+- [ ] **R2-3. El acceso al Mac por app sigue sin funcionar de punta a punta (P1-5).** Es el mayor riesgo funcional de la 1.0. Las notas de P1-5 registran respuestas incompletas de NVIDIA, falsos positivos de contenido sensible, aprobaciones que caducan sin ejecutar y promesas sin ejecución. Hace falta un recorrido completo que pase: pedir una escritura en TextEdit, aprobar «Siempre», repetir sin pregunta y revocar. Si no se consigue a tiempo, valorar sacar el uso del Mac de la 1.0 o marcarlo como beta en la interfaz.
+- [ ] **R2-4. Estado vacío de «Archivados».** Con la lista vacía muestra «Tu primera conversación · Empieza un chat para verlo aquí», el mismo texto que Recientes. Debe decir que no hay chats archivados y cómo archivar uno.
+- [ ] **R2-5. «Buscar chats» se queda resaltado** en la barra lateral mientras se ven Recientes, Archivados o la Papelera, y convive con el campo «Buscar en títulos y mensajes» justo debajo. Unificar: un solo buscador y sin resaltar cuando no está activo.
+- [ ] **R2-6. Diagnóstico muestra códigos internos.** «Fallos recientes» enseña `incomplete_model_response` tal cual. Mostrar un texto en español («NVIDIA devolvió una respuesta incompleta») y dejar el código solo como detalle.
+- [ ] **R2-7. Peso del repositorio.**
+  - Los informes de cobertura REA (`docs/quality/CODEX_REA_*_COVERAGE.json`, unas 50.000 líneas y 1,4 MB) se versionan junto a la documentación; el paquete git pasó de 14 a 17 MB en un día.
+  - Dejar en el repositorio el resumen `.md` y mover los JSON a un artefacto de CI o a `dist/` (ignorado).
+  - `Localizable.xcstrings` y `es.lproj/Localizable.strings` contienen los mismos textos. Confirmar que el `.strings` se genera siempre desde el catálogo (`docs/LOCALIZACION.md`) y que una prueba falla si se desincronizan.
+- [ ] **R2-8. El historial de chats y los proyectos están vacíos** en el Mac del dueño, papelera incluida; `projects.json` y `memory.sqlite3` se modificaron el 22-10 a las 16:25. La auditoría no registra borrados de conversaciones, así que no se puede saber desde aquí si fue la limpieza del punto 6 o una pérdida de datos. **El dueño debe confirmar si los borró él.** Si no fue así, es un bloqueo P0 y hay que investigarlo antes de cualquier otra cosa. En cualquier caso, conviene auditar los borrados masivos (solo metadatos: cuántos y cuándo).
+
+**Sigue pendiente del dueño:** P0-1 (Developer ID y notarización), y con él P0-2 (publicar la primera actualización y probar 1.0.0 → 1.0.1), además del recorrido con VoiceOver de P1-12.
+
 ## 1. Estado de la revisión original (antes de completar este lote)
 
 | Área | Estado | Dónde |
@@ -113,7 +151,7 @@ y límites explícitos. No sustituye las comprobaciones manuales que siguen abie
 
 ### Fallos vistos en esta revisión
 
-- [x] **P1-1. La ventana «Decisión de Jarvis» se queda abierta y vacía.** Tras resolver las decisiones queda una ventana de 560×428 con «Sin decisiones pendientes» (en otro Escritorio). Debe cerrarse sola cuando la cola queda vacía. La escena es `Window("Decisión de Jarvis", id: "approval")` en `AegisMenuBarApp.swift:160` y el estado vacío está en `ApprovalView.swift:21`. **Resuelto:** cierre desde el observador persistente, comprobación inicial y cancelación del enfoque diferido; pruebas con ventanas AppKit sintéticas.
+- [ ] **P1-1. La ventana «Decisión de Jarvis» se queda abierta y vacía.** (Reabierto el 22-10: ver R2-2.) Tras resolver las decisiones queda una ventana de 560×428 con «Sin decisiones pendientes» (en otro Escritorio). Debe cerrarse sola cuando la cola queda vacía. La escena es `Window("Decisión de Jarvis", id: "approval")` en `AegisMenuBarApp.swift:160` y el estado vacío está en `ApprovalView.swift:21`. **Resuelto:** cierre desde el observador persistente, comprobación inicial y cancelación del enfoque diferido; pruebas con ventanas AppKit sintéticas.
 - [x] **P1-2. El menú de «Estilo» apareció abierto sobre otras secciones de Ajustes.** Al pasar de General a Diagnóstico, Modelos y Cuentas, la lista «Predeterminada / Directa / Cercana / Profesional / Divertida» siguió abierta encima del contenido hasta pulsar Esc. Reproducir y asegurar que un selector abierto se cierra al cambiar de sección (`JarvisMenuPicker.swift`, `JarvisGeneralSettingsView.swift`, `JarvisSettingsView.swift`). **Resuelto:** se cancela el seguimiento al cambiar sección, desmontar el selector o quitarlo de la ventana. XCTest cubre cancelación y desmontaje.
 - [x] **P1-3. «Abre este enlace» intenta usar Chrome por CDP y falla con «No pude conectar a Chrome»** cuando Chrome no está conectado. Cuando no haya navegador de automatización, la respuesta natural es abrir la URL en el navegador incorporado o en el predeterminado. Revisar el enrutado en `orchestration/direct_actions.py`, `semantic_tools.py` y `tools/chrome_cdp.py`. **Resuelto:** abrir una URL explícita usa el navegador predeterminado aunque se ofrezca CDP; «este enlace» usa una fuente reciente del daemon y mantiene confirmación. Las tareas compuestas conservan la ruta de automatización. Pruebas del router y del broker pasan.
 - [x] **P1-4. Barra de direcciones del navegador incorporado.** Comprobar a mano que Enter navega y que buscar texto libre va a DuckDuckGo. El control remoto de la revisión no pudo enviar Enter. Ver `JarvisBrowserPanel.swift`.
