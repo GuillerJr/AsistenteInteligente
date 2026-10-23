@@ -26,6 +26,42 @@ final class VoiceApprovalScopeTests: XCTestCase {
         XCTAssertFalse(MenuBarModel().voiceApprovalEnabled)
     }
 
+    func testTheChatShowsOnlyTheApprovalForItsOwnRequest() throws {
+        let model = MenuBarModel()
+        model.wakeWordOptedIn = false
+        let job = UUID()
+        model.chat.conversationID = UUID()
+        _ = model.chat.transcript.begin("Solicitud sintética")
+        model.chat.transcript.attach(job)
+        let approval = PendingApproval(jobID: job, confirmation: try confirmation(voice: false))
+        model.pendingApproval = approval
+        XCTAssertEqual(model.chatApproval, approval)
+        // A voice or Dot request goes under the notch, never into the chat.
+        model.pendingApproval = PendingApproval(jobID: UUID(), confirmation: try confirmation(voice: false))
+        XCTAssertNil(model.chatApproval)
+    }
+
+    func testQuestionsAndNoticesGoWhereTheRequestWasMade() throws {
+        let model = MenuBarModel()
+        model.wakeWordOptedIn = false
+        let job = UUID()
+        let request = try XCTUnwrap(IPCInputRequest(object: [
+            "question": "¿Qué texto lleva el mensaje?", "request_text": "Escribe a Laura",
+            "expires_at": "2099-01-01T00:00:00Z",
+        ]))
+        model.chat.inputJobID = job
+        model.pendingInput = PendingInput(id: job, request: request)
+        XCTAssertTrue(model.decisionBelongsToChat)
+        model.pendingInput = PendingInput(id: UUID(), request: request)  // Asked by voice.
+        XCTAssertFalse(model.decisionBelongsToChat)
+        model.pendingInput = nil
+        model.pendingRecovery = PendingRecovery(code: "job_timeout", message: "Tardó demasiado.")
+        model.mascotUsesVoice = false
+        XCTAssertTrue(model.decisionBelongsToChat)
+        model.mascotUsesVoice = true
+        XCTAssertFalse(model.decisionBelongsToChat)
+    }
+
     func testMicrophoneOpensOnlyWhenEnabledAndTheActionOnlyReads() throws {
         let reads = try confirmation(voice: true)
         let writes = try confirmation(voice: false)

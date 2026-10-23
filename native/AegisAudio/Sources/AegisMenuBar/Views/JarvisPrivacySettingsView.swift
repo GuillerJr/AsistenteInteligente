@@ -95,7 +95,7 @@ struct JarvisPrivacySettingsView: View {
             }
             ForEach(store.appGrants) { grant in
                 HStack(spacing: 12) {
-                    Text(ActionReviewView.appName(grant.bundle_identifier)).font(.system(size: 12))
+                    Text(JarvisApprovalCard.appName(grant.bundle_identifier)).font(.system(size: 12))
                         .frame(maxWidth: .infinity, alignment: .leading)
                     Button(String(localized: "Quitar", bundle: .module)) { Task { await store.revokeAppGrant(grant) } }
                         .accessibilityLabel(String(localized: "Quitar el permiso para usar \(grant.bundle_identifier)", bundle: .module))

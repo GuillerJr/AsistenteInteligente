@@ -201,20 +201,24 @@ extension MenuBarModel {
         else {
             return
         }
-        // Without an owner the authorizer never opens the microphone and only asks for
-        // Touch ID: voice stays off unless the owner enabled it, and the daemon only
-        // lets a voice approve actions that read.
-        let ownerIdentifier = Self.voiceApprovalOwner(
+        // The owner approves with the card's buttons, in the chat or under the notch, as
+        // in Codex and Claude: no Touch ID sheet pops up. Voice is an optional extra that
+        // stays off unless the owner enabled it, and the daemon only lets a voice approve
+        // actions that read.
+        guard let ownerIdentifier = Self.voiceApprovalOwner(
             effectiveSpeakerOwnerIdentifier,
             enabled: voiceApprovalEnabled,
             confirmation: approval.confirmation
-        )
+        ) else {
+            return
+        }
         let modelFingerprint = speakerIdentityModelFingerprint
         dualAuthorizationTask = Task { @MainActor [weak self] in
             guard let self else { return }
             let result = await dualChannelAuthorizer.authorize(
                 selectedOwnerIdentifier: ownerIdentifier,
                 expectedModelFingerprint: modelFingerprint,
+                requestTouchID: false,
                 physicalApproval: {
                     await Task.detached(priority: .userInitiated) {
                         Self.approveJob(approval, secret: secret)
@@ -257,6 +261,28 @@ extension MenuBarModel {
                 }
             }
         }
+    }
+
+    /// The approval the chat shows as a card under its conversation: the owner asked
+    /// for this action there.
+    var chatApproval: PendingApproval? {
+        guard let approval = pendingApproval, chat.transcript.jobID == approval.jobID else { return nil }
+        return approval
+    }
+
+    /// The pending decision (approval, question, browser choice or notice) was asked for
+    /// in the chat, so the chat shows it as a card; otherwise it goes under the notch.
+    var decisionBelongsToChat: Bool {
+        if let approval = pendingApproval { return chat.transcript.jobID == approval.jobID }
+        if let input = pendingInput { return chat.inputJobID == input.id }
+        if pendingBrowserSelection != nil || pendingRecovery != nil { return !mascotUsesVoice }
+        return false
+    }
+
+    /// Whether Jarvis is listening for a spoken approval of this card.
+    func voiceApprovalListens(for approval: PendingApproval) -> Bool {
+        Self.voiceApprovalOwner(effectiveSpeakerOwnerIdentifier, enabled: voiceApprovalEnabled,
+                                confirmation: approval.confirmation) != nil
     }
 
     nonisolated static func voiceApprovalOwner(

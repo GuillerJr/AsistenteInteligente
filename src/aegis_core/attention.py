@@ -81,7 +81,7 @@ class AttentionList:
             if approval.expires_at <= now:
                 continue
             where = ("en Telegram" if approval.source_channel == "telegram"
-                     else "en la ventana de aprobación")
+                     else "en su chat o bajo el notch")
             found.append(AttentionItem(
                 item_id=f"approval:{approval.job_id}", kind="approval",
                 title=" ".join(approval.summary.split())[:80],

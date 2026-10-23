@@ -295,16 +295,20 @@ public final class DualChannelAuthorizer: @unchecked Sendable {
     public func authorize(
         selectedOwnerIdentifier: String?,
         expectedModelFingerprint: String?,
+        requestTouchID: Bool = true,
         physicalApproval: @escaping @Sendable () async -> Bool,
         voiceApproval: @escaping @Sendable (VoiceAuthorizationEvidence) async -> Bool
     ) async -> DualAuthorizationResult {
         await withTaskCancellationHandler {
             await withTaskGroup(of: AuthorizationAttempt.self) { group in
-                group.addTask { [weak self] in
-                    guard let self else { return .physical(false) }
-                    let authenticated = await authenticateOwnerPresence()
-                    guard authenticated, !Task.isCancelled else { return .physical(false) }
-                    return .physical(await physicalApproval())
+                let attempts = requestTouchID ? 2 : 1
+                if requestTouchID {
+                    group.addTask { [weak self] in
+                        guard let self else { return .physical(false) }
+                        let authenticated = await authenticateOwnerPresence()
+                        guard authenticated, !Task.isCancelled else { return .physical(false) }
+                        return .physical(await physicalApproval())
+                    }
                 }
                 group.addTask { [weak self] in
                     guard let self else { return .voice(false) }
@@ -328,7 +332,7 @@ public final class DualChannelAuthorizer: @unchecked Sendable {
                         cancel()
                         return .authorizedByVoice
                     case .physical(false), .voice(false):
-                        if completedAttempts == 2 {
+                        if completedAttempts == attempts {
                             cancel()
                             return .manualConfirmationRequired
                         }

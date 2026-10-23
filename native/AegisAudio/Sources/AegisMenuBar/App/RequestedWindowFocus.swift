@@ -24,6 +24,12 @@ enum RequestedWindowFocus {
         }
     }
 
+    /// The window is open on this Space and at least partly in view.
+    static func isShowing(_ id: String) -> Bool {
+        guard let window = windows[id]?.window else { return false }
+        return window.isVisible && !window.isMiniaturized && window.occlusionState.contains(.visible)
+    }
+
     static func close(_ id: String, action: () -> Void) {
         // A decision can finish before SwiftUI has registered its window. Do not
         // let the deferred focus request bring that now-empty scene back.

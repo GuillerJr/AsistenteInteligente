@@ -114,7 +114,12 @@ struct MenuBarVoiceAction: View {
 
     private func performPrimaryAction() {
         if model.interactionID != nil {
-            RequestedWindowFocus.open("approval") { openWindow(id: "approval") }
+            // The decision is a card in its chat or under the notch; bring it back up.
+            if model.decisionBelongsToChat {
+                RequestedWindowFocus.open("chat") { openWindow(id: "chat") }
+            } else {
+                NotchApprovalPanelController.shared.show(model: model)
+            }
         } else if model.activeComputerUseJobID != nil {
             Task { await model.cancelActiveComputerUse() }
         } else if model.canStartVoiceTurn {

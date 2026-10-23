@@ -113,7 +113,13 @@ struct HUDView: View {
             }
         }
         if model.interactionID != nil {
-            Button { RequestedWindowFocus.open("approval") { openWindow(id: "approval") } } label: {
+            Button {
+                if model.decisionBelongsToChat {
+                    RequestedWindowFocus.open("chat") { openWindow(id: "chat") }
+                } else {
+                    NotchApprovalPanelController.shared.show(model: model)
+                }
+            } label: {
                 Label(String(localized: "Revisar solicitud", bundle: .module), systemImage: "arrow.up.right")
                     .frame(maxWidth: .infinity)
             }

@@ -106,7 +106,7 @@ public struct AssistantPresentation: Equatable, Sendable {
         }
         if approvalPending || voice == .awaitingAuthorization {
             return .init(kind: .approval, title: "Autorización pendiente", compactTitle: "Revisa la aprobación",
-                         detail: "Revisa la acción en la ventana de aprobación. Solo continúa si reconoces la solicitud.",
+                         detail: "Revisa la acción en su chat o bajo el notch. Solo continúa si reconoces la solicitud.",
                          symbol: "hand.raised.fill", tone: .warning)
         }
         if browserSelectionPending {

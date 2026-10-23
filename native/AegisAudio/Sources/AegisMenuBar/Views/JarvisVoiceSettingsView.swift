@@ -19,7 +19,7 @@ struct JarvisVoiceSettingsView: View {
             }
         }
         JarvisSettingsCard(title: String(localized: "Aprobación por voz", bundle: .module),
-                          detail: String(localized: "Desactivada por defecto. Si la activas, al pedirte una aprobación Jarvis escucha unos segundos y acepta un «sí» de tu voz solo en acciones que leen, como buscar correos. Lo que escribe, envía, borra o usa el Mac siempre pide el botón o Touch ID.", bundle: .module)) {
+                          detail: String(localized: "Desactivada por defecto. Si la activas, al pedirte una aprobación Jarvis escucha unos segundos y acepta un «sí» de tu voz solo en acciones que leen, como buscar correos. Lo que escribe, envía, borra o usa el Mac siempre se aprueba con el botón.", bundle: .module)) {
             Toggle(String(localized: "Aprobar con la voz las acciones de solo lectura", bundle: .module), isOn: Binding(
                 get: { model.voiceApprovalEnabled },
                 set: { model.voiceApprovalEnabled = $0 }

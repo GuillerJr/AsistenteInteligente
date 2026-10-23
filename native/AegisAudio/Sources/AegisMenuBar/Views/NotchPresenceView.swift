@@ -65,7 +65,7 @@ struct NotchPresenceView: View {
 
     private var hint: String {
         if !model.mascotSessionAvailable { return String(localized: "Desbloquea tu Mac", bundle: .module) }
-        if model.interactionID != nil { return String(localized: "Doble clic para revisar", bundle: .module) }
+        if model.interactionID != nil { return String(localized: "Doble clic para ver la decisión", bundle: .module) }
         if model.voiceState == .listening || model.voiceState == .followingUp {
             return String(localized: "Doble clic para dejar de escuchar", bundle: .module)
         }

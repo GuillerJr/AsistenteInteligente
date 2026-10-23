@@ -61,7 +61,7 @@ private struct PresentationPreviewView: View {
                     .frame(width: 220, height: 180)
                     .background(.black.opacity(0.85))
                 if [.approval, .browser, .input, .recovery].contains(mode) {
-                    ApprovalView(model: model, interactive: false)
+                    JarvisDecisionCard(model: model).frame(width: 520).padding(20)
                 } else if showMenu {
                     MenuBarView(model: model, interactive: false,
                                 maximumContentHeight: compact ? 340 : 560,

@@ -8,6 +8,21 @@ import Testing
     #expect(DualChannelAuthorizer.semanticWindowStrideMilliseconds == 128)
 }
 
+@Test func withoutTouchIDNoBiometricPromptOrPhysicalApprovalRuns() async {
+    // Approvals are clicked in the card; the authorizer only listens when asked to.
+    final class Flag: @unchecked Sendable { var called = false }
+    let physical = Flag()
+    let result = await DualChannelAuthorizer(modelURL: nil).authorize(
+        selectedOwnerIdentifier: nil,
+        expectedModelFingerprint: nil,
+        requestTouchID: false,
+        physicalApproval: { physical.called = true; return true },
+        voiceApproval: { _ in true }
+    )
+    #expect(result == .manualConfirmationRequired)
+    #expect(physical.called == false)
+}
+
 @Test func adversarialSpeakerThresholdRejectsEverySyntheticVoice() {
     let distractors = Array(repeating: 0.41, count: 15) + [0.72]
     let owners = Array(repeating: 0.91, count: 8)

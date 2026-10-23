@@ -198,8 +198,8 @@ final class JarvisVisualAccessibilityTests: XCTestCase {
             menu.close()
 
             model.applyNotchPreview(.approval)
-            let approval = window(ApprovalView(model: model, interactive: false),
-                                  size: NSSize(width: 560, height: 650), dark: dark)
+            let approval = window(JarvisDecisionCard(model: model).frame(width: 520).padding(20),
+                                  size: NSSize(width: 560, height: 420), dark: dark)
             try await settle()
             try capture(approval, name: "approval-" + suffix)
             try assertNamedButtons(approval, surface: "approval")

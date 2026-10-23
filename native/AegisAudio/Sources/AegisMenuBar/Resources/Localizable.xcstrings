@@ -289,6 +289,18 @@
       },
       "generatesSymbol": false
     },
+    "%lld s": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld s"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "%lld veces": {
       "extractionState": "manual",
       "localizations": {
@@ -1453,6 +1465,30 @@
       },
       "generatesSymbol": false
     },
+    "Aprobación de Jarvis": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aprobación de Jarvis"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Aprobación pendiente": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aprobación pendiente"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Aprobación por voz": {
       "extractionState": "manual",
       "localizations": {
@@ -2372,6 +2408,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cada tarea te pedirá acceso cuando sea necesario. Jarvis resolverá la pestaña y limitará el acceso a esa tarea."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Caducó": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Caducó"
           }
         }
       },
@@ -4297,6 +4345,18 @@
       },
       "generatesSymbol": false
     },
+    "Desactivada por defecto. Si la activas, al pedirte una aprobación Jarvis escucha unos segundos y acepta un «sí» de tu voz solo en acciones que leen, como buscar correos. Lo que escribe, envía, borra o usa el Mac siempre se aprueba con el botón.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desactivada por defecto. Si la activas, al pedirte una aprobación Jarvis escucha unos segundos y acepta un «sí» de tu voz solo en acciones que leen, como buscar correos. Lo que escribe, envía, borra o usa el Mac siempre se aprueba con el botón."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Desactivado": {
       "extractionState": "manual",
       "localizations": {
@@ -4460,6 +4520,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Desvincular…"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Detalles": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detalles"
           }
         }
       },
@@ -4688,6 +4760,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Doble clic para revisar"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Doble clic para ver la decisión": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doble clic para ver la decisión"
           }
         }
       },
@@ -5696,6 +5780,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Enseña a Jarvis a reconocer su nombre. Pulsa una vez y espera a “Grabando” antes de hablar. Cada muestra dura 2 segundos y permanece en este Mac."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Entendido": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entendido"
           }
         }
       },
@@ -9356,6 +9452,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "No ejecuté la acción."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "No escribas contraseñas ni claves aquí.": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No escribas contraseñas ni claves aquí."
           }
         }
       },
@@ -14192,6 +14300,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "También puedes decir el nombre del navegador."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "También puedes decir «Aprobado».": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "También puedes decir «Aprobado»."
           }
         }
       },

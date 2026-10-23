@@ -218,17 +218,6 @@ struct JarvisChatView: View {
             header(sidebarVisible: sidebarVisible)
             JarvisSeparator()
             transcript
-            if model.interactionID != nil {
-                Button {
-                    RequestedWindowFocus.open("approval") { openWindow(id: "approval") }
-                } label: {
-                    Label(model.pendingApproval != nil ? String(localized: "Revisar acción pendiente", bundle: .module) : String(localized: "Revisar solicitud", bundle: .module),
-                          systemImage: "exclamationmark.bubble")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .buttonStyle(HUDActionStyle(accent: HUDStyle.accent(for: .warning)))
-                .padding(.horizontal, 20).padding(.bottom, 12)
-            }
             if chat.transcript.hasNewerHistory {
                 HStack(spacing: 12) {
                     Label(String(localized: "Viendo mensajes anteriores", bundle: .module), systemImage: "clock.arrow.circlepath")
@@ -376,6 +365,11 @@ struct JarvisChatView: View {
                                 .buttonStyle(MenuBarSmallButtonStyle()).disabled(!model.canManageChatHistory)
                         }
                         ForEach(chat.transcript.messages) { message in messageView(message).id(message.id) }
+                        if model.decisionBelongsToChat {
+                            JarvisDecisionCard(model: model)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            .id("decision")
+                        }
                         Color.clear.frame(height: 1).id("latest")
                     }.frame(maxWidth: 700).frame(maxWidth: .infinity).padding(.horizontal, 24).padding(.vertical, 20)
                 }
@@ -383,6 +377,11 @@ struct JarvisChatView: View {
             .defaultScrollAnchor(.bottom)
             .onChange(of: chat.transcript.messages.last?.id) { _, _ in
                 if !chat.transcript.hasNewerHistory { proxy.scrollTo("latest", anchor: .bottom) }
+            }
+            .onChange(of: model.interactionID) { _, id in
+                if id != nil, model.decisionBelongsToChat {
+                    withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("latest", anchor: .bottom) }
+                }
             }
             .onChange(of: chat.conversationID) { _, _ in
                 if chat.historyMatchNavigation == nil { proxy.scrollTo("latest", anchor: .bottom) }

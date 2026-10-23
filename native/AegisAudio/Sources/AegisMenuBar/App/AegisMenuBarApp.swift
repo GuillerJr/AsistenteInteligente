@@ -201,13 +201,6 @@ struct AegisMenuBarApp: App {
         .defaultSize(width: 920, height: 660)
         .windowResizability(.contentMinSize)
 
-        Window("Decisión de Jarvis", id: "approval") {
-            ApprovalView(model: model)
-                .background(RequestedWindowRegistration(id: "approval"))
-        }
-        .defaultSize(width: 560, height: 560)
-        .windowResizability(.contentMinSize)
-
         Window("Activación por voz de Jarvis", id: "wake-word-enrollment") {
             WakeWordEnrollmentView(model: model)
                 .background(RequestedWindowRegistration(id: "wake-word-enrollment"))
@@ -228,7 +221,6 @@ private struct MenuBarLabel: View {
     let model: MenuBarModel
     let settingsStore: JarvisSettingsStore
     @Environment(\.openWindow) private var openWindow
-    @Environment(\.dismissWindow) private var dismissWindow
 
     var body: some View {
         Label("Jarvis", systemImage: "waveform")
@@ -238,11 +230,12 @@ private struct MenuBarLabel: View {
                 if NotchPreviewMode(arguments: ProcessInfo.processInfo.arguments) != nil { return }
 #endif
                 guard interactionID != nil else {
-                    RequestedWindowFocus.close("approval") { dismissWindow(id: "approval") }
+                    NotchApprovalPanelController.shared.hide()
+                    // A decision answered here must leave «Requiere tu atención» at once.
+                    Task { await model.chat.refreshAttention(model: model) }
                     return
                 }
-                NotchPanelController.shared.dismissForInteractionReview()
-                RequestedWindowFocus.open("approval") { openWindow(id: "approval") }
+                presentDecision()
             }
             .task {
                 let arguments = ProcessInfo.processInfo.arguments
@@ -269,8 +262,7 @@ private struct MenuBarLabel: View {
                 model.startPrivacyChangeMonitoring()
                 NotchPanelController.shared.show(model: model, reviewInteraction: {
                     guard model.interactionID != nil else { return }
-                    NotchPanelController.shared.dismissForInteractionReview()
-                    RequestedWindowFocus.open("approval") { openWindow(id: "approval") }
+                    presentDecision(underNotch: true)
                 })
                 model.voiceShortcutAvailable = VoiceHotKeyController.shared.install {
                     Task { await model.startVoiceTurn() }
@@ -301,5 +293,18 @@ private struct MenuBarLabel: View {
                 }
                 await model.runBackgroundMonitoring()
             }
+    }
+
+    /// A decision asked for in the chat is answered in that chat when it is in view;
+    /// anything else (voice, Dot, a hidden chat) gets the card under the notch. There
+    /// is no separate decision window.
+    private func presentDecision(underNotch: Bool = false) {
+        guard model.interactionID != nil else { return }
+        if !underNotch, model.decisionBelongsToChat, RequestedWindowFocus.isShowing("chat") {
+            NotchApprovalPanelController.shared.hide()
+            return
+        }
+        NotchPanelController.shared.dismissForInteractionReview()
+        NotchApprovalPanelController.shared.show(model: model)
     }
 }

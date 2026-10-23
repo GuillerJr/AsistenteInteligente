@@ -23,6 +23,7 @@
 "%lld de %lld mínimas" = "%lld de %lld mínimas";
 "%lld herramientas revisadas" = "%lld herramientas revisadas";
 "%lld pendientes" = "%lld pendientes";
+"%lld s" = "%lld s";
 "%lld veces" = "%lld veces";
 "%lld/4000" = "%lld/4000";
 "%lld/600" = "%lld/600";
@@ -120,6 +121,8 @@
 "Aplicación" = "Aplicación";
 "Aplicar y reiniciar" = "Aplicar y reiniciar";
 "Apps que Jarvis puede usar" = "Apps que Jarvis puede usar";
+"Aprobación de Jarvis" = "Aprobación de Jarvis";
+"Aprobación pendiente" = "Aprobación pendiente";
 "Aprobación por voz" = "Aprobación por voz";
 "Aprobar con la voz las acciones de solo lectura" = "Aprobar con la voz las acciones de solo lectura";
 "Aprobar en los ajustes de macOS" = "Aprobar en los ajustes de macOS";
@@ -197,6 +200,7 @@
 "Cada %lld minutos" = "Cada %lld minutos";
 "Cada cierto tiempo" = "Cada cierto tiempo";
 "Cada tarea te pedirá acceso cuando sea necesario. Jarvis resolverá la pestaña y limitará el acceso a esa tarea." = "Cada tarea te pedirá acceso cuando sea necesario. Jarvis resolverá la pestaña y limitará el acceso a esa tarea.";
+"Caducó" = "Caducó";
 "Calendario" = "Calendario";
 "Calendario disponible." = "Calendario disponible.";
 "Cambia sus asignaciones antes de quitarlo" = "Cambia sus asignaciones antes de quitarlo";
@@ -357,6 +361,7 @@
 "Decisión de Jarvis" = "Decisión de Jarvis";
 "Dejará de ejecutarse. Su chat con los resultados se conserva." = "Dejará de ejecutarse. Su chat con los resultados se conserva.";
 "Desactivada por defecto. Si la activas, al pedirte una aprobación Jarvis escucha unos segundos y acepta un «sí» de tu voz solo en acciones que leen, como buscar correos. Lo que escribe, envía, borra o usa el Mac siempre pide el botón o Touch ID." = "Desactivada por defecto. Si la activas, al pedirte una aprobación Jarvis escucha unos segundos y acepta un «sí» de tu voz solo en acciones que leen, como buscar correos. Lo que escribe, envía, borra o usa el Mac siempre pide el botón o Touch ID.";
+"Desactivada por defecto. Si la activas, al pedirte una aprobación Jarvis escucha unos segundos y acepta un «sí» de tu voz solo en acciones que leen, como buscar correos. Lo que escribe, envía, borra o usa el Mac siempre se aprueba con el botón." = "Desactivada por defecto. Si la activas, al pedirte una aprobación Jarvis escucha unos segundos y acepta un «sí» de tu voz solo en acciones que leen, como buscar correos. Lo que escribe, envía, borra o usa el Mac siempre se aprueba con el botón.";
 "Desactivado" = "Desactivado";
 "Desactivar" = "Desactivar";
 "Desactivar %@" = "Desactivar %@";
@@ -371,6 +376,7 @@
 "Describe lo que necesitas para este proyecto…" = "Describe lo que necesitas para este proyecto…";
 "Desvincular" = "Desvincular";
 "Desvincular…" = "Desvincular…";
+"Detalles" = "Detalles";
 "Detalles de la acción" = "Detalles de la acción";
 "Detener" = "Detener";
 "Detener %d:%02d" = "Detener %d:%02d";
@@ -390,6 +396,7 @@
 "Doble clic para dejar de escuchar" = "Doble clic para dejar de escuchar";
 "Doble clic para hablar" = "Doble clic para hablar";
 "Doble clic para revisar" = "Doble clic para revisar";
+"Doble clic para ver la decisión" = "Doble clic para ver la decisión";
 "Dot" = "Dot";
 "Dot está atento" = "Dot está atento";
 "Dot está en pausa" = "Dot está en pausa";
@@ -474,6 +481,7 @@
 "Encontré varias opciones. Elige dónde continuar con tu solicitud." = "Encontré varias opciones. Elige dónde continuar con tu solicitud.";
 "Enrutamiento" = "Enrutamiento";
 "Enseña a Jarvis a reconocer su nombre. Pulsa una vez y espera a “Grabando” antes de hablar. Cada muestra dura 2 segundos y permanece en este Mac." = "Enseña a Jarvis a reconocer su nombre. Pulsa una vez y espera a “Grabando” antes de hablar. Cada muestra dura 2 segundos y permanece en este Mac.";
+"Entendido" = "Entendido";
 "Entendido. No ejecuté la acción." = "Entendido. No ejecuté la acción.";
 "Enter para preguntar · Esc para cerrar · La conversación queda en tu historial." = "Enter para preguntar · Esc para cerrar · La conversación queda en tu historial.";
 "Entrenando localmente… Puede tardar varios minutos." = "Entrenando localmente… Puede tardar varios minutos.";
@@ -779,6 +787,7 @@
 "No concede control ni aprueba acciones." = "No concede control ni aprueba acciones.";
 "No disponible" = "No disponible";
 "No ejecuté la acción." = "No ejecuté la acción.";
+"No escribas contraseñas ni claves aquí." = "No escribas contraseñas ni claves aquí.";
 "No escuché nada que guardar de la reunión." = "No escuché nada que guardar de la reunión.";
 "No fue posible guardar la muestra" = "No fue posible guardar la muestra";
 "No hay integraciones configuradas." = "No hay integraciones configuradas.";
@@ -1182,6 +1191,7 @@
 "Síntesis" = "Síntesis";
 "TU DECISIÓN" = "TU DECISIÓN";
 "También puedes decir el nombre del navegador." = "También puedes decir el nombre del navegador.";
+"También puedes decir «Aprobado»." = "También puedes decir «Aprobado».";
 "Tarea borrada." = "Tarea borrada.";
 "Tarea guardada." = "Tarea guardada.";
 "Tarea pausada." = "Tarea pausada.";
