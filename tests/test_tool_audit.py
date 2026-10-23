@@ -1,3 +1,4 @@
+import hashlib
 import json
 import stat
 from concurrent.futures import ThreadPoolExecutor
@@ -13,6 +14,9 @@ from aegis_core.contracts import (
     ToolExecutionResult,
 )
 from aegis_core.tools.audit import AuditIntegrityError, HashChainAuditLog
+from aegis_core.tools.computer import ComputerActionSummary, ComputerUseReport
+from aegis_core.tools.defaults import default_policy_context
+from aegis_core.tools.execution import ReadOnlyToolExecutor
 
 REQUEST_ID = UUID("11111111-1111-4111-8111-111111111111")
 FIXED_TIME = datetime(2026, 8, 18, 12, 0, tzinfo=UTC)
@@ -259,3 +263,112 @@ def test_audit_log_rejects_oversized_existing_file(tmp_path: Path) -> None:
 def test_audit_log_rejects_non_positive_capacity(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="must be positive"):
         HashChainAuditLog(tmp_path / "audit.jsonl", max_bytes=0)
+
+
+@pytest.mark.parametrize("action", [None, "type"])
+async def test_partial_computer_execution_audits_only_closed_diagnostics(tmp_path, action):
+    report = ComputerUseReport(
+        status="partial", steps=2, application_bundle_identifier="com.apple.TextEdit",
+        reason_code="postcondition_failed", failed_check="unverified_action",
+        observation_sha256="e" * 64,
+        last_action=(ComputerActionSummary(
+            action=action, target="SYNTHETIC_PRIVATE_AX_LABEL", text_sha256="d" * 64,
+        ) if action else None),
+    )
+
+    class SyntheticController:
+        async def run(self, **kwargs):
+            return report
+
+    authorization = ToolAuthorization(
+        call_id="synthetic-computer", tool_name="computer_use", call_digest="a" * 64,
+        decision=PolicyDecision.ALLOW, reason_code="confirmation_consumed",
+        normalized_arguments={
+            "objective": "Escribe «SYNTHETIC_PRIVATE_VALUE» en TextEdit",
+            "application_bundle_identifier": "com.apple.TextEdit", "max_steps": 3,
+        },
+    )
+    result = await ReadOnlyToolExecutor(computer_controller=SyntheticController()).execute_async(
+        authorization, default_policy_context(tmp_path)
+    )
+    assert result.success and result.metadata.get("last_action_type") == action
+    assert result.output == report.model_dump_json()
+    audit = HashChainAuditLog(tmp_path / "audit.jsonl", clock=lambda: FIXED_TIME)
+    audit.record_execution(REQUEST_ID, result)
+    record, = audit.verify()
+    assert record.data == {
+        "success": True, "error_code": None,
+        "output_bytes": len(result.output.encode()),
+        "output_sha256": hashlib.sha256(result.output.encode()).hexdigest(),
+        "computer_status": "partial", "computer_steps": 2,
+        "computer_reason_code": "postcondition_failed",
+        "computer_failed_check": "unverified_action", "computer_last_action_type": action,
+    }
+    stored = audit.path.read_text()
+    assert all(value not in stored for value in (
+        "SYNTHETIC_PRIVATE_AX_LABEL", "SYNTHETIC_PRIVATE_VALUE", "com.apple.TextEdit",
+        "e" * 64, "d" * 64,
+    ))
+
+
+def _computer_result_metadata():
+    return {
+        "source": "native_computer_control", "status": "partial", "steps": 2,
+        "reason_code": "postcondition_failed", "failed_check": "unverified_action",
+        "last_action_type": "type", "objective": "SYNTHETIC_PRIVATE_VALUE",
+        "target": "SYNTHETIC_PRIVATE_AX_LABEL", "x": 999, "y": 888,
+        "observation_sha256": "e" * 64, "application_bundle_identifier": "private.bundle.name",
+    }
+
+
+@pytest.mark.parametrize(("name", "value"), [
+    ("status", "SYNTHETIC_PRIVATE_VALUE"), ("status", True),
+    ("reason_code", "SYNTHETIC_PRIVATE_VALUE"), ("reason_code", 1),
+    ("failed_check", "SYNTHETIC_PRIVATE_VALUE"), ("failed_check", False),
+    ("last_action_type", "SYNTHETIC_PRIVATE_VALUE"), ("last_action_type", "done"),
+    ("last_action_type", {"text": "SYNTHETIC_PRIVATE_VALUE"}),
+    ("steps", "2"), ("steps", True), ("steps", -1), ("steps", 13), ("steps", 2.5),
+])
+def test_computer_audit_rejects_unvalidated_metadata_types_and_unlisted_values(
+    tmp_path, name, value,
+):
+    result = ToolExecutionResult(
+        call_id="synthetic-computer", tool_name="computer_use", success=True,
+        output="SYNTHETIC_PRIVATE_OUTPUT",
+    ).model_copy(update={"metadata": {**_computer_result_metadata(), name: value}})
+    # Even a caller bypassing model validation cannot expand the audit's whitelist.
+    audit = HashChainAuditLog(tmp_path / "audit.jsonl", clock=lambda: FIXED_TIME)
+    audit.record_execution(REQUEST_ID, result)
+    record, = audit.verify()
+    assert f"computer_{name}" not in record.data
+    assert record.data["output_sha256"] == hashlib.sha256(result.output.encode()).hexdigest()
+    assert set(record.data) <= {
+        "success", "error_code", "output_bytes", "output_sha256", "computer_status",
+        "computer_steps", "computer_reason_code", "computer_failed_check",
+        "computer_last_action_type",
+    }
+    stored = audit.path.read_text()
+    assert "SYNTHETIC_PRIVATE" not in stored
+    assert "private.bundle.name" not in stored and "e" * 64 not in stored
+
+
+@pytest.mark.parametrize(("tool_name", "source"), [
+    ("filesystem_read_text", "native_computer_control"),
+    ("computer_use", "synthetic_untrusted_source"),
+])
+def test_computer_diagnostics_require_both_native_source_and_exact_tool(
+    tmp_path, tool_name, source,
+):
+    result = ToolExecutionResult(
+        call_id="synthetic-computer", tool_name=tool_name, success=True,
+        output="SYNTHETIC_PRIVATE_OUTPUT",
+        metadata={**_computer_result_metadata(), "source": source},
+    )
+    audit = HashChainAuditLog(tmp_path / "audit.jsonl", clock=lambda: FIXED_TIME)
+    audit.record_execution(REQUEST_ID, result)
+    record, = audit.verify()
+    assert record.data == {
+        "success": True, "error_code": None, "output_bytes": len(result.output.encode()),
+        "output_sha256": hashlib.sha256(result.output.encode()).hexdigest(),
+    }
+    assert "SYNTHETIC_PRIVATE" not in audit.path.read_text()

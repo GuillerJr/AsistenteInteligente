@@ -14,10 +14,41 @@ from pathlib import Path
 from typing import Any, Protocol
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, field_validator
 
 from aegis_core.contracts import ToolAuthorization, ToolExecutionResult
 from aegis_core.failure_boundary import record_boundary_error
+from aegis_core.tools.computer import ComputerActionSummary, ComputerUseReport
+
+_COMPUTER_DIAGNOSTIC_ADAPTERS = {
+    name: TypeAdapter(ComputerUseReport.model_fields[name].annotation)
+    for name in ("status", "reason_code", "failed_check")
+}
+_COMPUTER_DIAGNOSTIC_ADAPTERS["last_action_type"] = TypeAdapter(
+    ComputerActionSummary.model_fields["action"].annotation
+)
+
+
+def _computer_execution_diagnostics(result: ToolExecutionResult) -> dict[str, str | int | None]:
+    if (
+        result.tool_name != "computer_use"
+        or result.metadata.get("source") != "native_computer_control"
+    ):
+        return {}
+    diagnostics: dict[str, str | int | None] = {}
+    for name, adapter in _COMPUTER_DIAGNOSTIC_ADAPTERS.items():
+        value = result.metadata.get(name)
+        if value is None and name in {"failed_check", "last_action_type"}:
+            diagnostics[f"computer_{name}"] = None
+        elif type(value) is str:
+            try:
+                diagnostics[f"computer_{name}"] = adapter.validate_python(value, strict=True)
+            except ValidationError:
+                pass  # Unrecognized text must never enter the content-free audit.
+    steps = result.metadata.get("steps")
+    if type(steps) is int and 0 <= steps <= 12:
+        diagnostics["computer_steps"] = steps
+    return diagnostics
 
 
 class AuditIntegrityError(RuntimeError):
@@ -193,6 +224,7 @@ class HashChainAuditLog:
                 "error_code": result.error_code,
                 "output_bytes": len(encoded_output),
                 "output_sha256": hashlib.sha256(encoded_output).hexdigest(),
+                **_computer_execution_diagnostics(result),
             },
         )
         self._notify_activity("record_execution", request_id, result)

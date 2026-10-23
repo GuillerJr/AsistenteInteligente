@@ -125,3 +125,30 @@ abiertos en P1-5 hasta comprobarlos en la app instalada.
 
 Comportamiento de razonamiento y presupuesto de Omni:
 [NVIDIA NIM Omni API](https://docs.nvidia.com/nim/vision-language-models/1.7.0/examples/nemotron-3-nano-omni-30b-a3b-reasoning/api.html).
+
+Tras instalar `8d79bd1`, se verificaron firma, revisión limpia, arranque, IPC,
+diagnóstico y VAD sintético; CI y todos los gates pasaron. El dueño eligió
+«En esta conversación», apareció el recibo y se reutilizó el permiso. No eligió
+«Siempre» en ese intento. La escritura seguía sin verificarse y el documento
+permaneció vacío. El audit anterior solo conservaba el hash de la salida y no
+permitía distinguir el último gesto del motivo de detención.
+
+Otro sondeo completo con NVIDIA y AX ficticio reprodujo un campo ya enfocado:
+Omni pidió `focus`, el puente verificó ese gesto sin cambio, Omni volvió a pedir
+`focus` y la protección detuvo el ciclo con `partial`, un paso y `no_progress`,
+sin escribir. Ambas respuestas fueron Omni/HTTP 200/`stop`, sin respaldo.
+El modelo recibe ahora el contexto de la acción anterior y la indicación de no
+reenfocar un campo que ya tiene el foco. Los destinos de acciones siguen ligados
+al descriptor AX completo (`item.text`), mientras las postcondiciones usan la
+etiqueta del campo; no se relaja el enlace nativo ni la protección de repetición.
+Con la corrección, dos sondeos NVIDIA completaron la postcondición ficticia con
+`focus → type`, tanto con el campo inicialmente enfocado como sin enfocar, en
+1,85 y 2,05 segundos. El primer caso aún empezó con un foco innecesario; el
+contexto evitó que lo repitiera. Las cuatro respuestas fueron Omni/HTTP 200/`stop`,
+sin respaldo ni acciones reales en el Mac.
+
+La auditoría añade únicamente estado, pasos, motivo, comprobación fallida y tipo
+de última acción para `computer_use` de origen nativo. Se validan tipos y enums
+cerrados; no se copian objetivos, valores, etiquetas, coordenadas ni imágenes.
+Los mensajes parciales explican el motivo permitido sin afirmar que se escribió.
+Estas comprobaciones no cierran P1-5 hasta repetir la prueba real instalada.

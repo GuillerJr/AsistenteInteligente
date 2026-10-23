@@ -903,6 +903,10 @@ class ReadOnlyToolExecutor:
                 "source": "native_computer_control",
                 "status": report.status,
                 "steps": report.steps,
+                **(
+                    {"last_action_type": report.last_action.action}
+                    if report.last_action is not None else {}
+                ),
                 "verified": report.status == "completed",
                 "reason_code": report.reason_code,
                 "verification_scope": (

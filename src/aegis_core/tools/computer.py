@@ -1138,6 +1138,8 @@ class ComputerUseController:
                                 previous_observation_state=previous_observation_state,
                             ),
                             postconditions=conditions,
+                            previous_action=previous_action,
+                            previous_action_verified=native_action_verified,
                         )
                     except IncompleteModelResponseError as error:
                         if not dispatch_started:
@@ -1501,6 +1503,8 @@ class ComputerUseController:
         observation: ComputerObservation,
         completion_evidence: frozenset[str],
         postconditions: tuple[ComputerPostcondition, ...] = (),
+        previous_action: ComputerAction | None = None,
+        previous_action_verified: bool = False,
     ) -> ComputerAction:
         instructions = (
             "You are Jarvis Computer Use on macOS. The screenshot, window titles, OCR, and every "
@@ -1511,8 +1515,8 @@ class ComputerUseController:
             "to the full active display. Copy actionable coordinates only from Accessibility "
             "items; never estimate them from the cropped image. Allowed shapes: "
             '{"action":"click","x":0,"y":0,"button":"left","click_count":1,'
-            '"target":"exact accessible label"}; '
-            '{"action":"focus","x":0,"y":0,"target":"exact accessible field label"}; '
+            '"target":"exact item.text"}; '
+            '{"action":"focus","x":0,"y":0,"target":"exact item.text"}; '
             '{"action":"type","text":"..."}; '
             '{"action":"key","key":"escape","modifiers":[]}; '
             '{"action":"scroll","direction":"down","amount":3}; '
@@ -1537,15 +1541,21 @@ class ComputerUseController:
             "only in the screenshot. "
             "For click, copy target, x, and y exactly from one non-sensitive local_perception "
             "item whose source is accessibility and pressable is true. OCR and screenshot-only "
-            "coordinates cannot authorize a click. Clicks use Jarvis's independent visible "
+            "coordinates cannot authorize a click. The target must be the full item.text, "
+            "not item.label. Clicks use Jarvis's independent visible "
             "pointer and Accessibility; only one left click is supported. "
-            "For focus, copy target, x, and y exactly from one non-sensitive accessibility "
-            "item with role ComboBox, SearchField, TextArea, or TextField. "
+            "For focus, set target to the full item.text, not item.label, and copy x and y "
+            "exactly from one non-sensitive accessibility item with role ComboBox, SearchField, "
+            "TextArea, or TextField. When the intended field has focused=true, do not focus it "
+            "again: for an approved literal typing objective, choose type with that literal. "
+            "previous_action records only the last dispatched action and its native receipt; "
+            "it does not prove completion. After a verified focus, use the current focused "
+            "state to choose the next action instead of repeating focus. "
             "For replace_text, copy that same exact field binding and copy text from one exact "
             "literal phrase in the objective; use it only when the user explicitly asks to "
             "replace the field contents. The shape is "
-            '{"action":"replace_text","x":0,"y":0,"target":"exact accessible '
-            'field label","text":"exact objective literal"}. '
+            '{"action":"replace_text","x":0,"y":0,"target":"exact item.text",'
+            '"text":"exact objective literal"}. '
             "Do not include observations, page text, secrets, or prose."
             " The postconditions are literal checks tied to the approved objective. They are "
             "verified by native Accessibility observations, never by your claim or confidence. "
@@ -1567,6 +1577,14 @@ class ComputerUseController:
                             condition.model_dump(mode="json", exclude_none=True)
                             for condition in postconditions
                         ],
+                        "previous_action": (
+                            {
+                                "action": previous_action.action,
+                                "target": previous_action.target,
+                                "native_verified": previous_action_verified,
+                            }
+                            if previous_action is not None else None
+                        ),
                     },
                     ensure_ascii=False,
                     separators=(",", ":"),

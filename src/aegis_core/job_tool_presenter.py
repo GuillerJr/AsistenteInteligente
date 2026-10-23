@@ -398,11 +398,6 @@ class JobToolPresenter:
                 if all(check.kind == "action_performed" for check in report.postcondition_checks):
                     return "Ejecuté y comprobé el gesto solicitado."
                 return "Completé el objetivo y comprobé el resultado en la aplicación."
-            if status == "partial":
-                return (
-                    "Realicé parte de la tarea, pero no pude comprobar el resultado final. "
-                    "Me detuve para evitar repetir cambios."
-                )
             if status == "step_limit":
                 if reason_code != "step_limit" or steps != max_steps:
                     raise ValueError("computer result reason is invalid")
@@ -414,10 +409,16 @@ class JobToolPresenter:
                 "user_takeover": "detectó que retomaste el teclado o el puntero",
                 "missing_postcondition": "falta una condición comprobable para el resultado",
                 "postcondition_failed": "el resultado observado no coincide con lo solicitado",
+                "step_limit": "alcanzó el límite de pasos sin verificar el objetivo",
             }
             reason = reasons.get(reason_code)
             if reason is None:
                 raise ValueError("computer result reason is invalid")
+            if status == "partial":
+                return (
+                    f"Jarvis detuvo el control visual porque {reason}. "
+                    "El resultado final sigue sin verificar. Me detuve para evitar repetir cambios."
+                )
             return f"Jarvis detuvo el control visual porque {reason}."
         if result.tool_name == "terminal_run_template":
             template = result.metadata.get("template")
