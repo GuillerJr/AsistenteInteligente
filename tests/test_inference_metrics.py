@@ -47,6 +47,10 @@ async def test_metrics_count_http_fallbacks_without_counting_unknown_usage_as_kn
     data = audit.events[request_id]
     assert data["http_requests"] == 2 and data["usage_responses"] == 1
     assert data["prompt_tokens"] == 8 and data["completion_tokens"] == 3
+    assert data["fallback_count"] == 1
+    assert data["fallback_reason"] == "http_410"
+    assert data["fallback_requested_model_id"] != data["fallback_actual_model_id"]
+    assert data["fallback_actual_model_id"] == data["model_id"]
     assert "Mensaje privado" not in json.dumps(data)
 
 

@@ -4,6 +4,8 @@ Asistente personal para **macOS Apple Silicon**. Conversa por texto o voz, organ
 proyectos y tareas, y trabaja con tus apps mediante acciones que tú apruebas.
 La interfaz está en español. La inferencia usa **NVIDIA exclusivamente** y requiere
 internet; la ejecución de herramientas, los permisos y la memoria cifrada viven en el Mac.
+La recuperación semántica también usa NVIDIA: envía consultas y fragmentos de memoria
+con secretos redactados para obtener embeddings; el índice permanece en el Mac.
 
 ## Instalar y empezar
 

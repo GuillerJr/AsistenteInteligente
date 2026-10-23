@@ -42,7 +42,6 @@ from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.retrieval import MemoryRetriever
 from aegis_core.memory.social import SocialMemory
 from aegis_core.memory.task_checkpoint import TaskCheckpoint
-from aegis_core.models import INTERPRETATION_MODEL_IDS
 from aegis_core.orchestration.authorization_nodes import create_authorize_tools_node
 from aegis_core.orchestration.clarification import (
     may_ask_user,
@@ -79,7 +78,7 @@ from aegis_core.privacy import (
 from aegis_core.providers.base import (
     ChatProvider,
 )
-from aegis_core.request_intent import is_explicit_native_ui_request
+from aegis_core.request_intent import is_chat_only_request, is_explicit_native_ui_request
 from aegis_core.scheduling import interpret_schedule_request
 from aegis_core.skills import (
     SkillActivation,
@@ -250,7 +249,9 @@ def build_swarm_graph(
             scope_request=scope_request,
             skills=skills,
         )
-        if is_explicit_native_ui_request(request.text):
+        if is_chat_only_request(request.text):
+            names = frozenset()
+        elif is_explicit_native_ui_request(request.text):
             # The requested app is the destination. A semantic guess, old service
             # context or a Skill starter cannot substitute a cloud write for its UI.
             names = frozenset({"computer_use"})
@@ -435,7 +436,6 @@ def build_swarm_graph(
                 result = await complete_for(
                     AgentRole.ROUTER,
                     audit_request_id=request.request_id,
-                    model_ids=INTERPRETATION_MODEL_IDS,
                     max_tokens=400,
                     temperature=0.0,
                     structured_time_budget=4.0,
@@ -482,7 +482,6 @@ def build_swarm_graph(
                 result = await complete_for(
                     AgentRole.ROUTER,
                     audit_request_id=request.request_id,
-                    model_ids=INTERPRETATION_MODEL_IDS,
                     max_tokens=400,
                     temperature=0.0,
                     structured_time_budget=6.0,

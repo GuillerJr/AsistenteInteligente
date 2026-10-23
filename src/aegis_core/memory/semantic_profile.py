@@ -22,7 +22,6 @@ from typing import Any
 
 from aegis_core.completion_boundary import optional_completion
 from aegis_core.contracts import AgentRole
-from aegis_core.models import INTERPRETATION_MODEL_IDS
 from aegis_core.privacy import redact_secrets_for_remote
 
 MAX_OPERATIONS = 4
@@ -180,7 +179,7 @@ def nvidia_memory_interpreter(brain: Any, *, timeout_seconds: float = 12.0) -> C
     async def complete(messages: list[dict[str, str]]) -> str:
         async with asyncio.timeout(timeout_seconds):
             result = await brain.complete_nvidia_only(
-                role=AgentRole.ROUTER, model_ids=INTERPRETATION_MODEL_IDS,
+                role=AgentRole.ROUTER,
                 max_tokens=600, temperature=0.0, structured_time_budget=timeout_seconds,
                 extra_body={"response_format": {"type": "json_object"}},
                 messages=messages,

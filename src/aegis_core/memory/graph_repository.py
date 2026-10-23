@@ -362,16 +362,12 @@ class GraphRepository:
 
     @classmethod
     def encode_vector(cls, vector: tuple[float, ...]) -> bytes:
+        if len(vector) > GRAPH_EMBEDDING_DIMENSIONS:
+            raise MemoryQueryError("embedding must be reduced by its encoder before indexing")
         normalized = cls._normalize_vector(vector)
-        projected = [0.0] * GRAPH_EMBEDDING_DIMENSIONS
-        for index, value in enumerate(normalized):
-            bucket = index % GRAPH_EMBEDDING_DIMENSIONS
-            sign = 1.0 if (index // GRAPH_EMBEDDING_DIMENSIONS) % 2 == 0 else -1.0
-            projected[bucket] += sign * value
-        norm = math.sqrt(math.fsum(value * value for value in projected))
-        if norm <= 0.0:
-            raise MemoryQueryError("projected graph vector norm must be positive")
-        projected = [value / norm for value in projected]
+        # Zero-padding preserves cosine distances for supported smaller encoders.
+        # Larger spaces need a documented encoder-specific reduction, never folding.
+        projected = [*normalized, *([0.0] * (GRAPH_EMBEDDING_DIMENSIONS - len(normalized)))]
         try:
             return struct.pack(f"<{GRAPH_EMBEDDING_DIMENSIONS}f", *projected)
         except (OverflowError, struct.error) as error:

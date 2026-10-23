@@ -32,6 +32,12 @@ _FAILURE_EVENTS = {
     "telegram_delivery_failed": "No se pudo entregar en Telegram",
 }
 _CODE_KEYS = ("error_code", "reason_code", "server_id", "tool")
+_FAILURE_TITLES = {
+    "incomplete_model_response": "NVIDIA devolvió una respuesta incompleta",
+    "web_access_failed": "No se pudieron consultar las fuentes web",
+    "web_search_unavailable": "Los proveedores de búsqueda no están disponibles",
+    "confirmation_expired": "La aprobación caducó antes de ejecutar la acción",
+}
 
 
 def _tail_events(path: Path, limit: int = TAIL_BYTES) -> list[dict[str, Any]]:
@@ -90,7 +96,8 @@ def health_report(events: Iterable[dict[str, Any]], *, now: datetime,
         elif kind in _FAILURE_EVENTS:
             detail = " · ".join(str(data[key]) for key in _CODE_KEYS
                                 if isinstance(data.get(key), str | int))[:120]
-            failures.append({"at": when.isoformat(), "title": _FAILURE_EVENTS[kind],
+            title = _FAILURE_TITLES.get(str(data.get("error_code")), _FAILURE_EVENTS[kind])
+            failures.append({"at": when.isoformat(), "title": title,
                              "detail": detail or None})
     answered = outcomes["completed"]
     attempted = sum(count for outcome, count in outcomes.items() if outcome != "cancelled")
@@ -124,12 +131,16 @@ class HealthIpcService:
 
     def __init__(self, audit_path: Path, *, mcp_status: Callable[[], dict[str, Any]] | None,
                  credential: Callable[[], Any], cooldown: Callable[[], float] = lambda: 0.0,
+                 fallback: Callable[[], dict[str, str] | None] = lambda: None,
+                 memory_status: Callable[[], Any] | None = None,
                  clock: Callable[[], datetime] = lambda: datetime.now(UTC)) -> None:
         self._audit_path = audit_path
         self._mcp_status = mcp_status
         self._credential = credential
         self._cooldown = cooldown
         self._clock = clock
+        self._fallback = fallback
+        self._memory_status = memory_status
 
     def handlers(self) -> dict[str, Any]:
         return {self.METHOD: self.handle}
@@ -157,7 +168,19 @@ class HealthIpcService:
         except Exception as error:
             record_boundary_error(error)
             cooldown = 0.0
-        return IpcHandlerResult(ok=True, payload=health_report(
+        report = health_report(
             events, now=self._clock(), mcp_status=mcp,
             credential=(credential or {}).get("credential") if isinstance(credential, dict)
-            else None, cooldown_seconds=cooldown))
+            else None, cooldown_seconds=cooldown)
+        try:
+            report["nvidia"]["last_fallback"] = self._fallback()
+        except Exception as error:
+            record_boundary_error(error)
+            report["nvidia"]["last_fallback"] = None
+        if self._memory_status is not None:
+            try:
+                report["memory"] = await self._memory_status()
+            except Exception as error:
+                record_boundary_error(error)
+                report["memory"] = {"state": "degraded"}
+        return IpcHandlerResult(ok=True, payload=report)

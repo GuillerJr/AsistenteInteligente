@@ -21,6 +21,9 @@ Marca cada punto como hecho (`[x]`) en el mismo commit que lo resuelve.
 
 La verificación del lote inicial (3.934 Python, 371 Swift del núcleo y 48 XCTest de interfaz), junto con las regresiones posteriores, se documenta en [quality/V1_IMPLEMENTATION_VERIFICATION.md](quality/V1_IMPLEMENTATION_VERIFICATION.md).
 
+Las mejoras funcionales y de memoria del 23-10, sus pruebas y límites se documentan
+en [quality/ARCHITECTURE_IMPROVEMENTS_20261023.md](quality/ARCHITECTURE_IMPROVEMENTS_20261023.md).
+
 La revisión con REA del 22-10 y el refuerzo de herramientas, borradores,
 recuperación y proyectos se documentan en
 [quality/CODEX_REA_TOOL_REVIEW.md](quality/CODEX_REA_TOOL_REVIEW.md), con cobertura
@@ -55,7 +58,7 @@ Hecha con Claude Code sobre la app instalada, que coincide con `46e8b75` (versi�
 - [ ] **R2-3. El acceso al Mac por app sigue sin funcionar de punta a punta (P1-5).** Es el mayor riesgo funcional de la 1.0. Las notas de P1-5 registran respuestas incompletas de NVIDIA, falsos positivos de contenido sensible, aprobaciones que caducan sin ejecutar y promesas sin ejecución. Hace falta un recorrido completo que pase: pedir una escritura en TextEdit, aprobar «Siempre», repetir sin pregunta y revocar. Si no se consigue a tiempo, valorar sacar el uso del Mac de la 1.0 o marcarlo como beta en la interfaz.
 - [ ] **R2-4. Estado vacío de «Archivados».** Con la lista vacía muestra «Tu primera conversación · Empieza un chat para verlo aquí», el mismo texto que Recientes. Debe decir que no hay chats archivados y cómo archivar uno.
 - [ ] **R2-5. «Buscar chats» se queda resaltado** en la barra lateral mientras se ven Recientes, Archivados o la Papelera, y convive con el campo «Buscar en títulos y mensajes» justo debajo. Unificar: un solo buscador y sin resaltar cuando no está activo.
-- [ ] **R2-6. Diagnóstico muestra códigos internos.** «Fallos recientes» enseña `incomplete_model_response` tal cual. Mostrar un texto en español («NVIDIA devolvió una respuesta incompleta») y dejar el código solo como detalle.
+- [x] **R2-6. Diagnóstico muestra códigos internos.** **Resuelto el 23-10:** los fallos conocidos tienen explicación en español y conservan el código en el detalle técnico. Diagnóstico también avisa del último respaldo NVIDIA y muestra el estado real del índice semántico. Regresiones Python y de presentación Swift. «Fallos recientes» enseñaba `incomplete_model_response` sin explicación específica.
 - [ ] **R2-7. Peso del repositorio.**
   - Los informes de cobertura REA (`docs/quality/CODEX_REA_*_COVERAGE.json`, unas 50.000 líneas y 1,4 MB) se versionan junto a la documentación; el paquete git pasó de 14 a 17 MB en un día.
   - Dejar en el repositorio el resumen `.md` y mover los JSON a un artefacto de CI o a `dist/` (ignorado).
@@ -79,15 +82,19 @@ Hecha con Claude Code sobre la app instalada, que coincide con `46e8b75` (versi�
     - Sustituir el clasificador de dos clases por una verificación de hablante real.
     - Quitar las pistas «sí/ok» del reconocedor.
     - Exigir una frase que nombre la acción.
-- [ ] **R2-11. Los modelos elegidos en Ajustes no gobiernan las decisiones.**
+- [x] **R2-11. Los modelos elegidos en Ajustes no gobiernan las decisiones.**
+  - **Resuelto el 23-10:** intención, herramientas, interpretación de memoria, novedad y objetivos usan la selección por rol de Ajustes, sin sobreescrituras fijas. El último respaldo exitoso identifica modelo solicitado, modelo usado y motivo, sin contenido del usuario. Guardar modelos sigue indicando que requiere reiniciar el servicio. Pruebas con preferencias distintas y transportes simulados; el recorrido sintético real confirmó el modelo del enrutador.
   - La selección de herramientas, la intención y la interpretación de tareas usan `INTERPRETATION_MODEL_IDS` (`models.py:23`, Lightning y GPT-OSS 20B), que ignora Ajustes.
   - Al configurar DeepSeek V4 Pro, ninguna llamada lo usó y no hubo aviso. Probablemente falló y Jarvis cayó al respaldo en silencio.
   - **Hecho cuando:** esas decisiones usan el modelo configurado y Diagnóstico avisa cuando un modelo cae a su respaldo.
-- [ ] **R2-12. La búsqueda web no devuelve nada.**
+- [x] **R2-12. La búsqueda web no devuelve nada.**
+  - **Resuelto el 23-10:** desafíos anti-robots, HTML no reconocido y RSS ambiguamente vacío se notifican como fallos del proveedor. Se mantienen los vacíos explícitos y el respaldo seguro. Una consulta pública real mediante el broker obtuvo una fuente verificable; 31 nuevas regresiones cubren fallos, respaldo, resultados vacíos y diagnóstico sin consultas ni URL.
   - Desde este Mac, `html.duckduckgo.com` responde 202 con una página anti-robots y el RSS de Bing llega vacío (`tools/web.py:257-258`).
   - `web_research` termina «con éxito» con 68 bytes y Jarvis responde «No encontré resultados públicos».
   - **Hecho cuando:** una búsqueda real devuelve fuentes, o el fallo del proveedor se informa como error y no como «sin resultados».
-- [ ] **R2-13. Elección de herramientas con el modelo actual.** En una batería fija con chats temporales, Jarvis propuso herramientas equivocadas en 4 de 7 turnos:
+- [x] **R2-13. Elección de herramientas con el modelo actual.**
+  - **Resuelto el 23-10:** las solicitudes de redactar en el chat, confirmar o trabajar sobre una lista pegada no habilitan acciones en servicios; el destino explícito TextEdit conserva el control del Mac. El selector recibe hasta 12 turnos dentro de 8 KiB y respeta el modelo configurado. Cinco escenarios sintéticos reales pasaron, incluyendo el control positivo de lectura de correo; ninguna herramienta se ejecutó. El recorrido con aprobación real de R2-3 sigue pendiente y no queda certificado por estas pruebas.
+  - En una batería fija con chats temporales, Jarvis propuso herramientas equivocadas en 4 de 7 turnos:
   - programar una tarea ante «solo confírmame que lo anotaste»;
   - buscar en Gmail para ordenar una lista que estaba en el chat;
   - crear un archivo en Drive o un borrador ante «escribe un mensaje»;

@@ -44,7 +44,6 @@ from aegis_core.memory.profile import OwnerProfile
 from aegis_core.memory.retrieval import MemoryRetriever
 from aegis_core.memory.social import SocialMemory
 from aegis_core.memory.task_checkpoint import TaskCheckpoint
-from aegis_core.models import INTERPRETATION_MODEL_IDS
 from aegis_core.orchestration.clarification import (
     may_ask_user,
     structured_clarification,
@@ -696,7 +695,6 @@ def _build_historical_swarm_graph(
             async with asyncio.timeout(4.0):
                 result = await complete_for(
                     AgentRole.ROUTER, nvidia_only=True, audit_request_id=request.request_id,
-                    model_ids=INTERPRETATION_MODEL_IDS,
                     max_tokens=400, temperature=0.0, structured_time_budget=4.0,
                     extra_body={"response_format": {"type": "json_object"}},
                     messages=messages,
@@ -732,7 +730,6 @@ def _build_historical_swarm_graph(
             async with asyncio.timeout(6.0):
                 result = await complete_for(
                     AgentRole.ROUTER, nvidia_only=True, audit_request_id=request.request_id,
-                    model_ids=INTERPRETATION_MODEL_IDS,
                     max_tokens=400, temperature=0.0, structured_time_budget=6.0,
                     extra_body={"response_format": {"type": "json_object"}},
                     messages=messages,

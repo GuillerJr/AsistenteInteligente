@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     )
 
     nvidia_base_url: AnyHttpUrl = "https://integrate.api.nvidia.com/v1"
-    nvidia_embedding_model_id: str = "nvidia/nemotron-3-embed-1b"
+    nvidia_embedding_model_id: str = "nvidia/nemotron-3.5-embed-1b"
     nvidia_tts_url: AnyHttpUrl = (
         "https://877104f7-e885-42b9-8de8-f6e4c6303969.invocation.api.nvcf.nvidia.com/"
         "v1/audio/synthesize"

@@ -17,7 +17,27 @@ import httpx
 
 
 class WebAccessError(RuntimeError):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        reason: str = "request_failed",
+        provider_failures: dict[str, str] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.reason = reason
+        # Only categorical diagnostics may leave the client: no query, URL,
+        # response body or exception text from a provider belongs in telemetry.
+        safe_reasons = {
+            "request_failed", "challenge", "invalid_response", "empty_response",
+            "result_pages_unavailable",
+        }
+        self.provider_failures = {
+            provider: failure
+            for provider, failure in (provider_failures or {}).items()
+            if provider in {"duckduckgo", "bing"}
+            and (failure in safe_reasons or re.fullmatch(r"http_[1-5][0-9]{2}", failure))
+        }
 
 
 Resolver = Callable[[str], tuple[str, ...]]
@@ -159,10 +179,19 @@ class _SearchParser(HTMLParser):
         self._snippet: list[str] = []
         self._capture_title = False
         self._capture_snippet = False
+        self.no_results = False
+        self.challenge = False
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         attributes = dict(attrs)
         classes = set((attributes.get("class") or "").split())
+        if classes & {"no-results", "no-results__message", "result--no-result"}:
+            self.no_results = True
+        if (
+            any(value.startswith("anomaly-modal") for value in classes)
+            or (tag == "form" and attributes.get("id") in {"challenge-form", "img-form"})
+        ):
+            self.challenge = True
         if tag == "a" and "result__a" in classes:
             self._href = attributes.get("href")
             self._title = []
@@ -313,21 +342,21 @@ class PublicWebClient:
         query_terms = _distinctive_search_terms(normalized_query)
         search_url = self.SEARCH_URL.format(query=quote_plus(normalized_query))
         candidates: list[dict[str, str]] = []
+        failures: dict[str, str] = {}
+        confirmed_empty = False
         try:
             _, _, body = self._request(
                 search_url,
                 timeout_seconds=self.PRIMARY_SEARCH_TIMEOUT_SECONDS,
             )
-        except WebAccessError:
-            pass
-        else:
-            parser = _SearchParser()
-            parser.feed(body.decode("utf-8", errors="replace"))
-            parser.close()
+            parsed_primary = _parse_html_search_results(body)
             candidates = _rank_relevant_candidates(
-                parser.results[: self.MAX_SEARCH_CANDIDATES],
+                parsed_primary[: self.MAX_SEARCH_CANDIDATES],
                 query_terms,
             )
+            confirmed_empty = not candidates
+        except WebAccessError as error:
+            failures["duckduckgo"] = error.reason
 
         seen: set[str] = set()
         results, primary_readable = self._read_research_candidates(
@@ -338,8 +367,11 @@ class PublicWebClient:
         )
         if results:
             return results
+        if candidates and not primary_readable:
+            failures["duckduckgo"] = "result_pages_unavailable"
 
         fallback_url = self.FALLBACK_SEARCH_URL.format(query=quote_plus(normalized_query))
+        fallback_candidates: list[dict[str, str]] = []
         try:
             _, _, body = self._request(
                 fallback_url,
@@ -347,14 +379,13 @@ class PublicWebClient:
                 timeout_seconds=self.FALLBACK_SEARCH_TIMEOUT_SECONDS,
             )
             parsed_fallback = _parse_rss_results(body)
+            fallback_candidates = _rank_relevant_candidates(
+                parsed_fallback[: self.MAX_SEARCH_CANDIDATES],
+                query_terms,
+            )
+            confirmed_empty = confirmed_empty or not fallback_candidates
         except WebAccessError as error:
-            if primary_readable:
-                return []
-            raise WebAccessError("web search providers are unavailable") from error
-        fallback_candidates = _rank_relevant_candidates(
-            parsed_fallback[: self.MAX_SEARCH_CANDIDATES],
-            query_terms,
-        )
+            failures["bing"] = error.reason
         results, fallback_readable = self._read_research_candidates(
             fallback_candidates,
             max_results=max_results,
@@ -366,8 +397,16 @@ class PublicWebClient:
         if primary_readable or fallback_readable:
             return []
         if candidates or fallback_candidates:
-            raise WebAccessError("web result pages are unavailable")
-        return []
+            if fallback_candidates:
+                failures["bing"] = "result_pages_unavailable"
+            raise WebAccessError(
+                "web result pages are unavailable", provider_failures=failures,
+            )
+        if confirmed_empty:
+            return []
+        raise WebAccessError(
+            "web search providers are unavailable", provider_failures=failures,
+        )
 
     def _read_research_candidates(
         self,
@@ -387,6 +426,8 @@ class PublicWebClient:
             try:
                 page = self.fetch(candidate["url"], max_characters=6_000)
             except WebAccessError:
+                return None, False
+            if not page["content"]:
                 return None, False
             if _search_relevance_score(
                 title=page["title"],
@@ -450,7 +491,10 @@ class PublicWebClient:
                             raise WebAccessError("web redirect is invalid") from error
                         continue
                     if response.status_code != 200:
-                        raise WebAccessError("web response status is unavailable")
+                        raise WebAccessError(
+                            "web response status is unavailable",
+                            reason=f"http_{response.status_code}",
+                        )
                     content_type = response.headers.get("content-type", "").split(";", 1)[0]
                     if content_type not in accepted_content_types:
                         raise WebAccessError("web content type is unsupported")
@@ -473,18 +517,37 @@ def _resolve_host(host: str) -> tuple[str, ...]:
     return tuple(sorted({value[4][0] for value in values}))
 
 
+def _parse_html_search_results(body: bytes) -> list[dict[str, str]]:
+    parser = _SearchParser()
+    parser.feed(body.decode("utf-8", errors="replace"))
+    parser.close()
+    if parser.challenge:
+        raise WebAccessError("web search challenge was returned", reason="challenge")
+    if parser.results or parser.no_results:
+        return parser.results
+    raise WebAccessError(
+        "web search response contains no result evidence",
+        reason="empty_response" if not body.strip() else "invalid_response",
+    )
+
+
 def _parse_rss_results(body: bytes) -> list[dict[str, str]]:
+    if not body.strip():
+        raise WebAccessError("web search response is empty", reason="empty_response")
     try:
         root = ElementTree.fromstring(body)
     except ElementTree.ParseError as error:
-        raise WebAccessError("web search response is invalid") from error
+        raise WebAccessError(
+            "web search response is invalid", reason="invalid_response",
+        ) from error
     if root.tag != "rss":
-        raise WebAccessError("web search response is invalid")
+        raise WebAccessError("web search response is invalid", reason="invalid_response")
     channel = root.find("channel")
     if channel is None:
-        raise WebAccessError("web search response is invalid")
+        raise WebAccessError("web search response is invalid", reason="invalid_response")
     results: list[dict[str, str]] = []
-    for item in channel.findall("item"):
+    items = channel.findall("item")
+    for item in items:
         title = _normalize_text(item.findtext("title", default=""))[:300]
         url = _normalize_text(item.findtext("link", default=""))
         description = item.findtext("description", default="")
@@ -494,6 +557,15 @@ def _parse_rss_results(body: bytes) -> list[dict[str, str]]:
         snippet = _normalize_text(" ".join(snippet_parser.parts))[:800]
         if title and url:
             results.append({"title": title, "url": url, "snippet": snippet})
+    if not results:
+        # An empty RSS channel is also returned on provider failures. Only an
+        # explicit search count establishes that a completed search found zero.
+        total = channel.findtext("{http://a9.com/-/spec/opensearch/1.1/}totalResults")
+        if items or total is None or total.strip() != "0":
+            raise WebAccessError(
+                "web search response contains no result evidence",
+                reason="invalid_response" if items else "empty_response",
+            )
     return results
 
 

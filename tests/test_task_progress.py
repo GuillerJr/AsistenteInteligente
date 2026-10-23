@@ -59,6 +59,28 @@ def test_draft_payload_cannot_add_a_calendar_domain_to_explicit_workflow():
     assert "Reunión" in steps[1].instruction
 
 
+@pytest.mark.parametrize("prompt", [
+    "Prepara un borrador de correo para Ana",
+    "Busca correos y prepara un borrador de correo para Ana aquí",
+    "Busca correos y prepara un borrador de correo en el chat",
+    "Busca correos y prepara un borrador de correo sin usar Gmail",
+    "Busca correos, no crees nada y prepara un borrador de correo",
+    "Busca correos y redacta una respuesta para Ana",
+])
+def test_workflow_mail_context_cannot_promote_a_chat_draft_or_override_restrictions(prompt):
+    assert not requested_task_steps(prompt)
+
+
+@pytest.mark.parametrize("restriction", ["sin enviarlo", "no envíes nada"])
+def test_workflow_draft_keeps_the_owners_no_send_restriction(restriction):
+    steps = requested_task_steps(f"Busca mis correos y prepara un borrador, {restriction}")
+    assert [step.tool_suffixes for step in steps] == [
+        ("search_gmail_messages",), ("draft_gmail_message",),
+    ]
+    assert "en Gmail" in steps[1].instruction
+    assert restriction in steps[1].instruction
+
+
 def result(*, name=TOOL, payload=None, metadata=None, success=True, call_id="search-1"):
     return ToolExecutionResult(
         call_id=call_id, tool_name=name, success=success,

@@ -59,3 +59,49 @@ async def test_ipc_reads_the_audit_tail_and_rejects_payloads(tmp_path):
     assert result.payload["nvidia"]["credential"] == "configured"
     rejected = await service.handle(SimpleNamespace(method="health.status", payload={"x": 1}))
     assert not rejected.ok
+
+
+def test_incomplete_response_is_explained_in_spanish_with_code_as_detail():
+    report = health_report(
+        [event("swarm_execution_failed", 1, error_code="incomplete_model_response")],
+        now=NOW, mcp_status=None, credential="configured", cooldown_seconds=0,
+    )
+    assert report["failures"][0]["title"] == "NVIDIA devolvió una respuesta incompleta"
+    assert report["failures"][0]["detail"] == "incomplete_model_response"
+
+
+@pytest.mark.asyncio
+async def test_health_exposes_runtime_fallback_and_memory_readiness(tmp_path):
+    async def credential():
+        return {"credential": "configured"}
+
+    async def memory():
+        return {"state": "indexing", "pending": 3}
+
+    fallback = {"role": "router", "requested_model_id": "test/selected",
+                "actual_model_id": "test/backup", "reason": "timeout"}
+    service = HealthIpcService(
+        tmp_path / "absent.jsonl", mcp_status=None, credential=credential,
+        fallback=lambda: fallback, memory_status=memory, clock=lambda: NOW,
+    )
+    result = await service.handle(SimpleNamespace(method="health.status", payload={}))
+    assert result.ok
+    assert result.payload["nvidia"]["last_fallback"] == fallback
+    assert result.payload["memory"] == {"state": "indexing", "pending": 3}
+
+
+@pytest.mark.asyncio
+async def test_failed_memory_probe_does_not_make_health_unavailable(tmp_path):
+    async def credential():
+        return {"credential": "configured"}
+
+    async def memory():
+        raise RuntimeError("probe failed")
+
+    service = HealthIpcService(
+        tmp_path / "absent.jsonl", mcp_status=None, credential=credential,
+        memory_status=memory, clock=lambda: NOW,
+    )
+    result = await service.handle(SimpleNamespace(method="health.status", payload={}))
+    assert result.ok
+    assert result.payload["memory"] == {"state": "degraded"}

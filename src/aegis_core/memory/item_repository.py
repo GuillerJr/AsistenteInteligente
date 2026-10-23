@@ -339,9 +339,17 @@ class MemoryItemRepository:
             if row is None:
                 raise MemoryNotFoundError("memory does not exist")
             previous = self._row_codec.record_from_row(row)
+            # tanh(c + boost) can LOWER an already high confidence. The addition
+            # identity implements tanh(atanh(c) + boost), including c == 1,
+            # without an infinite atanh or a loss of confidence from rounding.
+            boost = math.tanh(delta_boost)
+            confidence = min(1.0, max(
+                previous.confidence,
+                (previous.confidence + boost) / (1.0 + previous.confidence * boost),
+            ))
             reinforced = previous.model_copy(
                 update={
-                    "confidence": math.tanh(previous.confidence + delta_boost),
+                    "confidence": confidence,
                     "updated_at": timestamp,
                     "last_confirmed_at": timestamp,
                 }

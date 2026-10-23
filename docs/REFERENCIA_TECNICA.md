@@ -47,8 +47,8 @@ El proyecto incluye:
 - ejecutores locales auditados, incluido sondeo TCP acotado, con auditoría JSONL encadenada;
 - daemon local autenticado mediante Unix Domain Socket;
 - memoria persistente local con SQLite/FTS5 y aislamiento por namespace;
-- GraphRAG local cifrado con nodos/relaciones SQLite, FTS5 y PPR; el daemon actual usa
-  recuperación léxica, sin proveedor de embeddings conectado ni garantía de búsqueda semántica;
+- GraphRAG cifrado con nodos/relaciones SQLite, FTS5/RRF y PPR; embeddings NVIDIA
+  versionados, backfill reanudable y recuperación léxica cuando falla la ruta semántica;
 - memoria evolutiva con evidencia, confianza, confirmación y caducidad;
 - telemetría de amplitud local con Swift/Accelerate y sin retención de PCM;
 - cliente Swift del UDS con autenticación mutua y credencial IPC en Keychain;
@@ -457,8 +457,9 @@ El daemon usa NVIDIA para conversación, resúmenes, planificación e interpreta
 Una caída de NVIDIA produce un error identificado o una respuesta determinista sobre evidencia
 ya verificada; no activa un modelo de lenguaje local. Las clases y helpers históricos de
 FoundationModels/MLX se conservan para compatibilidad y pruebas, pero no forman parte de esta ruta.
-La memoria persistente sigue cifrada en SQLite. El recuperador actual usa búsqueda léxica y PPR;
-la presencia de sqlite-vec no significa que los embeddings estén activos.
+La memoria persistente sigue cifrada en SQLite. El recuperador del chat comparte una consulta
+embedding NVIDIA entre RRF y PPR. El estado distingue índice preparado, indexación pendiente,
+recuperación léxica e indisponibilidad semántica; un índice vacío no se anuncia como preparado.
 El contexto conversacional recupera también mensajes originales fuera de la ventana reciente.
 Si una pregunta histórica tiene poca coincidencia léxica, NVIDIA puede reformularla para buscar
 sinónimos localmente; no crea un índice remoto. Los resúmenes conservan además citas verificadas
@@ -1011,9 +1012,12 @@ continúan residiendo exclusivamente en Keychain.
 Antes de devolver memoria o resultados RAG, Jarvis autentica la fila con AES-GCM y recomputa
 `content_sha256`; una etiqueta AEAD inválida bloquea el subsistema como comprometido.
 
-FTS5 constituye el nivel determinista y el respaldo permanente del RAG local. Un helper Swift usa
-`NaturalLanguage.NLEmbedding` de macOS para producir embeddings de frases en español enteramente
-on-device; el texto de memoria y cada consulta permanecen en el Mac. Cada recuerdo genera un nodo
+FTS5 constituye el nivel determinista y el respaldo permanente del RAG. El daemon obtiene
+embeddings con NVIDIA Nemotron 3.5 Embed: prefijo Matryoshka de 384 dimensiones y
+renormalización, sin plegar vectores mayores. El endpoint devuelve su salida nativa de 2048.
+Las consultas y fragmentos se envían a NVIDIA con patrones de secretos redactados; la redacción
+no equivale a anonimizar todos los datos personales. El helper Apple se conserva para detectar
+nombres en la protección de prompts, no como proveedor de inferencia de respaldo. Cada recuerdo genera un nodo
 `document`, entidades deterministas cifradas y aristas con procedencia. Los nombres y propiedades
 se guardan bajo AES-GCM; las columnas consultables contienen únicamente índices ciegos.
 
@@ -1021,12 +1025,13 @@ se guardan bajo AES-GCM; las columnas consultables contienen únicamente índice
 de 2,93 MiB de datos vectoriales. Una búsqueda obtiene cinco semillas KNN y ejecuta siete
 iteraciones de Personalized PageRank sobre una lista de adyacencia acotada a 4.096 nodos y 16.384
 aristas. El resultado es un subgrafo Markdown local; la ruta híbrida FTS5/coseno también dispone de
-fusión RRF. No se transmiten entidades a NVIDIA. El FIFO vectorial borra solo embeddings antiguos,
+fusión RRF. La identidad del encoder incluye versión y dimensiones, aislando vectores históricos.
+El FIFO vectorial borra solo embeddings antiguos,
 nunca recuerdos FTS5 ni hechos del
 grafo. Al iniciar, un backfill térmicamente cooperativo indexa lotes de diez nodos pendientes.
 
-Si el helper no está disponible o falla su presupuesto de cinco segundos, la misma consulta
-continúa con FTS5: la memoria no depende de NVIDIA ni de conectividad.
+Si NVIDIA no está disponible o falla el presupuesto de ocho segundos de embeddings, la consulta
+continúa con FTS5: los recuerdos locales siguen disponibles mediante búsqueda léxica.
 LangGraph consulta siempre el namespace fijo `user.default` —configurable por el operador, no por el
 prompt— después del routing, y recibe un máximo de 4 KiB de extractos marcados explícitamente como
 datos no confiables.

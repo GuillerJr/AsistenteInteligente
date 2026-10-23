@@ -1022,8 +1022,13 @@ class ReadOnlyToolExecutor:
             return self._error(authorization, "invalid_utf8")
         except subprocess.TimeoutExpired:
             return self._error(authorization, "execution_timeout")
-        except WebAccessError:
-            return self._error(authorization, "web_access_failed")
+        except WebAccessError as error:
+            result = self._error(authorization, "web_access_failed")
+            if authorization.tool_name == "web_research" and error.provider_failures:
+                return result.model_copy(update={
+                    "metadata": {"search_provider_failures": error.provider_failures},
+                })
+            return result
         except OSError:
             return self._error(authorization, "io_error")
 

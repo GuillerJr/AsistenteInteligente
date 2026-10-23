@@ -16,13 +16,6 @@ class ModelSpec:
     fallback_model_id: str | None = None
 
 
-# Interpreting what a free-form request needs is a small structured call. NVIDIA
-# removed the 120B Super endpoint (404 "Function not found", 2026-10-20); with the
-# current prompts the router model got 17/17 in about 0.5 s, while 550B Ultra got
-# 13/17 in 3.8 s, so the router model leads and GPT-OSS 20B is its fallback.
-INTERPRETATION_MODEL_IDS = ("nvidia/nemotron-3.5-lightning-30b-a3b",
-                            "openai/gpt-oss-20b")
-
 # Endpoints NVIDIA withdrew (404/410 on 2026-10-20) and their live-verified successor.
 # Saved model preferences are migrated on load so a retired choice cannot strand a role.
 RETIRED_MODEL_REPLACEMENTS = {

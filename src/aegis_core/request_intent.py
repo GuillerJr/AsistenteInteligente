@@ -46,7 +46,9 @@ _NATIVE_UI_REQUEST = re.compile(
     r"(?:controla|controlar) (?:mi |la )?(?:computadora|ordenador|mac)\b|"
     r"(?:controla|controlar) visualmente[: ]+en\b|"
     r"(?:escribe|escribir|pega|pegar|selecciona|seleccionar|haz clic)\b[^.;]{0,500}"
-    r"\b(?:en|dentro de) (?:la |el )?(?:app|aplicacion|ventana)\b"
+    r"\b(?:en|dentro de) (?:la |el )?(?:app|aplicacion|ventana)\b|"
+    r"(?:escribe|escribir|pega|pegar|selecciona|seleccionar)\b[^.;]{0,500}"
+    r"\b(?:en|dentro de) (?=textedit\b)"
     r")"
 )
 _ADDITIONAL_SERVICE_REQUEST = re.compile(
@@ -67,6 +69,43 @@ def folded_request(text: str) -> str:
 def mask_quoted_text(text: str) -> str:
     """Keep offsets while removing examples/data from instruction classification."""
     return _QUOTED.sub(lambda match: " " * len(match[0]), text)
+
+
+def is_chat_only_request(text: str) -> bool:
+    """Constrain explicit drafting/confirmation in chat, never authorize an action.
+
+    Quoted examples are data. Compound requests and named external destinations
+    remain available to normal planning; drafting alone does not create a draft
+    in an account. These conservative cases constrain misleading tool guesses too.
+    """
+    command = folded_request(mask_quoted_text(text))
+    if re.match(
+        _PREFIX + r"(?:solo |unicamente )?confirma(?:me)? que "
+        r"(?:lo |la |los |las )?(?:anotaste|entendiste|leiste|recibiste)\b", command,
+    ) and not re.search(r"\b(?:y|ademas|luego|despues)\b", command):
+        return True
+    external = re.search(
+        r"\b(?:en|dentro de|a traves de|usando) (?:mi |la |el |google )?"
+        r"(?:gmail|drive|textedit|mail|calendario|agenda|app|aplicacion)\b|"
+        r"\b(?:envia(?:lo|la|los|las)?|manda(?:lo|la)?|guarda(?:lo|la)?|"
+        r"publica(?:lo|la)?|sube(?:lo|la)?|programa|busca|consulta|revisa|lee)\b|"
+        r"(?:^|[.;]|\b(?:y|luego|despues) )agenda\b", command,
+    )
+    if external:
+        return False
+    if re.match(
+        _PREFIX + r"(?:solo |unicamente )?(?:redacta(?:me)?|escribe(?:me)?|"
+        r"reescribe|corrige|traduce|prepara(?:me)?) "
+        r"(?:(?:un|una|el|la|este|esta) )?"
+        r"(?:mensaje|correo|email|texto|borrador|respuesta)\b", command,
+    ):
+        return not re.search(
+            r"\b(?:mis? (?:correos|eventos|reuniones|archivos)|"
+            r"(?:correos|eventos|reuniones) de (?:hoy|manana))\b", command,
+        )
+    return bool(re.match(
+        _PREFIX + r"(?:solo |unicamente )?(?:ordena|organiza|clasifica|resume)\b", command,
+    ) and re.search(r"\b(?:esta lista|lista (?:del|en el) chat|aqui|pegue|pegado)\b", command))
 
 
 def smart_tv_discovery_intent(text: str) -> Literal["discover", "clarify"] | None:
@@ -121,6 +160,8 @@ def native_ui_target_prefix(text: str) -> str | None:
 
 def google_request_tools(text: str) -> frozenset[str]:
     """Activate only the requested domain, never arbitrary mentions in quoted data."""
+    if is_chat_only_request(text) or is_explicit_native_ui_request(text):
+        return frozenset()
     command = folded_request(mask_quoted_text(text))
     if re.search(r"\b(?:tutorial|documentacion|manual|ejemplo) (?:sobre|de|para)\b", command):
         return frozenset()

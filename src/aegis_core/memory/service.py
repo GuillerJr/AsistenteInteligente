@@ -6,6 +6,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from aegis_core.async_tasks import run_blocking_owned
 from aegis_core.ipc.protocol import IpcRequest
 from aegis_core.ipc.server import IpcHandlerResult, IpcMethodHandler
 from aegis_core.memory.contracts import NAMESPACE_PATTERN, TAG_PATTERN, MemoryKind
@@ -127,27 +128,43 @@ class MemoryIpcService:
                     "graph_traversal_ms": (
                         round(graph_result.traversal_ms, 3) if graph_result else None
                     ),
+                    "graph_total_ms": (
+                        round(graph_result.end_to_end_ms, 3) if graph_result else None
+                    ),
+                    "graph_timing": ({
+                        key: round(getattr(graph_result, key), 3)
+                        for key in ("seed_ms", "neighborhood_ms", "ppr_compute_ms", "format_ms")
+                    } if graph_result else None),
+                    "memory_retrieval": await self._retriever.status(payload.namespace),
                     "retrieval_mode": (
                         "graphrag" if graph_result and graph_result.markdown else "lexical"
                     ),
                 }
             elif request.method == "memory.delete":
                 payload = GetMemoryPayload.model_validate(request.payload)
-                await asyncio.to_thread(
-                    self._store.delete,
-                    namespace=payload.namespace,
-                    memory_id=payload.memory_id,
-                )
+                self._retriever.invalidate()
+                try:
+                    await run_blocking_owned(
+                        self._store.delete,
+                        namespace=payload.namespace,
+                        memory_id=payload.memory_id,
+                    )
+                finally:
+                    self._retriever.invalidate()
                 response_payload = {
                     "memory_id": str(payload.memory_id),
                     "status": "deleted",
                 }
             elif request.method == "memory.session.reset":
                 payload = ResetMemorySessionPayload.model_validate(request.payload)
-                reset = await self._graph_service.reset_session(
-                    namespace=payload.namespace,
-                    session_id=payload.session_id,
-                )
+                self._retriever.invalidate()
+                try:
+                    reset = await self._graph_service.reset_session(
+                        namespace=payload.namespace,
+                        session_id=payload.session_id,
+                    )
+                finally:
+                    self._retriever.invalidate()
                 response_payload = {
                     "session_id": str(payload.session_id),
                     "status": "reset",

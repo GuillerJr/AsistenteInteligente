@@ -3,10 +3,13 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import time
+from collections import OrderedDict
 from enum import StrEnum
 from typing import Protocol
 from uuid import uuid4
 
+from aegis_core.async_tasks import gather_owned, run_blocking_owned
 from aegis_core.failure_boundary import record_boundary_error
 from aegis_core.memory.contracts import MemoryRecord, MemorySearchHit
 from aegis_core.memory.errors import MemoryQueryError
@@ -29,7 +32,18 @@ class EmbeddingIndexStatus(StrEnum):
     UNAVAILABLE = "unavailable"
 
 
+class MemoryRetrievalState(StrEnum):
+    LEXICAL = "lexical_only"
+    INDEXING = "indexing"
+    READY = "hybrid_ready"
+    DEGRADED = "degraded"
+
+
 class MemoryRetriever(Protocol):
+    async def retrieve_context(
+        self, *, namespace: str, query: str, limit: int
+    ) -> tuple[tuple[MemorySearchHit, ...], GraphSearchResult | None]: ...
+
     async def retrieve_local(
         self, *, namespace: str, query: str, limit: int
     ) -> tuple[MemorySearchHit, ...]: ...
@@ -62,6 +76,17 @@ class HybridMemoryRetriever:
         self._embedding_provider = embedding_provider
         self._background_gate = background_gate
         self._graph_service = graph_service or GraphRAGService(store)
+        self._states: OrderedDict[str, MemoryRetrievalState] = OrderedDict()
+        self._timings: OrderedDict[str, dict[str, float]] = OrderedDict()
+        self._coverage: OrderedDict[str, tuple[int, int]] = OrderedDict()
+        self._epoch = 0
+
+    def invalidate(self) -> None:
+        """Discard in-flight results across an explicit forget boundary."""
+        self._epoch += 1
+        self._states.clear()
+        self._coverage.clear()
+        self._timings.clear()
 
     @property
     def semantic_embeddings_enabled(self) -> bool:
@@ -72,11 +97,58 @@ class HybridMemoryRetriever:
         model_id = getattr(self._embedding_provider, "model_id", None)
         return model_id if isinstance(model_id, str) and model_id else None
 
+    def snapshot(self, namespace: str) -> dict[str, object]:
+        """Content-free runtime diagnostics; no database or network work."""
+        state = self._states.get(namespace, MemoryRetrievalState.INDEXING)
+        if not self.semantic_embeddings_enabled:
+            state = MemoryRetrievalState.LEXICAL
+        return {
+            "state": state.value,
+            "model_id": self.embedding_model_id,
+            "dimensions": getattr(self._embedding_provider, "dimensions", None),
+            "nodes": self._coverage.get(namespace, (0, 0))[0],
+            "indexed_nodes": self._coverage.get(namespace, (0, 0))[1],
+            **self._timings.get(namespace, {}),
+        }
+
+    async def status(self, namespace: str) -> dict[str, object]:
+        """Read actual coverage for this namespace, without embedding owner data."""
+        if self._states.get(namespace) is not MemoryRetrievalState.DEGRADED:
+            await self._refresh_state(namespace)
+        return self.snapshot(namespace)
+
+    def _set_state(self, namespace: str, state: MemoryRetrievalState) -> None:
+        self._states[namespace] = state
+        self._states.move_to_end(namespace)
+        while len(self._states) > 64:
+            self._states.popitem(last=False)
+
+    async def _refresh_state(self, namespace: str) -> None:
+        if not self.semantic_embeddings_enabled:
+            self._set_state(namespace, MemoryRetrievalState.LEXICAL)
+            return
+        model_id = self.embedding_model_id
+        if model_id is None:
+            self._set_state(namespace, MemoryRetrievalState.INDEXING)
+            return
+        total, indexed = await run_blocking_owned(
+            self._store.embedding_coverage,
+            namespace=namespace,
+            model_id=model_id,
+        )
+        self._coverage[namespace] = (total, indexed)
+        self._coverage.move_to_end(namespace)
+        while len(self._coverage) > 64:
+            self._coverage.popitem(last=False)
+        self._set_state(namespace, MemoryRetrievalState.LEXICAL if total == 0 else (
+            MemoryRetrievalState.INDEXING if indexed < total else MemoryRetrievalState.READY
+        ))
+
     async def index(self, record: MemoryRecord) -> EmbeddingIndexStatus:
         provider = self._embedding_provider
         if provider is None:
             return EmbeddingIndexStatus.DISABLED
-        candidates = await asyncio.to_thread(
+        candidates = await run_blocking_owned(
             self._store.graph_nodes_for_memory,
             namespace=record.namespace,
             memory_id=record.memory_id,
@@ -86,7 +158,9 @@ class HybridMemoryRetriever:
         try:
             indexed = await self._index_candidates(provider, candidates)
         except EmbeddingProviderError:
+            self._set_state(record.namespace, MemoryRetrievalState.DEGRADED)
             return EmbeddingIndexStatus.UNAVAILABLE
+        await self._refresh_state(record.namespace)
         return (
             EmbeddingIndexStatus.INDEXED
             if indexed == len(candidates)
@@ -107,7 +181,8 @@ class HybridMemoryRetriever:
             raise ValueError("embedding backfill delay cannot be negative")
         if provider is None or model_id is None or not 1 <= limit <= MAX_NODE_EMBEDDINGS:
             return 0
-        candidates = await asyncio.to_thread(
+        self._set_state(namespace, MemoryRetrievalState.INDEXING)
+        candidates = await run_blocking_owned(
             self._store.list_missing_graph_embeddings,
             namespace=namespace,
             model_id=model_id,
@@ -122,9 +197,11 @@ class HybridMemoryRetriever:
             try:
                 indexed += await self._index_candidates(provider, candidates_batch)
             except EmbeddingProviderError:
+                self._set_state(namespace, MemoryRetrievalState.DEGRADED)
                 if raise_provider_errors:
                     raise
-                break
+                return indexed
+        await self._refresh_state(namespace)
         return indexed
 
     async def retrieve(
@@ -140,13 +217,15 @@ class HybridMemoryRetriever:
     async def retrieve_local(
         self, *, namespace: str, query: str, limit: int
     ) -> tuple[MemorySearchHit, ...]:
+        epoch = self._epoch
         try:
-            return await asyncio.to_thread(
+            hits = await run_blocking_owned(
                 self._store.search,
                 namespace=namespace,
                 query=query,
                 limit=limit,
             )
+            return hits if epoch == self._epoch else ()
         except MemoryQueryError:
             return ()
 
@@ -159,6 +238,7 @@ class HybridMemoryRetriever:
         try:
             batch = await provider.embed([query], input_type=EmbeddingInputType.QUERY)
         except EmbeddingProviderError:
+            self._set_state(namespace, MemoryRetrievalState.DEGRADED)
             return None
         if len(batch.vectors) != 1:
             return None
@@ -180,19 +260,27 @@ class HybridMemoryRetriever:
         query: str,
         limit: int,
     ) -> tuple[tuple[MemorySearchHit, ...], GraphSearchResult | None]:
-        """Embed once, then run SQL RRF and bounded PPR concurrently."""
+        """One remote embedding feeds both RRF and PPR; failures retain lexical recall."""
+        started = time.perf_counter()
+        epoch = self._epoch
+        embedding_ms = 0.0
         provider = self._embedding_provider
         if provider is None:
             return await self.retrieve_local(namespace=namespace, query=query, limit=limit), None
         try:
             batch = await provider.embed([query], input_type=EmbeddingInputType.QUERY)
+            embedding_ms = (time.perf_counter() - started) * 1_000
         except EmbeddingProviderError:
+            self._set_state(namespace, MemoryRetrievalState.DEGRADED)
             return await self.retrieve_local(namespace=namespace, query=query, limit=limit), None
-        if len(batch.vectors) != 1:
+        if len(batch.vectors) != 1 or (
+            self.embedding_model_id is not None and batch.model_id != self.embedding_model_id
+        ):
+            self._set_state(namespace, MemoryRetrievalState.DEGRADED)
             return await self.retrieve_local(namespace=namespace, query=query, limit=limit), None
         vector = batch.vectors[0]
         try:
-            hybrid_result, graph_result = await asyncio.gather(
+            hybrid_result, graph_result = await gather_owned(
                 self._graph_service.hybrid_search(
                     namespace=namespace,
                     query=query,
@@ -209,7 +297,18 @@ class HybridMemoryRetriever:
                 ),
             )
         except MemoryQueryError:
+            self._set_state(namespace, MemoryRetrievalState.DEGRADED)
             return await self.retrieve_local(namespace=namespace, query=query, limit=limit), None
+        await self._refresh_state(namespace)
+        if epoch != self._epoch:
+            return (), None
+        self._timings[namespace] = {
+            "embedding_ms": round(embedding_ms, 3),
+            "retrieval_total_ms": round((time.perf_counter() - started) * 1_000, 3),
+        }
+        self._timings.move_to_end(namespace)
+        while len(self._timings) > 64:
+            self._timings.popitem(last=False)
         return hybrid_result.hits, graph_result
 
     async def _index_candidates(
@@ -223,14 +322,16 @@ class HybridMemoryRetriever:
             tuple(self._embedding_text(candidate) for candidate in candidates),
             input_type=EmbeddingInputType.PASSAGE,
         )
-        if len(batch.vectors) != len(candidates):
+        if len(batch.vectors) != len(candidates) or (
+            self.embedding_model_id is not None and batch.model_id != self.embedding_model_id
+        ):
             raise EmbeddingProviderError(
                 "embedding provider returned an inconsistent graph batch"
             )
         for candidate, vector in zip(candidates, batch.vectors, strict=True):
             if self._background_gate is not None:
                 await self._background_gate.wait_until_active()
-            await asyncio.to_thread(
+            await run_blocking_owned(
                 self._store.put_node_embedding,
                 namespace=candidate.namespace,
                 node_id=candidate.node_id,
@@ -263,7 +364,8 @@ class HybridMemoryRetriever:
     @staticmethod
     def _embedding_text(candidate: GraphEmbeddingCandidate) -> str:
         properties = json.dumps(
-            candidate.properties,
+            {key: value for key, value in candidate.properties.items()
+             if key not in {"ip_address", "mac_address", "api_token"}},
             ensure_ascii=False,
             allow_nan=False,
             separators=(",", ":"),
@@ -308,6 +410,14 @@ class EmbeddingBackfillWorker:
 
     def arm(self) -> None:
         self._preflight_response_sent.set()
+
+    async def run_continuously(self, *, interval_seconds: float = 60.0) -> None:
+        """Resume from persisted model/hash coverage, including later new memories."""
+        if not math.isfinite(interval_seconds) or interval_seconds < 1:
+            raise ValueError("embedding backfill interval is invalid")
+        while True:
+            await self.run()
+            await asyncio.sleep(interval_seconds)
 
     async def run(self) -> int:
         await self._preflight_response_sent.wait()

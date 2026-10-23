@@ -4,6 +4,12 @@ import SwiftUI
 /// What the daemon's `health.status` reports: NVIDIA, integrations and recent failures.
 struct JarvisHealthReport: Decodable, Sendable, Equatable {
     struct Nvidia: Decodable, Sendable, Equatable {
+        struct Fallback: Decodable, Sendable, Equatable {
+            let role: String
+            let requested_model_id: String
+            let actual_model_id: String
+            let reason: String
+        }
         let credential: String
         let calls: Int
         let answered: Int
@@ -13,6 +19,11 @@ struct JarvisHealthReport: Decodable, Sendable, Equatable {
         let last_success_at: String?
         let last_problem_at: String?
         let cooldown_seconds: Double
+        let last_fallback: Fallback?
+    }
+
+    struct Memory: Decodable, Sendable, Equatable {
+        let state: String
     }
 
     struct Server: Decodable, Sendable, Equatable, Identifiable {
@@ -34,6 +45,7 @@ struct JarvisHealthReport: Decodable, Sendable, Equatable {
     let nvidia: Nvidia
     let mcp: [Server]
     let failures: [Failure]
+    let memory: Memory?
 }
 
 /// One line of the health panel, computed in plain Swift so the view stays a single list.
@@ -71,6 +83,23 @@ extension JarvisHealthReport {
             add(String(localized: "Pausa por límite", bundle: .module), String(format: "%.0f s", ai.cooldown_seconds), .warning)
         }
         if let last = ai.last_success_at { add(String(localized: "Última respuesta", bundle: .module), Self.relative(last), .good) }
+        if let fallback = ai.last_fallback {
+            add(String(localized: "Se usó un modelo de respaldo", bundle: .module), "", .warning)
+            add("\(fallback.requested_model_id) → \(fallback.actual_model_id)", "", .detail)
+        }
+        if let memory {
+            add(String(localized: "Recuperación de memoria", bundle: .module), "", .heading)
+            switch memory.state {
+            case "hybrid_ready":
+                add(String(localized: "Búsqueda híbrida preparada", bundle: .module), "", .good)
+            case "indexing":
+                add(String(localized: "Indexando recuerdos", bundle: .module), "", .note)
+            case "degraded":
+                add(String(localized: "Búsqueda semántica no disponible; se usan palabras clave", bundle: .module), "", .warning)
+            default:
+                add(String(localized: "Búsqueda por palabras clave", bundle: .module), "", .note)
+            }
+        }
         add(String(localized: "Integraciones", bundle: .module), "", .heading)
         if mcp.isEmpty { add(String(localized: "No hay integraciones configuradas.", bundle: .module), "", .note) }
         for server in mcp {

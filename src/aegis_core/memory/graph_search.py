@@ -25,6 +25,11 @@ class GraphSearchResult:
     scores: tuple[float, ...]
     traversal_ms: float
     within_latency_budget: bool
+    seed_ms: float = 0.0
+    neighborhood_ms: float = 0.0
+    ppr_compute_ms: float = 0.0
+    format_ms: float = 0.0
+    end_to_end_ms: float = 0.0
 
 
 class PersonalizedPageRankSearch:
@@ -58,26 +63,32 @@ class PersonalizedPageRankSearch:
             raise ValueError("GraphRAG seed limit must be between three and five")
         if not 1 <= result_limit <= 16:
             raise ValueError("GraphRAG result limit is out of range")
+        started = time.perf_counter_ns()
         seeds = self._store.graph_seed_search(
             namespace=namespace,
             model_id=model_id,
             query_vector=query_vector,
             limit=seed_limit,
         )
+        seeds_finished = time.perf_counter_ns()
+        seed_ms = (seeds_finished - started) / 1_000_000.0
         if not seeds:
             return GraphSearchResult(
                 markdown="",
                 ranked_node_ids=(),
                 scores=(),
                 traversal_ms=0.0,
-                within_latency_budget=True,
+                within_latency_budget=seed_ms <= PPR_BUDGET_MILLISECONDS,
+                seed_ms=seed_ms,
+                end_to_end_ms=seed_ms,
             )
         nodes, edges = self._store.load_graph_neighborhood(
             namespace=namespace,
             seed_ids=tuple(seed.node_id for seed in seeds),
         )
-        started = time.perf_counter_ns()
+        neighborhood_finished = time.perf_counter_ns()
         scores = self._ppr(nodes=nodes, edges=edges, seeds=seeds)
+        ppr_finished = time.perf_counter_ns()
         ranking_scores = {
             node.node_id: scores.get(node.node_id, 0.0)
             * (1.12 if node.type in {"device", "sensor", "location"} else 1.0)
@@ -91,19 +102,26 @@ class PersonalizedPageRankSearch:
                 node.name.casefold(),
             ),
         )[:result_limit]
-        elapsed_ms = (time.perf_counter_ns() - started) / 1_000_000.0
         markdown = self._format_context(
             ranked=ranked,
             edges=edges,
             nodes_by_id={node.node_id: node for node in nodes},
             scores=ranking_scores,
         )
+        finished = time.perf_counter_ns()
+        ppr_ms = (ppr_finished - neighborhood_finished) / 1_000_000.0
+        total_ms = (finished - started) / 1_000_000.0
         return GraphSearchResult(
             markdown=markdown,
             ranked_node_ids=tuple(node.node_id for node in ranked),
             scores=tuple(ranking_scores.get(node.node_id, 0.0) for node in ranked),
-            traversal_ms=elapsed_ms,
-            within_latency_budget=elapsed_ms <= PPR_BUDGET_MILLISECONDS,
+            traversal_ms=ppr_ms,  # Compatibility: compute-only, never the total latency.
+            within_latency_budget=total_ms <= PPR_BUDGET_MILLISECONDS,
+            seed_ms=seed_ms,
+            neighborhood_ms=(neighborhood_finished - seeds_finished) / 1_000_000.0,
+            ppr_compute_ms=ppr_ms,
+            format_ms=(finished - ppr_finished) / 1_000_000.0,
+            end_to_end_ms=total_ms,
         )
 
     def _ppr(

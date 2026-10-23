@@ -202,6 +202,20 @@ def requested_task_steps(request: str) -> tuple[TaskStep, ...]:
         clause = clause.strip()
         names = google_request_tools(clause)
         if not names and domain:
+            # A draft phase following an explicit mailbox operation keeps that
+            # task's destination. A standalone draft remains chat-only. Persist
+            # the destination too, so a later continuation has the same scope.
+            draft = re.match(r"(?:prepara|redacta|crea) (?:un |el )?borrador"
+                             r"(?: de correo)?\b", clause, flags=re.I)
+            restricted = re.search(
+                r"\b(?:chat|aqui|textedit|drive)\b|"
+                r"\b(?:no|nunca) (?:uses?|utilices?|crees?|guardes?|prepares?|"
+                r"redactes?|hagas)\b|"
+                r"\bsin (?:usar|utilizar|crear|guardar|preparar|redactar|acceso)\b",
+                folded_request(mask_quoted_text(request)),
+            )
+            if domain == "correo" and draft is not None and restricted is None:
+                clause = f"{clause[:draft.end()]} en Gmail{clause[draft.end():]}"
             clause = f"{clause} {domain}"
             names = google_request_tools(clause)
         if not names:

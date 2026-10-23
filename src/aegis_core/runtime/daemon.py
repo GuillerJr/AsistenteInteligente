@@ -81,7 +81,9 @@ from aegis_core.memory import (
 )
 from aegis_core.memory.conversation_context import ConversationContextManager
 from aegis_core.memory.crypto import MemoryRowCipher
+from aegis_core.memory.embedding import NvidiaMemoryEmbeddingClient
 from aegis_core.memory.errors import MemoryStoreError
+from aegis_core.memory.retrieval import EmbeddingBackfillWorker
 from aegis_core.memory.retrieval_planning import NvidiaRetrievalPlanner
 from aegis_core.memory.semantic_profile import nvidia_memory_interpreter
 from aegis_core.memory.spotlight_sync import SpotlightGraphSync
@@ -556,9 +558,15 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
             graph_service = GraphRAGService(memory_store)
             memory_retriever = HybridMemoryRetriever(
                 memory_store,
-                embedding_provider=None,
+                embedding_provider=NvidiaMemoryEmbeddingClient(nvidia_client),
                 background_gate=runtime_state,
                 graph_service=graph_service,
+            )
+            embedding_backfill_worker = EmbeddingBackfillWorker(
+                memory_retriever,
+                namespace=settings.memory_rag_namespace,
+                limit=settings.memory_embedding_backfill_limit,
+                audit_sink=audit_sink,
             )
             memory_decay_worker = MemoryDecayWorker(
                 graph_service,
@@ -828,7 +836,11 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     **HealthIpcService(
                         audit_sink.path, mcp_status=mcp_host.status,
                         credential=provider_status_service.status_payload,
-                        cooldown=nvidia_client.cooldown_remaining).handlers(),
+                        cooldown=nvidia_client.cooldown_remaining,
+                        fallback=nvidia_client.fallback_status,
+                        memory_status=lambda: memory_retriever.status(
+                            namespace=settings.memory_rag_namespace,
+                        )).handlers(),
                     **telegram_service.handlers(),
                     **mascot_service.handlers(),
                     **engineering_service.handlers(),
@@ -866,6 +878,8 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     ),
                 },
                 handler_timeout_overrides={
+                    "memory.search": 25,
+                    "memory.put": 25,
                     "conversations.search": 4,
                     # Cancellation drains the owned job before deletion is acknowledged.
                     "schedules.delete": 27,
@@ -899,6 +913,7 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                         if biometric_training_service is not None
                         else None,
                         spotlight_sync.arm(),
+                        embedding_backfill_worker.arm(),
                     ),
                 },
                 security_compromised=lambda: security_state.compromised,
@@ -925,6 +940,10 @@ async def _run_daemon(shutdown: asyncio.Event) -> int:
                     background_tasks.create(telegram_service.run(), name="telegram-polling")
                     background_tasks.create(scheduler.run(), name="task-scheduler")
                     background_tasks.create(goal_runner.run(), name="goal-runner")
+                    background_tasks.create(
+                        embedding_backfill_worker.run_continuously(),
+                        name="nvidia-memory-embedding-backfill",
+                    )
                     background_tasks.create(
                         memory_decay_worker.run(),
                         name="semantic-memory-decay-eviction",

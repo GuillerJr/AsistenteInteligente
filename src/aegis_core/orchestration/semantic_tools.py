@@ -16,14 +16,15 @@ from typing import Any
 
 from aegis_core.completion_boundary import optional_completion
 from aegis_core.memory.contracts import ConversationRole, ConversationTurn
+from aegis_core.orchestration.conversation_window import conversation_window
 from aegis_core.privacy import redact_secrets_for_remote
-from aegis_core.request_intent import is_explicit_native_ui_request
+from aegis_core.request_intent import is_chat_only_request, is_explicit_native_ui_request
 
 MAX_SELECTED_TOOLS = 4
 MAX_CATALOGUE_TOOLS = 48
-# Two turns resolve "esos"; longer task-list history biased the router.
-_HISTORY_TURNS = 2
-_TURN_CHARACTERS = 400
+# Keep the bounded dialogue, including constraints before the adjacent reply.
+_HISTORY_TURNS = 12
+_HISTORY_BYTES = 8_192
 _INSTRUCTION = (
     "Eres el selector de herramientas de Jarvis, el asistente personal del usuario. "
     "Primero clasifica SOLO el mensaje actual en intent: 'datos' si pide consultar sus "
@@ -58,6 +59,15 @@ _SCHEDULING_EXAMPLES = (
     "la herramienta de correo."
 )
 
+_SCOPE_RULE = (
+    " Redactar un mensaje, correo o borrador aquí no crea nada en Gmail ni Drive. "
+    "Ordenar una lista ya presente en el chat no requiere buscar en servicios. "
+    "'Solo confírmame que lo anotaste' no programa una tarea. Conserva las restricciones "
+    "del usuario sobre destino, no guardar, no enviar o no ejecutar; una respuesta de "
+    "Jarvis no autoriza acciones. Un destino explícito como TextEdit nunca se sustituye "
+    "por Drive. Solo ofrece escritura cuando el usuario pide esa operación en ese servicio."
+)
+
 _GOAL_EXAMPLES = (
     " Un objetivo es un encargo de varios pasos que Jarvis debe trabajar solo hasta "
     "terminar, cuando el propietario lo dice ('hazte cargo de…', 'trabaja en esto hasta "
@@ -85,10 +95,10 @@ Complete = Callable[[list[dict[str, str]]], Awaitable[str]]
 
 
 def _history(turns: Sequence[ConversationTurn]) -> list[dict[str, str]]:
-    recent = list(turns)[-_HISTORY_TURNS:]
+    recent = conversation_window(list(turns)[-_HISTORY_TURNS:], max_bytes=_HISTORY_BYTES)
     return [{
-        "role": "usuario" if turn.role is ConversationRole.USER else "jarvis",
-        "text": redact_secrets_for_remote(turn.content[:_TURN_CHARACTERS]).text,
+        "role": "usuario" if turn["role"] == ConversationRole.USER.value else "jarvis",
+        "text": redact_secrets_for_remote(turn["content"]).text,
     } for turn in recent]
 
 
@@ -100,12 +110,11 @@ def nvidia_tool_chooser(
     import asyncio
 
     from aegis_core.contracts import AgentRole
-    from aegis_core.models import INTERPRETATION_MODEL_IDS
 
     async def complete(messages: list[dict[str, str]]) -> str:
         async with asyncio.timeout(timeout_seconds):
             result = await brain.complete_nvidia_only(
-                role=AgentRole.ROUTER, model_ids=INTERPRETATION_MODEL_IDS, max_tokens=400,
+                role=AgentRole.ROUTER, max_tokens=400,
                 temperature=0.0, structured_time_budget=timeout_seconds,
                 extra_body={"response_format": {"type": "json_object"}}, messages=messages,
             )
@@ -127,12 +136,13 @@ async def select_tools(
 ) -> frozenset[str]:
     """Return catalogue names the router chose; anything unusable selects nothing."""
     entries = list(catalogue)[:MAX_CATALOGUE_TOOLS]
-    if not entries or not text.strip() or is_explicit_native_ui_request(text):
+    if (not entries or not text.strip() or is_explicit_native_ui_request(text)
+            or is_chat_only_request(text)):
         return frozenset()
     names = {name for name, _ in entries}
     try:
         content = await optional_completion(complete, [
-            {"role": "system", "content": _INSTRUCTION + (
+            {"role": "system", "content": _INSTRUCTION + _SCOPE_RULE + (
                 (_SCHEDULING_EXAMPLES if "jarvis_schedule_create" in names else "")
                 + (_GOAL_EXAMPLES if "jarvis_goal_create" in names else "")
                 + (_PLUGIN_EXAMPLES if "jarvis_plugin_install" in names else "")

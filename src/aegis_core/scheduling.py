@@ -1011,7 +1011,6 @@ _JUDGE_INSTRUCTION = (
 
 
 def nvidia_novelty_judge(brain: Any, *, timeout_seconds: float = 12.0) -> JudgeNew:
-    from aegis_core.models import INTERPRETATION_MODEL_IDS
     from aegis_core.privacy import redact_secrets_for_remote
 
     async def judge(previous: str | None, current: str) -> bool:
@@ -1019,7 +1018,7 @@ def nvidia_novelty_judge(brain: Any, *, timeout_seconds: float = 12.0) -> JudgeN
             return True
         async with asyncio.timeout(timeout_seconds):
             result = await brain.complete_nvidia_only(
-                role=AgentRole.ROUTER, model_ids=INTERPRETATION_MODEL_IDS, max_tokens=64,
+                role=AgentRole.ROUTER, max_tokens=64,
                 temperature=0.0, structured_time_budget=timeout_seconds,
                 extra_body={"response_format": {"type": "json_object"}},
                 messages=[

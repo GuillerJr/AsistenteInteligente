@@ -29,7 +29,11 @@ from aegis_core.providers.base import (
     EmbeddingProviderError,
     IncompleteModelResponseError,
 )
-from aegis_core.providers.inference_metrics import record_http_request, record_usage
+from aegis_core.providers.inference_metrics import (
+    record_http_request,
+    record_model_fallback,
+    record_usage,
+)
 from aegis_core.settings_store import load_model_preferences, selected_model_registry
 from aegis_core.speech_pcm import SpeechPauseSmoother
 
@@ -155,6 +159,7 @@ class NvidiaNimClient:
         self._cooldown.register()
         self._closed = False
         self._unavailable_model_ids: set[str] = set()
+        self._last_fallback: dict[str, str] | None = None
         self._client = httpx.AsyncClient(
             base_url=str(settings.nvidia_base_url).rstrip("/"),
             timeout=settings.request_timeout_seconds,
@@ -256,6 +261,26 @@ class NvidiaNimClient:
         return tuple(dict.fromkeys(
             identifier for identifier in (spec.model_id, spec.fallback_model_id) if identifier
         ))
+
+    def fallback_status(self) -> dict[str, str] | None:
+        """Last successful fallback in this runtime; never prompts, headers or errors."""
+        return dict(self._last_fallback) if self._last_fallback is not None else None
+
+    def _record_fallback(
+        self, role: AgentRole, requested: str, actual: str, reason: str,
+    ) -> None:
+        if requested == actual:
+            return
+        details = {"role": role.value, "requested_model_id": requested,
+                   "actual_model_id": actual, "reason": reason}
+        self._last_fallback = details
+        record_model_fallback(details)
+
+    @staticmethod
+    def _fallback_http_reason(status: int) -> str:
+        if status in {202, 404, 410}:
+            return f"http_{status}"
+        return "http_5xx" if status >= 500 else "http_retryable"
 
     async def __aexit__(self, *_: object) -> None:
         await self.aclose()
@@ -364,6 +389,7 @@ class NvidiaNimClient:
         )
 
         result: AgentResult | None = None
+        fallback_reason = "model_unavailable"
         async with self._request_slot(time_budget) as deadline:
             await self._await_short_cooldown()
             self._raise_if_rate_limited()
@@ -404,6 +430,7 @@ class NvidiaNimClient:
                                 )
                         except (TimeoutError, httpx.ReadTimeout) as error:
                             if has_fallback:
+                                fallback_reason = "timeout"
                                 continue
                             raise NvidiaNimError("NVIDIA NIM request timed out") from error
                         except httpx.HTTPError as error:
@@ -411,6 +438,7 @@ class NvidiaNimClient:
 
                         if response.status_code == 202:
                             if has_fallback:
+                                fallback_reason = "http_202"
                                 continue
                             raise NvidiaNimError("NVIDIA NIM returned HTTP 202")
                         if not response.is_error:
@@ -422,6 +450,7 @@ class NvidiaNimClient:
                                 )
                             except NvidiaNimError:
                                 if has_fallback:
+                                    fallback_reason = "invalid_response"
                                     continue
                                 raise
                             break
@@ -431,6 +460,7 @@ class NvidiaNimClient:
                             self._open_rate_limit_cooldown(response)
                             raise NvidiaNimRateLimited("NVIDIA NIM rate limit reached")
                         if has_fallback and self._can_fallback(response.status_code):
+                            fallback_reason = self._fallback_http_reason(response.status_code)
                             continue
                         raise NvidiaNimError(
                             f"NVIDIA NIM returned HTTP {response.status_code}",
@@ -446,6 +476,7 @@ class NvidiaNimClient:
                 terminal=True,
             )
         record_usage(result.raw_usage)
+        self._record_fallback(role, selected_model_ids[0], result.model_id, fallback_reason)
         return result
 
     def _parse_completion_response(
@@ -545,6 +576,7 @@ class NvidiaNimClient:
         finish_reason: str | None = None
         usage: dict[str, int] = {}
         selected_model = selected_model_ids[0]
+        fallback_reason = "model_unavailable"
 
         async with self._request_slot(self._settings.request_timeout_seconds) as deadline:
             await self._await_short_cooldown()
@@ -596,6 +628,9 @@ class NvidiaNimClient:
                                         response.status_code == 202
                                         or self._can_fallback(response.status_code)
                                     ):
+                                        fallback_reason = self._fallback_http_reason(
+                                            response.status_code
+                                        )
                                         continue
                                     raise NvidiaNimError(
                                         f"NVIDIA NIM returned HTTP {response.status_code}",
@@ -697,8 +732,10 @@ class NvidiaNimClient:
                                     break
                                 if not has_fallback:
                                     raise NvidiaNimError("NVIDIA NIM returned an empty stream")
+                                fallback_reason = "empty_stream"
                         except (TimeoutError, httpx.ReadTimeout) as error:
                             if has_fallback and not any(content_parts):
+                                fallback_reason = "timeout"
                                 continue
                             raise NvidiaNimError("NVIDIA NIM request timed out") from error
                         except httpx.HTTPError as error:
@@ -716,6 +753,7 @@ class NvidiaNimClient:
                 )
             raise NvidiaNimError("NVIDIA NIM returned an empty stream")
         record_usage(usage)
+        self._record_fallback(role, selected_model_ids[0], selected_model, fallback_reason)
         return AgentResult(
             role=role,
             model_id=selected_model,
@@ -767,7 +805,11 @@ class NvidiaNimClient:
                 raise NvidiaNimRateLimited("NVIDIA NIM embedding rate limit reached")
 
         if response.is_error:
-            raise NvidiaNimError(f"NVIDIA NIM embeddings returned HTTP {response.status_code}")
+            raise NvidiaNimError(
+                f"NVIDIA NIM embeddings returned HTTP {response.status_code}",
+                status_code=response.status_code,
+                terminal=response.status_code in {400, 401, 403, 429},
+            )
 
         try:
             data = response.json()

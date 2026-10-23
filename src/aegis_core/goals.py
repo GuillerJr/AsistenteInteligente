@@ -708,13 +708,12 @@ _JUDGE_INSTRUCTION = (
 
 
 def nvidia_step_judge(brain: Any, *, timeout_seconds: float = 20.0) -> Judge:
-    from aegis_core.models import INTERPRETATION_MODEL_IDS
     from aegis_core.privacy import redact_secrets_for_remote
 
     async def judge(goal: Goal, result: str) -> StepVerdict:
         async with asyncio.timeout(timeout_seconds):
             answer = await brain.complete_nvidia_only(
-                role=AgentRole.ROUTER, model_ids=INTERPRETATION_MODEL_IDS, max_tokens=1_500,
+                role=AgentRole.ROUTER, max_tokens=1_500,
                 temperature=0.0, structured_time_budget=timeout_seconds,
                 extra_body={"response_format": {"type": "json_object"}},
                 messages=[

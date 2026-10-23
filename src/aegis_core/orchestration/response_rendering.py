@@ -471,9 +471,17 @@ def _deterministic_read_error_response(
             else None
         )
     if result.error_code == "web_access_failed":
+        if result.tool_name == "web_research":
+            failures = result.metadata.get("search_provider_failures")
+            if isinstance(failures, dict) and "result_pages_unavailable" in failures.values():
+                return "Encontré referencias, pero no pude leer sus páginas para verificarlas."
+            return (
+                "No pude consultar los proveedores de búsqueda web. "
+                "Inténtalo de nuevo más tarde."
+            )
         return (
             "No pude acceder al recurso web público solicitado."
-            if result.tool_name in {"web_fetch", "web_research"}
+            if result.tool_name == "web_fetch"
             else None
         )
     return {

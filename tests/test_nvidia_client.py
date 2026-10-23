@@ -925,7 +925,7 @@ async def test_embed_uses_nvidia_endpoint_modes_and_normalizes_vectors() -> None
         payload = json.loads(request.content)
         assert request.url.path == "/v1/embeddings"
         assert payload == {
-            "model": "nvidia/nemotron-3-embed-1b",
+            "model": "nvidia/nemotron-3.5-embed-1b",
             "input": ["consulta", "documento"],
             "input_type": "query",
             "encoding_format": "float",
@@ -950,7 +950,7 @@ async def test_embed_uses_nvidia_endpoint_modes_and_normalizes_vectors() -> None
             input_type=EmbeddingInputType.QUERY,
         )
 
-    assert batch.model_id == "nvidia/nemotron-3-embed-1b"
+    assert batch.model_id == "nvidia/nemotron-3.5-embed-1b"
     assert batch.dimensions == 2
     assert batch.vectors[0] == pytest.approx((0.6, 0.8))
     assert batch.vectors[1] == pytest.approx((0.0, 1.0))

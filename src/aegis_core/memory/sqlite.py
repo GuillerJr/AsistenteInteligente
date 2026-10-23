@@ -373,6 +373,30 @@ class SQLiteMemoryStore:
             sqlite_vec_loaded=True,
         )
 
+    def embedding_coverage(self, *, namespace: str, model_id: str) -> tuple[int, int]:
+        """Count live nodes and compatible vectors without returning private content."""
+        from aegis_core.memory.visibility import GRAPH_VISIBILITY_CTE
+
+        self._require_initialized()
+        self._validate_namespace(namespace)
+        if not model_id or len(model_id) > 256:
+            raise MemoryQueryError("invalid graph embedding model id")
+        with self._lock, self._connect(read_only=True) as connection:
+            row = connection.execute(
+                GRAPH_VISIBILITY_CTE + """
+                SELECT COUNT(*) AS total,
+                       COUNT(metadata.node_id) AS indexed
+                FROM live_nodes AS n
+                LEFT JOIN node_embedding_metadata AS metadata
+                  ON metadata.node_id = n.node_id
+                 AND metadata.namespace = n.namespace
+                 AND metadata.model_id = ?
+                 AND metadata.content_sha256 = n.content_sha256
+                """,
+                (namespace, datetime.now(UTC).isoformat(), model_id),
+            ).fetchone()
+        return int(row["total"]), int(row["indexed"])
+
     def put(
         self,
         *,

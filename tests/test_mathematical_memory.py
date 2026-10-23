@@ -33,6 +33,16 @@ def _unit_vector(index: int) -> tuple[float, ...]:
     return tuple(1.0 if position == index else 0.0 for position in range(384))
 
 
+@pytest.mark.parametrize("dimensions", [385, 768, 2048])
+def test_vector_index_rejects_undocumented_dimension_folding(dimensions: int) -> None:
+    from aegis_core.memory.errors import MemoryQueryError
+    from aegis_core.memory.graph_repository import GraphRepository
+
+    vector = tuple(1.0 if index == 0 else 0.0 for index in range(dimensions))
+    with pytest.raises(MemoryQueryError, match="reduced by its encoder"):
+        GraphRepository.encode_vector(vector)
+
+
 def _index_document(
     store: SQLiteMemoryStore,
     *,
@@ -172,9 +182,31 @@ def test_hyperbolic_reinforcement_updates_authenticated_row(tmp_path: Path) -> N
     )
     loaded = store.get(namespace="user.default", memory_id=memory.memory_id)
 
-    assert reinforced.confidence == pytest.approx(math.tanh(0.6))
+    assert reinforced.confidence == pytest.approx(math.tanh(math.atanh(0.4) + 0.2))
     assert loaded == reinforced
     assert loaded.last_confirmed_at == confirmed_at
+
+
+@pytest.mark.parametrize("confidence", [0.0, 0.4, 0.9, 0.999999, 1.0])
+@pytest.mark.parametrize("boost", [0.001, 0.15, 1.0])
+def test_positive_reinforcement_never_reduces_confidence(
+    tmp_path: Path, confidence: float, boost: float,
+) -> None:
+    store = _store(tmp_path)
+    memory = store.put(
+        namespace="user.default", kind=MemoryKind.EPISODIC,
+        content="Observación confirmada con evidencia.", confidence=confidence,
+    )
+    previous = confidence
+    for _ in range(20):
+        reinforced = store.reinforce(
+            namespace=memory.namespace, memory_id=memory.memory_id, delta_boost=boost,
+        )
+        assert previous <= reinforced.confidence <= 1.0
+        if previous < 0.99:
+            assert reinforced.confidence > previous
+        assert store.get(namespace=memory.namespace, memory_id=memory.memory_id) == reinforced
+        previous = reinforced.confidence
 
 
 @pytest.mark.asyncio

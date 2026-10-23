@@ -15,14 +15,18 @@ class InferenceMetrics:
     usage_responses: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    fallback_count: int = 0
+    last_fallback: dict[str, str] = field(default_factory=dict)
 
     stages: dict[str, dict[str, int]] = field(default_factory=dict)
 
-    def public_dict(self) -> dict[str, int]:
+    def public_dict(self) -> dict[str, int | str]:
         # HashChainAuditLog accepts scalar values only. A nested stage dictionary
         # would reject the event in the inference finalizer and mask the real result.
         return {"http_requests": self.http_requests, "usage_responses": self.usage_responses,
                 "prompt_tokens": self.prompt_tokens, "completion_tokens": self.completion_tokens,
+                "fallback_count": self.fallback_count,
+                **{f"fallback_{key}": value for key, value in self.last_fallback.items()},
                 **{f"{name}_{key}": value for name, values in self.stages.items()
                    for key, value in values.items()}}
 
@@ -42,6 +46,13 @@ def end_metrics(token: Token) -> None:
 def record_http_request() -> None:
     if (metrics := _CURRENT.get()) is not None:
         metrics.http_requests += 1
+
+
+def record_model_fallback(details: Mapping[str, str]) -> None:
+    """Record only locally selected model identifiers and a bounded reason code."""
+    if (metrics := _CURRENT.get()) is not None:
+        metrics.fallback_count += 1
+        metrics.last_fallback = dict(details)
 
 
 def record_usage(usage: Mapping[str, int]) -> None:

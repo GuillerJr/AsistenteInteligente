@@ -6,7 +6,7 @@ import math
 import time
 from collections import OrderedDict
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from uuid import UUID, uuid4
 
 from aegis_core.async_tasks import run_blocking_owned
@@ -69,7 +69,7 @@ class GraphRAGService:
             result_limit=limit,
         )
         if epoch != self._cache_epoch or self._active_resets:
-            return GraphSearchResult("", (), (), result.traversal_ms, result.within_latency_budget)
+            return replace(result, markdown="", ranked_node_ids=(), scores=())
         if session_id is not None:
             key = (namespace, session_id)
             self._seed_cache[key] = result.ranked_node_ids[:5]
@@ -87,8 +87,9 @@ class GraphRAGService:
         query_vector: tuple[float, ...],
         limit: int = 8,
     ) -> HybridRRFResult:
+        epoch = self._cache_epoch
         started = time.perf_counter_ns()
-        hits = await asyncio.to_thread(
+        hits = await run_blocking_owned(
             self._store.hybrid_rrf_search,
             namespace=namespace,
             query=query,
@@ -96,6 +97,8 @@ class GraphRAGService:
             query_vector=query_vector,
             limit=limit,
         )
+        if epoch != self._cache_epoch or self._active_resets:
+            hits = ()
         payload_bytes = len(
             json.dumps(
                 [hit.model_dump(mode="json") for hit in hits],

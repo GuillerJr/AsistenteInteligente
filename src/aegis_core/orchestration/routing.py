@@ -20,6 +20,7 @@ from aegis_core.engineering import (
 )
 from aegis_core.request_intent import (
     google_request_tools,
+    is_chat_only_request,
     is_explicit_native_ui_request,
     smart_tv_discovery_intent,
 )
@@ -535,6 +536,8 @@ def _request_may_need_tools(
 
 
 def _tool_names_for_request(request: UserRequest) -> frozenset[str]:
+    if is_chat_only_request(request.text):
+        return frozenset()
     if smart_tv_discovery_intent(request.text) == "discover":
         return frozenset({"smart_tv_discover"})
     if is_explicit_native_ui_request(request.text):

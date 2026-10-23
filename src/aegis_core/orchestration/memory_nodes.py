@@ -49,6 +49,14 @@ def create_recall_memory_node(
         async def retrieve_memory() -> tuple[tuple[MemorySearchHit, ...], str, bool]:
             if memory_retriever is not None:
                 try:
+                    # The production retriever embeds the query once for both RRF
+                    # and graph recall. Keep the legacy protocol for test adapters.
+                    retrieve_context = getattr(memory_retriever, "retrieve_context", None)
+                    if retrieve_context is not None:
+                        hits, graph_result = await retrieve_context(
+                            namespace=memory_namespace, query=memory_query, limit=memory_limit
+                        )
+                        return hits, graph_result.markdown if graph_result else "", False
                     lexical_task = memory_retriever.retrieve_local(
                         namespace=memory_namespace,
                         query=memory_query,

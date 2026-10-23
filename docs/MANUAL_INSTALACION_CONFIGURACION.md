@@ -15,6 +15,13 @@ muestra el problema y permite reintentar. No activa un modelo local. El reconoci
 de voz, la detección de actividad de voz, la biometría y las herramientas nativas
 siguen ejecutándose en el Mac.
 
+La búsqueda semántica de recuerdos obtiene embeddings en NVIDIA. Para ello envía
+las consultas y fragmentos de los recuerdos, después de ocultar patrones de secretos;
+esa redacción no anonimiza todo el texto personal. Los recuerdos y el índice siguen
+almacenados en el Mac. Los chats temporales no consultan esa memoria. Si la búsqueda
+semántica falla, se conserva la búsqueda local por palabras clave. Diagnóstico indica
+si el índice está preparado, indexándose o temporalmente degradado.
+
 ## Instalar desde código
 
 La distribución pública necesita una firma Developer ID y notarización. Mientras

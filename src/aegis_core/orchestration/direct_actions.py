@@ -20,7 +20,11 @@ from aegis_core.contracts import (
 )
 from aegis_core.feedback import FEEDBACK_STATUS_METADATA, owner_feedback_response
 from aegis_core.memory.profile import OwnerProfile
-from aegis_core.request_intent import google_request_tools, smart_tv_discovery_intent
+from aegis_core.request_intent import (
+    google_request_tools,
+    is_chat_only_request,
+    smart_tv_discovery_intent,
+)
 from aegis_core.secrets import contains_likely_secret_material
 from aegis_core.style import style_feedback_response
 
@@ -823,6 +827,8 @@ def _calculator_operand(value: str) -> Decimal | None:
 
 
 def direct_tool_call(request: UserRequest, *, now: datetime | None = None) -> ToolCall | None:
+    if is_chat_only_request(request.text):
+        return None
     command = _direct_command(request)
     if command is None:
         return None

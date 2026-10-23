@@ -2365,6 +2365,42 @@
       },
       "generatesSymbol": false
     },
+    "Búsqueda híbrida preparada": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Búsqueda híbrida preparada"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Búsqueda por palabras clave": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Búsqueda por palabras clave"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Búsqueda semántica no disponible; se usan palabras clave": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Búsqueda semántica no disponible; se usan palabras clave"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Búsqueda visible en Internet": {
       "extractionState": "manual",
       "localizations": {
@@ -7244,6 +7280,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Incluido"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Indexando recuerdos": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indexando recuerdos"
           }
         }
       },
@@ -12409,6 +12457,18 @@
       },
       "generatesSymbol": false
     },
+    "Recuperación de memoria": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recuperación de memoria"
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
     "Recuperación restablecida. Activa Telegram para reconectar; el token, tu cuenta y los chats se conservaron.": {
       "extractionState": "manual",
       "localizations": {
@@ -13496,6 +13556,18 @@
           "stringUnit": {
             "state": "translated",
             "value": "Se retirará del catálogo y se conservará una copia privada para recuperarla."
+          }
+        }
+      },
+      "generatesSymbol": false
+    },
+    "Se usó un modelo de respaldo": {
+      "extractionState": "manual",
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se usó un modelo de respaldo"
           }
         }
       },
