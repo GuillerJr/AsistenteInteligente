@@ -3,43 +3,26 @@ set -euo pipefail
 
 AEGIS_REPOSITORY_ROOT="$(git rev-parse --show-toplevel)"
 cd "$AEGIS_REPOSITORY_ROOT"
-
 AEGIS_PYTHON="$AEGIS_REPOSITORY_ROOT/.venv/bin/python"
 AEGIS_RUFF="$AEGIS_REPOSITORY_ROOT/.venv/bin/ruff"
 
+if [[ "$(git branch --show-current)" != "main" ]]; then
+    echo "[aegis-pre-commit] Trabaja en main; no se crean ramas para esta base." >&2
+    exit 1
+fi
 if [[ ! -x "$AEGIS_PYTHON" || ! -x "$AEGIS_RUFF" ]]; then
-    echo "[aegis-pre-commit] Rejected: run 'uv sync --group dev' first" >&2
+    echo "[aegis-pre-commit] Ejecuta uv sync --locked --group dev primero." >&2
     exit 1
 fi
 
-echo "[aegis-pre-commit] Checking staged patch integrity"
 git diff --cached --check
-
-echo "[aegis-pre-commit] Running Python lint"
-"$AEGIS_RUFF" check src tests
-
-echo "[aegis-pre-commit] Running deterministic Python tests"
+"$AEGIS_PYTHON" script/check_clean_base.py
+"$AEGIS_RUFF" check src tests script
+"$AEGIS_PYTHON" -m compileall -q src tests script
 (
-    # Git binds hook subprocesses to this repository. Tests create disposable
-    # repositories, so their Git commands must discover their own working tree.
     while IFS= read -r AEGIS_GIT_VARIABLE; do
         unset "$AEGIS_GIT_VARIABLE"
     done < <(git rev-parse --local-env-vars)
     "$AEGIS_PYTHON" -m pytest -q
 )
-
-AEGIS_STAGED_SWIFT_FILES=()
-while IFS= read -r AEGIS_STAGED_FILE; do
-    [[ -n "$AEGIS_STAGED_FILE" ]] && AEGIS_STAGED_SWIFT_FILES+=("$AEGIS_STAGED_FILE")
-done < <(git diff --cached --name-only --diff-filter=ACMR -- '*.swift')
-
-if (( ${#AEGIS_STAGED_SWIFT_FILES[@]} > 0 )); then
-    echo "[aegis-pre-commit] Parsing staged Swift sources"
-    for AEGIS_STAGED_SWIFT_FILE in "${AEGIS_STAGED_SWIFT_FILES[@]}"; do
-        # Each SwiftPM executable owns an independent main.swift module. Parsing all
-        # executables in one swiftc process incorrectly reports duplicate filenames.
-        /usr/bin/xcrun swiftc -parse "$AEGIS_STAGED_SWIFT_FILE"
-    done
-fi
-
-echo "[aegis-pre-commit] Fast qualification passed"
+echo "[aegis-pre-commit] Base Python aprobada; aplicación nativa pendiente."

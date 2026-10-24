@@ -1,69 +1,71 @@
-# Instrucciones para agentes (Codex, Claude Code)
+# Instrucciones para agentes
 
-Jarvis es un asistente personal para macOS Apple Silicon. Tiene dos partes:
+Esta es la base limpia de una variante propia inspirada en el estudio de OpenClaw.
+Se construye en este repositorio con código propio. OpenClaw es referencia de lectura
+por partes con REA, no un fork, árbol vendorizado ni runtime del producto.
 
-- un daemon Python en `src/aegis_core`;
-- una app SwiftUI de barra de menús en `native/AegisAudio`.
+## Estado y fases
 
-El nombre técnico heredado `aegis` se conserva en paquetes, rutas, Keychain e identificadores de bundle. **No lo renombres.**
-
-La lista de trabajo pendiente para la 1.0 está en [`docs/V1_PENDIENTES.md`](docs/V1_PENDIENTES.md).
-
-La reconstrucción acordada el 24-10-2026 se registra en
-[`docs/rebuild/README.md`](docs/rebuild/README.md): Jarvis propio en este repositorio,
-con OpenClaw como referencia de comportamiento y análisis REA por partes. No convertir
-este repositorio en un fork, importar el árbol de OpenClaw ni usarlo como runtime del
-producto. Conservar el inventario completo de capacidades, los identificadores `aegis`
-y las garantías de privacidad y aprobación. Primero se construye y verifica la variante
-base propia (fase A); implementar o conectar las herramientas específicas de Jarvis
-corresponde a una fase posterior (fase B). En fase A solo se inventariarán esas herramientas
-y se usan adaptadores sintéticos para probar los contratos del núcleo.
-La fase A incluye un cliente de escritorio nativo macOS en SwiftUI, con ventana propia,
-Dock, barra de menús y atajo: el uso habitual no depende de una pestaña ni de un panel
-web incrustado. Consultar `docs/rebuild/DESKTOP_APP.md`.
-El núcleo nuevo permanece separado del
-producto instalado hasta superar los criterios de paridad; cobertura estática parcial
-y pruebas sintéticas no acreditan una aplicación reconstruida ni una prueba real.
+- Fase A: núcleo propio, sesiones, política, extensibilidad, estado, proveedor elegido
+  y app nativa macOS en SwiftUI con ventana, Dock, barra de menús y atajo.
+- Fase B posterior: herramientas específicas de Jarvis. Están inventariadas en
+  `docs/rebuild/`; no implementarlas ni conectarlas antes de terminar la base A.
+- Hoy existe un núcleo Python aislado con pruebas sintéticas. La nueva app de
+  escritorio, el proveedor real y los transportes de producción siguen pendientes.
+- El código del Jarvis anterior fue retirado del árbol de trabajo por petición
+  expresa del dueño. Se conserva en Git, no en una carpeta de código heredado.
 
 ## Forma de trabajar
 
-- **Rama:** trabaja solo en `main`, sin ramas ni PRs. Después de cada cambio terminado, haz commit y `git push` a `main`.
-- **Pruebas:** ejecútalas tú. Si algo falla, corrígelo, reinstala y vuelve a probar hasta que funcione.
-- **Interfaz:** está en español. Los textos nuevos también van en español, con el tono de los existentes.
-- **Inferencia:** el dueño retiró la restricción de NVIDIA exclusivo el 23-10-2026. La primera conexión elegida es **Codex con ChatGPT**, mediante el cliente oficial y su inicio de sesión. No envíes inferencia, memoria ni audio a NVIDIA desde la app. Las alternativas Ollama, OpenAI API y Anthropic quedan para conexiones independientes posteriores; no actives respaldos entre proveedores sin elección explícita. Conserva las aprobaciones y verificaciones de Jarvis.
-- **Inspiración externa:** de ChatGPT, Codex y Claude toma solo ideas. Nunca copies su código ni sus recursos.
-- **Lo que hace el dueño:**
-  - escribe las contraseñas y la del llavero;
-  - concede los permisos de privacidad (TCC);
-  - aprueba las acciones.
+- Solo `main`, sin ramas ni PRs. Después de cada cambio terminado: commit y push.
+- Ejecutar pruebas y corregir fallos. No cambiar archivos ni instalar mientras
+  corre pre-push: verifica el árbol de trabajo completo y su identidad.
+- Conservar los nombres técnicos `aegis`, la distribución `aegis-swarm` y los
+  identificadores heredados que deban mantenerse. El producto se llama Jarvis.
+- Interfaz y textos al usuario en español.
+- Primera conexión elegida: Codex con ChatGPT, mediante cliente y acceso oficiales.
+  No enviar inferencia, memoria ni audio a NVIDIA. Otros proveedores se incorporan
+  solo por elección explícita, sin respaldos ocultos.
+- De ChatGPT, Codex y Claude tomar solo ideas, nunca copiar código o recursos.
+  La variante propia tampoco importa la implementación o recursos de OpenClaw.
+- El dueño escribe contraseñas, concede permisos TCC y aprueba acciones reales.
+  Nunca hacerlo por él. Los gates y herramientas de los tests son sintéticos.
+- No leer `auth.json`, historial personal ni datos privados del dueño.
+- No tocar la app instalada ni `~/Library/Application Support/Aegis` al limpiar código.
+- Ignorar duplicados iCloud `* 2.*`. `.venv` puede apuntar a `.venv.nosync`.
 
-  Nunca los hagas por él.
-- **Archivos privados:** no leas `auth.json` ni el historial personal del dueño.
-
-## Comandos
+## Comandos de la base actual
 
 ```bash
-.venv/bin/ruff check src tests                        # lint (líneas de 100 caracteres)
+uv sync --locked --group dev
+.venv/bin/ruff check src tests script
+.venv/bin/python -m compileall -q src
 PYTHONPATH=src .venv/bin/python -m pytest -p no:warnings
-./script/test_native.sh                               # pruebas Swift
-./script/menu_bar_service.sh install                  # compila, firma e instala ~/Applications/Jarvis.app
+.venv/bin/python script/check_clean_base.py
+./script/setup_git_gates.sh --check
+AEGIS_PACKAGE_DIR="$(mktemp -d /private/tmp/aegis-base-package.XXXXXX)"
+uv build --offline --sdist --out-dir "$AEGIS_PACKAGE_DIR"
+uv build --offline --wheel "$AEGIS_PACKAGE_DIR"/*.tar.gz --out-dir "$AEGIS_PACKAGE_DIR"
+.venv/bin/python script/check_clean_base.py \
+  --wheel "$AEGIS_PACKAGE_DIR"/*.whl --sdist "$AEGIS_PACKAGE_DIR"/*.tar.gz --smoke
 ```
 
-- **Entorno:** `.venv` apunta a `.venv.nosync` porque el repositorio vive en iCloud. Ignora los duplicados `* 2.*`.
-- **Hooks:** se activan con `./script/setup_git_gates.sh`.
-  - El **pre-commit** pasa ruff y pytest.
-  - El **pre-push** compila y prueba **el árbol de trabajo**, no el commit. Haz commit de todo antes de `git push`, y no edites archivos ni lances `install` mientras corre.
-  - El pre-push necesita Xcode fuera del sandbox.
+Los hooks califican la base Python y sus paquetes. No hay un instalador de app ni
+pruebas Swift de la variante nueva todavía; no sustituirlos por comandos eliminados
+ni afirmar que el empaquetado Python acredita una app macOS funcional.
 
-## Reglas técnicas que ya han causado fallos
+## Garantías de diseño
 
-- **Swift:**
-  - No uses literales de expresión regular (`/…/`): el analizador del pre-commit los rechaza. Usa análisis manual o `NSRegularExpression`.
-  - Las llamadas de `LocalIPCClient` tienen un tiempo máximo de **30 s**. Si un método del daemon tarda más, ajusta `handler_timeout_overrides` en `runtime/daemon.py` por debajo de ese límite.
-  - El ejecutable `Jarvis` tiene un presupuesto de tamaño (25 MiB tras `strip`) en `script/build_and_run.sh` y `script/rc3_rc8_gate.sh`. Comprueba el tamaño si añades código a la app.
-- **IPC firmada:** solo la app firmada habla con el daemon. Un `IpcClient` de Python recibe `peer_not_trusted`, así que las pruebas en vivo se hacen desde la interfaz de la app.
-- **Seguridad:**
-  - Las herramientas se declaran como `ToolDefinition`; las que cambian algo llevan `requires_confirmation`.
-  - Las aprobaciones nuevas necesitan su propio método firmado en `approval_signing.py` y en `ApprovalSigner.swift`.
-  - Los metadatos que pone el daemon (`plan_mode`, `project_context`, conversación temporal) se eliminan si llegan del cliente.
-- **Datos del dueño:** viven en `~/Library/Application Support/Aegis`. Los archivos privados se escriben con `write_private_json`.
+- Una autoridad de autorización, ligada a operación, sesión, ejecución y argumentos.
+- Cancelar entrega recibo; el siguiente run espera que termine la limpieza anterior.
+- Texto de modelo y recibos de acciones son datos distintos. Un efecto incierto se
+  conserva y no se repite automáticamente.
+- Los adaptadores productivos necesitarán autenticación, firmas, límites, revocación
+  y comprobación inmediatamente antes del efecto. El prototipo no acredita TCC.
+- La investigación mantiene identidad, fuentes, hashes, Evidence IDs e incógnitas.
+  Nunca presentar cobertura parcial o pruebas sintéticas como revisión exhaustiva.
+- Los inventarios históricos están congelados. No regenerarlos sobre el árbol nuevo
+  ni perder capacidades al simplificar la arquitectura.
+
+Consultar `docs/rebuild/README.md`, `docs/rebuild/CLEAN_START.md` y
+`docs/V1_PENDIENTES.md` antes de ampliar el alcance.

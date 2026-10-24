@@ -1,5 +1,10 @@
 # Inventario nativo de Jarvis para la reconstrucción propia
 
+> Snapshot histórico del producto anterior. El código referido fue retirado del
+> árbol de trabajo al iniciar la base limpia. Sus estados describen la revisión
+> histórica indicada, no capacidades disponibles en el núcleo nuevo. Consultar
+> [CLEAN_START.md](CLEAN_START.md) y el historial Git `c97ed89`.
+
 Fecha: 24-10-2026. Base observada: `4122a6e2e4ed5160abf2fc4480e752e6ab779197`.
 
 Este catálogo registra el producto que la nueva variante propia debe poder recuperar.

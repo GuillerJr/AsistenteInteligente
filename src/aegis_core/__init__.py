@@ -1,5 +1,35 @@
-"""Aegis Swarm core package."""
+"""Independent, offline reconstruction contracts; not wired to the production daemon."""
 
-__all__ = ["__version__"]
+from .runtime import (
+    AgentRuntime,
+    ApprovalGate,
+    ApprovalGrant,
+    ApprovalRequest,
+    CancelReceipt,
+    FinalAnswer,
+    Provider,
+    RunContext,
+    RunHandle,
+    RunPhase,
+    RunResult,
+    ToolDefinition,
+    ToolProposal,
+    ToolResult,
+)
 
-__version__ = "1.0.0"
+__all__ = [
+    "AgentRuntime",
+    "ApprovalGate",
+    "ApprovalGrant",
+    "ApprovalRequest",
+    "CancelReceipt",
+    "FinalAnswer",
+    "Provider",
+    "RunContext",
+    "RunHandle",
+    "RunPhase",
+    "RunResult",
+    "ToolDefinition",
+    "ToolProposal",
+    "ToolResult",
+]

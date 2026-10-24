@@ -3,33 +3,55 @@ set -euo pipefail
 
 AEGIS_REPOSITORY_ROOT="$(git rev-parse --show-toplevel)"
 cd "$AEGIS_REPOSITORY_ROOT"
-
 AEGIS_PYTHON="$AEGIS_REPOSITORY_ROOT/.venv/bin/python"
 AEGIS_RUFF="$AEGIS_REPOSITORY_ROOT/.venv/bin/ruff"
 
-if [[ ! -x "$AEGIS_PYTHON" || ! -x "$AEGIS_RUFF" ]]; then
-    echo "[aegis-pre-push] Rejected: run 'uv sync --group dev' first" >&2
+if [[ "$(git branch --show-current)" != "main" ]]; then
+    echo "[aegis-pre-push] Solo se publica desde main." >&2
+    exit 1
+fi
+if [[ -n "$(git status --porcelain)" ]]; then
+    echo "[aegis-pre-push] Haz commit de todo antes de comprobar el árbol de trabajo." >&2
+    exit 1
+fi
+if [[ ! -x "$AEGIS_PYTHON" || ! -x "$AEGIS_RUFF" ]] || ! command -v uv >/dev/null; then
+    echo "[aegis-pre-push] Ejecuta uv sync --locked --group dev primero." >&2
     exit 1
 fi
 
-echo "[aegis-pre-push] Running full Python qualification"
-"$AEGIS_RUFF" check src tests
-"$AEGIS_PYTHON" -m pytest -q
+AEGIS_CHECKED_REVISION="$(git rev-parse HEAD)"
+AEGIS_ARTIFACT_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/aegis-base-gate.XXXXXX")"
+cleanup() { rm -rf "$AEGIS_ARTIFACT_DIRECTORY"; }
+trap cleanup EXIT
 
-echo "[aegis-pre-push] Running native Swift tests"
-./script/test_native.sh
+"$AEGIS_PYTHON" script/check_clean_base.py
+"$AEGIS_RUFF" check src tests script
+"$AEGIS_PYTHON" -m compileall -q src tests script
+(
+    while IFS= read -r AEGIS_GIT_VARIABLE; do
+        unset "$AEGIS_GIT_VARIABLE"
+    done < <(git rev-parse --local-env-vars)
+    "$AEGIS_PYTHON" -m pytest -q
+)
+uv build --offline --sdist --out-dir "$AEGIS_ARTIFACT_DIRECTORY"
+AEGIS_SDISTS=("$AEGIS_ARTIFACT_DIRECTORY"/*.tar.gz)
+if [[ ${#AEGIS_SDISTS[@]} -ne 1 || ! -f "${AEGIS_SDISTS[0]}" ]]; then
+    echo "[aegis-pre-push] El build no produjo exactamente un sdist." >&2
+    exit 1
+fi
+# Build from the fresh source archive, never a checkout's stale build/lib cache.
+uv build --offline --wheel "${AEGIS_SDISTS[0]}" --out-dir "$AEGIS_ARTIFACT_DIRECTORY"
+AEGIS_WHEELS=("$AEGIS_ARTIFACT_DIRECTORY"/*.whl)
+if [[ ${#AEGIS_WHEELS[@]} -ne 1 || ! -f "${AEGIS_WHEELS[0]}" ]]; then
+    echo "[aegis-pre-push] El build no produjo exactamente un wheel." >&2
+    exit 1
+fi
+"$AEGIS_PYTHON" script/check_clean_base.py --wheel "${AEGIS_WHEELS[0]}" \
+    --sdist "${AEGIS_SDISTS[0]}" --smoke
 
-echo "[aegis-pre-push] Building the non-interactive release bundle"
-# Ad hoc: this bundle only proves the build; the Jarvis signing keychain needs a password.
-AEGIS_CODESIGN_IDENTITY=- AEGIS_BUILD_MLX=0 ./script/build_and_run.sh --package
-
-echo "[aegis-pre-push] Running deterministic acceptance contracts"
-./script/aegis.sh acceptance-benchmark
-
-echo "[aegis-pre-push] Running deterministic production workflows"
-./script/aegis.sh production-workflows
-
-echo "[aegis-pre-push] Running P7 long-horizon reliability"
-./script/aegis.sh long-horizon-reliability
-
-echo "[aegis-pre-push] Full qualification passed"
+if [[ "$(git rev-parse HEAD)" != "$AEGIS_CHECKED_REVISION" \
+      || -n "$(git status --porcelain)" ]]; then
+    echo "[aegis-pre-push] El árbol o HEAD cambió durante la cualificación; repítela." >&2
+    exit 1
+fi
+echo "[aegis-pre-push] Base Python y paquete aislado aprobados; app SwiftUI pendiente."

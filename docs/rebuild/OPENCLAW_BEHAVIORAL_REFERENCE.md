@@ -229,7 +229,7 @@ una configuración externa o por haber conectado el chat.
 
 ## Primer contrato ejecutable propio
 
-`src/aegis_core/rebuild/runtime.py` contiene un prototipo genérico independiente,
+`src/aegis_core/runtime.py` contiene un prototipo genérico independiente,
 sin conexión con el daemon, la app ni las herramientas específicas del Jarvis
 actual. Sus dependencias son de la biblioteca estándar de Python. No carga código
 de OpenClaw ni un runtime externo. Las pruebas inyectan proveedores, herramientas

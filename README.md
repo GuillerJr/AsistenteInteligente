@@ -1,56 +1,52 @@
-# Jarvis
+# Jarvis — base propia
 
-Asistente personal para **macOS Apple Silicon**. Conversa por texto, organiza
-proyectos y tareas, y trabaja con tus apps mediante acciones que tú apruebas.
-La interfaz está en español. La inferencia usa **Codex con tu cuenta de ChatGPT**
-y requiere internet; la ejecución de herramientas, los permisos y la memoria
-cifrada viven en el Mac. Los embeddings se calculan localmente con Apple.
-La salida de voz y las notas de audio de Telegram están pendientes de configurar
-tras retirar NVIDIA NIM. Ollama y otras APIs quedan para conexiones posteriores.
+Base limpia para una variante propia inspirada en el análisis de OpenClaw.
+El código anterior de Jarvis se retiró del árbol de trabajo; su historial y el
+inventario de capacidades se conservan como referencia.
 
-La [variante propia inspirada en OpenClaw](docs/rebuild/README.md) se desarrolla en
-este repositorio: primero la base independiente y después las herramientas de Jarvis.
-El núcleo experimental y su cobertura parcial están separados del producto descrito aquí.
+Primero se construye la **variante base independiente (fase A)**. Las herramientas
+específicas de Jarvis se integrarán en una **fase B posterior**.
 
-## Instalar y empezar
+## Estado real
 
-Consulta el [manual único de instalación y uso](docs/MANUAL_INSTALACION_CONFIGURACION.md).
-Incluye los requisitos, la instalación desde código, la bienvenida, los permisos
-opcionales y el diagnóstico. La distribución pública todavía requiere Developer ID
-y notarización: [estado de la 1.0](docs/V1_PENDIENTES.md).
+- Núcleo propio Python sin dependencias productivas externas: sesiones, ejecución,
+  aprobación por operación, cancelación/asentamiento y recibos de efectos inciertos.
+- Pruebas sintéticas con proveedores y herramientas de fixture.
+- App nativa macOS en SwiftUI, proveedor real, persistencia y transporte autenticado:
+  **pendientes de implementación y cualificación**.
+- La conversación habitual se hará en una ventana propia con Dock, barra de menús
+  y atajo. La nueva app no será una pestaña ni un panel web incrustado.
 
-Con el entorno de desarrollo preparado:
+No es una app lista para instalar. El prototipo no conecta cuentas, micrófono,
+control del Mac ni herramientas de la versión anterior.
 
-```bash
-./script/setup_git_gates.sh
-./script/menu_bar_service.sh install
-```
-
-Abre Jarvis y entra en Ajustes › Modelos. Pulsa «Iniciar sesión con ChatGPT» y
-abre el enlace oficial; completa tú el inicio de sesión en el navegador. Elige
-un modelo disponible y pulsa «Probar conexión» antes de tu primera pregunta.
-No hace falta introducir una clave de NVIDIA. Puedes saltar los permisos opcionales.
-Ajustes › General permite volver a abrir la bienvenida.
-
-## Desarrollar
-
-El daemon Python está en `src/aegis_core`; la app SwiftUI y los helpers están en
-`native/AegisAudio`. El namespace `aegis` se conserva para mantener las rutas,
-credenciales y permisos existentes. Las reglas están en [AGENTS.md](AGENTS.md).
+## Desarrollar y comprobar
 
 ```bash
-.venv/bin/ruff check src tests
+uv sync --locked --group dev
+./script/setup_git_gates.sh --install
+.venv/bin/python script/check_clean_base.py
+.venv/bin/ruff check src tests script
 PYTHONPATH=src .venv/bin/python -m pytest -p no:warnings
-./script/test_native.sh
+AEGIS_PACKAGE_DIR="$(mktemp -d /private/tmp/aegis-base-package.XXXXXX)"
+uv build --offline --sdist --out-dir "$AEGIS_PACKAGE_DIR"
+uv build --offline --wheel "$AEGIS_PACKAGE_DIR"/*.tar.gz --out-dir "$AEGIS_PACKAGE_DIR"
+.venv/bin/python script/check_clean_base.py \
+  --wheel "$AEGIS_PACKAGE_DIR"/*.whl --sdist "$AEGIS_PACKAGE_DIR"/*.tar.gz --smoke
 ```
+
+El entorno local `.venv` puede ser un enlace a `.venv.nosync` por iCloud.
+La distribución técnica conserva `aegis-swarm` y el paquete conserva `aegis_core`.
 
 ## Documentación
 
-- [Manual de instalación, uso y diagnóstico](docs/MANUAL_INSTALACION_CONFIGURACION.md)
-- [Cambios de versión](CHANGELOG.md)
-- [Pendientes y requisitos de salida de la 1.0](docs/V1_PENDIENTES.md)
-- [Alcance oficial de la 1.0](packaging/JarvisV1Scope.json)
-- [CLI de ingeniería](docs/ENGINEERING_CLI.md)
-- [Guía de interfaz](docs/JARVIS_INTERFACE_STYLE.md)
-- [Referencia técnica conservada](docs/REFERENCIA_TECNICA.md)
-- [CI y falta de capacidad de runners](docs/quality/CI_CAPACITY.md)
+- [Plan de la variante propia y fases](docs/rebuild/README.md).
+- [Limpieza, punto de recuperación y límites](docs/rebuild/CLEAN_START.md).
+- [Contrato de la app nativa](docs/rebuild/DESKTOP_APP.md).
+- [Pendientes actuales](docs/V1_PENDIENTES.md).
+- [Inventario histórico backend](docs/rebuild/JARVIS_BACKEND_INVENTORY.md).
+- [Inventario histórico nativo](docs/rebuild/JARVIS_NATIVE_INVENTORY.md).
+- [Cobertura REA, todavía parcial](docs/rebuild/REA_COVERAGE.json).
+
+Los inventarios describen el producto anterior, no funciones disponibles en esta
+base. La investigación de OpenClaw no importa su código al producto nuevo.

@@ -1,10 +1,9 @@
-name: CI
+name: Base propia de Jarvis
 
 on:
   push:
     branches: [main]
   pull_request:
-  # Allows a fresh attempt after hosted macOS capacity is restored.
   workflow_dispatch:
 
 permissions:
@@ -16,45 +15,41 @@ concurrency:
 
 jobs:
   python:
-    name: Python lint and tests
-    # The daemon relies on Darwin-only APIs (LOCAL_PEERCRED, Keychain paths).
-    runs-on: macos-26
-    timeout-minutes: 30
+    name: Base Python y paquete (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-26]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-      - name: Install Python 3.11
-        run: uv python install 3.11
-      - name: Sync dependencies
+      - name: Preparar Python y dependencias de desarrollo
         run: uv sync --locked --group dev --python 3.11
+      - name: Comprobar pureza de la base
+        run: uv run --no-sync python script/check_clean_base.py
       - name: Ruff
-        run: uv run ruff check src tests
-      - name: Pytest
-        run: uv run pytest -q
-
-  swift:
-    name: Swift core tests
-    runs-on: macos-26
-    timeout-minutes: 45
-    env:
-      AEGIS_SWIFT_TEST_SCOPE: core
-    defaults:
-      run:
-        working-directory: native/AegisAudio
-    steps:
-      - uses: actions/checkout@v5
-      - name: Select latest Xcode
-        run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
-      # This job's scope is the complete core suite. `swift test` alone compiles
-      # every target; the local pre-push also builds and tests the full UI app.
-      # The explicit manifest profile omits only AegisMenuBarTests. Without it the
-      # aggregate test product also compiles the UI. The default profile and the
-      # local pre-push retain both complete suites. VAD uses its real ONNX helper.
-      - name: Build VAD helper
-        run: swift build --build-system native --product jarvis-vad-helper
-      - name: Build AegisAudioCore tests
-        run: swift build --build-system native --product AegisAudioPackageTests
-      - name: Run AegisAudioCore tests
-        run: swift test --build-system native --skip-build --filter AegisAudioCoreTests
+        run: uv run --no-sync ruff check src tests script
+      - name: Compilar Python
+        run: uv run --no-sync python -m compileall -q src tests script
+      - name: Pruebas de contratos propios
+        run: uv run --no-sync pytest -q
+      - name: Construir el paquete propio
+        shell: bash
+        run: |
+          uv build --offline --sdist --out-dir dist
+          sdists=(dist/*.tar.gz)
+          test "${#sdists[@]}" -eq 1
+          uv build --offline --wheel "${sdists[0]}" --out-dir dist
+      - name: Validar artefactos e instalación aislada sin red
+        shell: bash
+        run: |
+          wheels=(dist/*.whl)
+          sdists=(dist/*.tar.gz)
+          test "${#wheels[@]}" -eq 1
+          test "${#sdists[@]}" -eq 1
+          uv run --no-sync python script/check_clean_base.py \
+            --wheel "${wheels[0]}" --sdist "${sdists[0]}" --smoke

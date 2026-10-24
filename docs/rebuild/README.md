@@ -1,4 +1,4 @@
-# Variante propia inspirada en OpenClaw
+# Variante propia inspirada en OpenClaw — base limpia
 
 Decisión del dueño, 24-10-2026: construir la nueva variante de Jarvis **en este
 repositorio**, con implementación propia y arquitectura informada por el estudio
@@ -10,6 +10,9 @@ herramientas específicas de Jarvis**. El inventario de Jarvis preserva el alcan
 esa segunda fase y no autoriza adelantar su integración. La fase A puede definir y
 probar contratos genéricos de herramientas con dobles sintéticos, sin conectores del
 producto anterior, control real del Mac ni audio de Jarvis.
+
+El árbol anterior fue retirado por petición del dueño. Ver [inicio limpio](CLEAN_START.md).
+Los inventarios históricos están congelados; el código previo vive en Git.
 
 Se conservan el nombre de producto Jarvis, los identificadores técnicos `aegis`,
 la interfaz en español y las reglas de privacidad/aprobación. La primera conexión
@@ -23,7 +26,7 @@ Dock, barra de menús y atajo. Ver [contrato de escritorio](DESKTOP_APP.md).
 | --- | --- |
 | [Inventario backend](JARVIS_BACKEND_INVENTORY.md) | Dominios Python, herramientas fijas y dinámicas, canales, dispositivos, memoria, seguridad, CLI e integraciones. La presencia de código no demuestra configuración ni funcionamiento real. |
 | [Inventario nativo](JARVIS_NATIVE_INVENTORY.md) | Módulos SwiftUI, productos SwiftPM, contratos, recursos, distribución, TCC, permisos y recorridos de paridad. |
-| [Declaraciones reproducibles](JARVIS_DECLARATIONS.json) | Archivos Python con hash y sitios AST de `ToolDefinition`, sin importar ni ejecutar el backend. No equivale al catálogo dinámico activo. |
+| [Snapshot de declaraciones](JARVIS_DECLARATIONS.json) | Censo histórico con hashes y sitios AST de `ToolDefinition`; no describe herramientas activas en la base limpia y no se regenera en su lugar. |
 | [Inventario OpenClaw](OPENCLAW_TREE_INVENTORY.json) | Identidad del árbol Git y recuento de todos sus archivos y ámbitos. Inventariar no significa revisar su código. |
 | [Cobertura REA](REA_COVERAGE.json) | Partes examinadas, fuentes exactas, Evidence IDs, límites, incógnitas y partes pendientes. La cobertura global permanece parcial. |
 | [Referencia de comportamiento](OPENCLAW_BEHAVIORAL_REFERENCE.md) | Observaciones trazables y contratos propios que orientan el diseño. No incorpora implementación de OpenClaw. |
@@ -33,12 +36,13 @@ Cada una necesita una decisión explícita: reconstruir, integrar, conservar tra
 auditoría, dejar pendiente de configuración o retirar con motivo documentado. Un
 estado «pendiente» nunca se presenta como función disponible.
 
-Para regenerar los inventarios, sin consultar credenciales ni historial:
+Los snapshots históricos se conservan sin sobrescribir. Para generar un inventario
+de investigación nuevo en una salida distinta, sin consultar credenciales ni historial:
 
 ```bash
-.venv/bin/python script/rebuild_inventory.py \
+.venv/bin/python script/research_inventory.py \
   --reference-root /ruta/al/material-de-referencia-openclaw \
-  --output-directory docs/rebuild
+  --output-directory /private/tmp/inventario-referencia-nuevo
 ```
 
 ## Arquitectura de la fase A
@@ -80,7 +84,7 @@ especificaciones y pruebas, sin trasladar implementaciones ni recursos del proye
 
 ## Primer núcleo ejecutable
 
-`src/aegis_core/rebuild/` contiene el prototipo propio del ciclo de ejecución.
+`src/aegis_core/runtime.py` (`AgentRuntime`) contiene el prototipo propio del ciclo de ejecución.
 Sus pruebas usan proveedores, herramientas y decisiones sintéticos. No tiene
 acceso a la cuenta del dueño, TCC, herramientas del Mac ni datos personales.
 No está conectado al daemon, CLI de producto ni app instalada.

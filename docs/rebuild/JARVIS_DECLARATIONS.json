@@ -1393,5 +1393,9 @@
     "Unresolved expressions include named constants as well as dynamic factories.",
     "No source was imported, no tool was executed and no user state was read.",
     "Source presence does not prove a feature is active or verified in the app."
-  ]
+  ],
+  "snapshot_revision": "c97ed8908e1233f282e67d08b41cd06cb071c431",
+  "role": "historical_snapshot_not_current_product",
+  "regenerate_in_place": false,
+  "snapshot_note": "Contains 255 legacy Python sources plus two initial prototype sources at c97ed89; not the clean base inventory."
 }

@@ -1,53 +1,29 @@
 [project]
 name = "aegis-swarm"
-version = "1.0.0"
-description = "Local-first, policy-gated agent swarm for macOS Apple Silicon"
+version = "0.1.0a1"
+description = "Base propia de Jarvis: contratos de agentes y ejecución verificable"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
-dependencies = [
-  "aiohttp>=3.12,<4",
-  "cryptography>=45,<47",
-  "httpx>=0.28,<1",
-  "jsonschema>=4.25,<5",
-  "langgraph>=0.6,<1",
-  "nvidia-riva-client>=2.24,<3",
-  "pillow>=11,<13",
-  "pypdf>=6,<7",
-  "mlx-whisper==0.4.3",
-  "psutil>=7,<8",
-  "prompt-toolkit>=3.0.52,<4",
-  "pydantic>=2.11,<3",
-  "pydantic-settings>=2.10,<3",
-  "sqlite-vec==0.1.8",
-]
-
-[project.optional-dependencies]
-distributed = [
-  "mlx>=0.29,<1",
-  "mlx-lm>=0.29,<1",
-]
-
-[project.scripts]
-aegis = "aegis_core.cli:main"
-jarvis = "aegis_core.cli:main"
+dependencies = []
 
 [dependency-groups]
 dev = [
   "pytest>=8.4,<9",
   "pytest-asyncio>=1.1,<2",
-  "respx>=0.22,<1",
   "ruff>=0.12,<1",
-]
-release = [
-  "pyinstaller==6.22.2",
 ]
 
 [build-system]
 requires = ["setuptools>=80"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+include-package-data = false
+
 [tool.setuptools.packages.find]
 where = ["src"]
+include = ["aegis_core*"]
+namespaces = false
 
 [tool.pytest.ini_options]
 addopts = "-q"

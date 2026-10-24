@@ -1,5 +1,10 @@
 # Inventario del backend de Jarvis para la reconstrucción propia
 
+> Snapshot histórico del producto anterior. El código referido fue retirado del
+> árbol de trabajo al iniciar la base limpia. Sus estados describen la revisión
+> histórica indicada, no capacidades disponibles en el núcleo nuevo. Consultar
+> [CLEAN_START.md](CLEAN_START.md) y el historial Git `c97ed89`.
+
 Fecha de corte: 24-10-2026. Fuente propia: revisión `4122a6e2e4ed5160abf2fc4480e752e6ab779197`.
 Este documento describe el sistema que debe recuperar la nueva variante de Jarvis en este
 repositorio. No es una propuesta de copiar el código de OpenClaw ni de convertir Jarvis en un fork.

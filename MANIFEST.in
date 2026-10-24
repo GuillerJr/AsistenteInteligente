@@ -1,0 +1,3 @@
+include LICENSE README.md pyproject.toml uv.lock
+include .githooks/pre-commit .githooks/pre-push
+recursive-include script *.py *.sh
