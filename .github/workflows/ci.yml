@@ -37,6 +37,11 @@ jobs:
         run: uv run --no-sync python -m compileall -q src tests script
       - name: Pruebas de contratos propios
         run: uv run --no-sync pytest -q
+      - name: Pruebas Swift y bundle nativo de desarrollo
+        if: runner.os == 'macOS'
+        run: |
+          ./script/test_desktop.sh
+          ./script/build_desktop.sh --output "$RUNNER_TEMP/jarvis-desktop"
       - name: Construir el paquete propio
         shell: bash
         run: |

@@ -20,20 +20,20 @@ SPEC.loader.exec_module(guard)
 
 
 def fixture_tree(root):
-    (root / "src/aegis_core").mkdir(parents=True)
+    (root / "src/jarvis_core").mkdir(parents=True)
     (root / "pyproject.toml").write_text(
-        '[project]\nname="aegis-swarm"\nversion="1.0.0"\ndependencies=[]\n',
+        '[project]\nname="jarvis-core"\nversion="1.0.0"\ndependencies=[]\n',
     )
-    (root / "src/aegis_core/__init__.py").write_text("import asyncio\n")
+    (root / "src/jarvis_core/__init__.py").write_text("import asyncio\n")
     return root
 
 
 def wheel(path, *, requires="", extra=None, source="import asyncio\n"):
     members = {
-        "aegis_core/__init__.py": source,
-        "aegis_swarm-1.0.0.dist-info/METADATA":
-            "Metadata-Version: 2.3\nName: aegis-swarm\nVersion: 1.0.0\n" + requires,
-        "aegis_swarm-1.0.0.dist-info/WHEEL":
+        "jarvis_core/__init__.py": source,
+        "jarvis_core-1.0.0.dist-info/METADATA":
+            "Metadata-Version: 2.3\nName: jarvis-core\nVersion: 1.0.0\n" + requires,
+        "jarvis_core-1.0.0.dist-info/WHEEL":
             "Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
     }
     members.update(extra or {})
@@ -45,7 +45,7 @@ def wheel(path, *, requires="", extra=None, source="import asyncio\n"):
 
 def test_current_tree_is_own_stdlib_base():
     report = guard.check_tree(ROOT)
-    assert report["name"] == "aegis-swarm" and report["source_files"]
+    assert report["name"] == "jarvis-core" and report["source_files"]
 
 
 @pytest.mark.parametrize("source", [
@@ -57,7 +57,7 @@ def test_current_tree_is_own_stdlib_base():
 ])
 def test_external_imports_and_runtime_launches_fail_closed(tmp_path, source):
     root = fixture_tree(tmp_path)
-    (root / "src/aegis_core/runtime.py").write_text(source)
+    (root / "src/jarvis_core/runtime.py").write_text(source)
     with pytest.raises(guard.CleanBaseError):
         guard.check_tree(root)
 
@@ -66,11 +66,17 @@ def test_research_documentation_does_not_become_runtime(tmp_path):
     root = fixture_tree(tmp_path)
     (root / "docs").mkdir()
     (root / "docs/reference.md").write_text("OpenClaw is a research reference, not a runtime.")
-    assert guard.check_tree(root)["source_files"] == ["aegis_core/__init__.py"]
+    assert guard.check_tree(root)["source_files"] == ["jarvis_core/__init__.py"]
+
+
+def test_finder_metadata_does_not_become_package_source(tmp_path):
+    root = fixture_tree(tmp_path)
+    (root / "src/.DS_Store").write_bytes(b"finder-metadata")
+    assert guard.check_tree(root)["source_files"] == ["jarvis_core/__init__.py"]
 
 
 @pytest.mark.parametrize("legacy", [
-    "native/AegisAudio/Package.swift", "src/aegis_core/runtime/daemon.py",
+    "native/JarvisAudio/Package.swift", "src/jarvis_core/runtime/daemon.py",
     "integrations/mcp/package.json", "script/build_and_run.sh",
 ])
 def test_retired_product_files_are_rejected(tmp_path, legacy):
@@ -89,7 +95,7 @@ def test_product_dependencies_and_fake_entrypoints_are_rejected(tmp_path):
     with pytest.raises(guard.CleanBaseError, match="dependencias"):
         guard.check_tree(root)
     manifest.write_text(manifest.read_text().replace('dependencies=["mlx"]', "dependencies=[]")
-                        + '\n[project.scripts]\njarvis="aegis_core.cli:main"\n')
+                        + '\n[project.scripts]\njarvis="jarvis_core.cli:main"\n')
     with pytest.raises(guard.CleanBaseError, match="CLI"):
         guard.check_tree(root)
 
@@ -98,7 +104,7 @@ def test_clean_wheel_matches_the_qualified_source(tmp_path):
     root = fixture_tree(tmp_path / "project")
     path = wheel(tmp_path / "own.whl")
     assert guard.check_wheel(path, root)["runtime_dependencies"] == 0
-    (root / "src/aegis_core/__init__.py").write_text("import json\n")
+    (root / "src/jarvis_core/__init__.py").write_text("import json\n")
     with pytest.raises(guard.CleanBaseError, match="corresponde"):
         guard.check_wheel(path, root)
 
@@ -106,9 +112,9 @@ def test_clean_wheel_matches_the_qualified_source(tmp_path):
 @pytest.mark.parametrize(("requires", "extra", "source"), [
     ("Requires-Dist: httpx\n", {}, "import asyncio\n"),
     ("", {"openclaw/gateway.js": "foreign"}, "import asyncio\n"),
-    ("", {"aegis_core/model.onnx": "foreign"}, "import asyncio\n"),
-    ("", {"aegis_swarm-1.0.0.dist-info/old_runtime.mjs": "foreign"}, "import asyncio\n"),
-    ("", {"aegis_swarm-1.0.0.dist-info/legacy.so": "foreign"}, "import asyncio\n"),
+    ("", {"jarvis_core/model.onnx": "foreign"}, "import asyncio\n"),
+    ("", {"jarvis_core-1.0.0.dist-info/old_runtime.mjs": "foreign"}, "import asyncio\n"),
+    ("", {"jarvis_core-1.0.0.dist-info/legacy.so": "foreign"}, "import asyncio\n"),
     ("", {"../outside.py": "foreign"}, "import asyncio\n"),
     ("", {}, "import httpx\n"),
 ])
@@ -124,7 +130,7 @@ def test_wheel_rejects_dependencies_foreign_resources_and_traversal(
 def test_sdist_rejects_external_runtime_without_extracting_it(tmp_path, suffix):
     path = tmp_path / "source.tar.gz"
     with tarfile.open(path, "w:gz") as archive:
-        member = tarfile.TarInfo(f"aegis_swarm-1.0.0/docs/reference/runtime.{suffix}")
+        member = tarfile.TarInfo(f"jarvis_core-1.0.0/docs/reference/runtime.{suffix}")
         member.size = 4
         archive.addfile(member, io.BytesIO(b"code"))
     with pytest.raises(guard.CleanBaseError, match="ajeno"):
@@ -134,12 +140,72 @@ def test_sdist_rejects_external_runtime_without_extracting_it(tmp_path, suffix):
 
 def test_sdist_requires_the_helpers_its_tests_need(tmp_path):
     path = tmp_path / "incomplete.tar.gz"
-    content = b"Metadata-Version: 2.3\nName: aegis-swarm\nVersion: 1.0.0\n"
+    content = b"Metadata-Version: 2.3\nName: jarvis-core\nVersion: 1.0.0\n"
     with tarfile.open(path, "w:gz") as archive:
-        member = tarfile.TarInfo("aegis_swarm-1.0.0/PKG-INFO")
+        member = tarfile.TarInfo("jarvis_core-1.0.0/PKG-INFO")
         member.size = len(content)
         archive.addfile(member, io.BytesIO(content))
     with pytest.raises(guard.CleanBaseError, match="repetir"):
+        guard.check_sdist(path)
+
+
+def native_sdist(path, root, *, omit=None, overrides=None):
+    entries = {name: b"fixture" for name in guard.SDIST_REQUIRED}
+    entries["PKG-INFO"] = b"Metadata-Version: 2.3\nName: jarvis-core\nVersion: 1.0.0\n"
+    entries["pyproject.toml"] = (root / "pyproject.toml").read_bytes()
+    entries.update({p.relative_to(root).as_posix(): p.read_bytes()
+                    for p in root.rglob("*.swift")})
+    entries["src/jarvis_core/__init__.py"] = (root / "src/jarvis_core/__init__.py").read_bytes()
+    entries.update(overrides or {})
+    if omit:
+        entries.pop(omit)
+    with tarfile.open(path, "w:gz") as archive:
+        for name, content in entries.items():
+            item = tarfile.TarInfo("jarvis_core-1.0.0/" + name)
+            item.size = len(content)
+            archive.addfile(item, io.BytesIO(content))
+    return path
+
+
+def test_sdist_carries_exact_own_native_source_and_still_rejects_retired_swift(tmp_path):
+    root = fixture_tree(tmp_path / "project")
+    relative = "native/JarvisDesktop/Package.swift"
+    file = root / relative
+    file.parent.mkdir(parents=True)
+    file.write_text("// Original native package fixture\n")
+    assert guard.check_sdist(native_sdist(tmp_path / "ok.tar.gz", root), root)["files"]
+    with pytest.raises(guard.CleanBaseError, match="nativas"):
+        guard.check_sdist(native_sdist(tmp_path / "omitted.tar.gz", root, omit=relative), root)
+    with pytest.raises(guard.CleanBaseError, match="nativas"):
+        guard.check_sdist(native_sdist(tmp_path / "stale.tar.gz", root,
+                                      overrides={relative: b"stale"}), root)
+    with pytest.raises(guard.CleanBaseError, match="ajeno"):
+        guard.check_sdist(native_sdist(tmp_path / "retired.tar.gz", root,
+                                      overrides={"native/JarvisAudio/Package.swift": b"old"}))
+
+
+def test_native_parent_symlink_is_rejected_before_reading_sources(tmp_path):
+    root = fixture_tree(tmp_path / "project")
+    outside = tmp_path / "outside"
+    (outside / "JarvisDesktop").mkdir(parents=True)
+    (root / "native").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(guard.CleanBaseError, match="enlaces"):
+        guard.check_tree(root)
+
+
+def test_unregistered_native_tree_is_not_treated_as_own_source(tmp_path):
+    root = fixture_tree(tmp_path)
+    (root / "native/foreign-product").mkdir(parents=True)
+    with pytest.raises(guard.CleanBaseError, match="nativo ajeno"):
+        guard.check_tree(root)
+
+
+def test_sdist_rejects_file_with_only_root_component(tmp_path):
+    path = tmp_path / "root-file.tar.gz"
+    with tarfile.open(path, "w:gz") as archive:
+        member = tarfile.TarInfo("jarvis_core-1.0.0")
+        archive.addfile(member, io.BytesIO())
+    with pytest.raises(guard.CleanBaseError, match="ruta relativa"):
         guard.check_sdist(path)
 
 
@@ -161,7 +227,7 @@ def test_gate_setup_reports_only_the_python_profile(tmp_path):
     assert inactive.returncode == 2
     installed = subprocess.run([str(script), "--install"], cwd=repository, env=environment,
                                capture_output=True, text=True, check=True)
-    assert "profile=jarvis_base" in installed.stdout and "native=pending" in installed.stdout
+    assert "profile=jarvis_base" in installed.stdout and "native=swiftpm" in installed.stdout
     active = subprocess.run([str(script), "--check"], cwd=repository, env=environment,
                             capture_output=True, text=True, check=True)
     assert active.stdout == installed.stdout
@@ -170,4 +236,5 @@ def test_gate_setup_reports_only_the_python_profile(tmp_path):
 def test_clean_base_cli_does_not_claim_native_app():
     completed = subprocess.run([sys.executable, str(ROOT / "script/check_clean_base.py")],
                                capture_output=True, text=True, check=True)
-    assert "runtime_dependencies=0" in completed.stdout and "native_app=pending" in completed.stdout
+    assert "runtime_dependencies=0" in completed.stdout
+    assert "native_app=development" in completed.stdout

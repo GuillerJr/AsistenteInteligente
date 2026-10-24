@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-24",
+  "scope": "first_development_vertical_slice_and_jarvis_namespace",
+  "complete_baseline": false,
+  "namespace": {
+    "package": "jarvis_core",
+    "distribution": "jarvis-core",
+    "bundle_id": "com.jarvis.desktop.baseline",
+    "window_id": "jarvis.main",
+    "local_protocol": "jarvis-local-rpc",
+    "database": "jarvis.sqlite3"
+  },
+  "verification": {
+    "python_tests": {
+      "passed": 303,
+      "real_local_sockets_sqlite_and_child_processes": true,
+      "synthetic_provider_peers": true
+    },
+    "swift_tests": {
+      "passed": 13,
+      "real_swift_python_ipc": true,
+      "delayed_service_start_seconds": 6.54,
+      "delayed_response_seconds": 4.2
+    },
+    "live_official_codex": {
+      "version": "0.163.0",
+      "owner_completed_login": true,
+      "agent_read_credentials": false,
+      "observed_response": "JARVIS LISTO",
+      "durable_context_after_restart": true,
+      "temporary_session_disappeared_after_restart": true,
+      "live_cancellation_observed_settled": true,
+      "durable_context_after_restart_stage": "after_final_namespace_rename",
+      "live_cancellation_stage": "before_namespace_rename",
+      "temporary_session_restart_stage": "before_namespace_rename"
+    },
+    "namespace_scan": {
+      "active_name_matches": 0,
+      "active_filename_matches": 0,
+      "git_history_rewritten": false
+    },
+    "packaging": {
+      "runtime_python_dependencies": 0,
+      "development_bundle_only": true,
+      "existing_installed_app_replaced": false
+    }
+  },
+  "rea": {
+    "static_batches": 4,
+    "parsed_unique_typescript_files": 16,
+    "whole_repository_review_complete": false,
+    "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac"
+  },
+  "source_sha256": {
+    "native/JarvisDesktop/Package.swift": "2c86109c862a56e63f79aa5baa7e404968d724c0bf0b9115912f752b7931c35c",
+    "native/JarvisDesktop/Sources/DesktopCore/LaunchOptions.swift": "b715889eacc9ef0adaa01ef269302c18e74bc05c98ed2138f46a89bb6379eee8",
+    "native/JarvisDesktop/Sources/DesktopCore/LocalRPCClient.swift": "fd232ecdfbb2c6cac9b427587d48afa13e2a648ae641df822e9e5ee8f32feaaf",
+    "native/JarvisDesktop/Sources/DesktopCore/RPCValue.swift": "2c6db48d19db9e051570fef4f65f7e96bc51c91a8ece7e85f425506db9a80c53",
+    "native/JarvisDesktop/Sources/DesktopCore/RunPresentation.swift": "393ccfd83a4eb2af305fa13ec67d2914713720764967570442ed4036ad441acc",
+    "native/JarvisDesktop/Sources/DesktopCore/ServiceBootstrap.swift": "2dd2d0252ac8d1700b57b894e619f8f7c6ff72e9118a7a952b084b85c961f26a",
+    "native/JarvisDesktop/Sources/DesktopCore/ServiceProcess.swift": "7637e4345dc5ea7e49b194f8de096ff5c21700fed920c6c86ae1d6ca74ad64ae",
+    "native/JarvisDesktop/Sources/JarvisApp/App/AppDelegate.swift": "b8fe0f2499092e6e020aee31ea375912944df38d820d4a5b5e73c483891dec06",
+    "native/JarvisDesktop/Sources/JarvisApp/App/JarvisApp.swift": "4366fce30155aaff327f6632bc7b6b46c971fd8faf1c5f932ce2d5b0d6ed021c",
+    "native/JarvisDesktop/Sources/JarvisApp/Stores/ChatStore.swift": "bdcdd81a5ea522c0832f7153d5437b35463ef62766d186433e7730d443d7c3f8",
+    "native/JarvisDesktop/Sources/JarvisApp/Views/ComposerView.swift": "762f7f6a5263ac757e0f1650346be0547f4b9cc4b0e483214404beeda0d51664",
+    "native/JarvisDesktop/Sources/JarvisApp/Views/ContentView.swift": "599b9378304495356e7938c4de95abcc264be7e962d75e3ae9ed411cd755fe0f",
+    "native/JarvisDesktop/Sources/JarvisApp/Views/MessageListView.swift": "86eb177d8f68274d8c80ef86a434f5a88b35c5ab5d69d7ad2676d7dd2d859e42",
+    "native/JarvisDesktop/Sources/JarvisApp/Views/SettingsView.swift": "edf6b1c257d07ac069aa5a297a39c4ad38cfb65d7477983620063248c338afcb",
+    "native/JarvisDesktop/Sources/JarvisApp/Views/SidebarView.swift": "156a8ee205e8c82a90ddb54e741d916b2b4f8c73d3f6c3f10cf60e4e57f965c1",
+    "native/JarvisDesktop/Tests/DesktopCoreTests/ProcessBootstrapTests.swift": "82110c8a0e393d184f5c6e939f7366fe9faa61db7e283830b0d2803f2ed8582c",
+    "native/JarvisDesktop/Tests/DesktopCoreTests/RPCFrameTests.swift": "11ff327e3534fbf0d308af481855c769c967f45e4309c4a06ecc4b20a52e68da",
+    "native/JarvisDesktop/Tests/DesktopCoreTests/SocketIntegrationTests.swift": "459b5d361e426e49a572966cad7478e032395533e5a237a6d609c9b864159d74",
+    "pyproject.toml": "da0dbb1a4c02a1b54e80f5fac7d9bf3a81c8621030e8cb39ffac1aa618e82bc6",
+    "script/build_desktop.sh": "c02a91c3e5fc80d276ead8f98e94dd8107b381ae50e2ece40f688f9ebd8e5b53",
+    "script/check_clean_base.py": "716706f2079d0f004f09a1bab8020f1019654ecdb3b63f1a6034a472d5d4889a",
+    "script/research_inventory.py": "15e636010b28c13ebc7e946928f640194b20760fff11b9f96b0784a7e604763e",
+    "script/setup_git_gates.sh": "5cdd8a1dba86845950202f3c6475b9bc74727c8bd38363ba6a469a52dde2dc1b",
+    "script/test_desktop.sh": "2ea37ae894d83413503b79de0319ea956b6354c8c5b6456571827c29cfbcd9e4",
+    "src/jarvis_core/__init__.py": "f8ef17019cfb5af4b16cb032419a79d6fc9f3969b9ac1d03b5fd3a20548ddab9",
+    "src/jarvis_core/codex.py": "727b0f80939f5d0f3c8d501a3ac6c83d20482894fed208ac020f2cc632af5204",
+    "src/jarvis_core/mcp.py": "9a4134e66785d5f6be8c21ca022b71dcc4f8d1c0fc9a839f67d3f6e851d25b1e",
+    "src/jarvis_core/protocol.py": "657a4f760ea182cb3a6d6cf82b0611aab715994622e275f01b7888a198e872f3",
+    "src/jarvis_core/runtime.py": "d145b1cf4dadc44974252836d058db276fb8bfd641c1e8a54f9a619d73541518",
+    "src/jarvis_core/service.py": "766b87977a0f6915848bb1f23ff60acb110a2dd9cd34102d71f0dbc917e07b7a",
+    "src/jarvis_core/state.py": "2beb40c82012db9d0dff0808403fe6d591aba20ae87bc354e42345d3dee9b0ef",
+    "uv.lock": "c1c3c6550f3eef32b498e82763ff8b9b2137c5a2ea1c338d13984edfd40d7c70"
+  },
+  "limitations": [
+    "Full OpenClaw baseline parity remains open.",
+    "MCP client is not connected to the app or runtime.",
+    "Local token authentication is not signed client attestation.",
+    "Development bundle needs explicit external Python, source and official Codex paths."
+  ]
+}

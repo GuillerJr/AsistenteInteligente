@@ -4,1038 +4,1038 @@
   "source_inventory_sha256": "df1cb34b2f31952554f2e2a8ec250cc2bbebe3335a2dd99f25e8918a290e2c4c",
   "source_files": [
     {
-      "path": "src/aegis_core/__init__.py",
+      "path": "src/jarvis_core/__init__.py",
       "sha256": "fe00a09164627fb16ba3e3926968b2c1962d9989e4b15ed5b2a49d3099268eb5"
     },
     {
-      "path": "src/aegis_core/acceptance_benchmark.py",
+      "path": "src/jarvis_core/acceptance_benchmark.py",
       "sha256": "c5b195c09079cb4f4be16f9bebffde36ebd637b713f5629e903e7dd0a6a1665e"
     },
     {
-      "path": "src/aegis_core/action_history.py",
+      "path": "src/jarvis_core/action_history.py",
       "sha256": "b412ad9a7c307ec96b2f3bc6ab6cc48dab7336cf27d6ea608574d9f50a3209c5"
     },
     {
-      "path": "src/aegis_core/action_history_ipc.py",
+      "path": "src/jarvis_core/action_history_ipc.py",
       "sha256": "2d00d76e5a4ac15ec3ed6a449f4d1da9974aff880010651cfca2f7fbe0c8163d"
     },
     {
-      "path": "src/aegis_core/activity.py",
+      "path": "src/jarvis_core/activity.py",
       "sha256": "d117f8f33d1434840c859e955a4891b57892e0ac080c8bfb063f044e3003c91e"
     },
     {
-      "path": "src/aegis_core/application_qualification.py",
+      "path": "src/jarvis_core/application_qualification.py",
       "sha256": "71f1182e601317d7f44144c8b0f290804aaf77c7319524e6ad6985e1193d14c5"
     },
     {
-      "path": "src/aegis_core/approval_signing.py",
+      "path": "src/jarvis_core/approval_signing.py",
       "sha256": "ef7f44cc00e4af5316334843ed0497da4b86de2d00d6ee8ad49b7a686c9dc1d8"
     },
     {
-      "path": "src/aegis_core/async_tasks.py",
+      "path": "src/jarvis_core/async_tasks.py",
       "sha256": "07f99355a6187e1b607b9941124f5dbf8ad0566f97b45165b474181852c3882e"
     },
     {
-      "path": "src/aegis_core/attention.py",
+      "path": "src/jarvis_core/attention.py",
       "sha256": "57637eb795c8756e71b2a37e900c0bf6970f58a119c9ad8acc7049181ad67563"
     },
     {
-      "path": "src/aegis_core/audio/__init__.py",
+      "path": "src/jarvis_core/audio/__init__.py",
       "sha256": "bd02b7829bf729e35f0743fceccc777d5d36bb0a5700b1d1aeb58ec958ab7285"
     },
     {
-      "path": "src/aegis_core/audio/contracts.py",
+      "path": "src/jarvis_core/audio/contracts.py",
       "sha256": "34df2286d32c69b626bad1a36d94fff659520379355a323da55ec99576a92ec4"
     },
     {
-      "path": "src/aegis_core/audio/service.py",
+      "path": "src/jarvis_core/audio/service.py",
       "sha256": "5127c74cd589389a5056ecac1f3a10976d2cd151d664b38d9a678c01728def64"
     },
     {
-      "path": "src/aegis_core/audit_anchor.py",
+      "path": "src/jarvis_core/audit_anchor.py",
       "sha256": "04b7fa2601e4d259f9e99c627747fdad0d77bf367ce971ec7a95f23bf2314b49"
     },
     {
-      "path": "src/aegis_core/biometric_training_service.py",
+      "path": "src/jarvis_core/biometric_training_service.py",
       "sha256": "c7dca2af245699a90d906ef6b00cca6301d5b529b99d71d3d8727ce584e06769"
     },
     {
-      "path": "src/aegis_core/brain/__init__.py",
+      "path": "src/jarvis_core/brain/__init__.py",
       "sha256": "d3c9c8a2ba9b1951398240154ca91ee9a78ec19888d551640eff284e07f531a4"
     },
     {
-      "path": "src/aegis_core/brain/agent_graph.py",
+      "path": "src/jarvis_core/brain/agent_graph.py",
       "sha256": "89d9fce95e0e026cd53a5107a0d7366541e76976123020450b3fc447c2d9e389"
     },
     {
-      "path": "src/aegis_core/brain/behavior_tree.py",
+      "path": "src/jarvis_core/brain/behavior_tree.py",
       "sha256": "2da2caf856eef868db73b6dec0000e9fd27074da7b8f3c45e98637b766e5437a"
     },
     {
-      "path": "src/aegis_core/brain/errors.py",
+      "path": "src/jarvis_core/brain/errors.py",
       "sha256": "6b965e707106c3ae95cbfde1f90aa03a4b8c2ab3f6abf82a9787e5ab9769509d"
     },
     {
-      "path": "src/aegis_core/brain/inference_client.py",
+      "path": "src/jarvis_core/brain/inference_client.py",
       "sha256": "947642ea13752b7703d90c8b156f2902f35b5b64dee7ad6b7207a19f5e91c070"
     },
     {
-      "path": "src/aegis_core/brain/nodes/__init__.py",
+      "path": "src/jarvis_core/brain/nodes/__init__.py",
       "sha256": "66f508b1e3759e24c454d77d5c5c3f1344fbd1c6dba81d7e5964dfca9441d435"
     },
     {
-      "path": "src/aegis_core/brain/nodes/reflector.py",
+      "path": "src/jarvis_core/brain/nodes/reflector.py",
       "sha256": "37a2bc0221e30c8a32e5f6eae6d9a67efe88577b646e5720a0360e2ee0eb8f8c"
     },
     {
-      "path": "src/aegis_core/brain/nvidia_client.py",
+      "path": "src/jarvis_core/brain/nvidia_client.py",
       "sha256": "64cd9849106828ebb1dde70f1fa11a488f7b26c5aaeec1d2082cc77675c03fb5"
     },
     {
-      "path": "src/aegis_core/brain/nvidia_dialogue_guard.py",
+      "path": "src/jarvis_core/brain/nvidia_dialogue_guard.py",
       "sha256": "0ca30f559deb1cd049d528e35fb3b0d31b4ea11cee957034f46526af344aa345"
     },
     {
-      "path": "src/aegis_core/brain/nvidia_goal.py",
+      "path": "src/jarvis_core/brain/nvidia_goal.py",
       "sha256": "c800a52888b336a7d89a542af851352eb8e0ec422eabae603a448dca239c9622"
     },
     {
-      "path": "src/aegis_core/brain/nvidia_summary.py",
+      "path": "src/jarvis_core/brain/nvidia_summary.py",
       "sha256": "f017b3f2b54e12fef020e9a7b7bb10babf2457797f0151ee8a9b541e47246449"
     },
     {
-      "path": "src/aegis_core/brain/router.py",
+      "path": "src/jarvis_core/brain/router.py",
       "sha256": "c535a551115faf21d06658aa3fa8ba87f25f6caf11020b1b350e9c94e31b4425"
     },
     {
-      "path": "src/aegis_core/brain/routing.py",
+      "path": "src/jarvis_core/brain/routing.py",
       "sha256": "ef8b09b9873ebde3736bc37dd3ad5d1da0075aa6cc4117cc64d60d2ee8b59427"
     },
     {
-      "path": "src/aegis_core/brain/vision_fallback.py",
+      "path": "src/jarvis_core/brain/vision_fallback.py",
       "sha256": "952d49a472c37e3824f5013e6052db98e216d2bf043355ad8a2861989a4d8a0f"
     },
     {
-      "path": "src/aegis_core/brain/vision_processor.py",
+      "path": "src/jarvis_core/brain/vision_processor.py",
       "sha256": "73e3ce118f1afedc5bcc4c89ad13b41b6db7c589b36c7eee06bf97418df5aba9"
     },
     {
-      "path": "src/aegis_core/browser_preferences.py",
+      "path": "src/jarvis_core/browser_preferences.py",
       "sha256": "af5f009eeb4172df5b1dbe3264743c63be0a1addaf79a25457a8b52545b09394"
     },
     {
-      "path": "src/aegis_core/browser_qualification.py",
+      "path": "src/jarvis_core/browser_qualification.py",
       "sha256": "ad9c834f6a9038a658043a1d8d896d6c85bdec75b7f86684f1b500419c0523b5"
     },
     {
-      "path": "src/aegis_core/build_info.py",
+      "path": "src/jarvis_core/build_info.py",
       "sha256": "af150d741c2f87888f224d146f74143d400ce3da246d655726963380acc52897"
     },
     {
-      "path": "src/aegis_core/bundle_paths.py",
+      "path": "src/jarvis_core/bundle_paths.py",
       "sha256": "f016c45c44fa27e7e9f8f2811bc775262428ae9256035c90f80466e76a44f1ec"
     },
     {
-      "path": "src/aegis_core/capability_blueprints.py",
+      "path": "src/jarvis_core/capability_blueprints.py",
       "sha256": "73c0e7d2ea677ddbe7f27afc1712e63edc018131f33f137e7715184e581f3770"
     },
     {
-      "path": "src/aegis_core/capability_learning.py",
+      "path": "src/jarvis_core/capability_learning.py",
       "sha256": "8900d7b0d541e878f2f4773c498381832fa34b7e02aa0e45834801923586f00c"
     },
     {
-      "path": "src/aegis_core/capability_review_gate.py",
+      "path": "src/jarvis_core/capability_review_gate.py",
       "sha256": "503dda15693a89a4f061ac9d657ff900583fce0f7e6b086a06b927c8d8c36125"
     },
     {
-      "path": "src/aegis_core/capability_reviews.py",
+      "path": "src/jarvis_core/capability_reviews.py",
       "sha256": "1eba6ff9e6c5114d6516d8df4e808e0f8ed55d1ed2757f09f54a57041b5b9e1c"
     },
     {
-      "path": "src/aegis_core/chat_attachments.py",
+      "path": "src/jarvis_core/chat_attachments.py",
       "sha256": "34aa2395c4cf09014c74123eefe4952eb1242e764605a11c1d64adbe50d13fc8"
     },
     {
-      "path": "src/aegis_core/cli.py",
+      "path": "src/jarvis_core/cli.py",
       "sha256": "7e9df01650bdf518288b0a5001acc1d3502649869bc807c7d9b743571d185847"
     },
     {
-      "path": "src/aegis_core/cli_entrypoint.py",
+      "path": "src/jarvis_core/cli_entrypoint.py",
       "sha256": "a775552f25386593c88b547c363c3dcef53cb6b1c77e0d679f3aee70c5079fb8"
     },
     {
-      "path": "src/aegis_core/completion_boundary.py",
+      "path": "src/jarvis_core/completion_boundary.py",
       "sha256": "17218a0a229ecca5bdba5a832de3c9a41b06fac96a36d6a609a0017734fc7529"
     },
     {
-      "path": "src/aegis_core/computer_app_grants.py",
+      "path": "src/jarvis_core/computer_app_grants.py",
       "sha256": "69078bfaa1c9b9e3122f3fcce01979cb52a1034b3de58462cc476b263d624682"
     },
     {
-      "path": "src/aegis_core/config.py",
+      "path": "src/jarvis_core/config.py",
       "sha256": "32036dbe38240dbc2e99c6a4c1326775f9e6719b941d8a8aebc0b9675f1c2105"
     },
     {
-      "path": "src/aegis_core/contracts.py",
+      "path": "src/jarvis_core/contracts.py",
       "sha256": "cc23b6d46eb63b97d42424b530861da006c06680404396b751a25e363e8ab928"
     },
     {
-      "path": "src/aegis_core/conversation_quality.py",
+      "path": "src/jarvis_core/conversation_quality.py",
       "sha256": "415f31c2e9422fb009e8db1a6b0436a48826b1164e5507c652f780542a00f724"
     },
     {
-      "path": "src/aegis_core/dialogue.py",
+      "path": "src/jarvis_core/dialogue.py",
       "sha256": "8d63de2535d20b54fab94f9fc74f5f4ecd8bbf9f8bc62a874a22c2ccf02d8beb"
     },
     {
-      "path": "src/aegis_core/dialogue_challenges.py",
+      "path": "src/jarvis_core/dialogue_challenges.py",
       "sha256": "19d2b037bfdfe4f52ffd259a349ebadec67815591991917db8b35a22b4479049"
     },
     {
-      "path": "src/aegis_core/dialogue_stability.py",
+      "path": "src/jarvis_core/dialogue_stability.py",
       "sha256": "a2809a5cebbf73e7bbe3e70f4bb0b18f266c2c60df884d556778470c4c4d6fcf"
     },
     {
-      "path": "src/aegis_core/distribution_archive.py",
+      "path": "src/jarvis_core/distribution_archive.py",
       "sha256": "f7baa36b375027425170d32823f85a7ab0069d31dfe81520cc9c4a9801d33b81"
     },
     {
-      "path": "src/aegis_core/distribution_release_qualification.py",
+      "path": "src/jarvis_core/distribution_release_qualification.py",
       "sha256": "7eaf227c5ccaa92cb6d592bd79ad03d7b720d41cb0882ad47e751b91d56407ec"
     },
     {
-      "path": "src/aegis_core/dot.py",
+      "path": "src/jarvis_core/dot.py",
       "sha256": "64c5142d1c27addd7893349ece4df1d0ae8a1fcda9d857d3b87e40a1b7ee8dd1"
     },
     {
-      "path": "src/aegis_core/engineering.py",
+      "path": "src/jarvis_core/engineering.py",
       "sha256": "62603756bcfbdc3c0f9e85e1251ef5b2d22b5b86d1a8bcf3bd5366fe7781f798"
     },
     {
-      "path": "src/aegis_core/engineering_cli.py",
+      "path": "src/jarvis_core/engineering_cli.py",
       "sha256": "45e1372b2645a039abd89713eb7d49c4d1b4ec5ea2c126d8d2bb796338fbab7e"
     },
     {
-      "path": "src/aegis_core/engineering_input.py",
+      "path": "src/jarvis_core/engineering_input.py",
       "sha256": "b3196d3565dd412e7a9afedc7789c8824b73b114d7c260718282bb29ff741d6b"
     },
     {
-      "path": "src/aegis_core/engineering_terminal.py",
+      "path": "src/jarvis_core/engineering_terminal.py",
       "sha256": "175ad3dd4a7ec5e0e68bf96640b65d9120f0c77fe4f8de6adf6e9f7faa2e1144"
     },
     {
-      "path": "src/aegis_core/evaluation.py",
+      "path": "src/jarvis_core/evaluation.py",
       "sha256": "e48caee17d25ba3451099db2c5dc62c3e4d9f5d9089f3f11a9efb87f5039db0d"
     },
     {
-      "path": "src/aegis_core/extensions_service.py",
+      "path": "src/jarvis_core/extensions_service.py",
       "sha256": "ee426709d12fd51aaf4cacffa18c91345fd806c04560c815187b63bc18ea82b8"
     },
     {
-      "path": "src/aegis_core/failure_boundary.py",
+      "path": "src/jarvis_core/failure_boundary.py",
       "sha256": "e78540587fe0ff1a8765c1f5600a91464db76b98c0f19a96dcb7774707e1a5da"
     },
     {
-      "path": "src/aegis_core/feedback.py",
+      "path": "src/jarvis_core/feedback.py",
       "sha256": "102ca7fa85ca0c7eeb5091634b7049b5c5a3b3e686ffbbab6dc0cc4da1feb7c7"
     },
     {
-      "path": "src/aegis_core/goals.py",
+      "path": "src/jarvis_core/goals.py",
       "sha256": "3b88ad98a28be699de14f75adb81a99663c57772072a3d1e3e83f5fffaf7b0b3"
     },
     {
-      "path": "src/aegis_core/google_account_settings.py",
+      "path": "src/jarvis_core/google_account_settings.py",
       "sha256": "7f8bcdf1007d9f0255fd2d85d71ab86377fcfee05279615f22806d948f94bb39"
     },
     {
-      "path": "src/aegis_core/health.py",
+      "path": "src/jarvis_core/health.py",
       "sha256": "3613bcc4f2d68deebdf8dda460f798c89be88a65bb475c98eaa2505f605fe79c"
     },
     {
-      "path": "src/aegis_core/inference_service.py",
+      "path": "src/jarvis_core/inference_service.py",
       "sha256": "ab3d422df9724b3cc9aac3b64021ef1ca0ba7726bdeb29ace04ffbd17db1bf5f"
     },
     {
-      "path": "src/aegis_core/inference_settings.py",
+      "path": "src/jarvis_core/inference_settings.py",
       "sha256": "6883d71fa3104d88e86cd2d1ed1b86c5dfbb2c8de748d68e05eaa2f226e556ee"
     },
     {
-      "path": "src/aegis_core/ipc/__init__.py",
+      "path": "src/jarvis_core/ipc/__init__.py",
       "sha256": "144da100f19d046740f7acf3347bae4bec5019fb3658376881bc96ab1c862d7e"
     },
     {
-      "path": "src/aegis_core/ipc/client.py",
+      "path": "src/jarvis_core/ipc/client.py",
       "sha256": "7d71ba89470932434dd7daa401abd0a3972f7aac2d4b7f18f3af559dc3f75d0f"
     },
     {
-      "path": "src/aegis_core/ipc/framing.py",
+      "path": "src/jarvis_core/ipc/framing.py",
       "sha256": "c9dbbe65acfc675b5626c329a87342eb63e28c2b487c8418b8f96f9303699ccd"
     },
     {
-      "path": "src/aegis_core/ipc/peer_identity.py",
+      "path": "src/jarvis_core/ipc/peer_identity.py",
       "sha256": "2788390dd13577fba7c974a4e23327eb543b8b7426ca412d9a8eb28299ffb17d"
     },
     {
-      "path": "src/aegis_core/ipc/protocol.py",
+      "path": "src/jarvis_core/ipc/protocol.py",
       "sha256": "76f3b6b69ee54cc65156e2276b8f62e34073bd842e6b7f6657908dda2c2dc554"
     },
     {
-      "path": "src/aegis_core/ipc/server.py",
+      "path": "src/jarvis_core/ipc/server.py",
       "sha256": "2acbd3ff4b8acc228893944240c8cc024169fb9ed155461aa47d3be3ed46a6d3"
     },
     {
-      "path": "src/aegis_core/job_admission.py",
+      "path": "src/jarvis_core/job_admission.py",
       "sha256": "b83ea7e71c7dd583aaac02fbd6bc62999c9a5fe5eb5ae3f3ea6b482cb45f4270"
     },
     {
-      "path": "src/aegis_core/job_authorization.py",
+      "path": "src/jarvis_core/job_authorization.py",
       "sha256": "f155e0318c6d8aa55108ff99283439ef301cbb9234d2c52088df52c7dbd90fa5"
     },
     {
-      "path": "src/aegis_core/job_completion.py",
+      "path": "src/jarvis_core/job_completion.py",
       "sha256": "8ffd252d1cda037acb03f54bc7a890d9899db1b80ac8a8ea93aaee1f5f634da0"
     },
     {
-      "path": "src/aegis_core/job_contracts.py",
+      "path": "src/jarvis_core/job_contracts.py",
       "sha256": "7a3c35347beec36eb7646bae1047506875ec918272906a9c7246aebe3cb5a341"
     },
     {
-      "path": "src/aegis_core/job_execution.py",
+      "path": "src/jarvis_core/job_execution.py",
       "sha256": "6991d1dc347efe00a6fb1c5c227786fa695139a0bb5b8da41e17be6e1c4c64e6"
     },
     {
-      "path": "src/aegis_core/job_failures.py",
+      "path": "src/jarvis_core/job_failures.py",
       "sha256": "859e3282886339294373cc6d111aa4be12116ef6b84f7f8409ca9a2228600bd2"
     },
     {
-      "path": "src/aegis_core/job_graph.py",
+      "path": "src/jarvis_core/job_graph.py",
       "sha256": "868071d885f0643641c549db1faa62545d6fd0e3b4e5f95704931ec7b231ff23"
     },
     {
-      "path": "src/aegis_core/job_interactions.py",
+      "path": "src/jarvis_core/job_interactions.py",
       "sha256": "6dd348c959ef9d38d050fcfbb8e7140c5a443f880f8b00bb3380139efec607cb"
     },
     {
-      "path": "src/aegis_core/job_ipc.py",
+      "path": "src/jarvis_core/job_ipc.py",
       "sha256": "3255b88fa9ead7d30b5e8b1cfb776b324098d77e90836e8d144c3e90730b2cd7"
     },
     {
-      "path": "src/aegis_core/job_lifecycle.py",
+      "path": "src/jarvis_core/job_lifecycle.py",
       "sha256": "4d25585b38776556d4cf1db302078c0696bc36d2409c4f99d056ff3516e5f223"
     },
     {
-      "path": "src/aegis_core/job_metrics.py",
+      "path": "src/jarvis_core/job_metrics.py",
       "sha256": "d3688264e7b7971aebeb37d2641ee2a9fb45e7a954a64ca95760f377d40417b4"
     },
     {
-      "path": "src/aegis_core/job_state.py",
+      "path": "src/jarvis_core/job_state.py",
       "sha256": "5b3a34678f177c064502deca1c93165cd886ba922b5b87234aabc38d841ea88c"
     },
     {
-      "path": "src/aegis_core/job_tasks.py",
+      "path": "src/jarvis_core/job_tasks.py",
       "sha256": "79c8902f2f5ba5ce8af60afe0b1ac39e6b20883dfb94b7c4b7326e2c31cc900c"
     },
     {
-      "path": "src/aegis_core/job_tool_presenter.py",
+      "path": "src/jarvis_core/job_tool_presenter.py",
       "sha256": "d5798e547d931d0c9998c84b396cc75d3ea53532ad0ef938dead6632a0f69d17"
     },
     {
-      "path": "src/aegis_core/job_tool_runtime.py",
+      "path": "src/jarvis_core/job_tool_runtime.py",
       "sha256": "2734098d306c9299b2f22d88822c22de3f34237635dc54a6e0c3ba3e9612c56c"
     },
     {
-      "path": "src/aegis_core/jobs.py",
+      "path": "src/jarvis_core/jobs.py",
       "sha256": "dd135f6aa0f58da98db9b4607104ad21e894ba772d127315c37bb22fd5af4982"
     },
     {
-      "path": "src/aegis_core/langgraph_compat.py",
+      "path": "src/jarvis_core/langgraph_compat.py",
       "sha256": "4bf4cfd7107748e4fd9a4359af5252ea04f48647fa4bfbbdedb193e42d1dac62"
     },
     {
-      "path": "src/aegis_core/long_horizon_reliability.py",
+      "path": "src/jarvis_core/long_horizon_reliability.py",
       "sha256": "f79fe90d257c5963f0719980deffd099eb3ff08f88f156984ab929b45af46164"
     },
     {
-      "path": "src/aegis_core/macos_qualification.py",
+      "path": "src/jarvis_core/macos_qualification.py",
       "sha256": "3450154ab26963ddc7428bb2764c97c36c5e743e64be47d86b5d4e7ce63253f4"
     },
     {
-      "path": "src/aegis_core/mascot.py",
+      "path": "src/jarvis_core/mascot.py",
       "sha256": "1dbbc9c0d152d5be7c9b6d7a595025bacd51e52ad91191e24afda7a10ad7eb59"
     },
     {
-      "path": "src/aegis_core/mcp/__init__.py",
+      "path": "src/jarvis_core/mcp/__init__.py",
       "sha256": "9f50d0dc238de63212b2e26fb752b05e441218af85b11c3f563133bb64eb67e7"
     },
     {
-      "path": "src/aegis_core/mcp/browser_session.py",
+      "path": "src/jarvis_core/mcp/browser_session.py",
       "sha256": "2b9f424ac215d1651c7fa35aedc81d333eca87a5fc5797f0587804775370d652"
     },
     {
-      "path": "src/aegis_core/mcp/browser_tasks.py",
+      "path": "src/jarvis_core/mcp/browser_tasks.py",
       "sha256": "20ee53374ff51d0c22b819bec7704ebdc46c5df7bde9fef10deebaf24417dcfa"
     },
     {
-      "path": "src/aegis_core/mcp/client.py",
+      "path": "src/jarvis_core/mcp/client.py",
       "sha256": "ad4e4e5303db3d5603c80a9e656e47fb49840c5bf62cc5c7a6448386c7611d46"
     },
     {
-      "path": "src/aegis_core/mcp/collections.py",
+      "path": "src/jarvis_core/mcp/collections.py",
       "sha256": "aba78a6a1c06c6268d3fe0d041cec4aa85b72694b3a75f5e334a55a0fe18db8b"
     },
     {
-      "path": "src/aegis_core/mcp/discovery.py",
+      "path": "src/jarvis_core/mcp/discovery.py",
       "sha256": "1d796420e0d7cf3e6965ae8a6a5e82d5e5bcf0ee6e21052fab876d08886eafa7"
     },
     {
-      "path": "src/aegis_core/mcp/google_workspace.py",
+      "path": "src/jarvis_core/mcp/google_workspace.py",
       "sha256": "f16929e9c044166e579ed34ddd1c4625bff1eba50bb73e37f853af8a158eb962"
     },
     {
-      "path": "src/aegis_core/mcp/home_assistant.py",
+      "path": "src/jarvis_core/mcp/home_assistant.py",
       "sha256": "ce81e14dc2b557d50a2f7d5401e86769c7dd42f691cc824a4e69654f509b802b"
     },
     {
-      "path": "src/aegis_core/mcp/host_manager.py",
+      "path": "src/jarvis_core/mcp/host_manager.py",
       "sha256": "30063a9140b3ec7a7eab06af5a341c01cde371dbb4a904342167d2035a59235a"
     },
     {
-      "path": "src/aegis_core/mcp/integrations.py",
+      "path": "src/jarvis_core/mcp/integrations.py",
       "sha256": "81e2e6f5df8f492f8f0c9132c9f7f8a5d058ebf656e527bc2ec8b581941c12aa"
     },
     {
-      "path": "src/aegis_core/mcp/local_peers.py",
+      "path": "src/jarvis_core/mcp/local_peers.py",
       "sha256": "e7542b5c3f9d8a376fb2216d58d4f7749d103cce55143021733e76ab5ab0f67d"
     },
     {
-      "path": "src/aegis_core/mcp/result_text.py",
+      "path": "src/jarvis_core/mcp/result_text.py",
       "sha256": "2e4b69b9ba9b70fb2cba9f684fb23f94f2aea19b262f25ca7b412d526b0abb92"
     },
     {
-      "path": "src/aegis_core/mcp/review.py",
+      "path": "src/jarvis_core/mcp/review.py",
       "sha256": "343bb952bdcd4f3c67f75bb1151d2ec4c56d48745bcfe94f5798aacc1a205eef"
     },
     {
-      "path": "src/aegis_core/mcp/setup.py",
+      "path": "src/jarvis_core/mcp/setup.py",
       "sha256": "a4963e6a3adb302a9705f4542d67ca2d1c5233fb7d910ef153f33b162c599d19"
     },
     {
-      "path": "src/aegis_core/memory/__init__.py",
+      "path": "src/jarvis_core/memory/__init__.py",
       "sha256": "0d36df18acc0f83641e08c847c26465ada91cec825d3c016fba724b483999969"
     },
     {
-      "path": "src/aegis_core/memory/capacity.py",
+      "path": "src/jarvis_core/memory/capacity.py",
       "sha256": "0749f8bd3042df65bc16d8c00827edfae690c0da2b784e90afe870e31f0f00ee"
     },
     {
-      "path": "src/aegis_core/memory/codec.py",
+      "path": "src/jarvis_core/memory/codec.py",
       "sha256": "b864cde688f61df6a93a7d7f93316289019f7569550ef538ec6b9840756f1b72"
     },
     {
-      "path": "src/aegis_core/memory/contracts.py",
+      "path": "src/jarvis_core/memory/contracts.py",
       "sha256": "41757fec23b7fbea2c40bc550404d8342fdd86fa9927cb985874a569bf094a5a"
     },
     {
-      "path": "src/aegis_core/memory/conversation_codec.py",
+      "path": "src/jarvis_core/memory/conversation_codec.py",
       "sha256": "43afa904696d5345f6f17c67a27980f18733a4708a122ca3d9cfb0668a9e1999"
     },
     {
-      "path": "src/aegis_core/memory/conversation_context.py",
+      "path": "src/jarvis_core/memory/conversation_context.py",
       "sha256": "73d0eb41a9f4ec0e2950d265b5978079d2e8e40f44fef3feffe14d38a9927685"
     },
     {
-      "path": "src/aegis_core/memory/conversation_evidence.py",
+      "path": "src/jarvis_core/memory/conversation_evidence.py",
       "sha256": "f102d97e4c143e5f13a1b2ef900a44e57990d965b4a678f4e89ef5f1fe2ced60"
     },
     {
-      "path": "src/aegis_core/memory/conversation_migration.py",
+      "path": "src/jarvis_core/memory/conversation_migration.py",
       "sha256": "bcd4ccef0a38941e9d72d60a818da26cb95e7370bad8bf8b5f0b3d613ffb08d4"
     },
     {
-      "path": "src/aegis_core/memory/conversation_repository.py",
+      "path": "src/jarvis_core/memory/conversation_repository.py",
       "sha256": "f24bdc3758b374cd07a2545c01917180e20ec8ad1d5169e618eecd7487579134"
     },
     {
-      "path": "src/aegis_core/memory/conversation_search.py",
+      "path": "src/jarvis_core/memory/conversation_search.py",
       "sha256": "a02a1c081e8436b03882cbe4a499622e9655d09bbccb3d714e4768b2e2551847"
     },
     {
-      "path": "src/aegis_core/memory/conversations.py",
+      "path": "src/jarvis_core/memory/conversations.py",
       "sha256": "f352dae9d8f57d3def6b82090b2101f3497db2e086fee5907453616dcdf413aa"
     },
     {
-      "path": "src/aegis_core/memory/crypto.py",
+      "path": "src/jarvis_core/memory/crypto.py",
       "sha256": "ac9bed4aeb03591d03267bb8985a8b5c422aec767b32ecb8378064902563d4b2"
     },
     {
-      "path": "src/aegis_core/memory/embedding.py",
+      "path": "src/jarvis_core/memory/embedding.py",
       "sha256": "80bbc730b79ae442ba2f4499cde6106ee799947e1d6ae4e3255e3c93eb0ca94b"
     },
     {
-      "path": "src/aegis_core/memory/errors.py",
+      "path": "src/jarvis_core/memory/errors.py",
       "sha256": "ccc1d770a008d8ba912b9d66c3c68fd4df9d962524a686c628567ab3398f0403"
     },
     {
-      "path": "src/aegis_core/memory/graph_embedding_repository.py",
+      "path": "src/jarvis_core/memory/graph_embedding_repository.py",
       "sha256": "251556b9a00d05d33820e543128df317a64672ea55ebfb43b1310ab2bfec6418"
     },
     {
-      "path": "src/aegis_core/memory/graph_extractor.py",
+      "path": "src/jarvis_core/memory/graph_extractor.py",
       "sha256": "dc7cd866d1e998ec4e7ff17a4f8ba4c1ec5b356e5414cfc268a28e5d41c213a2"
     },
     {
-      "path": "src/aegis_core/memory/graph_read_repository.py",
+      "path": "src/jarvis_core/memory/graph_read_repository.py",
       "sha256": "ca1b3398a7bbcf5230439cedbcd95b87bc7ce1171ccedad7969b517df400700d"
     },
     {
-      "path": "src/aegis_core/memory/graph_repository.py",
+      "path": "src/jarvis_core/memory/graph_repository.py",
       "sha256": "18f6cd2a78a4866298c4c6edcb092997721c12ecff9bebba15dafb97afd70beb"
     },
     {
-      "path": "src/aegis_core/memory/graph_search.py",
+      "path": "src/jarvis_core/memory/graph_search.py",
       "sha256": "15e5f32ae5c3f8a8abe5d00dfe00b07b00da8e43d75d4157634e745db5c2bfde"
     },
     {
-      "path": "src/aegis_core/memory/graph_service.py",
+      "path": "src/jarvis_core/memory/graph_service.py",
       "sha256": "79e2a728b49862d78fcacf2338a267753fbf057a5b8aa273fd171a74d2c4f291"
     },
     {
-      "path": "src/aegis_core/memory/item_repository.py",
+      "path": "src/jarvis_core/memory/item_repository.py",
       "sha256": "63f66129a7fed8826f162ca1ed1168ceeeb3b3cbee72112e411425f049099d42"
     },
     {
-      "path": "src/aegis_core/memory/langgraph_checkpoint.py",
+      "path": "src/jarvis_core/memory/langgraph_checkpoint.py",
       "sha256": "0bbe09cac61fb908c94384cc985e642fe46c8176e959b2c47a6aa8b1b89e01c0"
     },
     {
-      "path": "src/aegis_core/memory/migrations.py",
+      "path": "src/jarvis_core/memory/migrations.py",
       "sha256": "cca6bdd952807da47d2c9ac895983569cafb004184e8b850238ff5ad1d076862"
     },
     {
-      "path": "src/aegis_core/memory/profile.py",
+      "path": "src/jarvis_core/memory/profile.py",
       "sha256": "67d76b6b2d133d94e66418340337cb9e3f3fc23c8b29f3404200c702eab4e234"
     },
     {
-      "path": "src/aegis_core/memory/records.py",
+      "path": "src/jarvis_core/memory/records.py",
       "sha256": "48511545de35856fda0edbd1eec07494b8c54128f3a8ed44e05b0ed05bfc9538"
     },
     {
-      "path": "src/aegis_core/memory/retrieval.py",
+      "path": "src/jarvis_core/memory/retrieval.py",
       "sha256": "3ce5906d828ba7acff4b466e5f9d9edd5cbfadae2f4961ccfd9281899b8a7928"
     },
     {
-      "path": "src/aegis_core/memory/retrieval_planning.py",
+      "path": "src/jarvis_core/memory/retrieval_planning.py",
       "sha256": "3ccfd30ee56fc808c9026128167cc7200d0ebecd824e9075e9115e6676fb3bad"
     },
     {
-      "path": "src/aegis_core/memory/schema.py",
+      "path": "src/jarvis_core/memory/schema.py",
       "sha256": "f9ab3700c3fc770357fafdc86c659e7ebbea84d58d4da02332dbd8b333387b9f"
     },
     {
-      "path": "src/aegis_core/memory/search_repository.py",
+      "path": "src/jarvis_core/memory/search_repository.py",
       "sha256": "6bb4519226be75817d80d2b4a5c62dcae4671fab442458a3e25e81ecf231f647"
     },
     {
-      "path": "src/aegis_core/memory/semantic_profile.py",
+      "path": "src/jarvis_core/memory/semantic_profile.py",
       "sha256": "2885c68200daed16f006c0777d0c7e798d651b7d34714872dc7047d5531b6f65"
     },
     {
-      "path": "src/aegis_core/memory/service.py",
+      "path": "src/jarvis_core/memory/service.py",
       "sha256": "f4a8b1e70559f5dec233f67b4ad94f7079b97eaf3923173c43545abb8f68aa11"
     },
     {
-      "path": "src/aegis_core/memory/shared_context_ranking.py",
+      "path": "src/jarvis_core/memory/shared_context_ranking.py",
       "sha256": "5d070c2d79eea4df5343ee945a93da979a4ce0045174d760e03e3705bf868d8b"
     },
     {
-      "path": "src/aegis_core/memory/shared_conversation_context.py",
+      "path": "src/jarvis_core/memory/shared_conversation_context.py",
       "sha256": "dc5edb3925d2c6b47a11d90f258f1b563355e5963ea70a4ac053099f1f151866"
     },
     {
-      "path": "src/aegis_core/memory/social.py",
+      "path": "src/jarvis_core/memory/social.py",
       "sha256": "7f085b9b934202820bb6a80404aad99210abfe669ae1b8f6f4ff9956f856b668"
     },
     {
-      "path": "src/aegis_core/memory/spotlight_sync.py",
+      "path": "src/jarvis_core/memory/spotlight_sync.py",
       "sha256": "01a2bd24005ace73852d4b98341ce9d26bff2f2a6391981b8707b902168bfd23"
     },
     {
-      "path": "src/aegis_core/memory/sqlite.py",
+      "path": "src/jarvis_core/memory/sqlite.py",
       "sha256": "d3a8c6f63498d6edbb9cd4e033dae0bf6829def7eacb37b8f533bf2cc200d452"
     },
     {
-      "path": "src/aegis_core/memory/storage.py",
+      "path": "src/jarvis_core/memory/storage.py",
       "sha256": "1f5bf17ebceac015eadbe73d49492893f7e4a09d3109ae9c2659ad0150de89c2"
     },
     {
-      "path": "src/aegis_core/memory/task_checkpoint.py",
+      "path": "src/jarvis_core/memory/task_checkpoint.py",
       "sha256": "ce2eaeefd40a1a910d97aa6a6bae51b513d1dd8f9ab0c984270fa2c222ba0bae"
     },
     {
-      "path": "src/aegis_core/memory/vector_db.py",
+      "path": "src/jarvis_core/memory/vector_db.py",
       "sha256": "198007ed93e34a3244e4e729347cb86e9689ef184f84b1efd1e2b476ae8716b4"
     },
     {
-      "path": "src/aegis_core/memory/visibility.py",
+      "path": "src/jarvis_core/memory/visibility.py",
       "sha256": "3a6a4c3f3a53afb1e5bac317c5d53fb505bc0fd0fc74c2e317d84f09686ab51c"
     },
     {
-      "path": "src/aegis_core/models.py",
+      "path": "src/jarvis_core/models.py",
       "sha256": "b3568aba376f4aa247c8cc357b63dd93d424d060f6ce42e6eb61f2ab60d92df6"
     },
     {
-      "path": "src/aegis_core/orchestration/__init__.py",
+      "path": "src/jarvis_core/orchestration/__init__.py",
       "sha256": "14fde5afe45dbc15c1f10fdd431393ac1a2a271aef454a93a4e0af9ef361dcb8"
     },
     {
-      "path": "src/aegis_core/orchestration/authorization_nodes.py",
+      "path": "src/jarvis_core/orchestration/authorization_nodes.py",
       "sha256": "10b28cd7a41c391eb901dd95f2be8a6c1daca6f35974f2fc7e99dcdecf0a4e1c"
     },
     {
-      "path": "src/aegis_core/orchestration/clarification.py",
+      "path": "src/jarvis_core/orchestration/clarification.py",
       "sha256": "a8d01249e5edd44f868605f3501c5301e53f06bc7b4047c214e7c73623250621"
     },
     {
-      "path": "src/aegis_core/orchestration/conversation_window.py",
+      "path": "src/jarvis_core/orchestration/conversation_window.py",
       "sha256": "bda210bc8999a288b8057fbfd8f9fbc4a174d8a88196a88674965c96aad75946"
     },
     {
-      "path": "src/aegis_core/orchestration/direct_actions.py",
+      "path": "src/jarvis_core/orchestration/direct_actions.py",
       "sha256": "e4f0f03b136d4d23194f414444c11adb673a82c227c1479a210649c0b05b5b16"
     },
     {
-      "path": "src/aegis_core/orchestration/engineering_dialogue.py",
+      "path": "src/jarvis_core/orchestration/engineering_dialogue.py",
       "sha256": "7f5121b91f538cab5abe0699e0f0bff5b7a6e13b6e819a479ac7f99423c77efe"
     },
     {
-      "path": "src/aegis_core/orchestration/execution_nodes.py",
+      "path": "src/jarvis_core/orchestration/execution_nodes.py",
       "sha256": "786a608bd5ea8e296ab96553cae223c9c0ec66581ce72e6f76f95db3463b101b"
     },
     {
-      "path": "src/aegis_core/orchestration/graph.py",
+      "path": "src/jarvis_core/orchestration/graph.py",
       "sha256": "9d0ff0e3fcfd95b44b10a87868e64671c37eef506daf3ffd3b6ae3598a5be051"
     },
     {
-      "path": "src/aegis_core/orchestration/inference.py",
+      "path": "src/jarvis_core/orchestration/inference.py",
       "sha256": "6fe89c85106e4f0a1dfcd781ddf6339fb4612c03cc0acb44d853531b014a2196"
     },
     {
-      "path": "src/aegis_core/orchestration/memory_nodes.py",
+      "path": "src/jarvis_core/orchestration/memory_nodes.py",
       "sha256": "4d758d8e82bd41d8384c5554839dbaa06abd717044a42637513117a75c4d4282"
     },
     {
-      "path": "src/aegis_core/orchestration/notes.py",
+      "path": "src/jarvis_core/orchestration/notes.py",
       "sha256": "45fd5d3d7e3aef34e7e198a2a16579a8eb82c713914c6bc8e4dc1b97a9a95e6b"
     },
     {
-      "path": "src/aegis_core/orchestration/nvidia_dialogue.py",
+      "path": "src/jarvis_core/orchestration/nvidia_dialogue.py",
       "sha256": "83eb7ba0be9660e10dca8e5553379ba181879177b2b7abd6126dfeb7bb292f1d"
     },
     {
-      "path": "src/aegis_core/orchestration/planning_nodes.py",
+      "path": "src/jarvis_core/orchestration/planning_nodes.py",
       "sha256": "ece5d6c275cddc9e54c86620bbd9120eca92e3223b20d0cb84101bdb656469b5"
     },
     {
-      "path": "src/aegis_core/orchestration/private_context.py",
+      "path": "src/jarvis_core/orchestration/private_context.py",
       "sha256": "f922228b7984a54444e5acb1562c3583ea204e32de0a4be6d5910e34fe8eba15"
     },
     {
-      "path": "src/aegis_core/orchestration/response_rendering.py",
+      "path": "src/jarvis_core/orchestration/response_rendering.py",
       "sha256": "dde6d0f7a00d513b03c3f54edc94f583909d58d4d886c6a1b814e2c10bc5052f"
     },
     {
-      "path": "src/aegis_core/orchestration/routing.py",
+      "path": "src/jarvis_core/orchestration/routing.py",
       "sha256": "6051c530b98d834f67fcfe1df5874042307ff71f1521bb6875a7ade1c4c914f4"
     },
     {
-      "path": "src/aegis_core/orchestration/routing_nodes.py",
+      "path": "src/jarvis_core/orchestration/routing_nodes.py",
       "sha256": "7fd7ad44da4aae0d8f4ecfa785b97b815cc5dd670c2f7e1c21582d649b67081c"
     },
     {
-      "path": "src/aegis_core/orchestration/semantic_reference.py",
+      "path": "src/jarvis_core/orchestration/semantic_reference.py",
       "sha256": "1ff4e7daf58f22199d9029a11c292a294d9377e1c480aad1a382e68265bd4bee"
     },
     {
-      "path": "src/aegis_core/orchestration/semantic_tools.py",
+      "path": "src/jarvis_core/orchestration/semantic_tools.py",
       "sha256": "e8114fdfcfc8b92bc46853d9d71dad6fda83bf2c666a1806b6dce7d2ade54a04"
     },
     {
-      "path": "src/aegis_core/orchestration/skill_selection.py",
+      "path": "src/jarvis_core/orchestration/skill_selection.py",
       "sha256": "01ddffd9aee20d6cc1e078f22733164cb3ebfa2f1ff834ed8d8174868172b3cc"
     },
     {
-      "path": "src/aegis_core/orchestration/state.py",
+      "path": "src/jarvis_core/orchestration/state.py",
       "sha256": "71772b905db1d7605967de00b79e824749269947609bc3d158da24da9733b27e"
     },
     {
-      "path": "src/aegis_core/orchestration/synthesis_nodes.py",
+      "path": "src/jarvis_core/orchestration/synthesis_nodes.py",
       "sha256": "6aba4d291b928b959daa6d74a9051cf9d2ab94da0badf69120142d1131dc18ea"
     },
     {
-      "path": "src/aegis_core/orchestration/task_progress.py",
+      "path": "src/jarvis_core/orchestration/task_progress.py",
       "sha256": "885ee43024113980efd2a717f5197269524548b21756552c028152c5f482daab"
     },
     {
-      "path": "src/aegis_core/owner_language.py",
+      "path": "src/jarvis_core/owner_language.py",
       "sha256": "892e7bb82cc6cc35513dfcdf8f762ff0c66a5647863ccf4b94efce3130eaa11c"
     },
     {
-      "path": "src/aegis_core/performance_profiler.py",
+      "path": "src/jarvis_core/performance_profiler.py",
       "sha256": "75cf7bb107a15163d45eec8303a2b55ffc85aa00f65e3c3a2228736ed4a92592"
     },
     {
-      "path": "src/aegis_core/personality.py",
+      "path": "src/jarvis_core/personality.py",
       "sha256": "8bd4ae0e111ed1303b87062d7aab89c88e73782d7c7dd7d5b16472c173097407"
     },
     {
-      "path": "src/aegis_core/pilot_release_qualification.py",
+      "path": "src/jarvis_core/pilot_release_qualification.py",
       "sha256": "4d643989793078ec186cf3950e54cae1d0de748eadb29cf2289f51d5e89e62a3"
     },
     {
-      "path": "src/aegis_core/plugins/__init__.py",
+      "path": "src/jarvis_core/plugins/__init__.py",
       "sha256": "aab4639da69b266a965fdd9400995974524ae82cbed1e0f0f7d6e01cae258e68"
     },
     {
-      "path": "src/aegis_core/plugins/context7.py",
+      "path": "src/jarvis_core/plugins/context7.py",
       "sha256": "0acc3dd57edaee5e0cf71ae8d486ca254ad284d6be8169f68916afa340b8b0be"
     },
     {
-      "path": "src/aegis_core/plugins/contracts.py",
+      "path": "src/jarvis_core/plugins/contracts.py",
       "sha256": "f5f23457030e9703aaebf9eb74b80e92524463bfc26cf05a8dc84bf1497ac3ef"
     },
     {
-      "path": "src/aegis_core/plugins/foreign.py",
+      "path": "src/jarvis_core/plugins/foreign.py",
       "sha256": "d615911f1e26089ba175ec3bea7a13d46ef1ff0817928ce94b8e83deea3304c7"
     },
     {
-      "path": "src/aegis_core/plugins/foreign_service.py",
+      "path": "src/jarvis_core/plugins/foreign_service.py",
       "sha256": "8a316064144a6bc75a23632efad8be3668c6b4c33d7dca596b847dbe50a8dc57"
     },
     {
-      "path": "src/aegis_core/plugins/runtime.py",
+      "path": "src/jarvis_core/plugins/runtime.py",
       "sha256": "e31481d3581d67392b904e6579888bda90ee5fc3eae79271bbbb923f93015348"
     },
     {
-      "path": "src/aegis_core/plugins/service.py",
+      "path": "src/jarvis_core/plugins/service.py",
       "sha256": "d6169dce06c48cdc0765a074f9878a334cd7b2a45c7c47dc5f13f6217f5034c4"
     },
     {
-      "path": "src/aegis_core/plugins/store.py",
+      "path": "src/jarvis_core/plugins/store.py",
       "sha256": "0cc7dc8178ffd36c4e3f5d90274c7f4824fb631aeba7fa7dfdf22e0e93daaf1b"
     },
     {
-      "path": "src/aegis_core/privacy.py",
+      "path": "src/jarvis_core/privacy.py",
       "sha256": "4adfd8a3fdd044aa4f54cccacc0d5577af1490cf46fba5593523a0bfdd76b1e7"
     },
     {
-      "path": "src/aegis_core/production_workflows.py",
+      "path": "src/jarvis_core/production_workflows.py",
       "sha256": "094cab17446e96456c21bb78c647cd7f4f810b4e806e4311a5dd21c2fbb32b9b"
     },
     {
-      "path": "src/aegis_core/projects.py",
+      "path": "src/jarvis_core/projects.py",
       "sha256": "572332b438d774501bf263f2673f6c09be6f243f33e465010b4f71e1d356a57f"
     },
     {
-      "path": "src/aegis_core/provider_status.py",
+      "path": "src/jarvis_core/provider_status.py",
       "sha256": "54679871ace9dcba2c458bb0ee8890bc50c953708628caa6cc9a613d072ab0a9"
     },
     {
-      "path": "src/aegis_core/providers/__init__.py",
+      "path": "src/jarvis_core/providers/__init__.py",
       "sha256": "753ab5ca0792b44741bcf0f80db42d3c8178b33f4d9760f13de6879a825caa60"
     },
     {
-      "path": "src/aegis_core/providers/apple_embedding.py",
+      "path": "src/jarvis_core/providers/apple_embedding.py",
       "sha256": "095e190834cfb21aa088c9b1361869d4c5b16c309982ed78f810f26a76d8fbc7"
     },
     {
-      "path": "src/aegis_core/providers/base.py",
+      "path": "src/jarvis_core/providers/base.py",
       "sha256": "7a86958d063db2a275290c4f68be093c861a098a8d30a2014322502efe869262"
     },
     {
-      "path": "src/aegis_core/providers/codex.py",
+      "path": "src/jarvis_core/providers/codex.py",
       "sha256": "b8a24dab3fd1c95d8f91eddd0596ae0ec54c3ea46c96e3c9df4fb2eabbbeb184"
     },
     {
-      "path": "src/aegis_core/providers/errors.py",
+      "path": "src/jarvis_core/providers/errors.py",
       "sha256": "633307d90ace0438aff35f9d5e104d754e94f2cc61cbf4be0397c73a6cb139f5"
     },
     {
-      "path": "src/aegis_core/providers/inference_metrics.py",
+      "path": "src/jarvis_core/providers/inference_metrics.py",
       "sha256": "c0f640a5a9bf02ca8ceb00f585bd3146d40d60f626f177c69578e8b52fbe4cdf"
     },
     {
-      "path": "src/aegis_core/providers/mlx_provider.py",
+      "path": "src/jarvis_core/providers/mlx_provider.py",
       "sha256": "477c6e0fa2fc4e213ddc0fe9575b5a702227b66dbc069ba72985777abc362cac"
     },
     {
-      "path": "src/aegis_core/providers/nvidia.py",
+      "path": "src/jarvis_core/providers/nvidia.py",
       "sha256": "17c1980fb60ed76f776100982d4e0b5e2462b4b66abaa85f7368640e5c98dd96"
     },
     {
-      "path": "src/aegis_core/providers/nvidia_asr.py",
+      "path": "src/jarvis_core/providers/nvidia_asr.py",
       "sha256": "62439f3c22688929ce5e4e417a1293f9d93918c2bc91d8154828ea91f05ea7b8"
     },
     {
-      "path": "src/aegis_core/rebuild/__init__.py",
+      "path": "src/jarvis_core/rebuild/__init__.py",
       "sha256": "7edefa2e548601cdd697857ccc9e3d51d1fe79bb00f206cbb693619a9784e1d8"
     },
     {
-      "path": "src/aegis_core/rebuild/runtime.py",
+      "path": "src/jarvis_core/rebuild/runtime.py",
       "sha256": "7cbda0deebdd5e1cc4be77ec31f4a6042e6f227f0ab58c919efd1ff5769fb3df"
     },
     {
-      "path": "src/aegis_core/release_scope.py",
+      "path": "src/jarvis_core/release_scope.py",
       "sha256": "5eafa73d5e12cff3f41b3df13d05629b2f1de82f50f179a4e43a511721136be5"
     },
     {
-      "path": "src/aegis_core/request_intent.py",
+      "path": "src/jarvis_core/request_intent.py",
       "sha256": "5bcff908c2cc0600b9992438daa68553eef522f018ade0f0fbd906be9f7b0441"
     },
     {
-      "path": "src/aegis_core/runtime/__init__.py",
+      "path": "src/jarvis_core/runtime/__init__.py",
       "sha256": "c7206836e27fd837cfb5533c55cb0052c670708014ba1ff84cf2529475ab5085"
     },
     {
-      "path": "src/aegis_core/runtime/daemon.py",
+      "path": "src/jarvis_core/runtime/daemon.py",
       "sha256": "7ea690a0057b51a8e4afeaa8a505b5fdd08958eb975337fda4dc0b00ea8aea9e"
     },
     {
-      "path": "src/aegis_core/runtime/frozen_entrypoint.py",
+      "path": "src/jarvis_core/runtime/frozen_entrypoint.py",
       "sha256": "2bf989f1955884c5813c92b0cdce1704549424c8f6eef3c26b08aa5f80fefa22"
     },
     {
-      "path": "src/aegis_core/runtime/lifecycle.py",
+      "path": "src/jarvis_core/runtime/lifecycle.py",
       "sha256": "c61cc27c95c7eb00aa69ed62ab93204e0caceb9186ae997abb61eb4270cc0c16"
     },
     {
-      "path": "src/aegis_core/runtime_preflight.py",
+      "path": "src/jarvis_core/runtime_preflight.py",
       "sha256": "7f3d9116c645c1d578523b5e52936dd7275c27558357ab8b31ba06e053a97d41"
     },
     {
-      "path": "src/aegis_core/runtime_state.py",
+      "path": "src/jarvis_core/runtime_state.py",
       "sha256": "14a2e6bf68e6b214e502d366291e7b4574fb74a35a527c6f0b57dd88ce830f58"
     },
     {
-      "path": "src/aegis_core/scheduling.py",
+      "path": "src/jarvis_core/scheduling.py",
       "sha256": "a6a3f6a1c778eb1363ee0dc0bca7061e60b9508d72d3a609118c4342b3242101"
     },
     {
-      "path": "src/aegis_core/secrets.py",
+      "path": "src/jarvis_core/secrets.py",
       "sha256": "89cdae342e5eda49f8da80c9d4decfa6a660b98232dd5e237e2cd277cffb7e46"
     },
     {
-      "path": "src/aegis_core/secure_update.py",
+      "path": "src/jarvis_core/secure_update.py",
       "sha256": "e6424297977d2831d69dec542e6114dfa5e11e2e3f4dddede2d34bf3c44c0812"
     },
     {
-      "path": "src/aegis_core/secure_update_feed.py",
+      "path": "src/jarvis_core/secure_update_feed.py",
       "sha256": "cb8d22f9e062361950dfade1be041a90e9dd90e899f9db3ca8913b6d93580fd1"
     },
     {
-      "path": "src/aegis_core/secure_update_qualification.py",
+      "path": "src/jarvis_core/secure_update_qualification.py",
       "sha256": "2b39770d415615512a4f8bd2e2cc91a16d824319395dd60897cd24e8bf850d6f"
     },
     {
-      "path": "src/aegis_core/security.py",
+      "path": "src/jarvis_core/security.py",
       "sha256": "0511721789e0301e3ec8507ab61df1dd61ecc94ef156b59e1f3291d7cb95e0a9"
     },
     {
-      "path": "src/aegis_core/self_contained_release_qualification.py",
+      "path": "src/jarvis_core/self_contained_release_qualification.py",
       "sha256": "c5e8819f31ca3b7e02a83b20bda2eb61c044a6d237a6f63e802a4dfd21b88932"
     },
     {
-      "path": "src/aegis_core/settings_service.py",
+      "path": "src/jarvis_core/settings_service.py",
       "sha256": "f2e794b0fa61fa1d298d02c73c822aeb1d3369e308dfa826b3440cbab62632b3"
     },
     {
-      "path": "src/aegis_core/settings_store.py",
+      "path": "src/jarvis_core/settings_store.py",
       "sha256": "ee7bd138dcbeaf36187062c7bcaa93cd091edd37630e9174d67ce1c3a6ea77dc"
     },
     {
-      "path": "src/aegis_core/skill_flow_benchmark.py",
+      "path": "src/jarvis_core/skill_flow_benchmark.py",
       "sha256": "007e0fe4c1cae1cf561a9da60e1a06f42af2ec749608874a704950a74b987912"
     },
     {
-      "path": "src/aegis_core/skill_flow_live.py",
+      "path": "src/jarvis_core/skill_flow_live.py",
       "sha256": "0b0e665ae4335e62797d39c632847c604175bebaeb8568595f3453dc5bff8e17"
     },
     {
-      "path": "src/aegis_core/skills/__init__.py",
+      "path": "src/jarvis_core/skills/__init__.py",
       "sha256": "0215a0b82e775b763b0c11d2fb9c47907fcf97d0554941de67aafccfbb35e95b"
     },
     {
-      "path": "src/aegis_core/skills/builtins.py",
+      "path": "src/jarvis_core/skills/builtins.py",
       "sha256": "8d347ccd499d346100b09f627dc70bc0d6004cebcab538815cbe3b0dec80b88d"
     },
     {
-      "path": "src/aegis_core/skills/contracts.py",
+      "path": "src/jarvis_core/skills/contracts.py",
       "sha256": "570f8c61d4c43d75a31ebecb6ca81bcca0f50a78d6524e4129716ce38b30b4b0"
     },
     {
-      "path": "src/aegis_core/skills/importer.py",
+      "path": "src/jarvis_core/skills/importer.py",
       "sha256": "8bc1052cc29ff769da4cb2f01d5462cba23714cbd8fadea58024131173d2c25f"
     },
     {
-      "path": "src/aegis_core/skills/policy.py",
+      "path": "src/jarvis_core/skills/policy.py",
       "sha256": "6ae98776339b1e91263511a14df9773a45f664df2c9ed05a8dc8314a74909ecf"
     },
     {
-      "path": "src/aegis_core/skills/registry.py",
+      "path": "src/jarvis_core/skills/registry.py",
       "sha256": "fdcf1f73f51d2c5850e8690028767190cf4a73e3af084d5dc42ee869d9c28bf3"
     },
     {
-      "path": "src/aegis_core/skills/teach.py",
+      "path": "src/jarvis_core/skills/teach.py",
       "sha256": "14210125c208c8e1f41cd6cf3f043f641ac95af5f7b998a4d6232d2f6862b3a5"
     },
     {
-      "path": "src/aegis_core/speech.py",
+      "path": "src/jarvis_core/speech.py",
       "sha256": "85a7e62f4ff9be056ee9810cd5e43ae87e372ba5a7e60346c1808ae844b8bdf5"
     },
     {
-      "path": "src/aegis_core/speech_pcm.py",
+      "path": "src/jarvis_core/speech_pcm.py",
       "sha256": "5af1cee1109b579bc2018d1d9cb351e4535c3c5acd35d24db1fb3cd7ec0e108e"
     },
     {
-      "path": "src/aegis_core/standing_grants.py",
+      "path": "src/jarvis_core/standing_grants.py",
       "sha256": "aa46093f8bcfdfc4e84f0b17fefad24fa615ad1a6759aab4f093a50647a921bf"
     },
     {
-      "path": "src/aegis_core/style.py",
+      "path": "src/jarvis_core/style.py",
       "sha256": "492eb4dc33fda6d2f8ab234eaa1c4bdb3c5c5bc601967619f4b3875ba0368850"
     },
     {
-      "path": "src/aegis_core/tcc_privacy.py",
+      "path": "src/jarvis_core/tcc_privacy.py",
       "sha256": "5834ff0e69c85be4ff10063bb71ffc35ebe8c815eb5d58056581a25ac1d52202"
     },
     {
-      "path": "src/aegis_core/telegram/__init__.py",
+      "path": "src/jarvis_core/telegram/__init__.py",
       "sha256": "cbd43b03f518e8031c83ddc0cecd46c6fa36d827f73e922a0a49c012a2ed0981"
     },
     {
-      "path": "src/aegis_core/telegram/client.py",
+      "path": "src/jarvis_core/telegram/client.py",
       "sha256": "e850c8d69c1ede90ab72ab45a92be1e4447f0b82d7645e7065c6ec24690f745d"
     },
     {
-      "path": "src/aegis_core/telegram/configuration.py",
+      "path": "src/jarvis_core/telegram/configuration.py",
       "sha256": "f362be6a4a9195533e12a20135dc38acf413b8040111f3725d51c2df5fe5be96"
     },
     {
-      "path": "src/aegis_core/telegram/experience.py",
+      "path": "src/jarvis_core/telegram/experience.py",
       "sha256": "6fe1f1c15106b7068a7284ac152d71957e38dfe30587cf6232c047020eaeaa2c"
     },
     {
-      "path": "src/aegis_core/telegram/journal.py",
+      "path": "src/jarvis_core/telegram/journal.py",
       "sha256": "59ad745c2dc23b9eb20f8a014e544725ac24a70b873ca1007304b0f4b7fd4576"
     },
     {
-      "path": "src/aegis_core/telegram/media.py",
+      "path": "src/jarvis_core/telegram/media.py",
       "sha256": "cb6b77b2d1c5ee9306bfb1afa791c918d03f3e9233e8c17a40aeefd2db1de35c"
     },
     {
-      "path": "src/aegis_core/telegram/presentation.py",
+      "path": "src/jarvis_core/telegram/presentation.py",
       "sha256": "75ab0d9316648f430baeedc97262598530f20313bd7f85c88b7f00caaf4b2dcf"
     },
     {
-      "path": "src/aegis_core/telegram/service.py",
+      "path": "src/jarvis_core/telegram/service.py",
       "sha256": "d15cf946937a8fdb7e0422ffb364889157932b7e244196026fb2388f303c8e94"
     },
     {
-      "path": "src/aegis_core/tools/__init__.py",
+      "path": "src/jarvis_core/tools/__init__.py",
       "sha256": "d99cded76f1b8437748a523987c4967158a454499de2bf33cc51da96b4fcd050"
     },
     {
-      "path": "src/aegis_core/tools/android_automation.py",
+      "path": "src/jarvis_core/tools/android_automation.py",
       "sha256": "2740399c68755ac85b42415c7caa5dfb888483a97ed60b3fd371d3ecdc20838b"
     },
     {
-      "path": "src/aegis_core/tools/audit.py",
+      "path": "src/jarvis_core/tools/audit.py",
       "sha256": "1f3b08fd20feaa532cd702839f02556c3e65f7d13c9fdec647b5891c8a8a5b0a"
     },
     {
-      "path": "src/aegis_core/tools/audit_service.py",
+      "path": "src/jarvis_core/tools/audit_service.py",
       "sha256": "e78ddcdd8acd112903f7310697d702e9d9766db40ff828ca561f3fd7688cc7f1"
     },
     {
-      "path": "src/aegis_core/tools/automation_errors.py",
+      "path": "src/jarvis_core/tools/automation_errors.py",
       "sha256": "e31d0ee888cfd48175be3744f60f1aabc8f172887daa8ed5f069107c7d2c27c7"
     },
     {
-      "path": "src/aegis_core/tools/background_automation.py",
+      "path": "src/jarvis_core/tools/background_automation.py",
       "sha256": "a11619921d2ffde9dbbf0c551632d0a6b64b10f9cd1c0da3d25eebfa1bc0544f"
     },
     {
-      "path": "src/aegis_core/tools/broker.py",
+      "path": "src/jarvis_core/tools/broker.py",
       "sha256": "ac9a1d0e12e9c1d3181fd4df7c9561ed79448e6ad55e3e1fa13a9c507dd5f99e"
     },
     {
-      "path": "src/aegis_core/tools/chrome_cdp.py",
+      "path": "src/jarvis_core/tools/chrome_cdp.py",
       "sha256": "6846d1a637b45a5bf4c1a522b94b74a263027fb34c24ec07abe615edcc4fa755"
     },
     {
-      "path": "src/aegis_core/tools/computer.py",
+      "path": "src/jarvis_core/tools/computer.py",
       "sha256": "4644fde601206eee686eaddd32a29ea42e210658a873aefde207becdb2ee38d7"
     },
     {
-      "path": "src/aegis_core/tools/computer_postconditions.py",
+      "path": "src/jarvis_core/tools/computer_postconditions.py",
       "sha256": "3fadb8a1c4b61b0de7e2d4baa2f5545ce4861878d3648441e3b146c97477c796"
     },
     {
-      "path": "src/aegis_core/tools/computer_relay.py",
+      "path": "src/jarvis_core/tools/computer_relay.py",
       "sha256": "dd8637cab4089f715b5d999e9f47c3bae3cebb3cb411e61caf5805d65648ba77"
     },
     {
-      "path": "src/aegis_core/tools/computer_workflow.py",
+      "path": "src/jarvis_core/tools/computer_workflow.py",
       "sha256": "f9e0ee1a3d18ad2e8e6612a81cb3538e377918a457174309c65efbbfc62117eb"
     },
     {
-      "path": "src/aegis_core/tools/confirmations.py",
+      "path": "src/jarvis_core/tools/confirmations.py",
       "sha256": "209020dc7b752b5ab8ecb33c2130db5fc97dca25e90411d7899da2d96c2cf6f6"
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "sha256": "c6c360d12daab436d58f9018f4942a08dabbcaa47b0ea8c4139d51f242392ac6"
     },
     {
-      "path": "src/aegis_core/tools/device_config.py",
+      "path": "src/jarvis_core/tools/device_config.py",
       "sha256": "27d3d459bd3f39177e5564a94fa59f2e357e142907edac3c57f66a41fb1fb35b"
     },
     {
-      "path": "src/aegis_core/tools/execution.py",
+      "path": "src/jarvis_core/tools/execution.py",
       "sha256": "cd5dc2519788dc4e5a8d14643df90c5542c23cf542017fa78739e5ecd56b10a2"
     },
     {
-      "path": "src/aegis_core/tools/ios_bridge.py",
+      "path": "src/jarvis_core/tools/ios_bridge.py",
       "sha256": "17454e44c1af1e3f627d943fe6107e4480dadaa3bfbe0643e38c112444ad6705"
     },
     {
-      "path": "src/aegis_core/tools/native_receipts.py",
+      "path": "src/jarvis_core/tools/native_receipts.py",
       "sha256": "89604695bce9bdba8db2cfaeb58c0d493b9890ff9f0d417d53dab4104501dc0a"
     },
     {
-      "path": "src/aegis_core/tools/silent_executor.py",
+      "path": "src/jarvis_core/tools/silent_executor.py",
       "sha256": "bcb4490e4c2af445dbac3fb8713efa637785c688f5540f3a7cd4541e2b5089ea"
     },
     {
-      "path": "src/aegis_core/tools/smart_tv.py",
+      "path": "src/jarvis_core/tools/smart_tv.py",
       "sha256": "9f5da455b890204ffeb27349611c4fec3d90f132fd1627e915ed5e11923f0904"
     },
     {
-      "path": "src/aegis_core/tools/verification.py",
+      "path": "src/jarvis_core/tools/verification.py",
       "sha256": "3a2143702b82ec4f9a44a780542561faa26f049603cd1d136efd30c0a8167228"
     },
     {
-      "path": "src/aegis_core/tools/web.py",
+      "path": "src/jarvis_core/tools/web.py",
       "sha256": "ecde072f9924fb9a2303c35530353c3886764c4e3f658aedc177a340c3b7b4a1"
     },
     {
-      "path": "src/aegis_core/voice_qualification.py",
+      "path": "src/jarvis_core/voice_qualification.py",
       "sha256": "4d100e360a2b0a563abbfb5fc3cf39e2b70d04011e07fcc19c7f866d26264223"
     }
   ],
   "tool_definition_sites": 44,
   "declarations": [
     {
-      "path": "src/aegis_core/goals.py",
+      "path": "src/jarvis_core/goals.py",
       "line": 236,
       "name": "jarvis_goal_create",
       "name_expression": "'jarvis_goal_create'",
@@ -1043,7 +1043,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/goals.py",
+      "path": "src/jarvis_core/goals.py",
       "line": 244,
       "name": "jarvis_goal_list",
       "name_expression": "'jarvis_goal_list'",
@@ -1051,7 +1051,7 @@
       "requires_confirmation": "not_specified"
     },
     {
-      "path": "src/aegis_core/goals.py",
+      "path": "src/jarvis_core/goals.py",
       "line": 249,
       "name": "jarvis_goal_stop",
       "name_expression": "'jarvis_goal_stop'",
@@ -1059,7 +1059,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/mcp/browser_tasks.py",
+      "path": "src/jarvis_core/mcp/browser_tasks.py",
       "line": 428,
       "name": null,
       "name_expression": "name",
@@ -1067,7 +1067,7 @@
       "requires_confirmation": "runtime"
     },
     {
-      "path": "src/aegis_core/mcp/client.py",
+      "path": "src/jarvis_core/mcp/client.py",
       "line": 1624,
       "name": null,
       "name_expression": "binding.exposed_name",
@@ -1075,7 +1075,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/plugins/foreign_service.py",
+      "path": "src/jarvis_core/plugins/foreign_service.py",
       "line": 67,
       "name": "jarvis_plugin_search",
       "name_expression": "'jarvis_plugin_search'",
@@ -1083,7 +1083,7 @@
       "requires_confirmation": "not_specified"
     },
     {
-      "path": "src/aegis_core/plugins/foreign_service.py",
+      "path": "src/jarvis_core/plugins/foreign_service.py",
       "line": 74,
       "name": "jarvis_plugin_install",
       "name_expression": "'jarvis_plugin_install'",
@@ -1091,7 +1091,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/plugins/runtime.py",
+      "path": "src/jarvis_core/plugins/runtime.py",
       "line": 422,
       "name": null,
       "name_expression": "binding.exposed_name",
@@ -1099,7 +1099,7 @@
       "requires_confirmation": "runtime"
     },
     {
-      "path": "src/aegis_core/scheduling.py",
+      "path": "src/jarvis_core/scheduling.py",
       "line": 388,
       "name": "jarvis_schedule_create",
       "name_expression": "'jarvis_schedule_create'",
@@ -1107,7 +1107,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/scheduling.py",
+      "path": "src/jarvis_core/scheduling.py",
       "line": 399,
       "name": "jarvis_schedule_list",
       "name_expression": "'jarvis_schedule_list'",
@@ -1115,7 +1115,7 @@
       "requires_confirmation": "not_specified"
     },
     {
-      "path": "src/aegis_core/scheduling.py",
+      "path": "src/jarvis_core/scheduling.py",
       "line": 407,
       "name": "jarvis_schedule_delete",
       "name_expression": "'jarvis_schedule_delete'",
@@ -1123,7 +1123,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/skills/teach.py",
+      "path": "src/jarvis_core/skills/teach.py",
       "line": 58,
       "name": "jarvis_skill_create",
       "name_expression": "'jarvis_skill_create'",
@@ -1131,7 +1131,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/tools/android_automation.py",
+      "path": "src/jarvis_core/tools/android_automation.py",
       "line": 368,
       "name": null,
       "name_expression": "self.TOOL_NAME",
@@ -1139,7 +1139,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 468,
       "name": "system_describe_runtime",
       "name_expression": "'system_describe_runtime'",
@@ -1147,7 +1147,7 @@
       "requires_confirmation": "not_specified"
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 478,
       "name": "system_power_status",
       "name_expression": "'system_power_status'",
@@ -1155,7 +1155,7 @@
       "requires_confirmation": "not_specified"
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 486,
       "name": "system_storage_status",
       "name_expression": "'system_storage_status'",
@@ -1163,7 +1163,7 @@
       "requires_confirmation": "not_specified"
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 494,
       "name": "system_observe_status",
       "name_expression": "'system_observe_status'",
@@ -1171,7 +1171,7 @@
       "requires_confirmation": "not_specified"
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 505,
       "name": "system_audio_set",
       "name_expression": "'system_audio_set'",
@@ -1179,7 +1179,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 518,
       "name": "media_control",
       "name_expression": "'media_control'",
@@ -1187,7 +1187,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 531,
       "name": "spotlight_search",
       "name_expression": "'spotlight_search'",
@@ -1195,7 +1195,7 @@
       "requires_confirmation": "not_specified"
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 542,
       "name": "spotlight_open",
       "name_expression": "'spotlight_open'",
@@ -1203,7 +1203,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 551,
       "name": "filesystem_read_text",
       "name_expression": "'filesystem_read_text'",
@@ -1211,7 +1211,7 @@
       "requires_confirmation": "not_specified"
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 560,
       "name": "web_research",
       "name_expression": "'web_research'",
@@ -1219,7 +1219,7 @@
       "requires_confirmation": "not_specified"
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 573,
       "name": "web_fetch",
       "name_expression": "'web_fetch'",
@@ -1227,7 +1227,7 @@
       "requires_confirmation": "not_specified"
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 583,
       "name": "mail_list_recent",
       "name_expression": "'mail_list_recent'",
@@ -1235,7 +1235,7 @@
       "requires_confirmation": "not_specified"
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 594,
       "name": "mail_send_message",
       "name_expression": "'mail_send_message'",
@@ -1243,7 +1243,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 603,
       "name": "calendar_list_events",
       "name_expression": "'calendar_list_events'",
@@ -1251,7 +1251,7 @@
       "requires_confirmation": "not_specified"
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 613,
       "name": "calendar_create_event",
       "name_expression": "'calendar_create_event'",
@@ -1259,7 +1259,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 622,
       "name": "reminders_list",
       "name_expression": "'reminders_list'",
@@ -1267,7 +1267,7 @@
       "requires_confirmation": "not_specified"
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 633,
       "name": "reminder_create",
       "name_expression": "'reminder_create'",
@@ -1275,7 +1275,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 642,
       "name": "reminder_complete",
       "name_expression": "'reminder_complete'",
@@ -1283,7 +1283,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 651,
       "name": "contacts_search",
       "name_expression": "'contacts_search'",
@@ -1291,7 +1291,7 @@
       "requires_confirmation": "not_specified"
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 662,
       "name": "contact_create",
       "name_expression": "'contact_create'",
@@ -1299,7 +1299,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 671,
       "name": "browser_search",
       "name_expression": "'browser_search'",
@@ -1307,7 +1307,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 685,
       "name": "browser_open_url",
       "name_expression": "'browser_open_url'",
@@ -1315,7 +1315,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 698,
       "name": "browser_play_media",
       "name_expression": "'browser_play_media'",
@@ -1323,7 +1323,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 710,
       "name": "application_open",
       "name_expression": "'application_open'",
@@ -1331,7 +1331,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 723,
       "name": "shortcut_run",
       "name_expression": "'shortcut_run'",
@@ -1339,7 +1339,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 735,
       "name": "computer_use",
       "name_expression": "'computer_use'",
@@ -1347,7 +1347,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 752,
       "name": "network_discover_hosts",
       "name_expression": "'network_discover_hosts'",
@@ -1355,7 +1355,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/tools/defaults.py",
+      "path": "src/jarvis_core/tools/defaults.py",
       "line": 765,
       "name": "terminal_run_template",
       "name_expression": "'terminal_run_template'",
@@ -1363,7 +1363,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/tools/ios_bridge.py",
+      "path": "src/jarvis_core/tools/ios_bridge.py",
       "line": 318,
       "name": null,
       "name_expression": "self.TOOL_NAME",
@@ -1371,7 +1371,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/tools/smart_tv.py",
+      "path": "src/jarvis_core/tools/smart_tv.py",
       "line": 675,
       "name": null,
       "name_expression": "self.CONTROL_TOOL",
@@ -1379,7 +1379,7 @@
       "requires_confirmation": true
     },
     {
-      "path": "src/aegis_core/tools/smart_tv.py",
+      "path": "src/jarvis_core/tools/smart_tv.py",
       "line": 690,
       "name": null,
       "name_expression": "self.DISCOVERY_TOOL",
@@ -1397,5 +1397,13 @@
   "snapshot_revision": "c97ed8908e1233f282e67d08b41cd06cb071c431",
   "role": "historical_snapshot_not_current_product",
   "regenerate_in_place": false,
-  "snapshot_note": "Contains 255 legacy Python sources plus two initial prototype sources at c97ed89; not the clean base inventory."
+  "snapshot_note": "Contains 255 legacy Python sources plus two initial prototype sources at c97ed89; not the clean base inventory.",
+  "namespace_normalization": {
+    "date": "2026-10-24",
+    "requested_by_owner": true,
+    "display_namespace": "jarvis",
+    "original_snapshot_git_blob": "d10b290244c3ec0df004447dfef00f8470420a61",
+    "original_snapshot_commit": "dfd0e7c2b2356b5ce22b252af08263c47a2a0c3b",
+    "path_semantics": "Names are normalized for the current Jarvis namespace. Source hashes describe the original historical sources; exact original paths remain recoverable from the original Git blob."
+  }
 }

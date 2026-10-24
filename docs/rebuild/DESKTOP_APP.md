@@ -1,8 +1,9 @@
 # App de escritorio de la variante propia
 
 Requisito del dueño, 24-10-2026. Pertenece a la **fase A**, antes de integrar las
-herramientas específicas de Jarvis. Este documento define el cliente; no afirma
-que la nueva app ya esté implementada o instalada.
+mejoras adicionales de Jarvis. Este documento define el cliente. Ya existe una
+implementación de desarrollo en `native/JarvisDesktop`, con scripts propios y
+pruebas de IPC. Su distribución autocontenida y cualificación completa siguen abiertas.
 
 ## Experiencia elegida
 
@@ -27,8 +28,9 @@ siguen correspondiendo al dueño.
 
 El núcleo propio contiene sesiones, ejecuciones, política, eventos y persistencia.
 La app consume una API propia tipada mediante transporte local autenticado. Ese
-transporte y el arranque supervisado aún requieren implementación y cualificación;
-el prototipo Python actual no los proporciona.
+transporte y el arranque supervisado tienen una primera implementación real, con
+autenticación por token privado. Falta cualificar identidad de cliente firmada,
+distribución y recuperación completa de la app; el token no acredita esas garantías.
 
 La interfaz representa estado confirmado por el núcleo:
 
@@ -40,7 +42,7 @@ La interfaz representa estado confirmado por el núcleo:
 - Si el servicio cae, la app informa la desconexión y recupera la sesión conforme
   al registro durable; no inventa éxito ni vuelve a ejecutar mutaciones.
 
-La base mantiene `aegis` en los identificadores técnicos que corresponda conservar.
+La base mantiene `jarvis` en los identificadores técnicos que corresponda conservar.
 La implementación del cliente será propia; el clon de referencia no se integra
 como ejecutable, recursos visuales ni dependencia del producto.
 
@@ -52,8 +54,9 @@ como ejecutable, recursos visuales ni dependencia del producto.
 4. Cancelar y enviar otra consulta funciona mientras el cliente refleja asentamiento.
 5. Reiniciar cliente/servicio recupera el estado que corresponda sin duplicar efectos.
 6. Un cliente no autorizado no obtiene acceso al transporte ni a datos de sesión.
-7. La interfaz y las pruebas de ventana funcionan sin herramientas específicas de
-   Jarvis: control del Mac, audio, dispositivos y conectores de servicios van en B.
+7. La interfaz del hito de chat se prueba sin añadir herramientas históricas. Las
+   capacidades de computadora, audio, nodos y canales que ya pertenecen a OpenClaw
+   siguen en fase A, según la matriz. Sus mejoras propias de Jarvis vendrán en B.
 
 La comprobación será desde la app propia y fixtures autorizadas. Las pruebas de
 contratos o capturas estáticas no sustituyen ese recorrido real.

@@ -1,0 +1,41 @@
+{
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "files": [
+    {
+      "path": "package.json",
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "bytes": 153025,
+      "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+      "bytes": 1076,
+      "git_blob": "ed064819ab537575d0cad902f7e5af4a3488b1d0"
+    },
+    {
+      "path": "src/agents/mcp-client-lifecycle.ts",
+      "sha256": "d03278503e4e328c342b84a9ba7449da4dd8fa1943b3454ecb3d235d894d4912",
+      "bytes": 9160,
+      "git_blob": "b4d1e4c84173d631ee3e4c808e59a430da5ad58f"
+    },
+    {
+      "path": "src/agents/mcp-client-elicitation.ts",
+      "sha256": "79ce0f8f46787ea95938ab3043ba3c167f8c51b78167c2dd27def0647e56d4b2",
+      "bytes": 7501,
+      "git_blob": "48786b1199d760011da61ecd525105fb40f83a09"
+    },
+    {
+      "path": "src/agents/native-mcp-runtime-client.ts",
+      "sha256": "a396155d591826d7d671875d2d5170a3969109205ecc6f8ddd7952ac17693284",
+      "bytes": 15204,
+      "git_blob": "89c72981b881b1bd97a8eabcdec77968e97c5830"
+    },
+    {
+      "path": "src/mcp/tools-stdio-server.ts",
+      "sha256": "f257b91ed84111aff55154a5391d992fe30af2417d1d3d5b3e187c5b59c8654c",
+      "bytes": 7355,
+      "git_blob": "ef5a603bce25ebe2247966c40932e8539ae80632"
+    }
+  ]
+}

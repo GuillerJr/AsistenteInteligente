@@ -1,5 +1,11 @@
 # Inventario del backend de Jarvis para la reconstrucción propia
 
+> Nombres normalizados a Jarvis el 24-10-2026 por indicación del dueño. Este
+> inventario conserva las capacidades y hashes históricos; las rutas se muestran
+> con la nomenclatura actual. El snapshot original se conserva en Git, commit
+> `dfd0e7c2b2356b5ce22b252af08263c47a2a0c3b`, sin alterar su contenido histórico.
+
+
 > Snapshot histórico del producto anterior. El código referido fue retirado del
 > árbol de trabajo al iniciar la base limpia. Sus estados describen la revisión
 > histórica indicada, no capacidades disponibles en el núcleo nuevo. Consultar
@@ -12,7 +18,7 @@ La investigación externa y el diseño del nuevo núcleo se registran por separa
 
 ## Alcance y significado de los estados
 
-Se inventariaron **255 archivos Python** de `src/aegis_core`, mediante rutas y AST, sin importar
+Se inventariaron **255 archivos Python** de `src/jarvis_core`, mediante rutas y AST, sin importar
 ni ejecutar el daemon, herramientas o conectores. Se excluyeron duplicados iCloud `* 2.*`.
 Se leyeron manifiestos de `integrations/` y la lista `docs/V1_PENDIENTES.md`; no se abrió
 `auth.json`, historial del dueño ni su almacenamiento de ejecución.
@@ -67,7 +73,7 @@ No se consultó la configuración privada para fingir un número de herramientas
 | B32 | Distribución, actualizaciones y diagnóstico: `secure_update*.py`, `distribution_archive.py`, `build_info.py`, `release_scope.py`, `health.py`, `performance_profiler.py`, `runtime_preflight.py` | Implementado parcialmente certificado; Developer ID/notarización y salto de versión públicos pendientes del dueño | Firma, tamaño, instalación limpia, manifiesto/Ed25519/hash/revisión, recuperación de actualización interrumpida y rechazo de downgrade. |
 | B33 | Calificación: `*_qualification.py`, `acceptance_benchmark.py`, `production_workflows.py`, `long_horizon_reliability.py`, `dialogue_challenges.py`, `skill_flow_benchmark.py`, `skill_flow_live.py`, `failure_boundary.py` | Implementado; pruebas deterministas y muestras reales tienen autoridades distintas | Mantener la batería determinista y añadir evidencia real del recorrido completo por módulo; no declarar toda la app certificada por un puntaje sintético. |
 
-Las rutas cortas de esta tabla son relativas a `src/aegis_core/`. La lista exacta de los 255
+Las rutas cortas de esta tabla son relativas a `src/jarvis_core/`. La lista exacta de los 255
 archivos se conserva al final para que una función transversal no desaparezca por no estar en
 una tabla resumida. `Bxx` es una identidad de inventario, no un estado de implementación nueva.
 
@@ -80,50 +86,50 @@ Una observación o una propuesta del modelo no es permiso ni comprobación de é
 
 | Nombre técnico que debe mapearse | Fuente | Campo de confirmación |
 | --- | --- | --- |
-| `android_device_control` | `src/aegis_core/tools/android_automation.py:368` | sí |
-| `application_open` | `src/aegis_core/tools/defaults.py:710` | sí |
-| `browser_open_url` | `src/aegis_core/tools/defaults.py:685` | sí |
-| `browser_play_media` | `src/aegis_core/tools/defaults.py:698` | sí |
-| `browser_search` | `src/aegis_core/tools/defaults.py:671` | sí |
-| `browser_task_action` | `src/aegis_core/mcp/browser_tasks.py:428` | no; exige sesión aprobada |
-| `browser_task_close` | `src/aegis_core/mcp/browser_tasks.py:428` | no; solo desconexión de la tarea |
-| `browser_task_open` | `src/aegis_core/mcp/browser_tasks.py:428` | sí |
-| `calendar_create_event` | `src/aegis_core/tools/defaults.py:613` | sí |
-| `calendar_list_events` | `src/aegis_core/tools/defaults.py:603` | no (valor predeterminado) |
-| `computer_use` | `src/aegis_core/tools/defaults.py:735` | sí |
-| `contact_create` | `src/aegis_core/tools/defaults.py:662` | sí |
-| `contacts_search` | `src/aegis_core/tools/defaults.py:651` | no (valor predeterminado) |
-| `filesystem_read_text` | `src/aegis_core/tools/defaults.py:551` | no (valor predeterminado) |
-| `ios_shortcut_run` | `src/aegis_core/tools/ios_bridge.py:318` | sí |
-| `jarvis_goal_create` | `src/aegis_core/goals.py:236` | sí |
-| `jarvis_goal_list` | `src/aegis_core/goals.py:244` | no (valor predeterminado) |
-| `jarvis_goal_stop` | `src/aegis_core/goals.py:249` | sí |
-| `jarvis_plugin_install` | `src/aegis_core/plugins/foreign_service.py:74` | sí |
-| `jarvis_plugin_search` | `src/aegis_core/plugins/foreign_service.py:67` | no (valor predeterminado) |
-| `jarvis_schedule_create` | `src/aegis_core/scheduling.py:388` | sí |
-| `jarvis_schedule_delete` | `src/aegis_core/scheduling.py:407` | sí |
-| `jarvis_schedule_list` | `src/aegis_core/scheduling.py:399` | no (valor predeterminado) |
-| `jarvis_skill_create` | `src/aegis_core/skills/teach.py:58` | sí |
-| `mail_list_recent` | `src/aegis_core/tools/defaults.py:583` | no (valor predeterminado) |
-| `mail_send_message` | `src/aegis_core/tools/defaults.py:594` | sí |
-| `media_control` | `src/aegis_core/tools/defaults.py:518` | sí |
-| `network_discover_hosts` | `src/aegis_core/tools/defaults.py:752` | sí |
-| `reminder_complete` | `src/aegis_core/tools/defaults.py:642` | sí |
-| `reminder_create` | `src/aegis_core/tools/defaults.py:633` | sí |
-| `reminders_list` | `src/aegis_core/tools/defaults.py:622` | no (valor predeterminado) |
-| `shortcut_run` | `src/aegis_core/tools/defaults.py:723` | sí |
-| `smart_tv_control` | `src/aegis_core/tools/smart_tv.py:675` | sí |
-| `smart_tv_discover` | `src/aegis_core/tools/smart_tv.py:690` | no (valor predeterminado) |
-| `spotlight_open` | `src/aegis_core/tools/defaults.py:542` | sí |
-| `spotlight_search` | `src/aegis_core/tools/defaults.py:531` | no (valor predeterminado) |
-| `system_audio_set` | `src/aegis_core/tools/defaults.py:505` | sí |
-| `system_describe_runtime` | `src/aegis_core/tools/defaults.py:468` | no (valor predeterminado) |
-| `system_observe_status` | `src/aegis_core/tools/defaults.py:494` | no (valor predeterminado) |
-| `system_power_status` | `src/aegis_core/tools/defaults.py:478` | no (valor predeterminado) |
-| `system_storage_status` | `src/aegis_core/tools/defaults.py:486` | no (valor predeterminado) |
-| `terminal_run_template` | `src/aegis_core/tools/defaults.py:765` | sí |
-| `web_fetch` | `src/aegis_core/tools/defaults.py:573` | no (valor predeterminado) |
-| `web_research` | `src/aegis_core/tools/defaults.py:560` | no (valor predeterminado) |
+| `android_device_control` | `src/jarvis_core/tools/android_automation.py:368` | sí |
+| `application_open` | `src/jarvis_core/tools/defaults.py:710` | sí |
+| `browser_open_url` | `src/jarvis_core/tools/defaults.py:685` | sí |
+| `browser_play_media` | `src/jarvis_core/tools/defaults.py:698` | sí |
+| `browser_search` | `src/jarvis_core/tools/defaults.py:671` | sí |
+| `browser_task_action` | `src/jarvis_core/mcp/browser_tasks.py:428` | no; exige sesión aprobada |
+| `browser_task_close` | `src/jarvis_core/mcp/browser_tasks.py:428` | no; solo desconexión de la tarea |
+| `browser_task_open` | `src/jarvis_core/mcp/browser_tasks.py:428` | sí |
+| `calendar_create_event` | `src/jarvis_core/tools/defaults.py:613` | sí |
+| `calendar_list_events` | `src/jarvis_core/tools/defaults.py:603` | no (valor predeterminado) |
+| `computer_use` | `src/jarvis_core/tools/defaults.py:735` | sí |
+| `contact_create` | `src/jarvis_core/tools/defaults.py:662` | sí |
+| `contacts_search` | `src/jarvis_core/tools/defaults.py:651` | no (valor predeterminado) |
+| `filesystem_read_text` | `src/jarvis_core/tools/defaults.py:551` | no (valor predeterminado) |
+| `ios_shortcut_run` | `src/jarvis_core/tools/ios_bridge.py:318` | sí |
+| `jarvis_goal_create` | `src/jarvis_core/goals.py:236` | sí |
+| `jarvis_goal_list` | `src/jarvis_core/goals.py:244` | no (valor predeterminado) |
+| `jarvis_goal_stop` | `src/jarvis_core/goals.py:249` | sí |
+| `jarvis_plugin_install` | `src/jarvis_core/plugins/foreign_service.py:74` | sí |
+| `jarvis_plugin_search` | `src/jarvis_core/plugins/foreign_service.py:67` | no (valor predeterminado) |
+| `jarvis_schedule_create` | `src/jarvis_core/scheduling.py:388` | sí |
+| `jarvis_schedule_delete` | `src/jarvis_core/scheduling.py:407` | sí |
+| `jarvis_schedule_list` | `src/jarvis_core/scheduling.py:399` | no (valor predeterminado) |
+| `jarvis_skill_create` | `src/jarvis_core/skills/teach.py:58` | sí |
+| `mail_list_recent` | `src/jarvis_core/tools/defaults.py:583` | no (valor predeterminado) |
+| `mail_send_message` | `src/jarvis_core/tools/defaults.py:594` | sí |
+| `media_control` | `src/jarvis_core/tools/defaults.py:518` | sí |
+| `network_discover_hosts` | `src/jarvis_core/tools/defaults.py:752` | sí |
+| `reminder_complete` | `src/jarvis_core/tools/defaults.py:642` | sí |
+| `reminder_create` | `src/jarvis_core/tools/defaults.py:633` | sí |
+| `reminders_list` | `src/jarvis_core/tools/defaults.py:622` | no (valor predeterminado) |
+| `shortcut_run` | `src/jarvis_core/tools/defaults.py:723` | sí |
+| `smart_tv_control` | `src/jarvis_core/tools/smart_tv.py:675` | sí |
+| `smart_tv_discover` | `src/jarvis_core/tools/smart_tv.py:690` | no (valor predeterminado) |
+| `spotlight_open` | `src/jarvis_core/tools/defaults.py:542` | sí |
+| `spotlight_search` | `src/jarvis_core/tools/defaults.py:531` | no (valor predeterminado) |
+| `system_audio_set` | `src/jarvis_core/tools/defaults.py:505` | sí |
+| `system_describe_runtime` | `src/jarvis_core/tools/defaults.py:468` | no (valor predeterminado) |
+| `system_observe_status` | `src/jarvis_core/tools/defaults.py:494` | no (valor predeterminado) |
+| `system_power_status` | `src/jarvis_core/tools/defaults.py:478` | no (valor predeterminado) |
+| `system_storage_status` | `src/jarvis_core/tools/defaults.py:486` | no (valor predeterminado) |
+| `terminal_run_template` | `src/jarvis_core/tools/defaults.py:765` | sí |
+| `web_fetch` | `src/jarvis_core/tools/defaults.py:573` | no (valor predeterminado) |
+| `web_research` | `src/jarvis_core/tools/defaults.py:560` | no (valor predeterminado) |
 
 ## Familias dinámicas y herramientas remotas curadas
 
@@ -192,7 +198,7 @@ Los `probe-nvidia*` e importadores NVIDIA permanecen como comandos heredados ret
 
 ## Garantías que no se pueden perder al reescribir
 
-1. El namespace técnico `aegis`, identificadores de bundle, rutas y cuentas de Keychain deben
+1. El namespace técnico `jarvis`, identificadores de bundle, rutas y cuentas de Keychain deben
    conservar su continuidad. Un inventario funcional no autoriza renombrar datos del dueño.
 2. El dueño escribe contraseñas, concede TCC y aprueba decisiones. Ni REA ni un motor nuevo
    pueden conceder esos permisos por él. La aprobación por voz queda restringida a lectura;
@@ -271,294 +277,294 @@ este inventario de documentación; se verificaron sintaxis AST, cuentas y rutas 
 
 ### (raíz) (96)
 
-- `src/aegis_core/__init__.py`
-- `src/aegis_core/acceptance_benchmark.py`
-- `src/aegis_core/action_history.py`
-- `src/aegis_core/action_history_ipc.py`
-- `src/aegis_core/activity.py`
-- `src/aegis_core/application_qualification.py`
-- `src/aegis_core/approval_signing.py`
-- `src/aegis_core/async_tasks.py`
-- `src/aegis_core/attention.py`
-- `src/aegis_core/audit_anchor.py`
-- `src/aegis_core/biometric_training_service.py`
-- `src/aegis_core/browser_preferences.py`
-- `src/aegis_core/browser_qualification.py`
-- `src/aegis_core/build_info.py`
-- `src/aegis_core/bundle_paths.py`
-- `src/aegis_core/capability_blueprints.py`
-- `src/aegis_core/capability_learning.py`
-- `src/aegis_core/capability_review_gate.py`
-- `src/aegis_core/capability_reviews.py`
-- `src/aegis_core/chat_attachments.py`
-- `src/aegis_core/cli.py`
-- `src/aegis_core/cli_entrypoint.py`
-- `src/aegis_core/completion_boundary.py`
-- `src/aegis_core/computer_app_grants.py`
-- `src/aegis_core/config.py`
-- `src/aegis_core/contracts.py`
-- `src/aegis_core/conversation_quality.py`
-- `src/aegis_core/dialogue.py`
-- `src/aegis_core/dialogue_challenges.py`
-- `src/aegis_core/dialogue_stability.py`
-- `src/aegis_core/distribution_archive.py`
-- `src/aegis_core/distribution_release_qualification.py`
-- `src/aegis_core/dot.py`
-- `src/aegis_core/engineering.py`
-- `src/aegis_core/engineering_cli.py`
-- `src/aegis_core/engineering_input.py`
-- `src/aegis_core/engineering_terminal.py`
-- `src/aegis_core/evaluation.py`
-- `src/aegis_core/extensions_service.py`
-- `src/aegis_core/failure_boundary.py`
-- `src/aegis_core/feedback.py`
-- `src/aegis_core/goals.py`
-- `src/aegis_core/google_account_settings.py`
-- `src/aegis_core/health.py`
-- `src/aegis_core/inference_service.py`
-- `src/aegis_core/inference_settings.py`
-- `src/aegis_core/job_admission.py`
-- `src/aegis_core/job_authorization.py`
-- `src/aegis_core/job_completion.py`
-- `src/aegis_core/job_contracts.py`
-- `src/aegis_core/job_execution.py`
-- `src/aegis_core/job_failures.py`
-- `src/aegis_core/job_graph.py`
-- `src/aegis_core/job_interactions.py`
-- `src/aegis_core/job_ipc.py`
-- `src/aegis_core/job_lifecycle.py`
-- `src/aegis_core/job_metrics.py`
-- `src/aegis_core/job_state.py`
-- `src/aegis_core/job_tasks.py`
-- `src/aegis_core/job_tool_presenter.py`
-- `src/aegis_core/job_tool_runtime.py`
-- `src/aegis_core/jobs.py`
-- `src/aegis_core/langgraph_compat.py`
-- `src/aegis_core/long_horizon_reliability.py`
-- `src/aegis_core/macos_qualification.py`
-- `src/aegis_core/mascot.py`
-- `src/aegis_core/models.py`
-- `src/aegis_core/owner_language.py`
-- `src/aegis_core/performance_profiler.py`
-- `src/aegis_core/personality.py`
-- `src/aegis_core/pilot_release_qualification.py`
-- `src/aegis_core/privacy.py`
-- `src/aegis_core/production_workflows.py`
-- `src/aegis_core/projects.py`
-- `src/aegis_core/provider_status.py`
-- `src/aegis_core/release_scope.py`
-- `src/aegis_core/request_intent.py`
-- `src/aegis_core/runtime_preflight.py`
-- `src/aegis_core/runtime_state.py`
-- `src/aegis_core/scheduling.py`
-- `src/aegis_core/secrets.py`
-- `src/aegis_core/secure_update.py`
-- `src/aegis_core/secure_update_feed.py`
-- `src/aegis_core/secure_update_qualification.py`
-- `src/aegis_core/security.py`
-- `src/aegis_core/self_contained_release_qualification.py`
-- `src/aegis_core/settings_service.py`
-- `src/aegis_core/settings_store.py`
-- `src/aegis_core/skill_flow_benchmark.py`
-- `src/aegis_core/skill_flow_live.py`
-- `src/aegis_core/speech.py`
-- `src/aegis_core/speech_pcm.py`
-- `src/aegis_core/standing_grants.py`
-- `src/aegis_core/style.py`
-- `src/aegis_core/tcc_privacy.py`
-- `src/aegis_core/voice_qualification.py`
+- `src/jarvis_core/__init__.py`
+- `src/jarvis_core/acceptance_benchmark.py`
+- `src/jarvis_core/action_history.py`
+- `src/jarvis_core/action_history_ipc.py`
+- `src/jarvis_core/activity.py`
+- `src/jarvis_core/application_qualification.py`
+- `src/jarvis_core/approval_signing.py`
+- `src/jarvis_core/async_tasks.py`
+- `src/jarvis_core/attention.py`
+- `src/jarvis_core/audit_anchor.py`
+- `src/jarvis_core/biometric_training_service.py`
+- `src/jarvis_core/browser_preferences.py`
+- `src/jarvis_core/browser_qualification.py`
+- `src/jarvis_core/build_info.py`
+- `src/jarvis_core/bundle_paths.py`
+- `src/jarvis_core/capability_blueprints.py`
+- `src/jarvis_core/capability_learning.py`
+- `src/jarvis_core/capability_review_gate.py`
+- `src/jarvis_core/capability_reviews.py`
+- `src/jarvis_core/chat_attachments.py`
+- `src/jarvis_core/cli.py`
+- `src/jarvis_core/cli_entrypoint.py`
+- `src/jarvis_core/completion_boundary.py`
+- `src/jarvis_core/computer_app_grants.py`
+- `src/jarvis_core/config.py`
+- `src/jarvis_core/contracts.py`
+- `src/jarvis_core/conversation_quality.py`
+- `src/jarvis_core/dialogue.py`
+- `src/jarvis_core/dialogue_challenges.py`
+- `src/jarvis_core/dialogue_stability.py`
+- `src/jarvis_core/distribution_archive.py`
+- `src/jarvis_core/distribution_release_qualification.py`
+- `src/jarvis_core/dot.py`
+- `src/jarvis_core/engineering.py`
+- `src/jarvis_core/engineering_cli.py`
+- `src/jarvis_core/engineering_input.py`
+- `src/jarvis_core/engineering_terminal.py`
+- `src/jarvis_core/evaluation.py`
+- `src/jarvis_core/extensions_service.py`
+- `src/jarvis_core/failure_boundary.py`
+- `src/jarvis_core/feedback.py`
+- `src/jarvis_core/goals.py`
+- `src/jarvis_core/google_account_settings.py`
+- `src/jarvis_core/health.py`
+- `src/jarvis_core/inference_service.py`
+- `src/jarvis_core/inference_settings.py`
+- `src/jarvis_core/job_admission.py`
+- `src/jarvis_core/job_authorization.py`
+- `src/jarvis_core/job_completion.py`
+- `src/jarvis_core/job_contracts.py`
+- `src/jarvis_core/job_execution.py`
+- `src/jarvis_core/job_failures.py`
+- `src/jarvis_core/job_graph.py`
+- `src/jarvis_core/job_interactions.py`
+- `src/jarvis_core/job_ipc.py`
+- `src/jarvis_core/job_lifecycle.py`
+- `src/jarvis_core/job_metrics.py`
+- `src/jarvis_core/job_state.py`
+- `src/jarvis_core/job_tasks.py`
+- `src/jarvis_core/job_tool_presenter.py`
+- `src/jarvis_core/job_tool_runtime.py`
+- `src/jarvis_core/jobs.py`
+- `src/jarvis_core/langgraph_compat.py`
+- `src/jarvis_core/long_horizon_reliability.py`
+- `src/jarvis_core/macos_qualification.py`
+- `src/jarvis_core/mascot.py`
+- `src/jarvis_core/models.py`
+- `src/jarvis_core/owner_language.py`
+- `src/jarvis_core/performance_profiler.py`
+- `src/jarvis_core/personality.py`
+- `src/jarvis_core/pilot_release_qualification.py`
+- `src/jarvis_core/privacy.py`
+- `src/jarvis_core/production_workflows.py`
+- `src/jarvis_core/projects.py`
+- `src/jarvis_core/provider_status.py`
+- `src/jarvis_core/release_scope.py`
+- `src/jarvis_core/request_intent.py`
+- `src/jarvis_core/runtime_preflight.py`
+- `src/jarvis_core/runtime_state.py`
+- `src/jarvis_core/scheduling.py`
+- `src/jarvis_core/secrets.py`
+- `src/jarvis_core/secure_update.py`
+- `src/jarvis_core/secure_update_feed.py`
+- `src/jarvis_core/secure_update_qualification.py`
+- `src/jarvis_core/security.py`
+- `src/jarvis_core/self_contained_release_qualification.py`
+- `src/jarvis_core/settings_service.py`
+- `src/jarvis_core/settings_store.py`
+- `src/jarvis_core/skill_flow_benchmark.py`
+- `src/jarvis_core/skill_flow_live.py`
+- `src/jarvis_core/speech.py`
+- `src/jarvis_core/speech_pcm.py`
+- `src/jarvis_core/standing_grants.py`
+- `src/jarvis_core/style.py`
+- `src/jarvis_core/tcc_privacy.py`
+- `src/jarvis_core/voice_qualification.py`
 
 ### audio (3)
 
-- `src/aegis_core/audio/__init__.py`
-- `src/aegis_core/audio/contracts.py`
-- `src/aegis_core/audio/service.py`
+- `src/jarvis_core/audio/__init__.py`
+- `src/jarvis_core/audio/contracts.py`
+- `src/jarvis_core/audio/service.py`
 
 ### brain (15)
 
-- `src/aegis_core/brain/__init__.py`
-- `src/aegis_core/brain/agent_graph.py`
-- `src/aegis_core/brain/behavior_tree.py`
-- `src/aegis_core/brain/errors.py`
-- `src/aegis_core/brain/inference_client.py`
-- `src/aegis_core/brain/nodes/__init__.py`
-- `src/aegis_core/brain/nodes/reflector.py`
-- `src/aegis_core/brain/nvidia_client.py`
-- `src/aegis_core/brain/nvidia_dialogue_guard.py`
-- `src/aegis_core/brain/nvidia_goal.py`
-- `src/aegis_core/brain/nvidia_summary.py`
-- `src/aegis_core/brain/router.py`
-- `src/aegis_core/brain/routing.py`
-- `src/aegis_core/brain/vision_fallback.py`
-- `src/aegis_core/brain/vision_processor.py`
+- `src/jarvis_core/brain/__init__.py`
+- `src/jarvis_core/brain/agent_graph.py`
+- `src/jarvis_core/brain/behavior_tree.py`
+- `src/jarvis_core/brain/errors.py`
+- `src/jarvis_core/brain/inference_client.py`
+- `src/jarvis_core/brain/nodes/__init__.py`
+- `src/jarvis_core/brain/nodes/reflector.py`
+- `src/jarvis_core/brain/nvidia_client.py`
+- `src/jarvis_core/brain/nvidia_dialogue_guard.py`
+- `src/jarvis_core/brain/nvidia_goal.py`
+- `src/jarvis_core/brain/nvidia_summary.py`
+- `src/jarvis_core/brain/router.py`
+- `src/jarvis_core/brain/routing.py`
+- `src/jarvis_core/brain/vision_fallback.py`
+- `src/jarvis_core/brain/vision_processor.py`
 
 ### ipc (6)
 
-- `src/aegis_core/ipc/__init__.py`
-- `src/aegis_core/ipc/client.py`
-- `src/aegis_core/ipc/framing.py`
-- `src/aegis_core/ipc/peer_identity.py`
-- `src/aegis_core/ipc/protocol.py`
-- `src/aegis_core/ipc/server.py`
+- `src/jarvis_core/ipc/__init__.py`
+- `src/jarvis_core/ipc/client.py`
+- `src/jarvis_core/ipc/framing.py`
+- `src/jarvis_core/ipc/peer_identity.py`
+- `src/jarvis_core/ipc/protocol.py`
+- `src/jarvis_core/ipc/server.py`
 
 ### mcp (14)
 
-- `src/aegis_core/mcp/__init__.py`
-- `src/aegis_core/mcp/browser_session.py`
-- `src/aegis_core/mcp/browser_tasks.py`
-- `src/aegis_core/mcp/client.py`
-- `src/aegis_core/mcp/collections.py`
-- `src/aegis_core/mcp/discovery.py`
-- `src/aegis_core/mcp/google_workspace.py`
-- `src/aegis_core/mcp/home_assistant.py`
-- `src/aegis_core/mcp/host_manager.py`
-- `src/aegis_core/mcp/integrations.py`
-- `src/aegis_core/mcp/local_peers.py`
-- `src/aegis_core/mcp/result_text.py`
-- `src/aegis_core/mcp/review.py`
-- `src/aegis_core/mcp/setup.py`
+- `src/jarvis_core/mcp/__init__.py`
+- `src/jarvis_core/mcp/browser_session.py`
+- `src/jarvis_core/mcp/browser_tasks.py`
+- `src/jarvis_core/mcp/client.py`
+- `src/jarvis_core/mcp/collections.py`
+- `src/jarvis_core/mcp/discovery.py`
+- `src/jarvis_core/mcp/google_workspace.py`
+- `src/jarvis_core/mcp/home_assistant.py`
+- `src/jarvis_core/mcp/host_manager.py`
+- `src/jarvis_core/mcp/integrations.py`
+- `src/jarvis_core/mcp/local_peers.py`
+- `src/jarvis_core/mcp/result_text.py`
+- `src/jarvis_core/mcp/review.py`
+- `src/jarvis_core/mcp/setup.py`
 
 ### memory (40)
 
-- `src/aegis_core/memory/__init__.py`
-- `src/aegis_core/memory/capacity.py`
-- `src/aegis_core/memory/codec.py`
-- `src/aegis_core/memory/contracts.py`
-- `src/aegis_core/memory/conversation_codec.py`
-- `src/aegis_core/memory/conversation_context.py`
-- `src/aegis_core/memory/conversation_evidence.py`
-- `src/aegis_core/memory/conversation_migration.py`
-- `src/aegis_core/memory/conversation_repository.py`
-- `src/aegis_core/memory/conversation_search.py`
-- `src/aegis_core/memory/conversations.py`
-- `src/aegis_core/memory/crypto.py`
-- `src/aegis_core/memory/embedding.py`
-- `src/aegis_core/memory/errors.py`
-- `src/aegis_core/memory/graph_embedding_repository.py`
-- `src/aegis_core/memory/graph_extractor.py`
-- `src/aegis_core/memory/graph_read_repository.py`
-- `src/aegis_core/memory/graph_repository.py`
-- `src/aegis_core/memory/graph_search.py`
-- `src/aegis_core/memory/graph_service.py`
-- `src/aegis_core/memory/item_repository.py`
-- `src/aegis_core/memory/langgraph_checkpoint.py`
-- `src/aegis_core/memory/migrations.py`
-- `src/aegis_core/memory/profile.py`
-- `src/aegis_core/memory/records.py`
-- `src/aegis_core/memory/retrieval.py`
-- `src/aegis_core/memory/retrieval_planning.py`
-- `src/aegis_core/memory/schema.py`
-- `src/aegis_core/memory/search_repository.py`
-- `src/aegis_core/memory/semantic_profile.py`
-- `src/aegis_core/memory/service.py`
-- `src/aegis_core/memory/shared_context_ranking.py`
-- `src/aegis_core/memory/shared_conversation_context.py`
-- `src/aegis_core/memory/social.py`
-- `src/aegis_core/memory/spotlight_sync.py`
-- `src/aegis_core/memory/sqlite.py`
-- `src/aegis_core/memory/storage.py`
-- `src/aegis_core/memory/task_checkpoint.py`
-- `src/aegis_core/memory/vector_db.py`
-- `src/aegis_core/memory/visibility.py`
+- `src/jarvis_core/memory/__init__.py`
+- `src/jarvis_core/memory/capacity.py`
+- `src/jarvis_core/memory/codec.py`
+- `src/jarvis_core/memory/contracts.py`
+- `src/jarvis_core/memory/conversation_codec.py`
+- `src/jarvis_core/memory/conversation_context.py`
+- `src/jarvis_core/memory/conversation_evidence.py`
+- `src/jarvis_core/memory/conversation_migration.py`
+- `src/jarvis_core/memory/conversation_repository.py`
+- `src/jarvis_core/memory/conversation_search.py`
+- `src/jarvis_core/memory/conversations.py`
+- `src/jarvis_core/memory/crypto.py`
+- `src/jarvis_core/memory/embedding.py`
+- `src/jarvis_core/memory/errors.py`
+- `src/jarvis_core/memory/graph_embedding_repository.py`
+- `src/jarvis_core/memory/graph_extractor.py`
+- `src/jarvis_core/memory/graph_read_repository.py`
+- `src/jarvis_core/memory/graph_repository.py`
+- `src/jarvis_core/memory/graph_search.py`
+- `src/jarvis_core/memory/graph_service.py`
+- `src/jarvis_core/memory/item_repository.py`
+- `src/jarvis_core/memory/langgraph_checkpoint.py`
+- `src/jarvis_core/memory/migrations.py`
+- `src/jarvis_core/memory/profile.py`
+- `src/jarvis_core/memory/records.py`
+- `src/jarvis_core/memory/retrieval.py`
+- `src/jarvis_core/memory/retrieval_planning.py`
+- `src/jarvis_core/memory/schema.py`
+- `src/jarvis_core/memory/search_repository.py`
+- `src/jarvis_core/memory/semantic_profile.py`
+- `src/jarvis_core/memory/service.py`
+- `src/jarvis_core/memory/shared_context_ranking.py`
+- `src/jarvis_core/memory/shared_conversation_context.py`
+- `src/jarvis_core/memory/social.py`
+- `src/jarvis_core/memory/spotlight_sync.py`
+- `src/jarvis_core/memory/sqlite.py`
+- `src/jarvis_core/memory/storage.py`
+- `src/jarvis_core/memory/task_checkpoint.py`
+- `src/jarvis_core/memory/vector_db.py`
+- `src/jarvis_core/memory/visibility.py`
 
 ### orchestration (23)
 
-- `src/aegis_core/orchestration/__init__.py`
-- `src/aegis_core/orchestration/authorization_nodes.py`
-- `src/aegis_core/orchestration/clarification.py`
-- `src/aegis_core/orchestration/conversation_window.py`
-- `src/aegis_core/orchestration/direct_actions.py`
-- `src/aegis_core/orchestration/engineering_dialogue.py`
-- `src/aegis_core/orchestration/execution_nodes.py`
-- `src/aegis_core/orchestration/graph.py`
-- `src/aegis_core/orchestration/inference.py`
-- `src/aegis_core/orchestration/memory_nodes.py`
-- `src/aegis_core/orchestration/notes.py`
-- `src/aegis_core/orchestration/nvidia_dialogue.py`
-- `src/aegis_core/orchestration/planning_nodes.py`
-- `src/aegis_core/orchestration/private_context.py`
-- `src/aegis_core/orchestration/response_rendering.py`
-- `src/aegis_core/orchestration/routing.py`
-- `src/aegis_core/orchestration/routing_nodes.py`
-- `src/aegis_core/orchestration/semantic_reference.py`
-- `src/aegis_core/orchestration/semantic_tools.py`
-- `src/aegis_core/orchestration/skill_selection.py`
-- `src/aegis_core/orchestration/state.py`
-- `src/aegis_core/orchestration/synthesis_nodes.py`
-- `src/aegis_core/orchestration/task_progress.py`
+- `src/jarvis_core/orchestration/__init__.py`
+- `src/jarvis_core/orchestration/authorization_nodes.py`
+- `src/jarvis_core/orchestration/clarification.py`
+- `src/jarvis_core/orchestration/conversation_window.py`
+- `src/jarvis_core/orchestration/direct_actions.py`
+- `src/jarvis_core/orchestration/engineering_dialogue.py`
+- `src/jarvis_core/orchestration/execution_nodes.py`
+- `src/jarvis_core/orchestration/graph.py`
+- `src/jarvis_core/orchestration/inference.py`
+- `src/jarvis_core/orchestration/memory_nodes.py`
+- `src/jarvis_core/orchestration/notes.py`
+- `src/jarvis_core/orchestration/nvidia_dialogue.py`
+- `src/jarvis_core/orchestration/planning_nodes.py`
+- `src/jarvis_core/orchestration/private_context.py`
+- `src/jarvis_core/orchestration/response_rendering.py`
+- `src/jarvis_core/orchestration/routing.py`
+- `src/jarvis_core/orchestration/routing_nodes.py`
+- `src/jarvis_core/orchestration/semantic_reference.py`
+- `src/jarvis_core/orchestration/semantic_tools.py`
+- `src/jarvis_core/orchestration/skill_selection.py`
+- `src/jarvis_core/orchestration/state.py`
+- `src/jarvis_core/orchestration/synthesis_nodes.py`
+- `src/jarvis_core/orchestration/task_progress.py`
 
 ### plugins (8)
 
-- `src/aegis_core/plugins/__init__.py`
-- `src/aegis_core/plugins/context7.py`
-- `src/aegis_core/plugins/contracts.py`
-- `src/aegis_core/plugins/foreign.py`
-- `src/aegis_core/plugins/foreign_service.py`
-- `src/aegis_core/plugins/runtime.py`
-- `src/aegis_core/plugins/service.py`
-- `src/aegis_core/plugins/store.py`
+- `src/jarvis_core/plugins/__init__.py`
+- `src/jarvis_core/plugins/context7.py`
+- `src/jarvis_core/plugins/contracts.py`
+- `src/jarvis_core/plugins/foreign.py`
+- `src/jarvis_core/plugins/foreign_service.py`
+- `src/jarvis_core/plugins/runtime.py`
+- `src/jarvis_core/plugins/service.py`
+- `src/jarvis_core/plugins/store.py`
 
 ### providers (9)
 
-- `src/aegis_core/providers/__init__.py`
-- `src/aegis_core/providers/apple_embedding.py`
-- `src/aegis_core/providers/base.py`
-- `src/aegis_core/providers/codex.py`
-- `src/aegis_core/providers/errors.py`
-- `src/aegis_core/providers/inference_metrics.py`
-- `src/aegis_core/providers/mlx_provider.py`
-- `src/aegis_core/providers/nvidia.py`
-- `src/aegis_core/providers/nvidia_asr.py`
+- `src/jarvis_core/providers/__init__.py`
+- `src/jarvis_core/providers/apple_embedding.py`
+- `src/jarvis_core/providers/base.py`
+- `src/jarvis_core/providers/codex.py`
+- `src/jarvis_core/providers/errors.py`
+- `src/jarvis_core/providers/inference_metrics.py`
+- `src/jarvis_core/providers/mlx_provider.py`
+- `src/jarvis_core/providers/nvidia.py`
+- `src/jarvis_core/providers/nvidia_asr.py`
 
 ### runtime (4)
 
-- `src/aegis_core/runtime/__init__.py`
-- `src/aegis_core/runtime/daemon.py`
-- `src/aegis_core/runtime/frozen_entrypoint.py`
-- `src/aegis_core/runtime/lifecycle.py`
+- `src/jarvis_core/runtime/__init__.py`
+- `src/jarvis_core/runtime/daemon.py`
+- `src/jarvis_core/runtime/frozen_entrypoint.py`
+- `src/jarvis_core/runtime/lifecycle.py`
 
 ### skills (7)
 
-- `src/aegis_core/skills/__init__.py`
-- `src/aegis_core/skills/builtins.py`
-- `src/aegis_core/skills/contracts.py`
-- `src/aegis_core/skills/importer.py`
-- `src/aegis_core/skills/policy.py`
-- `src/aegis_core/skills/registry.py`
-- `src/aegis_core/skills/teach.py`
+- `src/jarvis_core/skills/__init__.py`
+- `src/jarvis_core/skills/builtins.py`
+- `src/jarvis_core/skills/contracts.py`
+- `src/jarvis_core/skills/importer.py`
+- `src/jarvis_core/skills/policy.py`
+- `src/jarvis_core/skills/registry.py`
+- `src/jarvis_core/skills/teach.py`
 
 ### telegram (8)
 
-- `src/aegis_core/telegram/__init__.py`
-- `src/aegis_core/telegram/client.py`
-- `src/aegis_core/telegram/configuration.py`
-- `src/aegis_core/telegram/experience.py`
-- `src/aegis_core/telegram/journal.py`
-- `src/aegis_core/telegram/media.py`
-- `src/aegis_core/telegram/presentation.py`
-- `src/aegis_core/telegram/service.py`
+- `src/jarvis_core/telegram/__init__.py`
+- `src/jarvis_core/telegram/client.py`
+- `src/jarvis_core/telegram/configuration.py`
+- `src/jarvis_core/telegram/experience.py`
+- `src/jarvis_core/telegram/journal.py`
+- `src/jarvis_core/telegram/media.py`
+- `src/jarvis_core/telegram/presentation.py`
+- `src/jarvis_core/telegram/service.py`
 
 ### tools (22)
 
-- `src/aegis_core/tools/__init__.py`
-- `src/aegis_core/tools/android_automation.py`
-- `src/aegis_core/tools/audit.py`
-- `src/aegis_core/tools/audit_service.py`
-- `src/aegis_core/tools/automation_errors.py`
-- `src/aegis_core/tools/background_automation.py`
-- `src/aegis_core/tools/broker.py`
-- `src/aegis_core/tools/chrome_cdp.py`
-- `src/aegis_core/tools/computer.py`
-- `src/aegis_core/tools/computer_postconditions.py`
-- `src/aegis_core/tools/computer_relay.py`
-- `src/aegis_core/tools/computer_workflow.py`
-- `src/aegis_core/tools/confirmations.py`
-- `src/aegis_core/tools/defaults.py`
-- `src/aegis_core/tools/device_config.py`
-- `src/aegis_core/tools/execution.py`
-- `src/aegis_core/tools/ios_bridge.py`
-- `src/aegis_core/tools/native_receipts.py`
-- `src/aegis_core/tools/silent_executor.py`
-- `src/aegis_core/tools/smart_tv.py`
-- `src/aegis_core/tools/verification.py`
-- `src/aegis_core/tools/web.py`
+- `src/jarvis_core/tools/__init__.py`
+- `src/jarvis_core/tools/android_automation.py`
+- `src/jarvis_core/tools/audit.py`
+- `src/jarvis_core/tools/audit_service.py`
+- `src/jarvis_core/tools/automation_errors.py`
+- `src/jarvis_core/tools/background_automation.py`
+- `src/jarvis_core/tools/broker.py`
+- `src/jarvis_core/tools/chrome_cdp.py`
+- `src/jarvis_core/tools/computer.py`
+- `src/jarvis_core/tools/computer_postconditions.py`
+- `src/jarvis_core/tools/computer_relay.py`
+- `src/jarvis_core/tools/computer_workflow.py`
+- `src/jarvis_core/tools/confirmations.py`
+- `src/jarvis_core/tools/defaults.py`
+- `src/jarvis_core/tools/device_config.py`
+- `src/jarvis_core/tools/execution.py`
+- `src/jarvis_core/tools/ios_bridge.py`
+- `src/jarvis_core/tools/native_receipts.py`
+- `src/jarvis_core/tools/silent_executor.py`
+- `src/jarvis_core/tools/smart_tv.py`
+- `src/jarvis_core/tools/verification.py`
+- `src/jarvis_core/tools/web.py`

@@ -60,7 +60,7 @@ interfaces o implementación deban reproducir los de OpenClaw.
 
 Los siguientes nombres describen conceptos, no una API ya implementada. Deben
 concretarse en los contratos versionados de Jarvis y probarse antes de conectarlos
-a la aplicación productiva. Se conserva el espacio técnico `aegis`.
+a la aplicación productiva. Se conserva el espacio técnico `jarvis`.
 
 ### Sesión, solicitud y ejecución
 
@@ -229,7 +229,7 @@ una configuración externa o por haber conectado el chat.
 
 ## Primer contrato ejecutable propio
 
-`src/aegis_core/runtime.py` contiene un prototipo genérico independiente,
+`src/jarvis_core/runtime.py` contiene un prototipo genérico independiente,
 sin conexión con el daemon, la app ni las herramientas específicas del Jarvis
 actual. Sus dependencias son de la biblioteca estándar de Python. No carga código
 de OpenClaw ni un runtime externo. Las pruebas inyectan proveedores, herramientas
@@ -251,5 +251,21 @@ Los callbacks inyectados siguen siendo código de confianza: una acción nativa 
 ignore cancelación necesita las barreras por efecto y generación del módulo de
 dispositivo; este prototipo en memoria no puede detener por sí solo un programa
 externo. Persistencia, autenticación, IPC, interfaces, memoria y herramientas
-concretas aún no están reconstruidas. El análisis completo por partes y la
-validación dinámica de esos módulos permanecen pendientes.
+concretas no se acreditan mediante este núcleo aislado. El servicio añadido tiene
+pruebas propias de SQLite e IPC y un cliente oficial Codex separado; su estado se
+documenta en [BASELINE_VERTICAL_SLICE.md](BASELINE_VERTICAL_SLICE.md). El análisis
+completo por partes y la cualificación de todas las familias siguen pendientes.
+
+## Bloques OC-03 y OC-04
+
+El tercer bloque añade el gateway, salud, inyección de chat y observación de
+sesiones; el cuarto, ciclo MCP, propiedad de preguntas, cliente y servidor stdio.
+Los manifiestos y resúmenes `REA_PART03_*` y `REA_PART04_*` conservan hashes, blob
+Git, Evidence IDs y límites. Se analizaron cuatro archivos TypeScript por bloque,
+sin ejecutar OpenClaw ni resolver todas sus dependencias dinámicas.
+
+Contratos que orientan la reconstrucción: comprobar salud actual sin exponer
+información sensible; separar chat temporal de almacenamiento durable; esperar
+el cierre del propietario de una conexión y no asignar una pregunta externa a un
+usuario ambiguo. La implementación propia se verifica aparte. La lectura estática
+no acredita equivalencia de comportamiento en ejecución.

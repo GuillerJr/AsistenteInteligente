@@ -40,7 +40,7 @@ def test_invalid_source_fails_instead_of_silently_claiming_a_complete_inventory(
 
 
 def test_source_inventory_excludes_cloud_duplicates_and_never_imports_code(tmp_path):
-    source = tmp_path / "src/aegis_core"
+    source = tmp_path / "src/jarvis_core"
     source.mkdir(parents=True)
     (source / "main.py").write_text('raise Exception("inert")\nx=ToolDefinition(name="read")')
     (source / "main 2.py").write_text("bad syntax (")

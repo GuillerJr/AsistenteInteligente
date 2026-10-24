@@ -1,5 +1,11 @@
 # Inventario nativo de Jarvis para la reconstrucción propia
 
+> Nombres normalizados a Jarvis el 24-10-2026 por indicación del dueño. Este
+> inventario conserva las capacidades y hashes históricos; las rutas se muestran
+> con la nomenclatura actual. El snapshot original se conserva en Git, commit
+> `dfd0e7c2b2356b5ce22b252af08263c47a2a0c3b`, sin alterar su contenido histórico.
+
+
 > Snapshot histórico del producto anterior. El código referido fue retirado del
 > árbol de trabajo al iniciar la base limpia. Sus estados describen la revisión
 > histórica indicada, no capacidades disponibles en el núcleo nuevo. Consultar
@@ -9,7 +15,7 @@ Fecha: 24-10-2026. Base observada: `4122a6e2e4ed5160abf2fc4480e752e6ab779197`.
 
 Este catálogo registra el producto que la nueva variante propia debe poder recuperar.
 Su destino es este repositorio; no supone modificar ni incorporar el código de OpenClaw.
-El identificador técnico `aegis` se conserva en paquetes, bundle IDs, IPC y Keychain.
+El identificador técnico `jarvis` se conserva en paquetes, bundle IDs, IPC y Keychain.
 El catálogo de herramientas y servicios Python se complementa en
 [`JARVIS_BACKEND_INVENTORY.md`](JARVIS_BACKEND_INVENTORY.md).
 
@@ -32,55 +38,55 @@ La existencia de pruebas se registra como evidencia de contrato, no como prueba 
 
 ## Producto y superficies que deben conservarse
 
-Las rutas de esta tabla parten de `native/AegisAudio/Sources/`.
+Las rutas de esta tabla parten de `native/JarvisAudio/Sources/`.
 
 | ID | Módulo o herramienta de producto | Rutas de referencia | Estado que debe trasladarse | Contrato para la nueva variante |
 | --- | --- | --- | --- | --- |
-| N01 | App de barra de menús, ciclo de vida y supervisión del daemon | `AegisMenuBar/App/AegisMenuBarApp.swift`, `AegisAudioCore/BundledDaemonSupervisor.swift`, `Models/MenuBarModel+Runtime.swift` dentro de `AegisMenuBar` | Implementado | Una app controla el proceso empaquetado; arranque comprobable, apagado que drena el daemon, reinicio sin procesos duplicados y fallo visible si no arranca. Cerrar ventanas no termina la app. |
-| N02 | Ventanas, Dock y enfoque | `AegisMenuBar/App/RequestedWindowFocus.swift`, `JarvisDockController.swift`, `QuickEntryPanelController.swift`, `SideChatPanel.swift` dentro de `AegisMenuBar/Views` | Implementado; regresiones de ciclo de ventanas | Ventanas identificadas y tamaños mínimos; reapertura coherente; ninguna ventana de aprobación vacía/restaurada. Una entrada rápida no debe perder el borrador ni capturar actividad en segundo plano. |
-| N03 | Chat de texto y estado del compositor | `AegisMenuBar/Views/JarvisChatView.swift`, `JarvisChatComposerView.swift`, `JarvisComposerTextEditor.swift`; `AegisMenuBar/Models/ChatSubmission.swift`, `JarvisChatStore.swift`, `JarvisChatStore+Drafts.swift` | Implementado | Envío, cola, parciales, detener, reintentar con adjuntos/borrador conservados, límites previos al IPC, identidad de respuesta ligada al chat correcto y estados honestos de error/cancelación. |
-| N04 | Historial de conversaciones, búsqueda y organización | `AegisMenuBar/Models/JarvisChatStore+History.swift`, `JarvisChatStore+Search.swift`, `JarvisSidebarHistory.swift`; `Views/JarvisChatHistoryView.swift` | Implementado; R2-4/R2-5/R2-9 abiertos | Recientes, archivados, papelera, búsqueda y paginación; archivos temporales no convertidos en permanentes por accidente; eliminación con recibo y metadatos de auditoría sin contenido. Pendientes: texto vacío de archivados y buscador de la barra lateral. |
-| N05 | Chat temporal y privacidad de contexto | `AegisMenuBar/Models/JarvisChatStore.swift`, `JarvisChatStore+History.swift`, `JarvisChatWorkspace.swift`; `Views/JarvisChatContextView.swift` | Implementado; usado en pruebas reales acotadas | Aviso de conversación temporal, sin memoria ni guardado permanente; contexto de proyecto desactivado en temporal; limpieza diferida segura y ninguna restauración cruzada de texto/adjuntos entre conversaciones. |
-| N06 | Edición, regeneración, bifurcación, copia y valoración | `AegisMenuBar/Models/JarvisChatStore+Actions.swift`; `Views/JarvisChatActionsView.swift`, `JarvisChatResponseView.swift`; `AegisAudioCore/ChatResponseDocument.swift` | Implementado | Editar/regenerar conserva el original mediante bifurcación; solo turnos completos y persistidos tienen identidad válida; pedir de nuevo imágenes originales no guardadas; 👍/👎 asociado a la respuesta exacta. |
-| N07 | Adjuntos, imágenes y transcripciones de reunión | `AegisAudioCore/ChatAttachment.swift`, `LocalImage.swift`; `AegisMenuBar/Views/JarvisChatAttachmentsView.swift`; `Services/ImageFilePicker.swift` | Implementado; texto y visión sintética comprobados con Codex | Texto/PDF/imagen con límites y validación; bytes/selección pertenecen al borrador actual; ninguna recuperación silenciosa de adjuntos antiguos; las imágenes no pasan a un historial permanente por defecto. |
-| N08 | Proyectos y conversaciones de proyecto | `AegisMenuBar/Models/ProjectConversationStore.swift`, `JarvisChatWorkspace.swift`; `Views/JarvisProjectView.swift` | Implementado; configuración/datos propios del dueño | Crear, editar, seleccionar y eliminar proyecto; paginar todos sus chats; selección atómica; proyecto de un chat nuevo sin perder borrador; conservación de estado ante corrupción o respuestas obsoletas. |
-| N09 | Modo plan y contexto del trabajo | `AegisMenuBar/Views/JarvisPlanCard.swift`, `JarvisChatContextView.swift`; `Models/ChatSubmission.swift`, `JarvisChatWorkspace.swift` | Implementado | Plan legible con pasos; modo plan investiga y propone sin ejecutar cambios; selección explícita y estado visible; metadatos del daemon siguen siendo autoridad. |
-| N10 | Navegador incorporado y pestañas | `AegisMenuBar/Models/JarvisBrowserStore.swift`, `JarvisBrowserTabs.swift`, `JarvisBrowserPageCapture.swift`; `Views/JarvisBrowserPanel.swift`, `JarvisBrowserTabStrip.swift` | Implementado; captura de página documentada; no certificación de todos los sitios | WKWebView, URL/búsqueda, atrás/adelante/recargar, hasta ocho pestañas, enlaces del chat, nueva pestaña y cierre; «Preguntar a Jarvis» adjunta la página seleccionada con identidad vigente. Cambiar pestaña/ocultar/cerrar invalida capturas en curso. Esquemas externos requieren decisión explícita. |
-| N11 | Chat lateral y espacio de trabajo | `AegisMenuBar/Models/SideChatStore.swift`, `JarvisChatWorkspace.swift`; `Views/SideChatPanel.swift`, `JarvisChatContextView.swift` | Implementado | Paneles de navegador, contexto y chat lateral con estado propio; una respuesta pendiente no se escribe en un panel cerrado o sustituido; selección de proyecto y adjuntos permanece consistente. |
-| N12 | Dot, objetivos y tareas programadas | `AegisMenuBar/Views/JarvisDotView.swift`, `JarvisScheduledView.swift`; `Models/MenuBarModel+Scheduled.swift`, `JarvisScheduledExecution.swift`; `Services/ScheduledNotificationRouter.swift` | Implementado; recorridos previos documentados; pendientes de aprobación dependen del dueño | Vista Ahora/Próximo/Resultados/Atención, pausa/reanudación de Dot, listar/editar/habilitar/ejecutar/borrar tareas y objetivos; recibo de inicio verdadero; notificación lleva al trabajo exacto y nunca aprueba la acción. |
-| N13 | Tarjetas de decisión y aprobación | `AegisMenuBar/Views/JarvisDecisionCard.swift`, `JarvisApprovalCard.swift`; `Models/MenuBarModel+Approvals.swift`, `MenuBarModel+Interactions.swift`, `ActionReviewPresentation.swift`; `App/NotchApprovalPanelController.swift` | Implementado; TextEdit «Siempre»/otro chat/revocación comprobados; R2-16 abierto | Una misma decisión en chat o notch/HUD; rechazo, caducidad y cancelación visibles; alcance una vez/conversación/siempre explícito; recibo solo tras respuesta firmada. Pendiente: detalles de tareas legibles y localizados. |
-| N14 | Permisos por herramienta y por app, revocación | `AegisMenuBar/Views/JarvisPrivacySettingsView.swift`; `Services/JarvisSettingsStore.swift`; `AegisAudioCore/ApprovalSigner.swift`, `LocalIPC.swift` | Implementado; evidencia real limitada a TextEdit | Firmas distintas para cada método y alcance; el texto del modelo no concede permiso. Permiso permanente persiste hasta revocación y el alcance conversacional no migra a otros chats. Revocar debe impedir una nueva ejecución antes de preguntar. |
-| N15 | Historial de acciones y borrado | `AegisMenuBar/Models/JarvisActionHistory.swift`, `MenuBarModel+ActionHistory.swift`; `Views/JarvisActionHistoryView.swift`; `AegisAudioCore/LocalIPC.swift` | Implementado | Consulta/paginación/filtro por conversación, estado verificado frente a fallido/cancelado, metadatos mínimos y borrado firmado ligado a revisión. No usar títulos de conversaciones ni argumentos como telemetría pública. |
-| N16 | Uso real del Mac: observación y acciones | `JarvisComputerHelper/main.swift`; `AegisAudioCore/ComputerControl.swift`, `QuietEventDispatcher.swift`, `UserSessionExecutionGate.swift`; `AegisMenuBar/Services/ComputerControlService.swift`, `Models/MenuBarModel+Computer.swift` | Implementado con TCC; TextEdit literal/permisos comprobados; nueva línea al final pendiente | `status`, `activate`, `capture`, `act`; acciones `click`, `focus`, `replace_text`, `type`, `key`, `scroll`. ScreenCaptureKit y AX/OCR describen el objetivo; los efectos se vinculan a observación, proceso, ventana y estado de sesión. Ceder ante intervención física; cancelar no equivale a no haber escrito un prefijo. No certificar posición/preservación solo por contener texto. |
-| N17 | Visión bajo demanda, ventana y contexto de aplicación | `AegisMenuBar/Services/ScreenCaptureService.swift`; `AegisAudioCore/WindowCapture.swift`, `OnDemandVisionCapture.swift`, `ActiveVisionSensor.swift`, `LocalVoiceApplicationContext.swift`; `Models/MenuBarModel+VoiceCapture.swift` | Implementado; permisos/configuración | Distinguir observación para actuar de captura adjunta solicitada por el dueño. Capturar solo la ventana/proceso autorizado y su pantalla, sin audio ni cursor; rechazo de apps y campos sensibles; validar de nuevo TCC y sesión antes/después. |
-| N18 | Captura de voz, transcripción y medidores | `AegisAudioCore/SpeechTranscription.swift`, `SpeechInputProcessor.swift`, `MicrophoneMeter.swift`, `AudioMeter.swift`, `AcousticSensor.swift`, `VoiceActivity.swift`; `AegisMenuBar/Models/MenuBarModel+Voice*.swift`; `AegisAudioHelper/main.swift` | Implementado local; TCC y assets de idioma; ruta hablada completa sin configurar | Push-to-talk, final de turno, límites, feedback parcial local, manejo de silencio y errores. Audio crudo no se convierte en logs/transcripts IPC; el envío de un turno no acepta parciales como finales. Ninguna captura automática por solo abrir la app. |
-| N19 | VAD y aislamiento ONNX | `AegisVADRuntime/SileroVADRuntime.swift`, `Resources/silero-vad.onnx`; `JarvisVADHelper/main.swift`; `AegisAudioCore/VADProcessClient.swift`, `SileroVADDetector.swift` | Implementado; self-test sintético empaquetado | Una sola copia de ONNX Runtime, auxiliar separado firmado, protocolo acotado, inferencia finita y recuperación ante caída. Conservación de licencia/notice del modelo. Un self-test de silencio no acredita reconocimiento de voz real. |
-| N20 | Palabra de activación y entrenamiento | `AegisAudioCore/WakeWord*.swift`, `FollowUpListeningGate.swift`; `JarvisWakeWordTrainer/main.swift`; `AegisMenuBar/Views/WakeWordEnrollmentView.swift`, `Models/MenuBarModel+WakeWord*.swift` | Implementado; opt-in y entrenamiento del dueño | Activación local «Jarvis», detector y ventana de escucha, entrenamiento de muestras, capacidad/estado visibles, pausa durante TTS y otras capturas, recuperación sin activar sesiones suspendidas. No transferir muestras o modelos privados como código. |
-| N21 | Identidad de voz, presencia y autorización múltiple | `AegisAudioCore/SpeakerIdentity.swift`, `SpeakerEnrollment.swift`, `SpeakerModelTraining.swift`, `LocalVoiceSpeakerIdentity.swift`, `DualChannelAuthorizer.swift`, `OwnerPresenceLease.swift`; `JarvisSpeakerTrainer/main.swift`, `JarvisBiometricCalibrator/main.swift`; `Services/OwnerPresenceAuthenticator.swift` | Implementado; enrolamiento/permisos/decisiones del dueño | Una puntuación de hablante no equivale a consentimiento. Ventanas y desafíos acotados; firmas/identidades ligadas a interacción actual; no aceptar TTS propio, voz repetida o prueba sintética como aprobación real. La regresión R2-10 sigue siendo criterio obligatorio. |
-| N22 | Síntesis de voz, reproducción, interrupción y repetir | `AegisAudioCore/SpeechOutput.swift`, `SpeechArtifact.swift`, `SpeechStreamChunker.swift`, `SpeechAudioReplayBuffer.swift`, `SpeechPlayoutPolicy.swift`, `SpeechPlaybackOutcome.swift`, `LocalVoiceReplay.swift`; `AegisMenuBar/Models/MenuBarModel+VoiceOutput.swift` | Infraestructura implementada; **proveedor de audio productivo sin configurar** | Streaming/audio con integridad, secuencia, formato y límites; cancelación coordinada; reproducción completa frente a parcial; preservar texto cuando falta voz. El login ChatGPT del chat no acredita síntesis/transcripción remotas. No reactivar NVIDIA ni introducir respaldo silencioso. |
-| N23 | Notas de reunión | `AegisAudioCore/MeetingTranscriber.swift`; `AegisMenuBar/Models/MenuBarModel+Meetings.swift`; `ChatAttachment.swift` | Implementado; micrófono/Speech y prueba real pendiente por alcance | Inicio/parada explícitos, texto en vivo, transcripción como adjunto y resumen con temas/decisiones/tareas; exclusión mutua con wake word; mensajes claros cuando no hay voz o falla captura. No grabar reuniones por iniciativa de la app. |
-| N24 | Presencia visual, mascota, notch y HUD | `AegisMenuBar/App/Notch*`, `HUDPanelController.swift`, `MascotAutonomyController.swift`, `JarvisPointerController.swift`; `Views/Notch*`, `HUD*`, `JarvisNotchMascot.swift`; `AegisAudioCore/Mascot*.swift`, `AssistantPresentation.swift`, `AssistantPanelLayout.swift` | Implementado; fixtures visuales | Estados coherentes con el trabajo real; animación, energía, hover/expansión y accesibilidad respetan reducción de movimiento/transparencia. El puntero ilustrativo no cuenta como ejecución. Fixtures no abren micrófono ni daemon. |
-| N25 | Alertas proactivas, energía, sesión y temperatura | `AegisMenuBar/Services/ProactiveEventMonitor.swift`, `ThermalMonitor.swift`; `Models/MenuBarModel+Presence.swift`, `MenuBarModel+Runtime.swift`; `AegisAudioCore/RuntimePowerStatus.swift`, `ProactiveAlertGate.swift`, `UserSessionExecutionGate.swift` | Implementado; configuración y permisos según sensor | Batería/red/agenda/rendimiento, avisos acotados, no spam; cierre de sesión/bloqueo/suspensión detienen capturas y efectos; reanudar exige permiso de ejecución vigente y no revive acciones antiguas. |
-| N26 | Ajustes, onboarding y diagnóstico | `AegisMenuBar/Views/JarvisWelcomeView.swift`, `JarvisSettingsView.swift`, `JarvisGeneralSettingsView.swift`, `JarvisDiagnosticsSettingsView.swift`, `JarvisHealthView.swift`; `Models/JarvisWelcomeState.swift`, `JarvisSettingsSnapshot.swift`; `Services/JarvisSettingsStore.swift` | Implementado; dueño completa permisos y credenciales | Primer arranque repetible, estado de integraciones/voz/seguridad verdadero, refresco/cancelación de operaciones, borrados solo tras recibo válido, secciones/navegación accesibles y mensajes en español. |
-| N27 | Conexión de inferencia Codex con ChatGPT | `AegisMenuBar/Models/JarvisCodexSettings.swift`; `Services/JarvisCodexSettingsStore.swift`; `Views/JarvisCodexSettingsView.swift` | Implementado; acceso oficial completado y conexión/chat/visión comprobados de forma acotada | Estado saneado, catálogo real, selección explícita, prueba sintética y cancelación del acceso; abrir URL oficial validada. No importar `auth.json` ni historial de otra app; no cambio de proveedor o modelo silencioso. |
-| N28 | Cuentas, MCP, extensiones y complementos | `AegisMenuBar/Views/JarvisAccountsSettingsView.swift`, `JarvisAccountsGoogleView.swift`, `JarvisExtensionsSettingsView.swift`, `JarvisExtensionReviewView.swift`, `JarvisForeignPluginsView.swift`, `JarvisBrowserSetupView.swift`; `AegisAudioCore/ExtensionsSettings.swift` | Implementado; servicios/configuración y aprobación propios | Habilitar/deshabilitar conexión, flujo OAuth por dueño, vista previa de importación y revisión de herramientas/skills/plugins, gestión de dependencias y cancelación. Los textos de una extensión son datos no fiables; instalar no concede permiso de ejecutar todas sus acciones. |
-| N29 | Telegram y dispositivos | `AegisMenuBar/Views/JarvisTelegramSettingsView.swift`, `JarvisDevicesSettingsView.swift`; `Services/JarvisTelegramStore.swift`; `AegisAudioCore/IOSSystemBridge.swift`; `JarvisIOSBridge/main.swift` | Implementado por superficies específicas; bot/dispositivos/permisos requieren configuración | Bot y vinculación de cuenta; Home Assistant mediante configuración; puente Focus/AppIntents y presencia biométrica con desafío. La existencia de `jarvis-ios-bridge` no acredita una app iPhone completa ni soporte universal Android/TV; el catálogo operativo está en el backend. |
-| N30 | Spotlight y embeddings locales | `AegisAudioCore/SpotlightIndexer.swift`; `JarvisSpotlightIndexer/main.swift`, `JarvisLocalEmbedding/main.swift` | Implementado; indexación según configuración | NaturalLanguage para embeddings locales con identidad propia; auxiliar acotado y sin red; degradación documentada a FTS cuando no está disponible. Spotlight `upsert/delete/reset_domain` opera sobre IDs ligados a Jarvis, sin ampliar la lectura del sistema. |
-| N31 | Distribución, arranque al iniciar sesión y actualizaciones | `AegisMenuBar/App/JarvisLoginItemController.swift`, `JarvisUpdateController.swift`; `AegisAudioCore/JarvisBuildIdentity.swift`, `SecureUpdateLaunchGuard.swift`; `AppBundle/`, `ComputerHelperBundle/`, `packaging/`, `script/` | Implementado local; Developer ID/notarización y actualización publicada pendientes | Una identidad de bundle estable, daemon/auxiliares firmados, versión/revisión/inventario de licencias; `SMAppService` como único registro de login; manifiesto Ed25519 y hashes, prevención de downgrade, cambio atómico y recuperación. Instalador no debe morir a mitad de reemplazo. |
-| N32 | Apariencia, localización y accesibilidad | `AegisMenuBar/Views/JarvisAppearance.swift`, `JarvisTheme.swift`, `JarvisInterfaceStyle.swift`, controles compartidos; `Resources/Localizable.xcstrings`, `Resources/es.lproj/Localizable.strings` | Implementado; recorrido VoiceOver P1-12 pendiente | Español como base; modo claro/oscuro y alto contraste; tamaños mínimos; labels de iconos, foco/Tab/Esc/atajos y menús del sistema. La presencia de etiquetas no sustituye una pasada real con VoiceOver. |
+| N01 | App de barra de menús, ciclo de vida y supervisión del daemon | `JarvisMenuBar/App/JarvisMenuBarApp.swift`, `JarvisAudioCore/BundledDaemonSupervisor.swift`, `Models/MenuBarModel+Runtime.swift` dentro de `JarvisMenuBar` | Implementado | Una app controla el proceso empaquetado; arranque comprobable, apagado que drena el daemon, reinicio sin procesos duplicados y fallo visible si no arranca. Cerrar ventanas no termina la app. |
+| N02 | Ventanas, Dock y enfoque | `JarvisMenuBar/App/RequestedWindowFocus.swift`, `JarvisDockController.swift`, `QuickEntryPanelController.swift`, `SideChatPanel.swift` dentro de `JarvisMenuBar/Views` | Implementado; regresiones de ciclo de ventanas | Ventanas identificadas y tamaños mínimos; reapertura coherente; ninguna ventana de aprobación vacía/restaurada. Una entrada rápida no debe perder el borrador ni capturar actividad en segundo plano. |
+| N03 | Chat de texto y estado del compositor | `JarvisMenuBar/Views/JarvisChatView.swift`, `JarvisChatComposerView.swift`, `JarvisComposerTextEditor.swift`; `JarvisMenuBar/Models/ChatSubmission.swift`, `JarvisChatStore.swift`, `JarvisChatStore+Drafts.swift` | Implementado | Envío, cola, parciales, detener, reintentar con adjuntos/borrador conservados, límites previos al IPC, identidad de respuesta ligada al chat correcto y estados honestos de error/cancelación. |
+| N04 | Historial de conversaciones, búsqueda y organización | `JarvisMenuBar/Models/JarvisChatStore+History.swift`, `JarvisChatStore+Search.swift`, `JarvisSidebarHistory.swift`; `Views/JarvisChatHistoryView.swift` | Implementado; R2-4/R2-5/R2-9 abiertos | Recientes, archivados, papelera, búsqueda y paginación; archivos temporales no convertidos en permanentes por accidente; eliminación con recibo y metadatos de auditoría sin contenido. Pendientes: texto vacío de archivados y buscador de la barra lateral. |
+| N05 | Chat temporal y privacidad de contexto | `JarvisMenuBar/Models/JarvisChatStore.swift`, `JarvisChatStore+History.swift`, `JarvisChatWorkspace.swift`; `Views/JarvisChatContextView.swift` | Implementado; usado en pruebas reales acotadas | Aviso de conversación temporal, sin memoria ni guardado permanente; contexto de proyecto desactivado en temporal; limpieza diferida segura y ninguna restauración cruzada de texto/adjuntos entre conversaciones. |
+| N06 | Edición, regeneración, bifurcación, copia y valoración | `JarvisMenuBar/Models/JarvisChatStore+Actions.swift`; `Views/JarvisChatActionsView.swift`, `JarvisChatResponseView.swift`; `JarvisAudioCore/ChatResponseDocument.swift` | Implementado | Editar/regenerar conserva el original mediante bifurcación; solo turnos completos y persistidos tienen identidad válida; pedir de nuevo imágenes originales no guardadas; 👍/👎 asociado a la respuesta exacta. |
+| N07 | Adjuntos, imágenes y transcripciones de reunión | `JarvisAudioCore/ChatAttachment.swift`, `LocalImage.swift`; `JarvisMenuBar/Views/JarvisChatAttachmentsView.swift`; `Services/ImageFilePicker.swift` | Implementado; texto y visión sintética comprobados con Codex | Texto/PDF/imagen con límites y validación; bytes/selección pertenecen al borrador actual; ninguna recuperación silenciosa de adjuntos antiguos; las imágenes no pasan a un historial permanente por defecto. |
+| N08 | Proyectos y conversaciones de proyecto | `JarvisMenuBar/Models/ProjectConversationStore.swift`, `JarvisChatWorkspace.swift`; `Views/JarvisProjectView.swift` | Implementado; configuración/datos propios del dueño | Crear, editar, seleccionar y eliminar proyecto; paginar todos sus chats; selección atómica; proyecto de un chat nuevo sin perder borrador; conservación de estado ante corrupción o respuestas obsoletas. |
+| N09 | Modo plan y contexto del trabajo | `JarvisMenuBar/Views/JarvisPlanCard.swift`, `JarvisChatContextView.swift`; `Models/ChatSubmission.swift`, `JarvisChatWorkspace.swift` | Implementado | Plan legible con pasos; modo plan investiga y propone sin ejecutar cambios; selección explícita y estado visible; metadatos del daemon siguen siendo autoridad. |
+| N10 | Navegador incorporado y pestañas | `JarvisMenuBar/Models/JarvisBrowserStore.swift`, `JarvisBrowserTabs.swift`, `JarvisBrowserPageCapture.swift`; `Views/JarvisBrowserPanel.swift`, `JarvisBrowserTabStrip.swift` | Implementado; captura de página documentada; no certificación de todos los sitios | WKWebView, URL/búsqueda, atrás/adelante/recargar, hasta ocho pestañas, enlaces del chat, nueva pestaña y cierre; «Preguntar a Jarvis» adjunta la página seleccionada con identidad vigente. Cambiar pestaña/ocultar/cerrar invalida capturas en curso. Esquemas externos requieren decisión explícita. |
+| N11 | Chat lateral y espacio de trabajo | `JarvisMenuBar/Models/SideChatStore.swift`, `JarvisChatWorkspace.swift`; `Views/SideChatPanel.swift`, `JarvisChatContextView.swift` | Implementado | Paneles de navegador, contexto y chat lateral con estado propio; una respuesta pendiente no se escribe en un panel cerrado o sustituido; selección de proyecto y adjuntos permanece consistente. |
+| N12 | Dot, objetivos y tareas programadas | `JarvisMenuBar/Views/JarvisDotView.swift`, `JarvisScheduledView.swift`; `Models/MenuBarModel+Scheduled.swift`, `JarvisScheduledExecution.swift`; `Services/ScheduledNotificationRouter.swift` | Implementado; recorridos previos documentados; pendientes de aprobación dependen del dueño | Vista Ahora/Próximo/Resultados/Atención, pausa/reanudación de Dot, listar/editar/habilitar/ejecutar/borrar tareas y objetivos; recibo de inicio verdadero; notificación lleva al trabajo exacto y nunca aprueba la acción. |
+| N13 | Tarjetas de decisión y aprobación | `JarvisMenuBar/Views/JarvisDecisionCard.swift`, `JarvisApprovalCard.swift`; `Models/MenuBarModel+Approvals.swift`, `MenuBarModel+Interactions.swift`, `ActionReviewPresentation.swift`; `App/NotchApprovalPanelController.swift` | Implementado; TextEdit «Siempre»/otro chat/revocación comprobados; R2-16 abierto | Una misma decisión en chat o notch/HUD; rechazo, caducidad y cancelación visibles; alcance una vez/conversación/siempre explícito; recibo solo tras respuesta firmada. Pendiente: detalles de tareas legibles y localizados. |
+| N14 | Permisos por herramienta y por app, revocación | `JarvisMenuBar/Views/JarvisPrivacySettingsView.swift`; `Services/JarvisSettingsStore.swift`; `JarvisAudioCore/ApprovalSigner.swift`, `LocalIPC.swift` | Implementado; evidencia real limitada a TextEdit | Firmas distintas para cada método y alcance; el texto del modelo no concede permiso. Permiso permanente persiste hasta revocación y el alcance conversacional no migra a otros chats. Revocar debe impedir una nueva ejecución antes de preguntar. |
+| N15 | Historial de acciones y borrado | `JarvisMenuBar/Models/JarvisActionHistory.swift`, `MenuBarModel+ActionHistory.swift`; `Views/JarvisActionHistoryView.swift`; `JarvisAudioCore/LocalIPC.swift` | Implementado | Consulta/paginación/filtro por conversación, estado verificado frente a fallido/cancelado, metadatos mínimos y borrado firmado ligado a revisión. No usar títulos de conversaciones ni argumentos como telemetría pública. |
+| N16 | Uso real del Mac: observación y acciones | `JarvisComputerHelper/main.swift`; `JarvisAudioCore/ComputerControl.swift`, `QuietEventDispatcher.swift`, `UserSessionExecutionGate.swift`; `JarvisMenuBar/Services/ComputerControlService.swift`, `Models/MenuBarModel+Computer.swift` | Implementado con TCC; TextEdit literal/permisos comprobados; nueva línea al final pendiente | `status`, `activate`, `capture`, `act`; acciones `click`, `focus`, `replace_text`, `type`, `key`, `scroll`. ScreenCaptureKit y AX/OCR describen el objetivo; los efectos se vinculan a observación, proceso, ventana y estado de sesión. Ceder ante intervención física; cancelar no equivale a no haber escrito un prefijo. No certificar posición/preservación solo por contener texto. |
+| N17 | Visión bajo demanda, ventana y contexto de aplicación | `JarvisMenuBar/Services/ScreenCaptureService.swift`; `JarvisAudioCore/WindowCapture.swift`, `OnDemandVisionCapture.swift`, `ActiveVisionSensor.swift`, `LocalVoiceApplicationContext.swift`; `Models/MenuBarModel+VoiceCapture.swift` | Implementado; permisos/configuración | Distinguir observación para actuar de captura adjunta solicitada por el dueño. Capturar solo la ventana/proceso autorizado y su pantalla, sin audio ni cursor; rechazo de apps y campos sensibles; validar de nuevo TCC y sesión antes/después. |
+| N18 | Captura de voz, transcripción y medidores | `JarvisAudioCore/SpeechTranscription.swift`, `SpeechInputProcessor.swift`, `MicrophoneMeter.swift`, `AudioMeter.swift`, `AcousticSensor.swift`, `VoiceActivity.swift`; `JarvisMenuBar/Models/MenuBarModel+Voice*.swift`; `JarvisAudioHelper/main.swift` | Implementado local; TCC y assets de idioma; ruta hablada completa sin configurar | Push-to-talk, final de turno, límites, feedback parcial local, manejo de silencio y errores. Audio crudo no se convierte en logs/transcripts IPC; el envío de un turno no acepta parciales como finales. Ninguna captura automática por solo abrir la app. |
+| N19 | VAD y aislamiento ONNX | `JarvisVADRuntime/SileroVADRuntime.swift`, `Resources/silero-vad.onnx`; `JarvisVADHelper/main.swift`; `JarvisAudioCore/VADProcessClient.swift`, `SileroVADDetector.swift` | Implementado; self-test sintético empaquetado | Una sola copia de ONNX Runtime, auxiliar separado firmado, protocolo acotado, inferencia finita y recuperación ante caída. Conservación de licencia/notice del modelo. Un self-test de silencio no acredita reconocimiento de voz real. |
+| N20 | Palabra de activación y entrenamiento | `JarvisAudioCore/WakeWord*.swift`, `FollowUpListeningGate.swift`; `JarvisWakeWordTrainer/main.swift`; `JarvisMenuBar/Views/WakeWordEnrollmentView.swift`, `Models/MenuBarModel+WakeWord*.swift` | Implementado; opt-in y entrenamiento del dueño | Activación local «Jarvis», detector y ventana de escucha, entrenamiento de muestras, capacidad/estado visibles, pausa durante TTS y otras capturas, recuperación sin activar sesiones suspendidas. No transferir muestras o modelos privados como código. |
+| N21 | Identidad de voz, presencia y autorización múltiple | `JarvisAudioCore/SpeakerIdentity.swift`, `SpeakerEnrollment.swift`, `SpeakerModelTraining.swift`, `LocalVoiceSpeakerIdentity.swift`, `DualChannelAuthorizer.swift`, `OwnerPresenceLease.swift`; `JarvisSpeakerTrainer/main.swift`, `JarvisBiometricCalibrator/main.swift`; `Services/OwnerPresenceAuthenticator.swift` | Implementado; enrolamiento/permisos/decisiones del dueño | Una puntuación de hablante no equivale a consentimiento. Ventanas y desafíos acotados; firmas/identidades ligadas a interacción actual; no aceptar TTS propio, voz repetida o prueba sintética como aprobación real. La regresión R2-10 sigue siendo criterio obligatorio. |
+| N22 | Síntesis de voz, reproducción, interrupción y repetir | `JarvisAudioCore/SpeechOutput.swift`, `SpeechArtifact.swift`, `SpeechStreamChunker.swift`, `SpeechAudioReplayBuffer.swift`, `SpeechPlayoutPolicy.swift`, `SpeechPlaybackOutcome.swift`, `LocalVoiceReplay.swift`; `JarvisMenuBar/Models/MenuBarModel+VoiceOutput.swift` | Infraestructura implementada; **proveedor de audio productivo sin configurar** | Streaming/audio con integridad, secuencia, formato y límites; cancelación coordinada; reproducción completa frente a parcial; preservar texto cuando falta voz. El login ChatGPT del chat no acredita síntesis/transcripción remotas. No reactivar NVIDIA ni introducir respaldo silencioso. |
+| N23 | Notas de reunión | `JarvisAudioCore/MeetingTranscriber.swift`; `JarvisMenuBar/Models/MenuBarModel+Meetings.swift`; `ChatAttachment.swift` | Implementado; micrófono/Speech y prueba real pendiente por alcance | Inicio/parada explícitos, texto en vivo, transcripción como adjunto y resumen con temas/decisiones/tareas; exclusión mutua con wake word; mensajes claros cuando no hay voz o falla captura. No grabar reuniones por iniciativa de la app. |
+| N24 | Presencia visual, mascota, notch y HUD | `JarvisMenuBar/App/Notch*`, `HUDPanelController.swift`, `MascotAutonomyController.swift`, `JarvisPointerController.swift`; `Views/Notch*`, `HUD*`, `JarvisNotchMascot.swift`; `JarvisAudioCore/Mascot*.swift`, `AssistantPresentation.swift`, `AssistantPanelLayout.swift` | Implementado; fixtures visuales | Estados coherentes con el trabajo real; animación, energía, hover/expansión y accesibilidad respetan reducción de movimiento/transparencia. El puntero ilustrativo no cuenta como ejecución. Fixtures no abren micrófono ni daemon. |
+| N25 | Alertas proactivas, energía, sesión y temperatura | `JarvisMenuBar/Services/ProactiveEventMonitor.swift`, `ThermalMonitor.swift`; `Models/MenuBarModel+Presence.swift`, `MenuBarModel+Runtime.swift`; `JarvisAudioCore/RuntimePowerStatus.swift`, `ProactiveAlertGate.swift`, `UserSessionExecutionGate.swift` | Implementado; configuración y permisos según sensor | Batería/red/agenda/rendimiento, avisos acotados, no spam; cierre de sesión/bloqueo/suspensión detienen capturas y efectos; reanudar exige permiso de ejecución vigente y no revive acciones antiguas. |
+| N26 | Ajustes, onboarding y diagnóstico | `JarvisMenuBar/Views/JarvisWelcomeView.swift`, `JarvisSettingsView.swift`, `JarvisGeneralSettingsView.swift`, `JarvisDiagnosticsSettingsView.swift`, `JarvisHealthView.swift`; `Models/JarvisWelcomeState.swift`, `JarvisSettingsSnapshot.swift`; `Services/JarvisSettingsStore.swift` | Implementado; dueño completa permisos y credenciales | Primer arranque repetible, estado de integraciones/voz/seguridad verdadero, refresco/cancelación de operaciones, borrados solo tras recibo válido, secciones/navegación accesibles y mensajes en español. |
+| N27 | Conexión de inferencia Codex con ChatGPT | `JarvisMenuBar/Models/JarvisCodexSettings.swift`; `Services/JarvisCodexSettingsStore.swift`; `Views/JarvisCodexSettingsView.swift` | Implementado; acceso oficial completado y conexión/chat/visión comprobados de forma acotada | Estado saneado, catálogo real, selección explícita, prueba sintética y cancelación del acceso; abrir URL oficial validada. No importar `auth.json` ni historial de otra app; no cambio de proveedor o modelo silencioso. |
+| N28 | Cuentas, MCP, extensiones y complementos | `JarvisMenuBar/Views/JarvisAccountsSettingsView.swift`, `JarvisAccountsGoogleView.swift`, `JarvisExtensionsSettingsView.swift`, `JarvisExtensionReviewView.swift`, `JarvisForeignPluginsView.swift`, `JarvisBrowserSetupView.swift`; `JarvisAudioCore/ExtensionsSettings.swift` | Implementado; servicios/configuración y aprobación propios | Habilitar/deshabilitar conexión, flujo OAuth por dueño, vista previa de importación y revisión de herramientas/skills/plugins, gestión de dependencias y cancelación. Los textos de una extensión son datos no fiables; instalar no concede permiso de ejecutar todas sus acciones. |
+| N29 | Telegram y dispositivos | `JarvisMenuBar/Views/JarvisTelegramSettingsView.swift`, `JarvisDevicesSettingsView.swift`; `Services/JarvisTelegramStore.swift`; `JarvisAudioCore/IOSSystemBridge.swift`; `JarvisIOSBridge/main.swift` | Implementado por superficies específicas; bot/dispositivos/permisos requieren configuración | Bot y vinculación de cuenta; Home Assistant mediante configuración; puente Focus/AppIntents y presencia biométrica con desafío. La existencia de `jarvis-ios-bridge` no acredita una app iPhone completa ni soporte universal Android/TV; el catálogo operativo está en el backend. |
+| N30 | Spotlight y embeddings locales | `JarvisAudioCore/SpotlightIndexer.swift`; `JarvisSpotlightIndexer/main.swift`, `JarvisLocalEmbedding/main.swift` | Implementado; indexación según configuración | NaturalLanguage para embeddings locales con identidad propia; auxiliar acotado y sin red; degradación documentada a FTS cuando no está disponible. Spotlight `upsert/delete/reset_domain` opera sobre IDs ligados a Jarvis, sin ampliar la lectura del sistema. |
+| N31 | Distribución, arranque al iniciar sesión y actualizaciones | `JarvisMenuBar/App/JarvisLoginItemController.swift`, `JarvisUpdateController.swift`; `JarvisAudioCore/JarvisBuildIdentity.swift`, `SecureUpdateLaunchGuard.swift`; `AppBundle/`, `ComputerHelperBundle/`, `packaging/`, `script/` | Implementado local; Developer ID/notarización y actualización publicada pendientes | Una identidad de bundle estable, daemon/auxiliares firmados, versión/revisión/inventario de licencias; `SMAppService` como único registro de login; manifiesto Ed25519 y hashes, prevención de downgrade, cambio atómico y recuperación. Instalador no debe morir a mitad de reemplazo. |
+| N32 | Apariencia, localización y accesibilidad | `JarvisMenuBar/Views/JarvisAppearance.swift`, `JarvisTheme.swift`, `JarvisInterfaceStyle.swift`, controles compartidos; `Resources/Localizable.xcstrings`, `Resources/es.lproj/Localizable.strings` | Implementado; recorrido VoiceOver P1-12 pendiente | Español como base; modo claro/oscuro y alto contraste; tamaños mínimos; labels de iconos, foco/Tab/Esc/atajos y menús del sistema. La presencia de etiquetas no sustituye una pasada real con VoiceOver. |
 
 ## Productos y auxiliares realmente declarados
 
-`native/AegisAudio/Package.swift` es la autoridad del paquete actual: Swift tools 6.2,
-macOS 14 como plataforma mínima declarada, `AegisAudioCore` compartido y ONNX Runtime
-fijado a 1.24.2 en `AegisVADRuntime`. La compatibilidad efectiva debe verificarse con
+`native/JarvisAudio/Package.swift` es la autoridad del paquete actual: Swift tools 6.2,
+macOS 14 como plataforma mínima declarada, `JarvisAudioCore` compartido y ONNX Runtime
+fijado a 1.24.2 en `JarvisVADRuntime`. La compatibilidad efectiva debe verificarse con
 el SDK, firma y sistema de destino de la reconstrucción.
 
 | Producto | Target | Papel |
 | --- | --- | --- |
-| `AegisAudioCore` | `AegisAudioCore` | Contratos, DSP, IPC, seguridad y tipos nativos compartidos. |
-| `Jarvis` | `AegisMenuBar` | Aplicación SwiftUI de barra de menús. |
-| `aegis-audio-helper` | `AegisAudioHelper` | Comandos de estado/medición/transcripción y envío por IPC. |
+| `JarvisAudioCore` | `JarvisAudioCore` | Contratos, DSP, IPC, seguridad y tipos nativos compartidos. |
+| `Jarvis` | `JarvisMenuBar` | Aplicación SwiftUI de barra de menús. |
+| `jarvis-audio-helper` | `JarvisAudioHelper` | Comandos de estado/medición/transcripción y envío por IPC. |
 | `jarvis-vad-helper` | `JarvisVADHelper` | ONNX/VAD fuera del ejecutable UI. |
 | `jarvis-wake-word-trainer` | `JarvisWakeWordTrainer` | Entrenamiento local de activación. |
 | `jarvis-speaker-trainer` | `JarvisSpeakerTrainer` | Entrenamiento de identidad del hablante. |
@@ -104,7 +110,7 @@ de NVIDIA/audio y no se usa aquí como autoridad del proveedor actual.
 1. **Autoridad humana:** el dueño escribe contraseñas, concede TCC y aprueba acciones.
    Captura, TCC concedido, enrolamiento de voz o login del proveedor no equivalen a
    aprobar una acción. Ningún agente, extensión o runtime alternativo elude el broker.
-2. **IPC local:** `AegisAudioCore/LocalIPC.swift` mantiene UDS privado, identidad del
+2. **IPC local:** `JarvisAudioCore/LocalIPC.swift` mantiene UDS privado, identidad del
    peer, HMAC/nonce/tiempo y respuesta ligada a solicitud; `ApprovalSigner.swift`
    añade la firma del método y alcance de aprobación. Las nuevas rutas deben disponer
    de contratos explícitos en ambos extremos; no convertir un endpoint HTTP nuevo en
@@ -127,19 +133,19 @@ de NVIDIA/audio y no se usa aquí como autoridad del proveedor actual.
    pantalla son contratos distintos; ninguno concede permiso global de leer historial.
 7. **Datos privados:** los logs/evaluaciones contienen enums, recuentos y tiempos,
    nunca imágenes, PCM, credenciales o contenido personal. El almacenamiento real del
-   dueño sigue en Application Support/Aegis y se migra solo con su contrato explícito.
+   dueño sigue en Application Support/Jarvis y se migra solo con su contrato explícito.
 8. **Inferencia:** Codex con ChatGPT es la primera conexión elegida; NVIDIA no debe
    recibir inferencia, memoria ni audio. Ollama/OpenAI API/Anthropic siguen como
    conexiones posteriores explícitas. Las fuentes MLX y flags heredados no autorizan
    respaldos automáticos ni cambio de modelo.
-9. **Firma y recursos:** preservar `ai.aegis.menubar`, namespaces/Keychain `aegis`,
+9. **Firma y recursos:** preservar `ai.jarvis.menubar`, namespaces/Keychain `jarvis`,
    notices del modelo y recursos propios. La app UI mantiene el presupuesto de 25 MiB
    tras strip, separando VAD/daemon/auxiliares. Versionado no puede depender de la ruta
    del checkout ni de un intérprete instalado en el equipo del dueño.
 
 ## Permisos declarados y acciones reservadas al dueño
 
-El manifiesto `native/AegisAudio/AppBundle/Info.plist` declara explicaciones en
+El manifiesto `native/JarvisAudio/AppBundle/Info.plist` declara explicaciones en
 español para micrófono, reconocimiento de voz, cámara, Apple Events, calendarios,
 contactos y red local. `Jarvis.entitlements` declara automatización Apple Events,
 micrófono/audio input, cámara, addressbook y calendars. Son declaraciones: no demuestran
@@ -195,8 +201,8 @@ Estos son criterios para la nueva variante; esta revisión de inventario no los 
 
 ## Localizadores de pruebas y empaquetado
 
-Las pruebas están en `native/AegisAudio/Tests/AegisAudioCoreTests` y
-`native/AegisAudio/Tests/AegisMenuBarTests`. Los nombres por área incluyen IPC,
+Las pruebas están en `native/JarvisAudio/Tests/JarvisAudioCoreTests` y
+`native/JarvisAudio/Tests/JarvisMenuBarTests`. Los nombres por área incluyen IPC,
 firmas, aprobaciones/recibos, quiet event boundaries, sesión, captura/AX, audio/VAD,
 conversación de voz, browser tabs/captures/keyboard, drafts/history/proyectos,
 ventanas, ajustes Codex/readiness, accesibilidad, localización y actualizaciones.
@@ -219,7 +225,7 @@ Se registran **226 archivos Swift de Sources** y **93 archivos Swift de Tests**,
 
 ### Fuentes por directorio
 
-`native/AegisAudio/Sources/AegisAudioCore`
+`native/JarvisAudio/Sources/JarvisAudioCore`
 
 - `AcousticSensor.swift`
 - `ActiveVisionSensor.swift`
@@ -299,13 +305,13 @@ Se registran **226 archivos Swift de Sources** y **93 archivos Swift de Tests**,
 - `WakeWordTrainingWindow.swift`
 - `WindowCapture.swift`
 
-`native/AegisAudio/Sources/AegisAudioHelper`
+`native/JarvisAudio/Sources/JarvisAudioHelper`
 
 - `main.swift`
 
-`native/AegisAudio/Sources/AegisMenuBar/App`
+`native/JarvisAudio/Sources/JarvisMenuBar/App`
 
-- `AegisMenuBarApp.swift`
+- `JarvisMenuBarApp.swift`
 - `HUDPanelController.swift`
 - `JarvisDockController.swift`
 - `JarvisLoginItemController.swift`
@@ -321,7 +327,7 @@ Se registran **226 archivos Swift de Sources** y **93 archivos Swift de Tests**,
 - `RequestedWindowFocus.swift`
 - `VoiceHotKeyController.swift`
 
-`native/AegisAudio/Sources/AegisMenuBar/Models`
+`native/JarvisAudio/Sources/JarvisMenuBar/Models`
 
 - `ActionReviewPresentation.swift`
 - `ChatRecovery.swift`
@@ -369,7 +375,7 @@ Se registran **226 archivos Swift de Sources** y **93 archivos Swift de Tests**,
 - `ProjectConversationStore.swift`
 - `SideChatStore.swift`
 
-`native/AegisAudio/Sources/AegisMenuBar/Services`
+`native/JarvisAudio/Sources/JarvisMenuBar/Services`
 
 - `ComputerControlService.swift`
 - `ImageFilePicker.swift`
@@ -383,12 +389,12 @@ Se registran **226 archivos Swift de Sources** y **93 archivos Swift de Tests**,
 - `ScreenCaptureService.swift`
 - `ThermalMonitor.swift`
 
-`native/AegisAudio/Sources/AegisMenuBar/Support`
+`native/JarvisAudio/Sources/JarvisMenuBar/Support`
 
 - `NotchPreview.swift`
 - `PresentationPreviewController.swift`
 
-`native/AegisAudio/Sources/AegisMenuBar/Views`
+`native/JarvisAudio/Sources/JarvisMenuBar/Views`
 
 - `HUDComponents.swift`
 - `HUDPresenceView.swift`
@@ -453,61 +459,61 @@ Se registran **226 archivos Swift de Sources** y **93 archivos Swift de Tests**,
 - `VoiceEnrollmentComponents.swift`
 - `WakeWordEnrollmentView.swift`
 
-`native/AegisAudio/Sources/AegisVADRuntime`
+`native/JarvisAudio/Sources/JarvisVADRuntime`
 
 - `SileroVADRuntime.swift`
 
-`native/AegisAudio/Sources/JarvisBiometricCalibrator`
+`native/JarvisAudio/Sources/JarvisBiometricCalibrator`
 
 - `main.swift`
 
-`native/AegisAudio/Sources/JarvisComputerHelper`
+`native/JarvisAudio/Sources/JarvisComputerHelper`
 
 - `main.swift`
 
-`native/AegisAudio/Sources/JarvisIOSBridge`
+`native/JarvisAudio/Sources/JarvisIOSBridge`
 
 - `main.swift`
 
-`native/AegisAudio/Sources/JarvisLocalBrain`
+`native/JarvisAudio/Sources/JarvisLocalBrain`
 
 - `main.swift`
 
-`native/AegisAudio/Sources/JarvisLocalEmbedding`
+`native/JarvisAudio/Sources/JarvisLocalEmbedding`
 
 - `main.swift`
 
-`native/AegisAudio/Sources/JarvisMLXEngine`
+`native/JarvisAudio/Sources/JarvisMLXEngine`
 
 - `main.swift`
 
-`native/AegisAudio/Sources/JarvisMLXVLM`
+`native/JarvisAudio/Sources/JarvisMLXVLM`
 
 - `main.swift`
 
-`native/AegisAudio/Sources/JarvisSpeakerTrainer`
+`native/JarvisAudio/Sources/JarvisSpeakerTrainer`
 
 - `main.swift`
 
-`native/AegisAudio/Sources/JarvisSpotlightIndexer`
+`native/JarvisAudio/Sources/JarvisSpotlightIndexer`
 
 - `main.swift`
 
-`native/AegisAudio/Sources/JarvisUIQualificationFixture`
+`native/JarvisAudio/Sources/JarvisUIQualificationFixture`
 
 - `main.swift`
 
-`native/AegisAudio/Sources/JarvisVADHelper`
+`native/JarvisAudio/Sources/JarvisVADHelper`
 
 - `main.swift`
 
-`native/AegisAudio/Sources/JarvisWakeWordTrainer`
+`native/JarvisAudio/Sources/JarvisWakeWordTrainer`
 
 - `main.swift`
 
 ### Pruebas por target
 
-`native/AegisAudio/Tests/AegisAudioCoreTests`
+`native/JarvisAudio/Tests/JarvisAudioCoreTests`
 
 - `AcousticSensorTests.swift`
 - `ActiveVisionSensorTests.swift`
@@ -571,7 +577,7 @@ Se registran **226 archivos Swift de Sources** y **93 archivos Swift de Tests**,
 - `WakeWordTrainingWindowTests.swift`
 - `WindowCaptureTests.swift`
 
-`native/AegisAudio/Tests/AegisMenuBarTests`
+`native/JarvisAudio/Tests/JarvisMenuBarTests`
 
 - `ActionHistoryTests.swift`
 - `AppGrantReceiptTests.swift`
@@ -608,35 +614,35 @@ Se registran **226 archivos Swift de Sources** y **93 archivos Swift de Tests**,
 
 ### Recursos y bundles
 
-`native/AegisAudio/AppBundle`
+`native/JarvisAudio/AppBundle`
 
 - `Info.plist`
 - `Jarvis.entitlements`
 
-`native/AegisAudio/AppBundle/Resources`
+`native/JarvisAudio/AppBundle/Resources`
 
 - `Jarvis.icns`
 - `JarvisLogo.png`
 
-`native/AegisAudio/AppBundle/es.lproj`
+`native/JarvisAudio/AppBundle/es.lproj`
 
 - `InfoPlist.strings`
 
-`native/AegisAudio/ComputerHelperBundle`
+`native/JarvisAudio/ComputerHelperBundle`
 
 - `Info.plist`
 
-`native/AegisAudio/Sources/AegisMenuBar/Resources`
+`native/JarvisAudio/Sources/JarvisMenuBar/Resources`
 
 - `JarvisMascotBody.png`
 - `JarvisTricksterDot.png`
 - `Localizable.xcstrings`
 
-`native/AegisAudio/Sources/AegisMenuBar/Resources/es.lproj`
+`native/JarvisAudio/Sources/JarvisMenuBar/Resources/es.lproj`
 
 - `Localizable.strings`
 
-`native/AegisAudio/Sources/AegisVADRuntime/Resources`
+`native/JarvisAudio/Sources/JarvisVADRuntime/Resources`
 
 - `SILERO_NOTICE.txt`
 - `silero-vad.onnx`

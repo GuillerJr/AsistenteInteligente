@@ -1,8 +1,7 @@
-"""Small original runtime for offline behavioral tests of the Jarvis reconstruction.
+"""Original execution contracts for the Jarvis reconstruction.
 
-No provider, tool, approval UI, persistence, device or network is installed here.
-Hosts supply explicit protocol implementations. The production app does not import
-this module. Approval grants below are test contracts, not signed IPC receipts.
+Hosts supply providers and tool adapters. Model text remains separate from action
+receipts. Approval grants here are contracts, not signed macOS IPC identities.
 """
 
 from __future__ import annotations
@@ -250,6 +249,7 @@ class AgentRuntime:
 
     def start(
         self, session_id: str, message: str, *, offered_tools: Sequence[str] | None = None,
+        run_id: str | None = None,
     ) -> RunHandle:
         if not isinstance(session_id, str) or not session_id.strip():
             raise ValueError("session_id must be nonempty")
@@ -258,7 +258,11 @@ class AgentRuntime:
         names = tuple(self._tools) if offered_tools is None else tuple(offered_tools)
         if len(set(names)) != len(names) or any(name not in self._tools for name in names):
             raise ValueError("offered tools must be distinct registered names")
-        context = RunContext(uuid4().hex, session_id, message, names)
+        if run_id is not None and (
+            not isinstance(run_id, str) or re.fullmatch(r"[a-f0-9]{32}", run_id) is None
+        ):
+            raise ValueError("invalid run identity")
+        context = RunContext(run_id or uuid4().hex, session_id, message, names)
         handle = RunHandle(context)
         lock = self._session_locks.setdefault(session_id, asyncio.Lock())
         task = asyncio.create_task(self._run(handle, context, lock))

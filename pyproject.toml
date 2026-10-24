@@ -1,7 +1,7 @@
 [project]
-name = "aegis-swarm"
-version = "0.1.0a1"
-description = "Base propia de Jarvis: contratos de agentes y ejecución verificable"
+name = "jarvis-core"
+version = "0.1.0a2"
+description = "Jarvis en construcción: sesiones, servicio local y cliente nativo propios"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 dependencies = []
@@ -22,7 +22,7 @@ include-package-data = false
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["aegis_core*"]
+include = ["jarvis_core*"]
 namespaces = false
 
 [tool.pytest.ini_options]

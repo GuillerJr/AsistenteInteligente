@@ -1,0 +1,41 @@
+{
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "files": [
+    {
+      "path": "package.json",
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "bytes": 153025,
+      "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+      "bytes": 1076,
+      "git_blob": "ed064819ab537575d0cad902f7e5af4a3488b1d0"
+    },
+    {
+      "path": "src/gateway/server.ts",
+      "sha256": "4bafdde66c0f6c98411cf5cb339db303d73d176a7ed13386d353df63ee046534",
+      "bytes": 7602,
+      "git_blob": "fa45b53cc44a8d6747b3724d577fc1aaae614c86"
+    },
+    {
+      "path": "src/gateway/server-methods/chat.ts",
+      "sha256": "9011f7511631c71022e54b376668c04b40f675a19b9f72ccc612922d1388763b",
+      "bytes": 2935,
+      "git_blob": "29d50dea1f52e3d7a82f9c726e946879fd1224d3"
+    },
+    {
+      "path": "src/gateway/server-methods/health.ts",
+      "sha256": "36d00ce733a2b12ba98df161c464fa73bc4b851ddc462a3c45850e0103ecb4a1",
+      "bytes": 7247,
+      "git_blob": "b932225f48c2284b261055cc9bcff4c0da722ce8"
+    },
+    {
+      "path": "src/gateway/session-observer.ts",
+      "sha256": "fc452bcaa050f465333aebc438e310a98a508bb4a7d125737f8f31effdd9ca34",
+      "bytes": 27382,
+      "git_blob": "579b82f779bebcc0d9a8091875cd751e41498d90"
+    }
+  ]
+}

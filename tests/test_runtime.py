@@ -6,7 +6,7 @@ from dataclasses import asdict
 
 import pytest
 
-from aegis_core import (
+from jarvis_core import (
     AgentRuntime,
     ApprovalGrant,
     FinalAnswer,

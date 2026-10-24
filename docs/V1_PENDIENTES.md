@@ -1,35 +1,41 @@
-# Pendientes de la variante propia
+# Pendientes de Jarvis
 
-El 24-10-2026 el dueño pidió limpiar este repositorio y empezar aquí una variante
-propia mejorada, informada por el análisis de OpenClaw. El código anterior se
-conserva en Git. Los inventarios históricos de `docs/rebuild/` conservan las
-capacidades que se integrarán después.
+Decisión del dueño, 24-10-2026: **primero construir la variante completa funcional
+de OpenClaw con el nombre Jarvis, mediante investigación con REA y código propio**.
+Las mejoras propias se harán después. Se limpió este repositorio; el código del
+producto anterior sigue en Git y sus inventarios están congelados.
 
-## Fase A — primero la base independiente
+## Fase A — base completa primero
 
-- [x] Limpiar el código antiguo del árbol de trabajo y conservar un punto de recuperación.
-- [x] Registrar módulos/herramientas históricas sin tratarlos como funciones de la base nueva.
-- [x] Primer núcleo propio: sesión, operación única, autorización exacta, cancelación,
-  asentamiento y recibos de efectos inciertos, probados con fixtures.
-- [ ] Completar investigación REA por partes. La cobertura global sigue siendo parcial.
-- [ ] Añadir límites de tiempo, datos y retención; aislamiento y recuperación productivos.
-- [ ] Persistencia, eventos y recuperación de sesiones propias; temporalidad y privacidad.
-- [ ] Conexión oficial aislada a Codex con ChatGPT, catálogo y manejo de interrupciones.
-- [ ] Transporte local autenticado y supervisión del servicio.
-- [ ] App nativa macOS SwiftUI: ventana propia, Dock, barra de menús y atajo.
-- [ ] Extensibilidad/MCP genéricos con fixtures y contratos de autoridad, sin conectores Jarvis.
-- [ ] Cualificación real de la base y empaquetado propio; la fase A todavía no está terminada.
+- [x] Limpiar el árbol de trabajo y conservar puntos de recuperación.
+- [x] Conservar inventarios de capacidades del Jarvis anterior para la fase posterior.
+- [x] Fijar la referencia de OpenClaw y empezar su análisis REA por bloques.
+- [ ] Completar la investigación y los recorridos de la
+  [matriz de paridad](rebuild/OPENCLAW_BASELINE_PARITY.md); el censo no es revisión.
+- [ ] Cualificar el recorrido inicial: app SwiftUI, servicio, IPC, sesiones SQLite,
+  streaming, Codex oficial, cancelación, reinicio y temporales. Hay implementación
+  de desarrollo y pruebas; faltan inferencia autenticada y cualificación de producto.
+- [ ] Implementar y verificar las herramientas de la propia base OpenClaw, sesiones
+  avanzadas, agentes, memoria base, MCP, skills, extensiones, programador, canales,
+  nodos y superficies funcionales incluidas en la matriz. No moverlas a la fase B
+  por coincidir con capacidades del Jarvis anterior.
+- [ ] Completar aislamiento de ejecución y autorizaciones reales del dueño, sin
+  confundir token local con identidad firmada, ni un ACK con cierre de una acción.
+- [ ] Distribución nativa autocontenida, actualización, recuperación e instalación
+  cualificadas; no reemplazar la app anterior con un bundle de desarrollo.
+- [ ] Acreditar la base completa mediante pruebas por capacidad y recorridos reales.
+  La fase A sigue abierta hasta cumplir los criterios de la matriz.
 
-## Fase B — herramientas Jarvis, posteriormente
+## Fase B — después de acreditar A
 
-- [ ] Recorrer todos los dominios del [inventario backend](rebuild/JARVIS_BACKEND_INVENTORY.md).
-- [ ] Recorrer todos los módulos del [inventario nativo](rebuild/JARVIS_NATIVE_INVENTORY.md).
-- [ ] Implementar los adaptadores de herramientas, memoria personal, computadora,
-  navegador, audio, canales, tareas, dispositivos e interfaz complementaria.
-- [ ] Recuperar garantías de aprobación/revocación, cifrado, firmas y migración reversible.
-- [ ] Certificar cada capacidad con pruebas reales y datos sintéticos antes de sustituir
-  el producto instalado. El dueño concede TCC, introduce contraseñas y aprueba acciones.
+- [ ] Mejoras propias y herramientas adicionales del
+  [inventario backend](rebuild/JARVIS_BACKEND_INVENTORY.md) y
+  [nativo](rebuild/JARVIS_NATIVE_INVENTORY.md).
+- [ ] Migración reversible y ensayada con datos sintéticos del producto anterior.
+- [ ] Repetir las pruebas históricas que correspondan, incluida aprobación,
+  revocación y verificación real de resultados. No se declaran resueltas por rehacer.
 
-El plan detallado está en [docs/rebuild/README.md](rebuild/README.md). Los pendientes
-anteriores permanecen en el historial del commit `c97ed89`; no se declaran resueltos
-por limpiar el código ni por cambiar de arquitectura.
+La conexión elegida sigue siendo Codex con ChatGPT; NVIDIA queda excluido y no hay
+respaldo automático entre proveedores. El dueño inicia sesión, escribe contraseñas,
+concede TCC y aprueba acciones reales. Los pendientes anteriores permanecen en el
+historial del commit `c97ed89`; no se han borrado de los inventarios.

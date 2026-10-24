@@ -11,17 +11,17 @@ propia aquí, no mantener una segunda implementación junto al producto anterior
 - Se retiraron 1.216 archivos versionados del árbol. Los inventarios de capacidades
   y la investigación permanecen en `docs/rebuild/` como documentación, no código activo.
 - Los restos locales de las carpetas de código se movieron sin leer su contenido a
-  `/private/tmp/aegis-clean-start-20261024-2ogf4mcy`, en un directorio privado. Esa
+  `/private/tmp/jarvis-clean-start-20261024-2ogf4mcy`, en un directorio privado. Esa
   copia temporal no sustituye al historial Git como punto de recuperación duradero.
 - No se ejecutó `git clean`, no se reescribió historia ni se hizo force-push.
 
-La app instalada y `~/Library/Application Support/Aegis` no se desinstalaron,
+La app instalada y `~/Library/Application Support/Jarvis` no se desinstalaron,
 leyeron, borraron ni migraron por esta limpieza. El entorno `.venv` y los archivos
 locales ajenos al árbol de código no se tratan como producto versionado.
 
 ## Qué contiene la base
 
-- `src/aegis_core/__init__.py` y `runtime.py`: únicamente el núcleo **nuevo y propio**
+- `src/jarvis_core/__init__.py` y `runtime.py`: únicamente el núcleo **nuevo y propio**
   creado para esta reconstrucción. No son el daemon ni el grafo antiguos.
 - `tests/`: contratos de la base, con proveedores/herramientas de fixture.
 - `script/`: cualificación, activación de hooks e inventario de investigación.
@@ -59,6 +59,15 @@ Para evitar contaminación futura, el empaquetado genera un sdist y construye el
 wheel desde ese sdist en un árbol temporal fresco. El guard contrasta las fuentes
 del wheel con el árbol cualificado y rechaza recursos o dependencias ajenos.
 
-La distribución inicial es `aegis-swarm 0.1.0a1`, sin dependencias productivas.
-El paquete wheel actual contiene solo `aegis_core/__init__.py` y `runtime.py`.
+La distribución inicial es `jarvis-core 0.1.0a1`, sin dependencias productivas.
+El paquete wheel actual contiene solo `jarvis_core/__init__.py` y `runtime.py`.
 Esto acredita un paquete Python propio, no una app de escritorio terminada.
+
+## Nomenclatura vigente
+
+El dueño sustituyó la instrucción de conservar el nombre técnico anterior. El
+árbol activo usa `jarvis_core`, distribución `jarvis-core`, identificadores `jarvis`
+y directorios/scripts propios de Jarvis. Las copias de consulta de los inventarios
+normalizan los nombres; los originales exactos continúan en Git en los commits
+indicados. Sus hashes siguen describiendo las fuentes históricas originales. No
+se han borrado capacidades ni reescrito el historial Git.

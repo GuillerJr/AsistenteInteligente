@@ -5,16 +5,17 @@ repositorio**, con implementación propia y arquitectura informada por el estudi
 de OpenClaw. El clon externo es material de referencia. El producto nuevo no será
 un fork ni una personalización de ese clon y no requerirá ejecutar OpenClaw.
 
-El dueño precisó el orden: **fase A, variante base propia mejorada; fase B posterior,
-herramientas específicas de Jarvis**. El inventario de Jarvis preserva el alcance de
-esa segunda fase y no autoriza adelantar su integración. La fase A puede definir y
-probar contratos genéricos de herramientas con dobles sintéticos, sin conectores del
-producto anterior, control real del Mac ni audio de Jarvis.
+El dueño precisó el orden: **fase A, variante completa funcional de OpenClaw con el nombre Jarvis;
+fase B posterior, mejoras y herramientas adicionales de Jarvis**. El inventario de Jarvis preserva el alcance de
+esa segunda fase y no autoriza adelantar su integración. Las herramientas, memoria, audio, nodos y canales que ya pertenecen a la base
+OpenClaw se incluyen en A. Coincidir con un módulo histórico no las desplaza a B.
+La [matriz de paridad](OPENCLAW_BASELINE_PARITY.md) sustituye el alcance reducido
+del primer prototipo. Un chat funcional no cierra esta fase.
 
 El árbol anterior fue retirado por petición del dueño. Ver [inicio limpio](CLEAN_START.md).
 Los inventarios históricos están congelados; el código previo vive en Git.
 
-Se conservan el nombre de producto Jarvis, los identificadores técnicos `aegis`,
+Se conservan el nombre de producto Jarvis, los identificadores técnicos `jarvis`,
 la interfaz en español y las reglas de privacidad/aprobación. La primera conexión
 de inferencia continúa siendo Codex con ChatGPT; NVIDIA está retirado del producto.
 El cliente de la fase A será una app nativa de macOS en SwiftUI, con ventana propia,
@@ -82,17 +83,20 @@ El diseño separa:
 Estos contratos son decisiones propias. Se contrastan con la referencia mediante
 especificaciones y pruebas, sin trasladar implementaciones ni recursos del proyecto externo.
 
-## Primer núcleo ejecutable
+## Primer núcleo ejecutable e integración de desarrollo
 
-`src/aegis_core/runtime.py` (`AgentRuntime`) contiene el prototipo propio del ciclo de ejecución.
+`src/jarvis_core/runtime.py` (`AgentRuntime`) contiene el prototipo propio del ciclo de ejecución.
 Sus pruebas usan proveedores, herramientas y decisiones sintéticos. No tiene
 acceso a la cuenta del dueño, TCC, herramientas del Mac ni datos personales.
-No está conectado al daemon, CLI de producto ni app instalada.
+Ahora se integra en el servicio propio `jarvis_core.service`, con SQLite, IPC
+y Codex oficial. La app de desarrollo SwiftUI es nueva. Ninguno de esos hechos
+acredita por sí solo una base completa ni cambia la app instalada del dueño.
+Ver [verificación del recorrido inicial](BASELINE_VERTICAL_SLICE.md).
 
 El prototipo prueba serialización por sesión, propuesta/validación/autorización,
-resultado explícito, cancelación y asentamiento. No acredita todavía autenticación,
-permisos persistentes, cifrado, recuperación tras caída, herramientas reales,
-compatibilidad IPC ni voz. Es el primer contrato ejecutable de la reconstrucción,
+resultado explícito, cancelación y asentamiento. El prototipo aislado no acredita permisos persistentes, cifrado, herramientas
+reales ni voz. El servicio añadido tiene pruebas separadas de autenticación local,
+recuperación de SQLite e IPC; token local no equivale a identidad firmada. Es el primer contrato ejecutable de la reconstrucción,
 no una nueva versión funcional de la app.
 
 Límites adicionales del prototipo: `max_steps` acota las propuestas, no el tiempo
@@ -104,6 +108,10 @@ El texto final lleva procedencia `model`; los recibos de acciones se presentan
 por separado y no verifican automáticamente las frases del modelo.
 
 ## Orden de implementación y cierre
+
+La tabla siguiente describe el desglose inicial, **no el alcance completo**. La
+matriz de paridad incluye las familias restantes y fija la condición de cierre.
+Las mejoras específicas de Jarvis solo empiezan después de acreditar toda A.
 
 | Etapa | Entregable y condición para pasar |
 | --- | --- |
