@@ -1,0 +1,41 @@
+{
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "files": [
+    {
+      "path": "package.json",
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "bytes": 153025,
+      "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+      "bytes": 1076,
+      "git_blob": "ed064819ab537575d0cad902f7e5af4a3488b1d0"
+    },
+    {
+      "path": "src/agents/embedded-agent-runner/run-orchestrator.ts",
+      "sha256": "97c3547b787451adcc34c390ee3e3fe88313108770d67edaccbbe8f11a8bda77",
+      "bytes": 34519,
+      "git_blob": "3120402bbfaed863492df2594334c693adce3e47"
+    },
+    {
+      "path": "src/agents/agent-tools.before-tool-call.wrapper.ts",
+      "sha256": "e69473dc9329f914d9bd6952bbfa3ccd411c3205919a429772c714bc60e7419b",
+      "bytes": 24840,
+      "git_blob": "821a905f874c52c9ad45d2032e27799d254abbd8"
+    },
+    {
+      "path": "src/agents/agent-tools.before-tool-call.policy.ts",
+      "sha256": "7693db28e8fc36969a77db84e91960e59166555bbe9027d3b22ba7e32dea38d3",
+      "bytes": 16616,
+      "git_blob": "9fd780b2b9c4e1a39f840f591ab47f1e51cae80e"
+    },
+    {
+      "path": "src/agents/agent-bundle-mcp-manager.ts",
+      "sha256": "2a59a9e5dc868d9217f81776239cfe309dd905f2e2a34e02cee9dc8c9b290ffb",
+      "bytes": 22509,
+      "git_blob": "b694624b258e6cd33c063a3ee3db2f609be0c182"
+    }
+  ]
+}

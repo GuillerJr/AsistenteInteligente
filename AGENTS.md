@@ -9,6 +9,22 @@ El nombre técnico heredado `aegis` se conserva en paquetes, rutas, Keychain e i
 
 La lista de trabajo pendiente para la 1.0 está en [`docs/V1_PENDIENTES.md`](docs/V1_PENDIENTES.md).
 
+La reconstrucción acordada el 24-10-2026 se registra en
+[`docs/rebuild/README.md`](docs/rebuild/README.md): Jarvis propio en este repositorio,
+con OpenClaw como referencia de comportamiento y análisis REA por partes. No convertir
+este repositorio en un fork, importar el árbol de OpenClaw ni usarlo como runtime del
+producto. Conservar el inventario completo de capacidades, los identificadores `aegis`
+y las garantías de privacidad y aprobación. Primero se construye y verifica la variante
+base propia (fase A); implementar o conectar las herramientas específicas de Jarvis
+corresponde a una fase posterior (fase B). En fase A solo se inventariarán esas herramientas
+y se usan adaptadores sintéticos para probar los contratos del núcleo.
+La fase A incluye un cliente de escritorio nativo macOS en SwiftUI, con ventana propia,
+Dock, barra de menús y atajo: el uso habitual no depende de una pestaña ni de un panel
+web incrustado. Consultar `docs/rebuild/DESKTOP_APP.md`.
+El núcleo nuevo permanece separado del
+producto instalado hasta superar los criterios de paridad; cobertura estática parcial
+y pruebas sintéticas no acreditan una aplicación reconstruida ni una prueba real.
+
 ## Forma de trabajar
 
 - **Rama:** trabaja solo en `main`, sin ramas ni PRs. Después de cada cambio terminado, haz commit y `git push` a `main`.

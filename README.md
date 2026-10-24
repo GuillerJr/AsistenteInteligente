@@ -8,6 +8,10 @@ cifrada viven en el Mac. Los embeddings se calculan localmente con Apple.
 La salida de voz y las notas de audio de Telegram están pendientes de configurar
 tras retirar NVIDIA NIM. Ollama y otras APIs quedan para conexiones posteriores.
 
+La [variante propia inspirada en OpenClaw](docs/rebuild/README.md) se desarrolla en
+este repositorio: primero la base independiente y después las herramientas de Jarvis.
+El núcleo experimental y su cobertura parcial están separados del producto descrito aquí.
+
 ## Instalar y empezar
 
 Consulta el [manual único de instalación y uso](docs/MANUAL_INSTALACION_CONFIGURACION.md).

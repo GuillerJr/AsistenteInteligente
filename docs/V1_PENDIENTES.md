@@ -7,6 +7,29 @@ hasta publicar la primera versión. Las reglas de trabajo del repositorio están
 
 Los párrafos originales se conservan como contexto; el avance fechado de cada punto describe el estado actual. Una casilla abierta puede tener toda la implementación terminada y una certificación pendiente del dueño.
 
+## Reconstrucción propia acordada el 24-10-2026
+
+El dueño aclaró que la nueva variante se construye **en este repositorio**, con
+código propio informado por el análisis de OpenClaw, sin convertir Jarvis en un
+fork ni usar OpenClaw como runtime. El plan y los inventarios completos viven en
+[`rebuild/README.md`](rebuild/README.md). Los pendientes históricos siguen siendo
+criterios de paridad y no desaparecen al cambiar de arquitectura.
+
+- [x] Registrar la decisión, los módulos backend/nativos y las herramientas que
+  debe recuperar la nueva variante, distinguiendo código activo, condicionado y heredado.
+- [x] Inventariar el árbol de referencia y ejecutar la primera parte estática con
+  REA, conservando identidad, fuentes, Evidence IDs e incógnitas.
+- [ ] Completar las partes restantes de la investigación de OpenClaw y contrastar
+  los comportamientos relevantes con pruebas controladas. El análisis global es parcial.
+- [ ] **Fase A:** terminar y verificar primero la variante base propia: sesiones,
+  ejecución, permisos, extensibilidad, proveedor elegido, persistencia y app de
+  escritorio nativa SwiftUI con ventana, Dock, barra de menús y atajo.
+  Los adaptadores actuales de sus pruebas son sintéticos.
+- [ ] **Fase B posterior:** implementar las herramientas específicas de Jarvis y
+  conectarlas a recorridos reales con aprobación, resultado, cancelación y revocación.
+  Reconstruir y verificar cada capacidad de ambos inventarios antes de sustituir
+  e instalar el producto nuevo. El prototipo offline no acredita esa sustitución.
+
 Cada punto dice **qué pasa**, **dónde** está y **cuándo se da por terminado**.
 Prioridades:
 

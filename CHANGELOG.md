@@ -2,6 +2,7 @@
 
 ## 1.0.0
 
+- Investigación por partes con REA e inventario de capacidades para una variante propia inspirada en OpenClaw. Núcleo genérico experimental con pruebas sintéticas; las herramientas de Jarvis quedan para una fase posterior.
 - Cierre coordinado de Codex al cancelar una respuesta para que el mensaje siguiente pueda reconectar.
 - Solicitudes de TextEdit con el destino al principio, sin perder la confirmación del dueño.
 - Propuestas obligatorias de Codex con esquema estricto y contadores locales de herramientas sin contenido privado.

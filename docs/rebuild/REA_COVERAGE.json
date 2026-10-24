@@ -1,0 +1,347 @@
+{
+  "schema_version": 1,
+  "decision_date": "2026-10-24",
+  "reference": {
+    "project": "OpenClaw",
+    "revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+    "role": "read_only_behavioral_reference",
+    "runtime_dependency": false
+  },
+  "global_status": "partial",
+  "whole_repository_review_complete": false,
+  "unlisted_paths_status": "not_reviewed",
+  "completed_static_batches": [
+    {
+      "id": "OC-01A",
+      "topic": "run lifecycle, pre-effect policy and MCP ownership",
+      "source_paths": [
+        "package.json",
+        "src/agents/embedded-agent-runner/run-orchestrator.ts",
+        "src/agents/agent-tools.before-tool-call.wrapper.ts",
+        "src/agents/agent-tools.before-tool-call.policy.ts",
+        "src/agents/agent-bundle-mcp-manager.ts"
+      ],
+      "parent_evidence_id": "ev_187d54eade88bc3011234d989dd9c4bf0744a2a3cc50e1feb61566acf0d11272",
+      "summary_evidence_id": "ev_e414175f4988b095c0fcf72a68e4097401fe2094b85fc5d3e731888dc9414588",
+      "partition_sha256": "ee75448a5c78364e6d65aa846b993a8565e2ba897812b6790bd85c923d24d1e0",
+      "statistics": {
+        "relevant_files": 5,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 251509,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 4,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 9566,
+        "findings": 316,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "partial",
+          "truncated": false,
+          "omitted_count": null,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 3,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 190,
+              "omitted_relations": 0,
+              "unknown_count": 463
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 782,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 5517,
+              "omitted_relations": 0,
+              "unknown_count": 652
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 2,
+              "omitted_relations": 0,
+              "unknown_count": 1
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 719,
+              "omitted_relations": 0,
+              "unknown_count": 800
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 86,
+              "omitted_relations": 0,
+              "unknown_count": 74
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 0,
+        "semantic_unknowns": 1990
+      },
+      "semantic_unknowns": 1990,
+      "execution_observed": false,
+      "full_evidence_path": "/private/tmp/jarvis-openclaw-rea-rebuild-part01-20261024.json",
+      "provenance_file": "REA_PART01_PROVENANCE.json",
+      "limitations": [
+        "Only the copied, hash-bound partition was analyzed; complete-within-view is not coverage of the upstream repository.",
+        "Static syntax and references are not proof of runtime behavior.",
+        "Unresolved imports outside the partition remain unknown."
+      ]
+    },
+    {
+      "id": "OC-RESOURCES-A",
+      "topic": "memory settlement, MCP lifecycle, thread ownership and connection health",
+      "source_paths": [
+        "package.json",
+        "extensions/memory-core/src/memory/manager.ts",
+        "src/agents/agent-bundle-mcp-manager-lifecycle.ts",
+        "extensions/codex/src/app-server/thread-ownership.ts",
+        "extensions/codex/src/app-server/connection-health.ts"
+      ],
+      "parent_evidence_id": "ev_682f7d1f107c5732c9d1621b189664409d2213c6ac935a6a569ca232134604b2",
+      "summary_evidence_id": "ev_33eab28fb4e7eaef114264c50f8c21452220fc542f6b842f921d80b0bd269ad9",
+      "partition_sha256": "39b2810d7cda9622f3092e59b080ae4dac80d9b015ea590b10d23445f5025f3a",
+      "statistics": {
+        "relevant_files": 5,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 222161,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 4,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 7909,
+        "findings": 143,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "partial",
+          "truncated": false,
+          "omitted_count": null,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 6,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 132,
+              "omitted_relations": 0,
+              "unknown_count": 421
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 444,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 3113,
+              "omitted_relations": 0,
+              "unknown_count": 399
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 415,
+              "omitted_relations": 0,
+              "unknown_count": 705
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 126,
+              "omitted_relations": 0,
+              "unknown_count": 93
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 0,
+        "semantic_unknowns": 1618
+      },
+      "semantic_unknowns": 1618,
+      "execution_observed": false,
+      "provenance_file": "REA_PART02_PROVENANCE.json",
+      "summary_file": "REA_PART02_SUMMARY.json",
+      "limitations": [
+        "Only this hash-bound partition was analyzed. Dependencies and dynamic execution remain unknown."
+      ]
+    }
+  ],
+  "remaining_parts": [
+    {
+      "id": "OC-01B",
+      "scope": "Remaining agent orchestration, resources and settlement",
+      "status": "pending"
+    },
+    {
+      "id": "OC-02",
+      "scope": "Gateway, protocol, client ownership and session persistence",
+      "status": "pending"
+    },
+    {
+      "id": "OC-03",
+      "scope": "Providers, Codex harness and isolated authentication",
+      "status": "pending"
+    },
+    {
+      "id": "OC-04",
+      "scope": "MCP, plugins, schemas and all execution admission paths",
+      "status": "pending"
+    },
+    {
+      "id": "OC-05",
+      "scope": "Memory, retrieval, compaction and migration",
+      "status": "pending"
+    },
+    {
+      "id": "OC-06",
+      "scope": "Computer use, browser, native devices and platform permissions",
+      "status": "pending"
+    },
+    {
+      "id": "OC-07",
+      "scope": "Audio, recognition, synthesis, wake, push-to-talk and interruption",
+      "status": "pending"
+    },
+    {
+      "id": "OC-08",
+      "scope": "Native/web/mobile interface and event/state synchronization",
+      "status": "pending"
+    },
+    {
+      "id": "OC-09",
+      "scope": "Messaging channels, schedules, proactive work and connected devices",
+      "status": "pending"
+    },
+    {
+      "id": "OC-10",
+      "scope": "Distribution, update, secrets, sandbox and recovery",
+      "status": "pending"
+    },
+    {
+      "id": "OC-11",
+      "scope": "Dependencies, build scripts, fixtures, tests, generated files, documentation and remaining inventory",
+      "status": "pending"
+    }
+  ],
+  "rea_parsed_unique_source_files": 8
+}

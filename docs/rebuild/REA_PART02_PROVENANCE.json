@@ -1,0 +1,41 @@
+{
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "files": [
+    {
+      "path": "package.json",
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "bytes": 153025,
+      "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+      "bytes": 1076,
+      "git_blob": "ed064819ab537575d0cad902f7e5af4a3488b1d0"
+    },
+    {
+      "path": "extensions/memory-core/src/memory/manager.ts",
+      "sha256": "84e38efda36049822ac9761232b88431e39b298dabbad0c572e376abb7703dc4",
+      "bytes": 30316,
+      "git_blob": "e36781380a027f2fd18f8eeb0acb52c809a79616"
+    },
+    {
+      "path": "src/agents/agent-bundle-mcp-manager-lifecycle.ts",
+      "sha256": "47ccb3597322fb2cc7b4cbe110858a344484e93dadad758627027c5319598d6b",
+      "bytes": 22372,
+      "git_blob": "4f138b4fc79fde003ed6dfb2a73a286854c0c82e"
+    },
+    {
+      "path": "extensions/codex/src/app-server/thread-ownership.ts",
+      "sha256": "0fa0aaad7f016dbaa69770dd0b42c6ba855c9ba1efc3949ba678bc2b18f360b2",
+      "bytes": 10498,
+      "git_blob": "a9d441ca92f35782d91d870a2c2913065cd23abb"
+    },
+    {
+      "path": "extensions/codex/src/app-server/connection-health.ts",
+      "sha256": "149f92cc8620f2c7962830e0336e4b1e27d7a42facdeefa305810ab3df0e3086",
+      "bytes": 5950,
+      "git_blob": "2be00840b19f360bf9a607584aa160bc9fa1c8e5"
+    }
+  ]
+}
