@@ -41,7 +41,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           ./script/test_desktop.sh
-          ./script/build_desktop.sh --output "$RUNNER_TEMP/jarvis-desktop"
+          ./script/build_desktop.sh
       - name: Construir el paquete propio
         shell: bash
         run: |
