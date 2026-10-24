@@ -56,6 +56,11 @@ final class SocketIntegrationTests: XCTestCase {
         do { _ = try await client.call("health"); XCTFail("Se aceptó la credencial revocada.") }
         catch { XCTAssertEqual((error as? RPCFailure), .remote(-32001, "No se autorizó la conexión local.")) }
         await client.close()
+        // Manual reconnection resets the same client's cached token. An auth
+        // rejection by itself must never silently reload that credential.
+        let resetHealth = try await client.call("health")
+        XCTAssertEqual(resetHealth["service"].string, "jarvis")
+        await client.close()
         let reconnected = LocalRPCClient(stateDirectory: directory)
         let newHealth = try await reconnected.call("health")
         XCTAssertEqual(newHealth["version"].integer, 1)

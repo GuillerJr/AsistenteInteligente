@@ -1,0 +1,41 @@
+{
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "files": [
+    {
+      "path": "package.json",
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "bytes": 153025,
+      "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+      "bytes": 1076,
+      "git_blob": "ed064819ab537575d0cad902f7e5af4a3488b1d0"
+    },
+    {
+      "path": "src/agents/tool-policy-pipeline.ts",
+      "sha256": "3fa404134c64df6b1d9560003aa826f7c65f96197a0be38d066562e6f670012a",
+      "bytes": 8977,
+      "git_blob": "d7e3627f7e6d3f3e0c12464f3494bc776cc9a0d0"
+    },
+    {
+      "path": "src/agents/tool-fs-policy.types.ts",
+      "sha256": "dfe4f6820dc76e0942bcee1a7701b1946a5d59a176cc00f86739b39730ba7700",
+      "bytes": 400,
+      "git_blob": "3e9cb1b9ab77e3b1cc06cd02ed7a0fd7ea6e5299"
+    },
+    {
+      "path": "extensions/codex/src/app-server/dynamic-tool-response-state.ts",
+      "sha256": "a17cd2db6b7d8f63d6a3580ce91e23a38e403fa08c39fee3f30cec2b7157375f",
+      "bytes": 2223,
+      "git_blob": "6a661dc7bd0ed5f5a5e748b168899cce42e10b5d"
+    },
+    {
+      "path": "extensions/codex/src/app-server/dynamic-tool-result-projection.ts",
+      "sha256": "9fd21b78d0eb5440bd09f3e5357ff8884d74cef9a6222c5c6768d1d2e35d886c",
+      "bytes": 1158,
+      "git_blob": "98dfccc24f1df7de91697a931d323270f0264e5d"
+    }
+  ]
+}

@@ -28,7 +28,7 @@ struct SettingsView: View {
             }
             Section("Estado de esta base") {
                 Text("Cliente nativo de desarrollo. Requiere el servicio Python del repositorio y el cliente oficial de Codex.")
-                Text("Las acciones en otras apps, audio y conectores se integrarán en una fase posterior.")
+                Text("Las capacidades disponibles se consultan en «Herramientas» y «Memoria». La paridad completa de la base permanece en construcción.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }.formStyle(.grouped).frame(width: 580, height: 430)

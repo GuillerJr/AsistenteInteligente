@@ -1,0 +1,41 @@
+{
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "files": [
+    {
+      "path": "package.json",
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "bytes": 153025,
+      "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+      "bytes": 1076,
+      "git_blob": "ed064819ab537575d0cad902f7e5af4a3488b1d0"
+    },
+    {
+      "path": "extensions/memory-core/src/memory/manager-search.ts",
+      "sha256": "8b53a789f0165449e1eff99ecb15c236c9e2b059630b187c890cdc891c253161",
+      "bytes": 28144,
+      "git_blob": "231583dc7667834f91f1d4bd2796bbc92085cc7b"
+    },
+    {
+      "path": "extensions/memory-core/src/memory/manager-search-schema.ts",
+      "sha256": "8d37191f1f2632c74592cfb831924d1d9ff9af4a34bc1181cf34610d3d59fd71",
+      "bytes": 124,
+      "git_blob": "b580d3ddecc4954bece1829136583ffce9db5c19"
+    },
+    {
+      "path": "extensions/memory-core/src/memory/manager-search-scorer.ts",
+      "sha256": "95c1192e0b2fee33856b1a82ee019d40765c26b16226bcb5f99c7b9258ddf0a6",
+      "bytes": 1238,
+      "git_blob": "a671800b5061044d2cbd8d0eb9c45f283cefcc89"
+    },
+    {
+      "path": "extensions/memory-core/src/memory/manager-chunk-writer.ts",
+      "sha256": "162234ed9c8f1ebef3b09e40c135c32e0694c3e3ba5ad734659c26885483f037",
+      "bytes": 5316,
+      "git_blob": "e43bc2d5b076771904b12c7025000973b9ae5343"
+    }
+  ]
+}

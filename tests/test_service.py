@@ -31,7 +31,7 @@ class ModelPeer:
     async def logout(self):
         return {"connected": False, "mode": None}
 
-    async def chat(self, message, *, thread_id, temporary, on_thread, on_event):
+    async def chat(self, message, *, thread_id, temporary, on_thread, on_event, **_options):
         self.calls.append((message, thread_id, temporary))
         if thread_id is None:
             on_thread("owned-" + uuid4().hex)

@@ -548,6 +548,282 @@
       "runtime_executed": false,
       "provenance": "REA_PART04_PROVENANCE.json",
       "summary": "REA_PART04_SUMMARY.json"
+    },
+    {
+      "id": "OC-05",
+      "topic": "Layered tool policy and truthful dynamic tool result delivery",
+      "source_paths": [
+        "package.json",
+        "LICENSE",
+        "src/agents/tool-policy-pipeline.ts",
+        "src/agents/tool-fs-policy.types.ts",
+        "extensions/codex/src/app-server/dynamic-tool-response-state.ts",
+        "extensions/codex/src/app-server/dynamic-tool-result-projection.ts"
+      ],
+      "parent_evidence_id": "ev_a2eaa6089c0d753f345c498d40253962dee08d6f3b294810eb0a391acea04286",
+      "summary_evidence_id": "ev_d422ef9293c04176e10c63ef89c220a694b6033bc2cee85ff10d70ecead9333d",
+      "partition_sha256": "0b3073ae73930166df95631a019440c7399cc743919048defdb057a70872cb36",
+      "statistics": {
+        "relevant_files": 5,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 165783,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 4,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 1334,
+        "findings": 40,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "complete",
+          "truncated": false,
+          "omitted_count": 0,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 3,
+              "omitted_relations": 0,
+              "unknown_count": 35
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 34,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 377,
+              "omitted_relations": 0,
+              "unknown_count": 76
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 72,
+              "omitted_relations": 0,
+              "unknown_count": 77
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 0,
+        "semantic_unknowns": 188
+      },
+      "runtime_executed": false,
+      "full_evidence_path": "/private/tmp/jarvis-openclaw-rea-phase-a-parts05-06-20261024.json",
+      "provenance": "REA_PART05_PROVENANCE.json",
+      "summary": "REA_PART05_SUMMARY.json",
+      "semantic_unknowns": 188,
+      "limitations": [
+        "Static partition only; dependencies outside the partition remain unknown. No target execution or runtime parity claim."
+      ]
+    },
+    {
+      "id": "OC-06",
+      "topic": "Memory search, chunk provenance and embedding scorer boundaries",
+      "source_paths": [
+        "package.json",
+        "LICENSE",
+        "extensions/memory-core/src/memory/manager-search.ts",
+        "extensions/memory-core/src/memory/manager-search-schema.ts",
+        "extensions/memory-core/src/memory/manager-search-scorer.ts",
+        "extensions/memory-core/src/memory/manager-chunk-writer.ts"
+      ],
+      "parent_evidence_id": "ev_fe86587afb04d95a81d5545151a178f0cade7b13382087f22df48632a93e6b54",
+      "summary_evidence_id": "ev_52aa9d197590e55baf2d5e7a1d7d05533658bbc2132a3dff6d03f2d21b94c406",
+      "partition_sha256": "fb92b7a2cce6289ef84668bdef91dd4f0e6d0c9cef62e196a2fc6df4930f6dd1",
+      "statistics": {
+        "relevant_files": 5,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 187847,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 4,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 4592,
+        "findings": 52,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "partial",
+          "truncated": false,
+          "omitted_count": null,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 2,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 181,
+              "omitted_relations": 0,
+              "unknown_count": 223
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 225,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 1979,
+              "omitted_relations": 0,
+              "unknown_count": 268
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 317,
+              "omitted_relations": 0,
+              "unknown_count": 392
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 10,
+              "omitted_relations": 0,
+              "unknown_count": 4
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 0,
+        "semantic_unknowns": 887
+      },
+      "runtime_executed": false,
+      "full_evidence_path": "/private/tmp/jarvis-openclaw-rea-phase-a-parts05-06-20261024.json",
+      "provenance": "REA_PART06_PROVENANCE.json",
+      "summary": "REA_PART06_SUMMARY.json",
+      "semantic_unknowns": 887,
+      "limitations": [
+        "Static partition only; dependencies outside the partition remain unknown. No target execution or runtime parity claim."
+      ]
     }
   ],
   "remaining_parts": [
@@ -618,6 +894,6 @@
       "original_plan_id": "OC-11"
     }
   ],
-  "rea_parsed_unique_source_files": 16,
+  "rea_parsed_unique_source_files": 24,
   "remaining_parts_id_note": "Los scopes restantes usan SCOPE para no confundir etiquetas del plan inicial con lotes OC completados. Un lote estático no cierra un scope."
 }

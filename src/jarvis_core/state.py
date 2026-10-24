@@ -584,6 +584,18 @@ class StateStore:
             ).fetchall()
             return tuple(MessageRecord(**dict(row)) for row in rows)
 
+    def list_recent_messages(self, ref: SessionRef, *, limit: int = 100
+                             ) -> tuple[MessageRecord, ...]:
+        self._ref(ref)
+        self._page(limit)
+        with self._transaction(ref.temporary) as connection:
+            self._session(connection, ref)
+            rows = connection.execute(
+                "SELECT * FROM messages WHERE session_id=? ORDER BY sequence DESC LIMIT ?",
+                (ref.session_id, limit),
+            ).fetchall()
+            return tuple(MessageRecord(**dict(row)) for row in reversed(rows))
+
     def create_run(self, ref: SessionRef, *, run_id: str | None = None,
                    user_text: str | None = None) -> RunRecord:
         """Commit queued run, initial event and optional request together.

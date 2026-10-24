@@ -13,6 +13,7 @@ public final class ServiceProcess {
         child.executableURL = URL(fileURLWithPath: options.python)
         child.arguments = ["-m", "jarvis_core.service", "--state", options.state,
                            "--codex", options.codex]
+        if let providerState = options.providerState { child.arguments! += ["--provider-state", providerState] }
         var environment = ProcessInfo.processInfo.environment
         environment["PYTHONPATH"] = options.source
         environment["PYTHONUNBUFFERED"] = "1"

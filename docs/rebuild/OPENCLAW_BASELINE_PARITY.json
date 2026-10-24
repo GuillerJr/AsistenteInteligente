@@ -45,7 +45,7 @@
       "Contratos declarados y rutas UI no acreditan disponibilidad ni funcionamiento real.",
       "No se ejecutó OpenClaw ni se leyó configuración/cuenta del dueño."
     ],
-    "current_jarvis_state": "Primer recorrido de desarrollo con SQLite, IPC local, adaptador oficial Codex y cliente SwiftUI; MCP stdio separado con fixtures. Sin inferencia autenticada acreditada ni herramientas completas de referencia conectadas. Cero capacidades completas certificadas."
+    "current_jarvis_state": "Recorrido de desarrollo con inferencia autenticada acreditada, SQLite, IPC y cliente SwiftUI; herramientas de archivos, autoridad por operación, memoria léxica local y registro MCP stdio conectados. Ver PHASE_A_TOOLS_MEMORY_MCP.md y PHASE_A_QUALIFICATION.json. La base completa sigue abierta; cero familias completas certificadas."
   },
   "status_vocabulary": {
     "no_implementado": "Sin evidencia productiva propia de cierre.",
@@ -179,8 +179,13 @@
       "family": "gateway",
       "name": "Configuración, esquema y recarga transaccional",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-TOOLS",
+          "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
+        }
+      ],
       "acceptance": {
         "observable_success": "Cambiar preferencia mediante API propia y comprobar efecto desde otro cliente y tras reinicio.",
         "observable_failure_or_revocation": "Dato inválido, revisión obsoleta y fallo de escritura preservan configuración previa y secretos.",
@@ -232,6 +237,10 @@
         {
           "progress_id": "P-CODEX",
           "scope": "Ver avance parcial; no cierra la capacidad."
+        },
+        {
+          "progress_id": "P-TOOLS",
+          "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
         }
       ],
       "acceptance": {
@@ -311,6 +320,10 @@
         {
           "progress_id": "P-MCP",
           "scope": "Ver avance parcial; no cierra la capacidad."
+        },
+        {
+          "progress_id": "P-TOOLS",
+          "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
         }
       ],
       "acceptance": {
@@ -337,6 +350,10 @@
         {
           "progress_id": "P-MCP",
           "scope": "Ver avance parcial; no cierra la capacidad."
+        },
+        {
+          "progress_id": "P-TOOLS",
+          "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
         }
       ],
       "acceptance": {
@@ -358,8 +375,13 @@
       "family": "loop",
       "name": "Contexto, instrucciones y compactación",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-MEMORY",
+          "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
+        }
+      ],
       "acceptance": {
         "observable_success": "Sesión larga compacta conservando instrucciones, decisiones y referencias necesarias para continuar una tarea de prueba.",
         "observable_failure_or_revocation": "Agotar contexto no pierde permisos/recibos ni convierte contenido externo en instrucciones confiables.",
@@ -387,6 +409,10 @@
         {
           "progress_id": "P-CODEX",
           "scope": "Ver avance parcial; no cierra la capacidad."
+        },
+        {
+          "progress_id": "P-TOOLS",
+          "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
         }
       ],
       "acceptance": {
@@ -641,8 +667,13 @@
       "family": "memory",
       "name": "Memoria durable, procedencia y controles",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-MEMORY",
+          "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
+        }
+      ],
       "acceptance": {
         "observable_success": "Guardar hecho sintético permitido y recuperarlo tras reinicio en sesión elegible con fuente/propietario.",
         "observable_failure_or_revocation": "Chat temporal no se recuerda; corregir o borrar recuerdo elimina su recuperación sin reimportarlo.",
@@ -663,8 +694,13 @@
       "family": "memory",
       "name": "Búsqueda lexical, vectorial e híbrida",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-MEMORY",
+          "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
+        }
+      ],
       "acceptance": {
         "observable_success": "Indexar corpus artificial, recuperar consultas exactas/semánticas con citas y reconstruir índice con equivalencia.",
         "observable_failure_or_revocation": "Sin embedding elegido declarar búsqueda lexical local disponible; no enviar memoria a NVIDIA ni proveedor no elegido.",
@@ -685,8 +721,13 @@
       "family": "memory",
       "name": "Recuperación activa, flush y mantenimiento",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-MEMORY",
+          "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
+        }
+      ],
       "acceptance": {
         "observable_success": "Recuperar recuerdos pertinentes antes de responder y ensayar mantenimiento con trazabilidad de cambios.",
         "observable_failure_or_revocation": "Recuerdo conflictivo, mantenimiento interrumpido e instrucciones incrustadas no alteran autoridad ni pierden fuentes.",
@@ -734,6 +775,10 @@
         {
           "progress_id": "P-STATE",
           "scope": "Ver avance parcial; no cierra la capacidad."
+        },
+        {
+          "progress_id": "P-MEMORY",
+          "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
         }
       ],
       "acceptance": {
@@ -755,8 +800,13 @@
       "family": "files",
       "name": "Listar, leer, escribir, editar y aplicar parches",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-TOOLS",
+          "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
+        }
+      ],
       "acceptance": {
         "observable_success": "En workspace temporal crear/editar texto, aplicar parche y verificar bytes y diff independientes.",
         "observable_failure_or_revocation": "Traversal, symlink que escape y cambio concurrente bloquean escritura preservando contenido previo.",
@@ -1727,8 +1777,13 @@
       "family": "security",
       "name": "Defensas de red, contenido, archivos y abuso",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-TOOLS",
+          "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
+        }
+      ],
       "acceptance": {
         "observable_success": "Corpus adversarial ensaya prompt externo, SSRF, traversal, spam y replay sin bloquear operación legítima.",
         "observable_failure_or_revocation": "Fallo plugin/proveedor no omite validación; cubrir WS, HTTP, CLI, node.invoke, MCP y UI de plugin.",
@@ -13490,10 +13545,10 @@
   },
   "progress_snapshot": {
     "date": "2026-10-24",
-    "revision_scope": "Árbol de trabajo previo al commit de este avance; resultados finales del conjunto en BASELINE_VERTICAL_SLICE.md. No modifica los hashes de la referencia externa.",
+    "revision_scope": "Avance de desarrollo; primera inferencia real y reinicio acreditados en BASELINE_VERTICAL_SLICE.md. Herramientas, memoria y MCP y resultados finales en PHASE_A_TOOLS_MEMORY_MCP.md y PHASE_A_QUALIFICATION.json. No modifica hashes externos ni cierra familias completas.",
     "complete_capability_count": 0,
     "complete_reference_parity": false,
-    "authenticated_inference_verified": false,
+    "authenticated_inference_verified": true,
     "installed_previous_app_replaced": false,
     "components": [
       {
@@ -13541,7 +13596,7 @@
           "A-14"
         ],
         "verified_scope": "Sockets/procesos locales reales con contenido y proveedor sintéticos; token privado, límites, idempotencia de petición, errores, cancelación y cierre.",
-        "remaining": "No identidad firmada de cliente, API completa de referencia, acceso remoto productivo, canal de tools común ni cualificación E2E autenticada."
+        "remaining": "No identidad firmada de cliente, API completa de referencia ni acceso remoto productivo."
       },
       {
         "id": "P-CODEX",
@@ -13549,12 +13604,16 @@
         "status": "contract_tested_partial",
         "code": [
           "src/jarvis_core/codex.py",
-          "src/jarvis_core/service.py"
+          "src/jarvis_core/service.py",
+          "src/jarvis_core/bridge.py"
         ],
         "tests": [
           "tests/test_codex.py",
           "tests/test_service.py",
-          "tests/test_service_review.py"
+          "tests/test_service_review.py",
+          "tests/test_codex_tools.py",
+          "tests/test_bridge.py",
+          "tests/test_service_capabilities.py"
         ],
         "capability_ids": [
           "A-07",
@@ -13563,8 +13622,8 @@
           "A-21",
           "A-23"
         ],
-        "verified_scope": "Contrato probado con subprocess de fixture. El registro BASELINE_VERTICAL_SLICE.md informa handshake/account/read oficial CLI 0.163.0 en espacio vacío con connected=false; sólo arranque/protocolo sin credenciales.",
-        "remaining": "Login del dueño e inferencia autenticada no acreditados. Adaptador inicial de chat con tools incorporadas desactivadas; no prueba paridad del harness ni aprobación de acciones."
+        "verified_scope": "Acceso oficial e inferencia autenticada del recorrido inicial, reinicio y contexto propios acreditados. DynamicTools conectadas a Runtime único, protocolo/turno/IDs validados y resultados separados; pruebas subprocess propias. No se importan hilos ajenos.",
+        "remaining": "No paridad completa del harness, cuentas/uso/renovación completos ni todas las herramientas de referencia. Las herramientas builtin del proveedor permanecen desactivadas."
       },
       {
         "id": "P-NATIVE",
@@ -13579,26 +13638,33 @@
         ],
         "tests": [
           "native/JarvisDesktop/Tests/DesktopCoreTests/RPCFrameTests.swift",
-          "native/JarvisDesktop/Tests/DesktopCoreTests/SocketIntegrationTests.swift"
+          "native/JarvisDesktop/Tests/DesktopCoreTests/SocketIntegrationTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/CapabilityModelsTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/CapabilityIntegrationTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/MCPModelsTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/MCPIntegrationTests.swift"
         ],
         "capability_ids": [
           "A-59",
           "A-60",
           "A-72"
         ],
-        "verified_scope": "Código de app propia con ventana/Dock/menú/atajo, sesiones, temporal, conexión/chat/cancelación; contratos Swift y conexión a Python real con datos sintéticos.",
-        "remaining": "No todas las vistas/funciones de referencia; E2E autenticado y app de distribución autocontenida pendientes. Bundle de desarrollo con Python/Codex externos y firma ad hoc no sustituye Jarvis instalado ni acredita Developer ID/notarización."
+        "verified_scope": "Ventana/Dock/menú/atajo y conversación oficial reales del recorrido inicial. Nuevos paneles de herramientas, aprobación por operación, memoria/citas, MCP, sesiones, borradores y recibos con contratos de socket/DTO probados.",
+        "remaining": "No todas las vistas/funciones de referencia ni paquete autocontenido. Firma ad hoc y Python/Codex externos no sustituyen instalación anterior ni Developer ID/notarización."
       },
       {
         "id": "P-MCP",
-        "component": "Cliente stdio MCP propio, todavía desconectado del producto",
+        "component": "Cliente stdio y registro MCP conectados a servicio/runtime/app",
         "status": "contract_tested_partial",
         "code": [
-          "src/jarvis_core/mcp.py"
+          "src/jarvis_core/mcp.py",
+          "src/jarvis_core/mcp_registry.py"
         ],
         "tests": [
           "tests/test_mcp.py",
-          "tests/test_mcp_review.py"
+          "tests/test_mcp_review.py",
+          "tests/test_mcp_registry.py",
+          "tests/test_service_mcp.py"
         ],
         "capability_ids": [
           "A-10",
@@ -13607,15 +13673,65 @@
           "A-39",
           "A-40"
         ],
-        "verified_scope": "47 pruebas propias y 6 de revisión independiente: subprocess MCP real de fixture sin red/cuenta; tools/resources/prompts, paginación, validación acotada, límites, cancelación/timeouts, incertidumbre, cierre/spawn concurrentes y HOME/CWD privados. Legacy 2025-11-25 initialize/initialized por defecto; moderno 2026-07-28 discover/_meta sólo por selección explícita y sin fallback.",
-        "remaining": "No conexión a runtime/servicio/UI, servidores productivos, OAuth/HTTP/SSE, subscriptions, sampling, tasks, resolución MRTR ni JSON Schema completo. input_required se entrega sin decisión automática. Callback bool por llamada no acredita autoridad de sesión/run/operación: integrar después con única autoridad central, permiso versionado/revalidable y revocación antes del efecto. HOME aislado no es sandbox OS."
+        "verified_scope": "Procesos stdio y socket locales propios; versiones2025-11-25 y2026-07-28 explícitas, catálogo versionado, mantenimiento, no autoconexión, misma autoridad por operación consumida justo antes de escribir tools/call, revocación y efecto incierto sin replay.",
+        "remaining": "Sin servidores externos cualificados, OAuth/HTTP/SSE, apps completas, subscriptions/sampling/tasks/MRTR o JSON Schema completo. HOME privado no es sandbox OS. Recursos/prompts del transporte aún no expuestos como tools/UI de producto."
+      },
+      {
+        "id": "P-TOOLS",
+        "component": "Herramientas de workspace y autoridad central",
+        "status": "contract_tested_partial",
+        "code": [
+          "src/jarvis_core/tools.py",
+          "src/jarvis_core/workspace.py",
+          "src/jarvis_core/config.py"
+        ],
+        "tests": [
+          "tests/test_tools.py",
+          "tests/test_workspace.py",
+          "tests/test_config.py",
+          "tests/test_service_capabilities.py"
+        ],
+        "capability_ids": [
+          "A-05",
+          "A-07",
+          "A-10",
+          "A-11",
+          "A-13",
+          "A-29",
+          "A-73"
+        ],
+        "verified_scope": "Filesystem real propio: listar/leer/escribir/editar/mkdir, raíz fijada, rutas privadas/enlaces rechazados, compare-and-swap de bytes, leases exactos de un uso y guard antes del efecto. Configuración privada transaccional con lock y merge.",
+        "remaining": "No exec/sandbox, parches completos, perfiles persistentes de permisos ni herramientas completas de referencia."
+      },
+      {
+        "id": "P-MEMORY",
+        "component": "Memoria local léxica con procedencia y citas de snapshot",
+        "status": "contract_tested_partial",
+        "code": [
+          "src/jarvis_core/memory.py",
+          "src/jarvis_core/memory_tools.py"
+        ],
+        "tests": [
+          "tests/test_memory.py",
+          "tests/test_memory_tools.py",
+          "tests/test_service_capabilities.py"
+        ],
+        "capability_ids": [
+          "A-12",
+          "A-24",
+          "A-25",
+          "A-26",
+          "A-28"
+        ],
+        "verified_scope": "SQLite real propio y temporales RAM, ámbito host por agente/workspace, búsqueda local FTS5 o lexical_scan explícita, revisiones/hashes/citas y generación invalidables; guardar/olvidar pasa por autoridad común.",
+        "remaining": "No embeddings ni híbrida/semántica, indexación automática, flush completo, wiki/motores externos, cifrado integral o migración de datos personales."
       }
     ],
-    "detail_file": "BASELINE_VERTICAL_SLICE.md",
+    "detail_file": "PHASE_A_TOOLS_MEMORY_MCP.md",
     "rea": {
       "source_file": "REA_COVERAGE.json",
-      "static_batches": 4,
-      "unique_typescript_paths_in_completed_batches": 16,
+      "static_batches": 6,
+      "unique_typescript_paths_in_completed_batches": 24,
       "global_status": "partial",
       "runtime_executed": false,
       "semantic_unknowns_remain": true,
@@ -13623,7 +13739,9 @@
         "OC-01A",
         "OC-RESOURCES-A",
         "OC-03",
-        "OC-04"
+        "OC-04",
+        "OC-05",
+        "OC-06"
       ],
       "limits": "Contar rutas examinadas no significa comprensión semántica ni revisión global. IDs y evidencias completos en REA_COVERAGE.json/provenance."
     }

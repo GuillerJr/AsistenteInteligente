@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "batch": "OC-06",
+  "topic": "Memory search, chunk provenance and embedding scorer boundaries",
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "parent_evidence_id": "ev_fe86587afb04d95a81d5545151a178f0cade7b13382087f22df48632a93e6b54",
+  "summary_evidence_id": "ev_52aa9d197590e55baf2d5e7a1d7d05533658bbc2132a3dff6d03f2d21b94c406",
+  "partition_sha256": "fb92b7a2cce6289ef84668bdef91dd4f0e6d0c9cef62e196a2fc6df4930f6dd1",
+  "statistics": {
+    "relevant_files": 5,
+    "nested_asar_containers": 0,
+    "text_bytes_read": 187847,
+    "invalid_utf8_files": 0,
+    "parsed_javascript_files": 4,
+    "skipped_javascript_files": 0,
+    "visited_ast_nodes": 4592,
+    "findings": 52,
+    "modules": 0,
+    "parse_failures": 0
+  },
+  "coverage": {
+    "application": {
+      "status": "partial",
+      "truncated": false,
+      "omitted_count": null,
+      "limits": []
+    },
+    "semantic": {
+      "status": "unknown",
+      "truncated": false,
+      "omitted_nodes": 0,
+      "omitted_relations": 0,
+      "limits": [],
+      "families": [
+        {
+          "family": "boundary",
+          "status": "partial",
+          "retained_relations": 2,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "call-flow",
+          "status": "partial",
+          "retained_relations": 181,
+          "omitted_relations": 0,
+          "unknown_count": 223
+        },
+        {
+          "family": "child-process",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "closure",
+          "status": "partial",
+          "retained_relations": 225,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "configuration",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "data-flow",
+          "status": "partial",
+          "retained_relations": 1979,
+          "omitted_relations": 0,
+          "unknown_count": 268
+        },
+        {
+          "family": "event",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "object-flow",
+          "status": "partial",
+          "retained_relations": 317,
+          "omitted_relations": 0,
+          "unknown_count": 392
+        },
+        {
+          "family": "promise-ownership",
+          "status": "partial",
+          "retained_relations": 10,
+          "omitted_relations": 0,
+          "unknown_count": 4
+        },
+        {
+          "family": "request",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "resource-lifecycle",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "timer",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        }
+      ]
+    },
+    "application_unknowns": 0,
+    "semantic_unknowns": 887
+  },
+  "limitations": [
+    "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+    "Caller-selected source analysis leaves 0 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+    "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+    "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+    "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+    "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+    "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+    "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+    "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+    "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+    "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+    "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+    "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+    "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+    "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+    "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+    "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+    "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+  ],
+  "unknowns": [
+    "887 semantic graph unknowns remain in the parent Evidence.",
+    "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+    "Caller-selected source analysis leaves 0 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+    "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+    "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+    "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+    "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+    "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+    "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+    "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+    "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+    "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+    "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+    "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+    "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+    "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+    "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+    "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+    "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code.",
+    "graph.coverage.status is partial",
+    "semantic_graph.coverage.status is unknown"
+  ],
+  "runtime_executed": false,
+  "full_evidence_path": "/private/tmp/jarvis-openclaw-rea-phase-a-parts05-06-20261024.json"
+}

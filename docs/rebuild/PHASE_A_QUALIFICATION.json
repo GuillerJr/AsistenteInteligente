@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-24",
+  "phase": "A",
+  "complete_reference_variant": false,
+  "git_parent": "6289f37119a8eccf79e2bcb7bfb7bbb1f9ebf3e9",
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "scope_document": "PHASE_A_TOOLS_MEMORY_MCP.md",
+  "automated": {
+    "python": {
+      "command": "PYTHONPATH=src .venv/bin/python -m pytest -p no:warnings -o addopts= -q -x",
+      "passed": 656,
+      "failed": 0,
+      "seconds": 28.08,
+      "kind": "real_local_files_sqlite_sockets_subprocesses_synthetic_decisions_and_provider_peers"
+    },
+    "swift": {
+      "command": "./script/test_desktop.sh",
+      "passed": 31,
+      "failed": 0,
+      "seconds": 12.75,
+      "log": "/private/tmp/jarvis-native-mcp-tests.log",
+      "kind": "native_contracts_and_real_socket_to_synthetic_python_peer"
+    },
+    "ruff": "passed",
+    "compileall": "passed",
+    "clean_source_guard": "passed",
+    "focused_final_bridge_codex_mcp": {
+      "passed": 69,
+      "failed": 0
+    },
+    "packaging": "Source-to-sdist-to-wheel smoke passed before final presentation-only adjustment. The pre-push hook rebuilds and verifies the final clean committed source."
+  },
+  "native_bundle": {
+    "path": "/private/tmp/jarvis-phase-a-mcp-native.wNm2BY/bundle/Jarvis.app",
+    "sha256": "95758efeddbe6e4c342f6823abe0da63474d53e36d9703d524c864291f2adcce",
+    "executable_bytes": 3177232,
+    "signing": "ad_hoc_codesign_verify_strict_passed",
+    "standalone": false,
+    "previous_app_replaced": false
+  },
+  "live": {
+    "synthetic_state": "/private/tmp/jarvis-phase-a-live-20261024",
+    "official_client": "Codex CLI 0.163.0, existing authorized Jarvis connection selected explicitly by --provider-state; no auth file read or imported history",
+    "workspace_read": {
+      "status": "verified",
+      "path": "verificacion-base.txt",
+      "bytes": 30,
+      "sha256": "ec00e2f084919ea68cd9456eb9dcb926a2b872708c6b95438b50dd7f6a880177",
+      "marker": "COBALTO 7319"
+    },
+    "workspace_write": {
+      "status": "verified",
+      "owner_approved": true,
+      "path": "fase-a-aprobacion.txt",
+      "bytes": 21,
+      "sha256": "ece9505bc61bed5b10e5e9018d13ec7715bc850efeeb735d90f4e0be2c5478d0",
+      "exact_text": "PRUEBA JARVIS FASE A\n",
+      "independent_file_check": true,
+      "write_and_read_receipts_match": true
+    },
+    "memory": {
+      "owner_approved_store": true,
+      "key": "prueba_fase_a",
+      "marker": "TOPACIO 4826",
+      "revision": 1,
+      "source_uri": "jarvis://prueba-fase-a",
+      "native_search_passed": true,
+      "native_snapshot_citation_check_passed": true,
+      "recovered_from_other_session_after_restart": true,
+      "external_source_verified": false
+    },
+    "mcp": {
+      "owner_approved_program_launch": true,
+      "owner_approved_tool_call": true,
+      "fixture_program": "/private/tmp/jarvis-phase-a-mcp-fixture/server.py",
+      "fixture_sha256": "8955ea79a92ae0080476b7655af41a1a1a9119f4508ec8e3f20918cc60b37e77",
+      "protocol": "2025-11-25",
+      "connected_native_catalog_tools": 1,
+      "catalog_hash": "1f5f9f6d06988cf9902edaf1cccf3755078ed1cbcab7e5e63de1102d51e4db36",
+      "tool_call_count": 1,
+      "marker": "JARVIS MCP 6421",
+      "receipt_has_full_result": true,
+      "receipt_independently_verified": false,
+      "independent_fixture_call_log_check": true,
+      "production_external_server_qualified": false,
+      "restart_keeps_configuration_without_launch": true
+    },
+    "delivery_probe": {
+      "kind": "real_official_inference_with_synthetic_readonly_report_not_another_MCP_action",
+      "completed": true,
+      "tool_calls": 1,
+      "wire_responses": 1,
+      "success": true,
+      "verified": false,
+      "marker_in_final_answer": true,
+      "proof_path": "/private/tmp/jarvis-phase-a-mcp-fixture/model_delivery_proof.json",
+      "proof_sha256": "4e78ce906abf4d64d55b1b83625f45ab0733468dc6b81ca0f4bff5b1b84cca43",
+      "limitation": "Earlier model summaries said no visible content despite complete local receipts. One successful phrasing does not certify deterministic model narration; native receipt is separate and authoritative."
+    }
+  },
+  "rea": {
+    "static_batches": 6,
+    "typescript_paths": 24,
+    "global_status": "partial",
+    "reference_executed": false,
+    "reference_modified": false,
+    "summaries": [
+      "REA_PART05_SUMMARY.json",
+      "REA_PART06_SUMMARY.json"
+    ],
+    "export_path": "/private/tmp/jarvis-openclaw-rea-phase-a-parts05-06-20261024.json"
+  },
+  "phase_b_started": false,
+  "source_sha256": {
+    "src/jarvis_core/mcp_registry.py": "a01f71e629566150188ca35aba95968903f2aa325ddb0bdc4d53a91151f9b0a3",
+    "src/jarvis_core/service.py": "c6ae8a2cd6f6f26f58d847cbe60ecd4b7cff279f466e18fd7845c03ae1ae14bd",
+    "src/jarvis_core/config.py": "2a27d244341b1bd155c5c0b36663f6aa92074c7a580af748af911bf2ac6a958f",
+    "src/jarvis_core/memory.py": "dbb6d4460282232fe3897b9626a9a1f3e0029f29c22626fdd14d8aa90f0d2fd6",
+    "src/jarvis_core/codex.py": "7c0293e6e346642ff5b33c26cd96b359bfe10102cc317d32feb796a96b6eba6b",
+    "src/jarvis_core/memory_tools.py": "24eeb773b2cfebdbcd0f32fb0d274e253581c94bb4306e4b29ea669b0dc68e2d",
+    "src/jarvis_core/protocol.py": "657a4f760ea182cb3a6d6cf82b0611aab715994622e275f01b7888a198e872f3",
+    "src/jarvis_core/tools.py": "cb635bfc7d437cc2b878b7ab3bea5e8dea245397c5bdc91938afabad4033dbc1",
+    "src/jarvis_core/bridge.py": "4165742b95ede9fad884d57ca797a690de914275b808555b554babb41ba8eb10",
+    "src/jarvis_core/__init__.py": "f8ef17019cfb5af4b16cb032419a79d6fc9f3969b9ac1d03b5fd3a20548ddab9",
+    "src/jarvis_core/runtime.py": "93b3bceeae41e24e70096233bc8ea6095d978c06d77e5ec26f4796b297a64a86",
+    "src/jarvis_core/mcp.py": "676abfd80d7ee9d0b71defc87140ec75a4f1edac73972918de182389c7965d95",
+    "src/jarvis_core/workspace.py": "9d4a5844b069eba86b8685f8b62f4d84ad57a66c0b74960cc24a31a09c4d3c8a",
+    "src/jarvis_core/state.py": "56441b749a5474f20724d4ba9cb9003e3fe289e536125ce6b23281cc4a688d1b",
+    "native/JarvisDesktop/Sources/JarvisApp/App/JarvisApp.swift": "4366fce30155aaff327f6632bc7b6b46c971fd8faf1c5f932ce2d5b0d6ed021c",
+    "native/JarvisDesktop/Sources/JarvisApp/App/AppDelegate.swift": "b8fe0f2499092e6e020aee31ea375912944df38d820d4a5b5e73c483891dec06",
+    "native/JarvisDesktop/Sources/JarvisApp/Stores/AccessStore.swift": "f5016091dee906d834cdc68ef1fe8366601fd01c7d71944991b1a4e7731c9971",
+    "native/JarvisDesktop/Sources/JarvisApp/Stores/ChatStore.swift": "346985ceb50889d3dcd6e5893ac5ab94caca7ab8cf3b00ea909ad7c8aa9cf4f3",
+    "native/JarvisDesktop/Sources/JarvisApp/Stores/MCPStore.swift": "8b92a3ed869a8308307b5c862f7483c452d7016eea4c2a4ec7f117dac918caa5",
+    "native/JarvisDesktop/Sources/JarvisApp/Models/ChatModels.swift": "a06bf06b039e910028b448be2de0b450d8c7878a0e79c7d3f0f5812cfe76cc14",
+    "native/JarvisDesktop/Sources/JarvisApp/Views/CapabilitiesView.swift": "5f3bd2cd5751ebbd6c2096ecf46aef63a497e9084fd3a16ff58f0fb238476608",
+    "native/JarvisDesktop/Sources/JarvisApp/Views/SettingsView.swift": "88e22e153387898b3400261b24ead8d7e8acb786d4858eed70ddebb63105310a",
+    "native/JarvisDesktop/Sources/JarvisApp/Views/MCPView.swift": "b577902b393864916963d5b93fd831ddecab498bf25b3f9970e06e17ade9d470",
+    "native/JarvisDesktop/Sources/JarvisApp/Views/RenameSessionView.swift": "f5ea43f74ae521ad790b81cdd22d280874f11c5de1047b63816e07aeed9ff227",
+    "native/JarvisDesktop/Sources/JarvisApp/Views/MessageListView.swift": "86eb177d8f68274d8c80ef86a434f5a88b35c5ab5d69d7ad2676d7dd2d859e42",
+    "native/JarvisDesktop/Sources/JarvisApp/Views/SidebarView.swift": "93388fd6744d51251ed1ced593cc54bb463891535e3ce91425c9d322319e5749",
+    "native/JarvisDesktop/Sources/JarvisApp/Views/ComposerView.swift": "8dbddc1ca951087ac6ecd554242ea5025ce903212aee73747e0a77120f80642b",
+    "native/JarvisDesktop/Sources/JarvisApp/Views/MemoryView.swift": "f40b8c0b11bacc8f88a02840837562e7a5cbcd045c5b03e78a629e780ab96122",
+    "native/JarvisDesktop/Sources/JarvisApp/Views/ContentView.swift": "0f5c0bbbce3fe2a2ea10a1f48658ebde9bb264aad0ad641597059b770baa5f11",
+    "native/JarvisDesktop/Sources/JarvisApp/Views/MCPConfigurationView.swift": "f4bbc4d409a606d371780289d46d9bda1239952532abe45110a86b4bc836fbd9",
+    "native/JarvisDesktop/Sources/JarvisApp/Views/ApprovalListView.swift": "ff9d0ebd274b73a221938cd219cb916fddf57aa6f8aaced70402f27f69ec0ac5",
+    "native/JarvisDesktop/Sources/JarvisApp/Views/ReceiptListView.swift": "b73c5ce8703d17a3a4a3e58e635d76fcf1df6f7e7383cb6dc1e83c256d8dc287",
+    "native/JarvisDesktop/Sources/DesktopCore/MCPManagementClient.swift": "ed80dd7873b02adde64b0ef9e88d5358c789ec484bf7b0e177af0e3ff6ce9ec9",
+    "native/JarvisDesktop/Sources/DesktopCore/MCPPresentation.swift": "a6b13683204ff456776b73139afaedad34f96e244c1557eb8a25e10f86ecdadc",
+    "native/JarvisDesktop/Sources/DesktopCore/LaunchOptions.swift": "6dcd9e92c65bbf33c03e7c00f4914206e325a0955f4b7224ca0011b201480484",
+    "native/JarvisDesktop/Sources/DesktopCore/ServiceProcess.swift": "c1eca9824a322c217384c1fcea42e9be7ff1fb893424b544524eb144d19c5c24",
+    "native/JarvisDesktop/Sources/DesktopCore/CapabilityPresentation.swift": "1fc94449a959bd95a36a965554571d0f042c41258adf8c5c12df0c9c84874a54",
+    "native/JarvisDesktop/Sources/DesktopCore/RunPresentation.swift": "7d3ef404eafe846d02c0403a8b363882c0968c4030e28a26aecedc363f90f8d5",
+    "native/JarvisDesktop/Sources/DesktopCore/CapabilityModels.swift": "86e39e26767d77e5f6bdac714e3f2626910c6612cea7bb5216033a2d57d32f9d",
+    "native/JarvisDesktop/Sources/DesktopCore/RPCValue.swift": "2c6db48d19db9e051570fef4f65f7e96bc51c91a8ece7e85f425506db9a80c53",
+    "native/JarvisDesktop/Sources/DesktopCore/ServiceBootstrap.swift": "2dd2d0252ac8d1700b57b894e619f8f7c6ff72e9118a7a952b084b85c961f26a",
+    "native/JarvisDesktop/Sources/DesktopCore/MCPModels.swift": "7e578e1c71282ed056042da096899b7c87c5c22996e76140ec4ccfb4c000131e",
+    "native/JarvisDesktop/Sources/DesktopCore/LocalRPCClient.swift": "fd232ecdfbb2c6cac9b427587d48afa13e2a648ae641df822e9e5ee8f32feaaf"
+  }
+}

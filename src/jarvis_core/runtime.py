@@ -12,6 +12,7 @@ import json
 import math
 import re
 from collections.abc import Awaitable, Callable, Mapping, Sequence
+from contextlib import AbstractContextManager, ExitStack
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from types import MappingProxyType
@@ -98,7 +99,9 @@ class ApprovalGrant:
 
 class ApprovalGate(Protocol):
     async def request(
-        self, operation: ApprovalRequest, cancellation: asyncio.Event,
+        self,
+        operation: ApprovalRequest,
+        cancellation: asyncio.Event,
     ) -> ApprovalGrant | None: ...
 
 
@@ -216,8 +219,9 @@ def _arguments_json(value: Mapping[str, Any]) -> str:
     if type(value) is not dict:
         raise _RunFailure("invalid_arguments")
     check(value)
-    return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"),
-                      allow_nan=False)
+    return json.dumps(
+        value, sort_keys=True, ensure_ascii=False, separators=(",", ":"), allow_nan=False
+    )
 
 
 def _freeze(value: Any) -> Any:
@@ -230,9 +234,16 @@ def _freeze(value: Any) -> Any:
 
 class AgentRuntime:
     def __init__(
-        self, provider: Provider, tools: Sequence[ToolDefinition] = (), *,
-        approval_gate: ApprovalGate | None = None, max_steps: int = 8,
+        self,
+        provider: Provider,
+        tools: Sequence[ToolDefinition] = (),
+        *,
+        approval_gate: ApprovalGate | None = None,
+        max_steps: int = 8,
         cleanup: Callable[[RunContext], Awaitable[None]] | None = None,
+        execution_scope: Callable[[ApprovalRequest, ApprovalGrant], AbstractContextManager]
+        | None = None,
+        on_tool_result: Callable[[RunContext, ToolResult], None] | None = None,
     ) -> None:
         if type(max_steps) is not int or not 1 <= max_steps <= 100:
             raise ValueError("max_steps must be between 1 and 100")
@@ -243,12 +254,18 @@ class AgentRuntime:
         self._approval_gate = approval_gate
         self._max_steps = max_steps
         self._cleanup = cleanup
+        self._execution_scope = execution_scope
+        self._on_tool_result = on_tool_result
         self._session_locks: dict[str, asyncio.Lock] = {}
         self._failed_cleanup_sessions: set[str] = set()
         self._tasks: set[asyncio.Task[None]] = set()
 
     def start(
-        self, session_id: str, message: str, *, offered_tools: Sequence[str] | None = None,
+        self,
+        session_id: str,
+        message: str,
+        *,
+        offered_tools: Sequence[str] | None = None,
         run_id: str | None = None,
     ) -> RunHandle:
         if not isinstance(session_id, str) or not session_id.strip():
@@ -289,25 +306,36 @@ class AgentRuntime:
                 handle._phase = RunPhase.RUNNING
                 try:
                     answer = await self._steps(handle, context, results)
-                    outcome = RunResult(context.run_id, "completed", answer, tuple(results),
-                                        answer_source="model")
+                    outcome = RunResult(
+                        context.run_id, "completed", answer, tuple(results), answer_source="model"
+                    )
                 except asyncio.CancelledError as error:
-                    outcome = RunResult(context.run_id, "cancelled", None, tuple(results),
-                                        error_type=type(error).__name__)
+                    outcome = RunResult(
+                        context.run_id,
+                        "cancelled",
+                        None,
+                        tuple(results),
+                        error_type=type(error).__name__,
+                    )
                 except Exception as error:
                     code = error.code if isinstance(error, _RunFailure) else "execution_failed"
                     error_type = (
-                        error.error_type if isinstance(error, _RunFailure) and error.error_type
+                        error.error_type
+                        if isinstance(error, _RunFailure) and error.error_type
                         else type(error).__name__
                     )
-                    outcome = RunResult(context.run_id, "failed", None, tuple(results), code,
-                                        error_type=error_type)
+                    outcome = RunResult(
+                        context.run_id, "failed", None, tuple(results), code, error_type=error_type
+                    )
                 finally:
                     handle._phase = RunPhase.CLEANING
                     if self._cleanup is not None:
                         final_context = RunContext(
-                            context.run_id, context.session_id, context.message,
-                            context.offered_tools, tuple(results),
+                            context.run_id,
+                            context.session_id,
+                            context.message,
+                            context.offered_tools,
+                            tuple(results),
                         )
                         try:
                             cancellation_type = await self._finish_cleanup(final_context)
@@ -316,18 +344,34 @@ class AgentRuntime:
                         except BaseException as error:
                             self._failed_cleanup_sessions.add(context.session_id)
                             outcome = RunResult(
-                                context.run_id, "failed", None, tuple(results), "cleanup_failed",
+                                context.run_id,
+                                "failed",
+                                None,
+                                tuple(results),
+                                "cleanup_failed",
                                 error_type=type(error).__name__,
                             )
                     if handle._cancellation.is_set() and outcome.error != "cleanup_failed":
-                        outcome = RunResult(context.run_id, "cancelled", None, tuple(results),
-                                            error_type=outcome.error_type)
+                        outcome = RunResult(
+                            context.run_id,
+                            "cancelled",
+                            None,
+                            tuple(results),
+                            error_type=outcome.error_type,
+                        )
         except asyncio.CancelledError as error:
-            outcome = RunResult(context.run_id, "cancelled", None, tuple(results),
-                                error_type=type(error).__name__)
+            outcome = RunResult(
+                context.run_id, "cancelled", None, tuple(results), error_type=type(error).__name__
+            )
         except _RunFailure as error:
-            outcome = RunResult(context.run_id, "failed", None, tuple(results), error.code,
-                                error_type=error.error_type or type(error).__name__)
+            outcome = RunResult(
+                context.run_id,
+                "failed",
+                None,
+                tuple(results),
+                error.code,
+                error_type=error.error_type or type(error).__name__,
+            )
         finally:
             handle._phase = RunPhase.SETTLED
             handle._settled.set_result(outcome)
@@ -347,12 +391,20 @@ class AgentRuntime:
         return cancellation_type
 
     async def _steps(
-        self, handle: RunHandle, context: RunContext, results: list[ToolResult],
+        self,
+        handle: RunHandle,
+        context: RunContext,
+        results: list[ToolResult],
     ) -> str:
         for _ in range(self._max_steps):
             self._check_cancelled(handle)
-            current = RunContext(context.run_id, context.session_id, context.message,
-                                 context.offered_tools, tuple(results))
+            current = RunContext(
+                context.run_id,
+                context.session_id,
+                context.message,
+                context.offered_tools,
+                tuple(results),
+            )
             step = await self._provider.next_step(current)
             self._check_cancelled(handle)
             if isinstance(step, FinalAnswer):
@@ -365,7 +417,10 @@ class AgentRuntime:
         raise _RunFailure("step_limit")
 
     async def _tool(
-        self, handle: RunHandle, context: RunContext, proposal: ToolProposal,
+        self,
+        handle: RunHandle,
+        context: RunContext,
+        proposal: ToolProposal,
         results: list[ToolResult],
     ) -> None:
         tool = self._tools[proposal.tool_name]
@@ -376,18 +431,28 @@ class AgentRuntime:
             tool.validate(arguments)
         except Exception as error:
             raise _RunFailure("invalid_arguments", error_type=type(error).__name__) from error
-        identity = json.dumps({"run": context.run_id, "session": context.session_id,
-                               "operation": operation_id, "tool": tool.name,
-                               "arguments_json": snapshot},
-                              sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+        identity = json.dumps(
+            {
+                "run": context.run_id,
+                "session": context.session_id,
+                "operation": operation_id,
+                "tool": tool.name,
+                "arguments_json": snapshot,
+            },
+            sort_keys=True,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
         digest = hashlib.sha256(identity.encode()).hexdigest()
+        operation = ApprovalRequest(
+            context.run_id, context.session_id, operation_id, tool.name, snapshot, digest
+        )
+        grant = None
         if tool.requires_confirmation:
             if self._approval_gate is None:
                 raise _RunFailure("approval_required")
             handle._phase = RunPhase.WAITING_APPROVAL
-            grant = await self._approval_gate.request(ApprovalRequest(
-                context.run_id, context.session_id, operation_id, tool.name, snapshot, digest,
-            ), handle._cancellation)
+            grant = await self._approval_gate.request(operation, handle._cancellation)
             handle._phase = RunPhase.RUNNING
             self._check_cancelled(handle)
             if not isinstance(grant, ApprovalGrant) or grant.digest != digest:
@@ -402,33 +467,56 @@ class AgentRuntime:
             or _arguments_json(proposal.arguments) != snapshot
         ):
             raise _RunFailure("arguments_changed")
+
         def record_uncertain(error: str, error_type: str | None = None) -> None:
-            results.append(ToolResult(
-                tool.name, succeeded=False, verified=False, error=error, effect_status="unknown",
-                operation_id=operation_id, error_type=error_type,
-            ))
+            receipt = ToolResult(
+                tool.name,
+                succeeded=False,
+                verified=False,
+                error=error,
+                effect_status="unknown",
+                operation_id=operation_id,
+                error_type=error_type,
+            )
+            results.append(receipt)
+            if self._on_tool_result:
+                self._on_tool_result(context, receipt)
 
         # Once dispatched, an interrupted callback may already have caused an
         # effect. Preserve uncertainty even if it suppresses cancellation and
         # returns a seemingly successful value. Never replay that effect.
-        try:
-            result = await tool.execute(_freeze(arguments), handle._cancellation)
-        except asyncio.CancelledError as error:
-            record_uncertain("execution_cancelled", type(error).__name__)
-            raise
-        except Exception as error:
-            record_uncertain("tool_execution_failed", type(error).__name__)
-            raise _RunFailure("tool_execution_failed", error_type=type(error).__name__) from error
+        with ExitStack() as scope:
+            if tool.requires_confirmation and self._execution_scope:
+                try:
+                    scope.enter_context(self._execution_scope(operation, grant))
+                except Exception as error:
+                    raise _RunFailure(
+                        "approval_invalidated", error_type=type(error).__name__
+                    ) from error
+            try:
+                result = await tool.execute(_freeze(arguments), handle._cancellation)
+            except asyncio.CancelledError as error:
+                record_uncertain("execution_cancelled", type(error).__name__)
+                raise
+            except Exception as error:
+                record_uncertain("tool_execution_failed", type(error).__name__)
+                raise _RunFailure(
+                    "tool_execution_failed", error_type=type(error).__name__
+                ) from error
         if handle._cancellation.is_set():
             cancellation = asyncio.CancelledError()
             record_uncertain("execution_cancelled", type(cancellation).__name__)
             raise cancellation
         if (
-            not isinstance(result, ToolResult) or result.tool_name != tool.name
+            not isinstance(result, ToolResult)
+            or result.tool_name != tool.name
             or result.operation_id not in {None, operation_id}
         ):
             record_uncertain("invalid_tool_result")
             raise _RunFailure("invalid_tool_result")
-        results.append(replace(result, operation_id=operation_id))
+        receipt = replace(result, operation_id=operation_id)
+        results.append(receipt)
+        if self._on_tool_result:
+            self._on_tool_result(context, receipt)
         if result.effect_status == "unknown":
             raise _RunFailure("tool_outcome_unknown")

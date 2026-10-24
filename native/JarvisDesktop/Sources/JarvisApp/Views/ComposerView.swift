@@ -12,6 +12,7 @@ struct ComposerView: View {
         case "cancelling": return "Cancelación solicitada…"
         case "cleaning": return "Terminando la limpieza…"
         case "disconnected": return "Estado pendiente: conexión interrumpida"
+        case "checking": return "Consultando el estado de la ejecución…"
         case "completed": return "Completado"
         case "failed": return "No se pudo completar"
         case "cancelled": return "Cancelado y asentado"
@@ -54,7 +55,8 @@ struct ComposerView: View {
                 }
             }
             .padding(16).background(.quaternary, in: .rect(cornerRadius: 16))
-            Text("Herramientas de la base pendientes de construcción")
+            Text(store.access.toolsEnabled ? "Herramientas disponibles · Las operaciones que cambian datos requieren tu aprobación"
+                 : "Herramientas de la base pendientes de construcción")
                 .font(.caption2).foregroundStyle(.secondary)
         }
         .onAppear { focused = true }

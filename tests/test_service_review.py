@@ -23,7 +23,7 @@ class CleanupPeer:
         self.release = asyncio.Event()
         self.closed = False
 
-    async def chat(self, message, *, thread_id, temporary, on_thread, on_event):
+    async def chat(self, message, *, thread_id, temporary, on_thread, on_event, **_options):
         on_thread("owned-" + uuid4().hex)
         self.entered.set()
         try:

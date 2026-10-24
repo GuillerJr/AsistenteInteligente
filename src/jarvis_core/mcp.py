@@ -610,7 +610,10 @@ class McpClient:
         self._tools = tools
         return tuple(tools.values())
 
-    async def call_tool(self, tool: str, arguments: Mapping[str, Any]) -> McpCallResult:
+    async def call_tool(
+        self, tool: str, arguments: Mapping[str, Any], *,
+        dispatch_guard: Callable[[], None] | None = None,
+    ) -> McpCallResult:
         definition = self._tools.get(tool)
         if definition is None:
             raise McpError("tool_not_listed")
@@ -636,6 +639,8 @@ class McpClient:
                 raise McpError("approval_revoked")
             if self._tools.get(tool) is not definition:
                 raise McpError("catalog_changed")
+            if dispatch_guard is not None:
+                dispatch_guard()
 
         result = await self._request(
             "tools/call", {"name": tool, "arguments": snapshot}, effect=True,

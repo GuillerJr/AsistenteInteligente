@@ -12,13 +12,15 @@ producto anterior sigue en Git y sus inventarios están congelados.
 - [x] Fijar la referencia de OpenClaw y empezar su análisis REA por bloques.
 - [ ] Completar la investigación y los recorridos de la
   [matriz de paridad](rebuild/OPENCLAW_BASELINE_PARITY.md); el censo no es revisión.
-- [ ] Cualificar el recorrido inicial: app SwiftUI, servicio, IPC, sesiones SQLite,
-  streaming, Codex oficial, cancelación, reinicio y temporales. Hay implementación
-  de desarrollo y pruebas; faltan inferencia autenticada y cualificación de producto.
+- [ ] Cualificar el producto: el recorrido de desarrollo ya acredita app SwiftUI,
+  servicio, IPC, sesiones SQLite, inferencia autenticada con Codex oficial,
+  cancelación, reinicio y temporales. Falta cualificación de distribución completa.
 - [ ] Implementar y verificar las herramientas de la propia base OpenClaw, sesiones
   avanzadas, agentes, memoria base, MCP, skills, extensiones, programador, canales,
   nodos y superficies funcionales incluidas en la matriz. No moverlas a la fase B
   por coincidir con capacidades del Jarvis anterior.
+  Avance conectado: autoridad de herramientas, archivos, memoria léxica local y
+  gestión MCP stdio desde la app; ver [alcance y límites](rebuild/PHASE_A_TOOLS_MEMORY_MCP.md).
 - [ ] Completar aislamiento de ejecución y autorizaciones reales del dueño, sin
   confundir token local con identidad firmada, ni un ACK con cierre de una acción.
 - [ ] Distribución nativa autocontenida, actualización, recuperación e instalación

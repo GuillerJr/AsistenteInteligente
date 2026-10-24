@@ -18,10 +18,13 @@ La app SwiftUI usa una ventana propia; no requiere buscar una pestaña del naveg
 Las credenciales, conversaciones y app instaladas del producto anterior no se importan.
 
 Esta entrega todavía no es la variante completa ni un sustituto cualificado de la
-app instalada. El cliente inicial de Codex ofrece chat de texto: sus herramientas
-están desactivadas y sus solicitudes de ejecución se rechazan. La disponibilidad
-de una cuenta y una respuesta real requieren iniciar sesión mediante el cliente
-oficial; un peer sintético no acredita inferencia.
+app instalada. Codex recibe el catálogo propio de Jarvis: archivos, memoria local
+y servidores MCP stdio configurados por el dueño. Las mutaciones pasan por una
+única autoridad de aprobación por operación; los recibos se muestran separados del
+texto del modelo. Las herramientas incorporadas de Codex continúan desactivadas.
+El dueño completó el acceso oficial y se verificaron inferencia, archivos, memoria
+tras reinicio y una llamada MCP de prueba. Un peer sintético no acredita por sí
+solo una conexión o una acción real; ver alcance y límites en los registros.
 
 El alcance y los criterios de aceptación están en la
 [matriz de paridad](docs/rebuild/OPENCLAW_BASELINE_PARITY.md). Los inventarios y las
@@ -52,6 +55,8 @@ El paquete Python no incluye el ejecutable oficial Codex ni un intérprete embeb
 - [Fases y arquitectura](docs/rebuild/README.md).
 - [Paridad funcional de la referencia](docs/rebuild/OPENCLAW_BASELINE_PARITY.md).
 - [Verificación del recorrido inicial](docs/rebuild/BASELINE_VERTICAL_SLICE.md).
+- [Herramientas, memoria y MCP conectados](docs/rebuild/PHASE_A_TOOLS_MEMORY_MCP.md).
+- [Verificación de este avance](docs/rebuild/PHASE_A_QUALIFICATION.json).
 - [Limpieza y recuperación del producto anterior](docs/rebuild/CLEAN_START.md).
 - [Pendientes](docs/V1_PENDIENTES.md).
 - [Inventario histórico backend](docs/rebuild/JARVIS_BACKEND_INVENTORY.md).

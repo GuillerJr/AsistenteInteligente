@@ -1,6 +1,13 @@
 import Foundation
 
 public enum RunPresentation {
+    public static func startWasRejected(_ error: Error) -> Bool {
+        guard case RPCFailure.remote(let code, _) = error else { return false }
+        // These protocol/policy errors precede run creation. An internal failure
+        // or a lost acknowledgement is uncertain and must retain its request id.
+        return [-32600, -32601, -32602, -32001, -32011, -32012].contains(code)
+    }
+
     public static func errorMessage(_ code: String) -> String {
         switch code {
         case "codex_login_required": return "Inicia sesión con tu cuenta de ChatGPT para continuar."

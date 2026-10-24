@@ -4,6 +4,11 @@ Este documento registra una implementación de desarrollo, **no el cierre de la
 fase A**. El alcance completo sigue en `OPENCLAW_BASELINE_PARITY.json`. No se han
 integrado mejoras adicionales ni herramientas del producto anterior.
 
+Este registro describe el primer recorrido (commits `4deaedd` y `6289f37`). El
+avance posterior de herramientas, memoria y MCP y su verificación se documentan
+en [el bloque siguiente](PHASE_A_TOOLS_MEMORY_MCP.md); los límites de esta primera
+integración no deben confundirse con el estado posterior.
+
 ## Implementación conectada
 
 - `state.py`: SQLite privado, sesiones, mensajes, runs, eventos, paginación y
@@ -62,7 +67,7 @@ identidad y el recorrido de chat no cierran la paridad completa.
 ## Distribución y límites abiertos
 
 `script/build_desktop.sh` genera un bundle de desarrollo con firma ad hoc y bundle
-ID `com.jarvis.jarvis.baseline`. Recibe rutas explícitas a Python, fuente, estado y
+ID `com.jarvis.desktop.baseline`. Recibe rutas explícitas a Python, fuente, estado y
 Codex. No incluye intérprete ni el cliente oficial, y no sustituye `Jarvis.app`
 instalado. Una firma ad hoc no equivale a Developer ID ni notarización.
 

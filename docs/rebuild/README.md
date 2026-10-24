@@ -92,6 +92,9 @@ Ahora se integra en el servicio propio `jarvis_core.service`, con SQLite, IPC
 y Codex oficial. La app de desarrollo SwiftUI es nueva. Ninguno de esos hechos
 acredita por sí solo una base completa ni cambia la app instalada del dueño.
 Ver [verificación del recorrido inicial](BASELINE_VERTICAL_SLICE.md).
+El siguiente bloque conecta herramientas, decisiones por operación, memoria local
+y MCP a ese recorrido; su [registro](PHASE_A_TOOLS_MEMORY_MCP.md) distingue pruebas
+de contrato, verificación con Codex y capacidades que siguen pendientes.
 
 El prototipo prueba serialización por sesión, propuesta/validación/autorización,
 resultado explícito, cancelación y asentamiento. El prototipo aislado no acredita permisos persistentes, cifrado, herramientas
