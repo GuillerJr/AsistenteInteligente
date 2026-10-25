@@ -89,6 +89,10 @@
         {
           "progress_id": "P-CLEANUP-OWNERS",
           "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
+        },
+        {
+          "progress_id": "P-RECOVERY",
+          "scope": "Avance contractual parcial; límites y cualificación en PHASE_A_RECOVERY.md."
         }
       ],
       "acceptance": {
@@ -303,6 +307,10 @@
         {
           "progress_id": "P-CLEANUP-OWNERS",
           "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
+        },
+        {
+          "progress_id": "P-RECOVERY",
+          "scope": "Avance contractual parcial; límites y cualificación en PHASE_A_RECOVERY.md."
         }
       ],
       "acceptance": {
@@ -1679,6 +1687,10 @@
         {
           "progress_id": "P-VOICE-LOCAL",
           "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
+        },
+        {
+          "progress_id": "P-RECOVERY",
+          "scope": "Avance contractual parcial; límites y cualificación en PHASE_A_RECOVERY.md."
         }
       ],
       "acceptance": {
@@ -1873,8 +1885,13 @@
       "family": "ops",
       "name": "Onboarding, asistente de sistema y doctor",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-RECOVERY",
+          "scope": "Avance contractual parcial; límites y cualificación en PHASE_A_RECOVERY.md."
+        }
+      ],
       "acceptance": {
         "observable_success": "Instalación limpia detecta requisitos y guía en español hasta primera conversación real con acceso del dueño.",
         "observable_failure_or_revocation": "Cancelar o faltar componente deja paso recuperable sin activar permisos/proveedores ni leer datos privados.",
@@ -1905,6 +1922,10 @@
         {
           "progress_id": "P-SCHEDULER",
           "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-RECOVERY",
+          "scope": "Avance contractual parcial; límites y cualificación en PHASE_A_RECOVERY.md."
         }
       ],
       "acceptance": {
@@ -1928,8 +1949,13 @@
       "family": "ops",
       "name": "Backup, restauración, actualización y rollback",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-RECOVERY",
+          "scope": "Avance contractual parcial; límites y cualificación en PHASE_A_RECOVERY.md."
+        }
+      ],
       "acceptance": {
         "observable_success": "Respaldar perfil artificial, actualizar paquete propio y restaurar sesiones/config/artefactos verificando hashes.",
         "observable_failure_or_revocation": "Corte de actualización, archivo corrupto y versión incompatible conservan versión recuperable sin leer Jarvis del dueño.",
@@ -14153,13 +14179,51 @@
         "verified_scope": "Regresiones MCP/Codex/Telegram y servicio integradas en1234 Python; supervisor nativo con dueño retenido, stop compartido,35s monotónicos y señales tras identidad/propiedad kernel.129 nativas incluyen12 lifecycle y teardown acotado de fixtures.",
         "remaining": "No certifica árboles arbitrarios ni descendientes escapados. Identidad kernel inmediata más señal PID no es primitiva atómica de audit-token. Recuperación productiva completa sigue pendiente.",
         "qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json"
+      },
+      {
+        "id": "P-RECOVERY",
+        "component": "Respaldo portátil, staging restaurado y diagnóstico del host",
+        "status": "contract_tested_partial",
+        "code": [
+          "src/jarvis_core/maintenance.py",
+          "src/jarvis_core/maintenance_journal.py",
+          "src/jarvis_core/host_profile.py",
+          "src/jarvis_core/recovery.py",
+          "src/jarvis_core/recovery_fs.py",
+          "src/jarvis_core/recovery_sqlite.py",
+          "src/jarvis_core/doctor.py",
+          "native/JarvisDesktop/Sources/JarvisApp/Views/MaintenanceView.swift"
+        ],
+        "tests": [
+          "tests/test_host_authority.py",
+          "tests/test_tool_approval_cleanup.py",
+          "tests/test_recovery.py",
+          "tests/test_recovery_sqlite.py",
+          "tests/test_doctor.py",
+          "tests/test_doctor_images.py",
+          "tests/test_host_profile.py",
+          "tests/test_maintenance_integration.py",
+          "tests/test_maintenance_journal.py",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/MaintenanceTests.swift"
+        ],
+        "capability_ids": [
+          "A-01",
+          "A-08",
+          "A-60",
+          "A-69",
+          "A-70",
+          "A-71"
+        ],
+        "verified_scope": "Contratos propios y pruebas sintéticas de SQLite real, autoridad central y workers: snapshot bajo barrera, verificación por identidad/hash, staging nuevo desarmado, diagnóstico de solo lectura y recibos inciertos sin replay. Integración final y recorrido nativo pendientes de registrar.",
+        "remaining": "Exportación del host de fuentes frías, archivos/artefactos del workspace, activación y asociación de memoria/canales, reparación explícita, actualización/rollback, distribución y cualificación real. No cierra ninguna familia ni inicia B.",
+        "detail_file": "PHASE_A_RECOVERY.md"
       }
     ],
     "detail_file": "PHASE_A_CHANNELS_VOICE_WEB.md",
     "rea": {
       "source_file": "REA_COVERAGE.json",
-      "static_batches": 14,
-      "unique_typescript_paths_in_completed_batches": 56,
+      "static_batches": 15,
+      "unique_typescript_paths_in_completed_batches": 60,
       "global_status": "partial",
       "runtime_executed": false,
       "semantic_unknowns_remain": true,
@@ -14177,7 +14241,8 @@
         "OC-11",
         "OC-12",
         "OC-13",
-        "OC-14"
+        "OC-14",
+        "OC-15"
       ],
       "limits": "Contar rutas examinadas no significa comprensión semántica ni revisión global. IDs y evidencias completos en REA_COVERAGE.json/provenance."
     },

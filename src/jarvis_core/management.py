@@ -12,6 +12,7 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
+from jarvis_core.host_profile import profile_background
 from jarvis_core.protocol import RpcError
 from jarvis_core.scheduler import DispatchResult, Scheduler, ScheduleSpec
 from jarvis_core.workspace import WorkspaceError
@@ -269,6 +270,7 @@ class ManagementAPI:
             self._maintenance = False
         return {"running": self.scheduler.running}
 
+    @profile_background("scheduler.dispatch")
     async def _dispatch_schedule(self, occurrence):
         # Workspace identity is pinned at creation, not retargeted by a later UI
         # selection. No unattended decision grants a tool capability.

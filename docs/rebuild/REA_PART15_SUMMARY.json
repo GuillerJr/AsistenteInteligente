@@ -1,0 +1,277 @@
+{
+  "schema_version": 1,
+  "batch": "OC-15",
+  "topic": "Immutable update control, pointer publication, independent recovery runtime and signature boundaries",
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "parent_evidence_id": "ev_f45ebe76e095370d3793afaaceb626edb46ed03f4181cc1977b725f13f32422d",
+  "summary_evidence_id": "ev_e705089266fdb89bb7b65481729001905a8b9f9aba0b11c1cdd60444f3ce1252",
+  "partition_sha256": "9c835133f868f6229af3e2fb7e0c2051d10c6ccfb2e520017f627e57f559cda2",
+  "statistics": {
+    "relevant_files": 5,
+    "nested_asar_containers": 0,
+    "text_bytes_read": 198422,
+    "invalid_utf8_files": 0,
+    "parsed_javascript_files": 4,
+    "skipped_javascript_files": 0,
+    "visited_ast_nodes": 5474,
+    "findings": 116,
+    "modules": 0,
+    "parse_failures": 0
+  },
+  "source_selection": {
+    "requested_paths": [
+      "package.json",
+      "src/infra/package-update-activation-immutable.ts",
+      "src/infra/package-update-activation-immutable-pointer.ts",
+      "src/infra/package-update-activation-immutable-recovery.ts",
+      "src/infra/ed25519-signature.ts"
+    ],
+    "unselected_files": 0
+  },
+  "coverage": {
+    "application": {
+      "status": "partial",
+      "truncated": false,
+      "omitted_count": null,
+      "limits": []
+    },
+    "semantic": {
+      "status": "unknown",
+      "truncated": false,
+      "omitted_nodes": 0,
+      "omitted_relations": 0,
+      "limits": [],
+      "families": [
+        {
+          "family": "boundary",
+          "status": "partial",
+          "retained_relations": 9,
+          "omitted_relations": 0,
+          "unknown_count": 6
+        },
+        {
+          "family": "call-flow",
+          "status": "partial",
+          "retained_relations": 273,
+          "omitted_relations": 0,
+          "unknown_count": 390
+        },
+        {
+          "family": "child-process",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "closure",
+          "status": "partial",
+          "retained_relations": 398,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "configuration",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "data-flow",
+          "status": "partial",
+          "retained_relations": 2469,
+          "omitted_relations": 0,
+          "unknown_count": 355
+        },
+        {
+          "family": "event",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "object-flow",
+          "status": "partial",
+          "retained_relations": 419,
+          "omitted_relations": 0,
+          "unknown_count": 522
+        },
+        {
+          "family": "promise-ownership",
+          "status": "partial",
+          "retained_relations": 17,
+          "omitted_relations": 0,
+          "unknown_count": 17
+        },
+        {
+          "family": "request",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "resource-lifecycle",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "timer",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        }
+      ]
+    },
+    "application_unknowns": 0,
+    "semantic_unknowns": 1290
+  },
+  "view_coverage": {
+    "status": "complete-within-view",
+    "examined": 89,
+    "total": 93,
+    "next_offset": null,
+    "exhausted": true
+  },
+  "limitations": [
+    "Four inert TypeScript source copies plus existing package metadata; not an observed shipped runtime.",
+    "Application partial and semantic unknown with 1290 retained semantic unknowns; no target or reference tests executed.",
+    "Zero unselected relevant files describes only the small source-copy partition, not the repository or imported helpers.",
+    "This research alone adds no Jarvis implementation evidence and closes no phase A capability or distribution family."
+  ],
+  "runtime_executed": false,
+  "full_evidence_path": "/private/tmp/jarvis-openclaw-reference-20261024/part15/evidence.json",
+  "export_sha256": "317bcbe83fff49f4a655b32dcaf2c4c56faa52236023a29a06c29caac533ae7d",
+  "export_bytes": 13303942,
+  "export_record_count": 22,
+  "gzip_export_path": "/private/tmp/jarvis-openclaw-reference-20261024/part15/evidence.json.gz",
+  "gzip_export_sha256": "af63f9208f704f4e941845f833be6b1dec30728ec83e7d8436abc5efcc2b8ada",
+  "gzip_export_bytes": 2025615,
+  "provenance": "REA_PART15_PROVENANCE.json",
+  "fine_grained_views": [
+    {
+      "role": "immutable",
+      "source_path": "src/infra/package-update-activation-immutable.ts",
+      "evidence_id": "ev_fa297ed77934cbab4f2881839dd6bf238f4a5f9d9436f40aeae4c86fed5ee10f",
+      "source_module_node_id": "jag_node_00ed0467c2da7a93165d956123be2818bf3597f2809448544f06c29d35d0a677",
+      "semantic_role": "source-module",
+      "source_sha256": "cbf55677fba3eb29c3fae0f896b274d26539c87a06eaf87fa6d282d30cbae5bb"
+    },
+    {
+      "role": "pointer",
+      "source_path": "src/infra/package-update-activation-immutable-pointer.ts",
+      "evidence_id": "ev_7386e7b7441bdc3f96d8e4ca98107f332a1a8e310b53ea627e6a1db82baf2fae",
+      "source_module_node_id": "jag_node_d7cfcbe8704b7403130bda1bca0222232d54b3a3eed8b74fd5ff0af738ad24e6",
+      "semantic_role": "source-module",
+      "source_sha256": "7f7019ccc5b75fe53ea0b12893e7fb3d6cdbfe46c6f2dcdd84afb21f5ba28fbc"
+    },
+    {
+      "role": "recovery",
+      "source_path": "src/infra/package-update-activation-immutable-recovery.ts",
+      "evidence_id": "ev_7767e68693826a53a1ea5a2fdb72efceaa01abf2cb18f5c9a9f617c2b27dd805",
+      "source_module_node_id": "jag_node_45f95376e6d31a36c146c27e9d74d048a632804a7c3e445adbc2eb9a4b4e9f60",
+      "semantic_role": "source-module",
+      "source_sha256": "aaded71cb9f67ed7a43ee5d3f1865e41a61e3ae144f5bac771eedf43851d2206"
+    },
+    {
+      "role": "signature",
+      "source_path": "src/infra/ed25519-signature.ts",
+      "evidence_id": "ev_51b39a525c5a8b5ade92edc30d99000416b5247e7d99e5552b68dccbf3f788ee",
+      "source_module_node_id": "jag_node_738594d97e528dfbd9557db25f635221e5a13a2231b13f98258aaf82760a0ded",
+      "semantic_role": "source-module",
+      "source_sha256": "b967d65bd3d04fcf7227134513479e1c8d3e51127f56ccc9db2fdc3bc0296680"
+    },
+    {
+      "role": "module_identity_page",
+      "evidence_id": "ev_432dcbc64711fcceca1ec7c325b60121fc81d6f183878663198d5089e576739f"
+    },
+    {
+      "role": "selected_module_facts",
+      "evidence_id": "ev_af2fa3947e4ad80adbee2c8150aff3d16229a2ca8dc4a089cc6228d2b0a9b96e"
+    },
+    {
+      "role": "selected_module_facts_final_page",
+      "evidence_id": "ev_eaca681680a268fee161fdf9425958617aa248581dc2800ff59b1cb6d04af720"
+    }
+  ],
+  "analyst_questions": [
+    {
+      "id": "U15-01",
+      "topic": "Identity and version",
+      "status": "partial",
+      "observed": "Generation SHA, buildDigest, physical identities and control-format revision are checked in the selected owners.",
+      "unknown": "App semver ordering, architecture/runtime compatibility and full descriptor schema validation live outside these four sources."
+    },
+    {
+      "id": "U15-02",
+      "topic": "Update lock and owner authorization",
+      "status": "partial",
+      "observed": "Functions accept assertCurrent; pending activation blocks preparation; publication comment delegates stopped-service custody to caller.",
+      "unknown": "Actual lock acquisition, stop/drain ownership, owner decision binding and revocation paths of the caller are not selected."
+    },
+    {
+      "id": "U15-03",
+      "topic": "Publication durability",
+      "status": "partial",
+      "observed": "A pointer intent precedes renameSync and matching identity is reconciled before control update.",
+      "unknown": "directory-durability helper, platform/FS atomicity, actual syscall outcomes and power-loss behavior were not inspected or executed."
+    },
+    {
+      "id": "U15-04",
+      "topic": "Recovery and rollback completion",
+      "status": "partial",
+      "observed": "An independent recovery runtime and launcher are prepared and validated against installation/runtime/generation identities.",
+      "unknown": "Full activation settlement, failed new-service startup, selection of previous code, health acceptance and migration/data compatibility are outside scope."
+    },
+    {
+      "id": "U15-05",
+      "topic": "Release assets and signature trust",
+      "status": "unknown",
+      "observed": "A bounded Ed25519 primitive verifies bytes using a caller-supplied public key.",
+      "unknown": "No authenticated catalog/manifest/asset/key chain, signer root, revocation/rotation policy, macOS signature or notarization path was established. No absence claim about the repository."
+    },
+    {
+      "id": "U15-06",
+      "topic": "Dependencies and schemas",
+      "status": "unknown",
+      "observed": "Static imports identify dependencies on Kysely, SQLite transaction owners, generation/layout schemas and durability helpers.",
+      "unknown": "Those implementations are outside the selected source partition; imports and source comments do not establish their runtime guarantees."
+    },
+    {
+      "id": "U15-07",
+      "topic": "Portability to Jarvis",
+      "status": "design_required",
+      "observed": "The reference control and recovery helper demand root-owned physical files; Jarvis is currently a user-owned macOS development app.",
+      "unknown": "An own distribution/custody design, supported installer boundary and qualification of code signing remain to be chosen. No root permissions or tooling were acquired."
+    },
+    {
+      "id": "U15-08",
+      "topic": "Dynamic coverage",
+      "status": "unobserved",
+      "observed": "Four TypeScript sources parsed as inert text with partial application and unknown semantic coverage.",
+      "unknown": "No test, target process, launcher, network download, activation, service restart or rollback ran. The 1290 semantic unknowns remain in parent Evidence."
+    }
+  ],
+  "semantic_unknown_details": {
+    "status": "retained_in_parent_evidence",
+    "count": 1290,
+    "omitted_nodes": 0,
+    "omitted_relations": 0
+  },
+  "analysis_lifecycle": {
+    "target_free": true,
+    "native_target_opened": false,
+    "target_executed": false,
+    "ghidra_or_readiness": false,
+    "setup_or_repair": false,
+    "initial_request": "LICENSE_source_path_rejected_then_corrected_once",
+    "exported_before_close": true,
+    "close_binary_result": null
+  },
+  "implementation_status": "research_only_no_product_implementation_or_capability_closure"
+}

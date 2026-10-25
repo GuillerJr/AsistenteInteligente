@@ -101,6 +101,11 @@ La [continuación de canales, voz local y web](PHASE_A_CHANNELS_VOICE_WEB.md) y 
 controles previos, ajustes posteriores y recorridos reales todavía pendientes.
 No declaran completa la fase A ni sustituyen la instalación anterior.
 
+El [bloque de recuperación y diagnóstico](PHASE_A_RECOVERY.md) añade revisiones
+del host, respaldo portátil, preparación de un perfil restaurado desarmado e
+inspección sin reparación. Distingue los contratos y pruebas de la cualificación
+en la app y de la activación, actualización y distribución todavía pendientes.
+
 El prototipo prueba serialización por sesión, propuesta/validación/autorización,
 resultado explícito, cancelación y asentamiento. El prototipo aislado no acredita permisos persistentes, cifrado, herramientas
 reales ni voz. El servicio añadido tiene pruebas separadas de autenticación local,

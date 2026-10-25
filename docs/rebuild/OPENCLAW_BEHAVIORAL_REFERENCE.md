@@ -399,3 +399,55 @@ nativo, sanitización/archivos fríos, manifiesto/FD/fsync, motores remotos y ej
 real. **No se implementan ni se cualifican backup/restore/doctor en Jarvis por esta
 lectura.** Catorce lotes y 56 rutas TS/JS únicas amplían una investigación parcial;
 no cierran la fase A ni la equivalencia de ninguna familia.
+
+## Bloque OC-15: activación inmutable, recuperación y firma
+
+Se incorporan cuatro fuentes TypeScript nuevas del mismo pin para control de
+instalación, publicación del puntero activo, runtime independiente de recuperación
+y primitivas Ed25519. La [procedencia](REA_PART15_PROVENANCE.json) verifica blobs
+y la cadena Git Root/Src/Infra. El clone permaneció dataless: sólo se consultaron
+metadatos y se obtuvieron bytes del GitHub oficial por SHA. Son copias de fuente
+inertes, sin ejecución de OpenClaw ni observación de una distribución instalada.
+
+El [resumen](REA_PART15_SUMMARY.json) conserva aplicación **partial**, semántica
+**unknown** y 1290 incógnitas. Padre:
+`ev_f45ebe76e095370d3793afaaceb626edb46ed03f4181cc1977b725f13f32422d`.
+La selección pequeña incluye los cuatro módulos y el manifiesto; cero archivos
+relevantes fuera de selección no acredita sus imports ni el repositorio completo.
+
+El [control inmutable](https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/infra/package-update-activation-immutable.ts#L491)
+comprueba identidad física, descriptor, revisión y registro esperado; distingue
+SHA de generación, buildDigest y formato de control. Una operación de activación
+pendiente bloquea nueva preparación. Preparar una generación no concede publicar
+su puntero ni autoridad sobre el servicio. La custodia real y los helpers de
+transacción quedan fuera de las cuatro fuentes. Vista de módulo:
+`ev_fa297ed77934cbab4f2881839dd6bf238f4a5f9d9436f40aeae4c86fed5ee10f`.
+
+La [publicación del puntero](https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/infra/package-update-activation-immutable-pointer.ts#L63)
+conserva intención durable e identidades anterior/temporal/destino antes de
+reemplazar current. La reconciliación distingue el estado anterior, una
+publicación coincidente o un objeto discrepante que conserva la recuperación.
+Las llamadas a rename y sync no acreditan atomicidad conjunta de journal, app,
+servicios y datos ni comportamiento ante corte eléctrico. Vista:
+`ev_7386e7b7441bdc3f96d8e4ca98107f332a1a8e310b53ea627e6a1db82baf2fae`.
+
+La [recuperación](https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/infra/package-update-activation-immutable-recovery.ts#L129)
+prepara y compara una copia independiente con la instalación, runtime y generación
+registrados; no prueba que un arranque fallido termine en rollback satisfactorio
+ni que una versión anterior pueda leer datos migrados. Vista:
+`ev_7767e68693826a53a1ea5a2fdb72efceaa01abf2cb18f5c9a9f617c2b27dd805`.
+La [primitiva Ed25519](https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/infra/ed25519-signature.ts#L166)
+verifica payload con una clave aportada por el llamador. No queda acreditada su
+conexión con catálogo, manifiesto, asset descargado, firmante confiable, revocación
+o firma/notarización macOS. Vista:
+`ev_51b39a525c5a8b5ade92edc30d99000416b5247e7d99e5552b68dccbf3f788ee`.
+
+Los contratos propios derivados separan descargar/preparar/activar/recuperar,
+requieren revisión y autoridad ligadas a identidades vigentes y mantienen
+incertidumbre sin replay automático. No reutilizan permisos de backup ni tools y
+no confunden rollback de código con restauración de datos. Son requisitos de
+diseño futuro, no evidencia de nuevas capacidades implementadas en Jarvis.
+El export completo permanece en la ruta temporal registrada, fuera del repositorio.
+Con OC-15 se alcanzan quince lotes y **60 rutas TS/JS únicas**. La investigación
+sigue parcial; este lote no cierra distribución, actualización, rollback ni otra
+familia de la fase A.

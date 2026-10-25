@@ -1,0 +1,83 @@
+{
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "partition_sha256": "9c835133f868f6229af3e2fb7e0c2051d10c6ccfb2e520017f627e57f559cda2",
+  "source_root_role": "private_inert_reference_only_not_product_source",
+  "input_artifact_kind": "source_copy_partition_not_observed_shipped_runtime",
+  "source_copy_root": "/private/tmp/jarvis-openclaw-reference-20261024/part15/analysis-input",
+  "original_clone_modified": false,
+  "reference_executed": false,
+  "files": [
+    {
+      "path": "src/infra/package-update-activation-immutable.ts",
+      "bytes": 21144,
+      "sha256": "cbf55677fba3eb29c3fae0f896b274d26539c87a06eaf87fa6d282d30cbae5bb",
+      "selected_for_analysis": true,
+      "git_blob": "ffbcf120aac96de0881aa063753806957463b49d",
+      "source_url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/infra/package-update-activation-immutable.ts"
+    },
+    {
+      "path": "src/infra/package-update-activation-immutable-pointer.ts",
+      "bytes": 5029,
+      "sha256": "7f7019ccc5b75fe53ea0b12893e7fb3d6cdbfe46c6f2dcdd84afb21f5ba28fbc",
+      "selected_for_analysis": true,
+      "git_blob": "c7adace7b041dac7279229756ca202c4d98a01cb",
+      "source_url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/infra/package-update-activation-immutable-pointer.ts"
+    },
+    {
+      "path": "src/infra/package-update-activation-immutable-recovery.ts",
+      "bytes": 11969,
+      "sha256": "aaded71cb9f67ed7a43ee5d3f1865e41a61e3ae144f5bac771eedf43851d2206",
+      "selected_for_analysis": true,
+      "git_blob": "1aab11dc5566293ecb4a91c6846d74fbfdc82ee7",
+      "source_url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/infra/package-update-activation-immutable-recovery.ts"
+    },
+    {
+      "path": "src/infra/ed25519-signature.ts",
+      "bytes": 7255,
+      "sha256": "b967d65bd3d04fcf7227134513479e1c8d3e51127f56ccc9db2fdc3bc0296680",
+      "selected_for_analysis": true,
+      "git_blob": "bad060efb735a85c24497e847de524101e1e0801",
+      "source_url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/infra/ed25519-signature.ts"
+    },
+    {
+      "path": "package.json",
+      "bytes": 153025,
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "selected_for_analysis": true,
+      "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d",
+      "reused_context_from": "part10"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1076,
+      "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+      "selected_for_analysis": false,
+      "git_blob": "ed064819ab537575d0cad902f7e5af4a3488b1d0",
+      "reused_context_from": "part10"
+    }
+  ],
+  "acquisition_metadata_sha256": "4f18ed6ad1f080c8abd9954af15cc21d4aab6e1b7909ad0d81af165e286863e4",
+  "reference_tree": "197c70097790e30087bbef323b0f2cc5148ab9b7",
+  "git_tree_chain_verified_in_acquisition": true,
+  "canonical_tree_hashes_recomputed": true,
+  "original_clone_content_read": false,
+  "original_clone_metadata_only": true,
+  "original_clone_selected_paths_still_dataless": true,
+  "acquisition_method": "Official GitHub connector fetch_blob GET by tree-verified SHA. Root/Src/Infra tree responses reused from verified part14 and canonical hashes recomputed; package/LICENSE reused from verified part10. Clone inspected through metadata only.",
+  "verified_tree_chain": [
+    {
+      "role": "Root",
+      "git_tree_sha1": "197c70097790e30087bbef323b0f2cc5148ab9b7"
+    },
+    {
+      "role": "Src",
+      "git_tree_sha1": "2016fce75d48ab2afbf221cf2c00b8b3b70018b7"
+    },
+    {
+      "role": "Infra",
+      "git_tree_sha1": "1efa84c79d161dcfbe0f3861e6299d99bfb976d3"
+    }
+  ],
+  "source_git_blob_hashes_recomputed": true,
+  "raw_export_copied_into_repository": false
+}

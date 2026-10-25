@@ -1983,6 +1983,158 @@
         "Application partial, semantic unknown2342; zero unselected files is not semantic or repository completeness.",
         "No backup/restore/doctor product implementation or phase A closure is credited by this research."
       ]
+    },
+    {
+      "id": "OC-15",
+      "topic": "Immutable update control, pointer publication, independent recovery runtime and signature boundaries",
+      "parent_evidence_id": "ev_f45ebe76e095370d3793afaaceb626edb46ed03f4181cc1977b725f13f32422d",
+      "summary_evidence_id": "ev_e705089266fdb89bb7b65481729001905a8b9f9aba0b11c1cdd60444f3ce1252",
+      "partition_sha256": "9c835133f868f6229af3e2fb7e0c2051d10c6ccfb2e520017f627e57f559cda2",
+      "statistics": {
+        "relevant_files": 5,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 198422,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 4,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 5474,
+        "findings": 116,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "partial",
+          "truncated": false,
+          "omitted_count": null,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 9,
+              "omitted_relations": 0,
+              "unknown_count": 6
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 273,
+              "omitted_relations": 0,
+              "unknown_count": 390
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 398,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 2469,
+              "omitted_relations": 0,
+              "unknown_count": 355
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 419,
+              "omitted_relations": 0,
+              "unknown_count": 522
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 17,
+              "omitted_relations": 0,
+              "unknown_count": 17
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 0,
+        "semantic_unknowns": 1290
+      },
+      "runtime_executed": false,
+      "full_evidence_path": "/private/tmp/jarvis-openclaw-reference-20261024/part15/evidence.json",
+      "source_paths": [
+        "package.json",
+        "src/infra/package-update-activation-immutable.ts",
+        "src/infra/package-update-activation-immutable-pointer.ts",
+        "src/infra/package-update-activation-immutable-recovery.ts",
+        "src/infra/ed25519-signature.ts"
+      ],
+      "source_selection": {
+        "requested_paths": [
+          "package.json",
+          "src/infra/package-update-activation-immutable.ts",
+          "src/infra/package-update-activation-immutable-pointer.ts",
+          "src/infra/package-update-activation-immutable-recovery.ts",
+          "src/infra/ed25519-signature.ts"
+        ],
+        "unselected_files": 0
+      },
+      "semantic_unknowns": 1290,
+      "provenance": "REA_PART15_PROVENANCE.json",
+      "summary": "REA_PART15_SUMMARY.json",
+      "export_sha256": "317bcbe83fff49f4a655b32dcaf2c4c56faa52236023a29a06c29caac533ae7d",
+      "export_bytes": 13303942,
+      "limitations": [
+        "Four inert TypeScript source copies plus existing package metadata; not an observed shipped runtime.",
+        "Application partial and semantic unknown with 1290 retained semantic unknowns; no target or reference tests executed.",
+        "Zero unselected relevant files describes only the small source-copy partition, not the repository or imported helpers.",
+        "This research alone adds no Jarvis implementation evidence and closes no phase A capability or distribution family."
+      ]
     }
   ],
   "remaining_parts": [
@@ -2053,7 +2205,7 @@
       "original_plan_id": "OC-11"
     }
   ],
-  "rea_parsed_unique_source_files": 56,
+  "rea_parsed_unique_source_files": 60,
   "remaining_parts_id_note": "Los scopes restantes usan SCOPE para no confundir etiquetas del plan inicial con lotes OC completados. Un lote estático no cierra un scope.",
   "rea_parsed_unique_source_paths": [
     "extensions/codex/src/app-server/connection-health.ts",
@@ -2096,8 +2248,12 @@
     "src/gateway/server-methods/health.ts",
     "src/gateway/server.ts",
     "src/gateway/session-observer.ts",
+    "src/infra/ed25519-signature.ts",
     "src/infra/net/ssrf.pinning.test.ts",
     "src/infra/net/ssrf.ts",
+    "src/infra/package-update-activation-immutable-pointer.ts",
+    "src/infra/package-update-activation-immutable-recovery.ts",
+    "src/infra/package-update-activation-immutable.ts",
     "src/infra/sqlite-integrity.ts",
     "src/infra/sqlite-snapshot.ts",
     "src/mcp/tools-stdio-server.ts",

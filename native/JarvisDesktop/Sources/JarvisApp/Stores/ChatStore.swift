@@ -29,6 +29,7 @@ final class ChatStore {
     let mcp = MCPStore()
     let management = ManagementStore()
     let telegram = TelegramStore()
+    let maintenance = MaintenanceStore()
     let voice: LocalVoiceController
     var dictationNotice: String?
     var newAgentID = "jarvis"
@@ -37,6 +38,7 @@ final class ChatStore {
     @ObservationIgnored private var client: LocalRPCClient?
     @ObservationIgnored private let service = ServiceProcess()
     @ObservationIgnored private var monitor: Task<Void, Never>?
+    @ObservationIgnored private var monitorReadActive = false
     @ObservationIgnored private var polling: Task<Void, Never>?
     @ObservationIgnored private var started = false
     @ObservationIgnored private var options: LaunchOptions?
@@ -52,16 +54,20 @@ final class ChatStore {
     var shutdownWarning: String? { service.lastStopReport?.warning }
 
     var selected: ChatSession? { sessions.first { $0.id == selectedID } }
-    var canSend: Bool { ready && connected && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !telegram.isChanging && !voice.canStopDictation && activeRunID == nil && selected != nil
+    var canSend: Bool { ready && connected && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !telegram.isChanging && !maintenance.blocksInteraction && !voice.canStopDictation && activeRunID == nil && selected != nil
                        && selected?.archived == false
                        && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    var canChangeSession: Bool { ready && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !telegram.isChanging && !voice.canStopDictation && activeRunID == nil }
+    var canChangeSession: Bool { ready && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !telegram.isChanging && !maintenance.blocksInteraction && !voice.canStopDictation && activeRunID == nil }
     var selectedAgentName: String { management.agents.first(where: { $0.id == selected?.agentID })?.name ?? selected?.agentID ?? "Jarvis" }
     var canUseVoice: Bool { canChangeSession && connected && selected?.archived == false && selected != nil }
 
     init(voice: LocalVoiceController? = nil) {
         self.voice = voice ?? LocalVoiceController(driver: MacLocalVoiceDriver())
         self.voice.onTranscript = { [weak self] transcript in self?.acceptDictation(transcript) }
+        maintenance.waitForSupervisionIdle = { [weak self] in
+            guard let self else { throw RPCFailure.configuration }
+            try await self.waitForMonitorSettlement()
+        }
     }
 
     func startDictation() {
@@ -104,6 +110,7 @@ final class ChatStore {
             mcp.configure(client: LocalRPCClient(stateDirectory: options.state))
             management.configure(client: LocalRPCClient(stateDirectory: options.state))
             telegram.configure(client: LocalRPCClient(stateDirectory: options.state))
+            maintenance.configure(client: LocalRPCClient(stateDirectory: options.state))
             try service.start(options)
             try await ServiceBootstrap.waitForHealth(stateDirectory: options.state) { service.isRunning }
             try await refreshStatus()
@@ -127,25 +134,12 @@ final class ChatStore {
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(2)) } catch { return }
                 guard let self else { return }
-                if self.starting { continue }
+                if self.starting || self.maintenance.monitorPaused { continue }
                 do {
-                    guard self.service.isRunning else { throw RPCFailure.disconnected }
-                    if self.awaitingStartupReadiness, let options = self.options {
-                        try await ServiceBootstrap.waitForHealth(stateDirectory: options.state, timeout: 1) { self.service.isRunning }
-                    }
-                    try await self.refreshStatus()
-                    try await self.access.refreshCatalog()
-                    try await self.mcp.refresh()
-                    try await self.management.refresh()
-                    if self.canChangeSession { try await self.refreshSessions() }
-                    try await self.refreshSelectedConversation()
-                    if self.activeRunID == nil { try await self.access.refreshApprovals(runID: nil) }
-                    if self.runPhase == "disconnected", self.activeRunID != nil { self.resumeStatus() }
-                    // Recovery performs only reads. It never selects/creates a
-                    // conversation, relaunches a child, or resends an operation.
-                    self.finishStartupRecovery()
+                    try await self.refreshMonitoredState()
                 } catch {
                     if Task.isCancelled || self.stopping { return }
+                    if MaintenanceMonitorPolicy.isTemporaryBusy(error) { continue }
                     self.ready = false; self.connected = false
                     self.voice.cancel()
                     if self.awaitingStartupReadiness, self.service.isRunning,
@@ -161,6 +155,44 @@ final class ChatStore {
                 }
             }
         }
+    }
+
+    private func waitForMonitorSettlement() async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(30))
+        while monitorReadActive {
+            try Task.checkCancellation()
+            guard !stopping, ContinuousClock.now < deadline else { throw RPCFailure.unavailable }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
+    private func refreshMonitoredState() async throws {
+        guard !maintenance.monitorPaused else { return }
+        monitorReadActive = true
+        defer { monitorReadActive = false }
+        guard service.isRunning else { throw RPCFailure.disconnected }
+        if awaitingStartupReadiness, let options = options {
+            try await ServiceBootstrap.waitForHealth(stateDirectory: options.state, timeout: 1) { service.isRunning }
+        guard !maintenance.monitorPaused else { return }
+        }
+        try await refreshStatus()
+        guard !maintenance.monitorPaused else { return }
+        try await access.refreshCatalog()
+        guard !maintenance.monitorPaused else { return }
+        try await mcp.refresh()
+        guard !maintenance.monitorPaused else { return }
+        try await management.refresh()
+        guard !maintenance.monitorPaused else { return }
+        if canChangeSession { try await refreshSessions() }
+        guard !maintenance.monitorPaused else { return }
+        try await refreshSelectedConversation()
+        guard !maintenance.monitorPaused else { return }
+        if activeRunID == nil { try await access.refreshApprovals(runID: nil) }
+        guard !maintenance.monitorPaused else { return }
+        if runPhase == "disconnected", activeRunID != nil { resumeStatus() }
+        // Recovery performs only reads. It never selects/creates a
+        // conversation, relaunches a child, or resends an operation.
+        finishStartupRecovery()
     }
 
     private func rpc(_ method: String, _ params: [String: RPCValue] = [:]) async throws -> RPCValue {
@@ -457,7 +489,7 @@ final class ChatStore {
     }
 
     func reconnect() async {
-        guard !stopping, !starting, let options else { return }
+        guard !stopping, !starting, !maintenance.blocksInteraction, let options else { return }
         conversationRefresh?.setScope(nil)
         voice.cancel(); dictationNotice = nil
         starting = true
@@ -468,6 +500,8 @@ final class ChatStore {
         await mcp.close()
         await management.close()
         await telegram.close()
+        await maintenance.close()
+        maintenance.configure(client: LocalRPCClient(stateDirectory: options.state))
         guard !stopping else { return }
         do {
             let restarted = !service.isRunning
@@ -631,6 +665,7 @@ final class ChatStore {
         await mcp.close()
         await management.close()
         await telegram.close()
+        await maintenance.close()
         return true
     }
 

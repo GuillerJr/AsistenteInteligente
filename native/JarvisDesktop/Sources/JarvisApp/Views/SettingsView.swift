@@ -6,6 +6,7 @@ struct SettingsView: View {
     @AppStorage("jarvis.openShortcut") private var shortcut = "commandShiftJ"
 
     var body: some View {
+        TabView {
         Form {
             Section("Escritorio") {
                 Picker("Abrir Jarvis", selection: $shortcut) {
@@ -21,9 +22,9 @@ struct SettingsView: View {
             Section("Cuenta de ChatGPT") {
                 Text(store.statusText)
                 HStack {
-                    Button("Abrir inicio de sesión") { Task { await store.login() } }.disabled(!store.ready)
+                    Button("Abrir inicio de sesión") { Task { await store.login() } }.disabled(!store.ready || store.maintenance.blocksInteraction)
                     Button("Cerrar sesión") { Task { await store.logout() } }
-                        .disabled(!store.connected || store.activeRunID != nil)
+                        .disabled(!store.connected || store.activeRunID != nil || store.maintenance.blocksInteraction)
                 }
             }
             Section("Estado de esta base") {
@@ -31,6 +32,8 @@ struct SettingsView: View {
                 Text("Las capacidades disponibles se consultan en «Herramientas» y «Memoria». La paridad completa de la base permanece en construcción.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-        }.formStyle(.grouped).frame(width: 580, height: 430)
+        }.formStyle(.grouped).tabItem { Label("General", systemImage: "gearshape") }
+            MaintenanceView(maintenance: store.maintenance, mayBegin: store.ready && !store.busy && store.activeRunID == nil && !store.voice.canStopDictation).tabItem { Label("Mantenimiento", systemImage: "externaldrive.badge.timemachine") }
+        }.frame(width: 760, height: 680)
     }
 }

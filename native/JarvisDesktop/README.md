@@ -228,9 +228,24 @@ las dos descripciones de privacidad necesarias; no concede permisos TCC por él.
 Las pruebas con driver sintético y reloj controlado acreditan el ciclo de vida y
 los límites, no la exactitud del dictado ni que un altavoz haya sido escuchado.
 
-La suite nativa incluye 129 pruebas de framing, gestión, voz y contratos Telegram,
+La suite nativa incluye pruebas de framing, gestión, voz y contratos Telegram,
 incluido pairing con servicio/journal propios y Bot API/opener sintéticos. La
 validación privada previa utiliza una identidad de fuentes declarada y debe
 repetirse sobre el árbol integrado antes de publicar. No abre cuentas, Telegram,
 micrófono ni permisos reales. Las comprobaciones físicas con el idioma, bot,
 dispositivos y autorizaciones del dueño son recorridos separados.
+
+## Mantenimiento
+
+Ajustes → Mantenimiento prepara una revisión del respaldo, solicita aprobación
+por una operación concreta y permite verificar o preparar una restauración en
+un perfil nuevo desarmado. El dueño pulsa el botón de autorización. No se
+incluyen archivos de la carpeta de trabajo, credenciales, estado del proveedor,
+programas MCP ni permisos vivos; el contenido escrito por el usuario puede
+contener datos sensibles. No se activa el perfil restaurado automáticamente.
+
+El diagnóstico utiliza sólo metadatos e imágenes SQLite coherentes del host, sin
+reparar o inicializar almacenes para aparentar disponibilidad. La supervisión usa
+el estado del coordinador y conserva la identidad ante un ACK perdido, sin
+reenviar efectos. La pausa de mantenimiento no equivale a una desconexión del
+proveedor ni cancela el borrador o la voz. Ver [contratos, controles y límites](../../docs/rebuild/PHASE_A_RECOVERY.md).

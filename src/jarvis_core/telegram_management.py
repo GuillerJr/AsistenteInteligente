@@ -13,6 +13,7 @@ import json
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
+from jarvis_core.host_profile import profile_background
 from jarvis_core.management import params
 from jarvis_core.protocol import RpcError
 from jarvis_core.state import SessionRef, StateError
@@ -38,7 +39,11 @@ class TelegramManagementAPI:
         if not callable(client_factory):
             raise TelegramError("telegram_client_factory_invalid")
         self._telegram_client_factory = client_factory
-        self._telegram_journal = TelegramJournal(self.directory / "telegram")
+        from jarvis_core.host_profile import BoundProfileResource
+
+        self._telegram_journal = BoundProfileResource(
+            TelegramJournal(self.directory / "telegram"), self.profile_lease, self.profile_gate
+        )
         self._telegram_channel = None
         self._telegram_mutating = False
         self._telegram_workspace_id = None
@@ -440,6 +445,7 @@ class TelegramManagementAPI:
                 continue
         cleanup.result()
 
+    @profile_background("telegram.dispatch")
     async def _dispatch_telegram(self, incoming: IncomingMessage):
         run_id, ref, accepted = uuid4().hex, None, False
         try:

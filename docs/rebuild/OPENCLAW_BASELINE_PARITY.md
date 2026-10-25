@@ -122,9 +122,9 @@ Todas las filas mantienen pendiente la cualificación real propia. «Sintético 
 | A-66 | Reuniones, telefonía, correo y bitácora | Pendiente; opcional o experimental de referencia | Elegir integración y ensayarla con recursos de prueba observando evento/artefacto/resultado autorizados. |
 | A-67 | Workers, entornos, cloud sessions y escritorio remoto | Pendiente; opcional o experimental de referencia | En entorno elegido provisionar prueba, despachar sesión, recuperar resultado y liberar lease/recursos. |
 | A-68 | CLI, TUI, ACP y clientes de automatización | Pendiente | Controlar sesión desde CLI/TUI y cliente ACP de prueba con los mismos eventos y autoridad que app. |
-| A-69 | Onboarding, asistente de sistema y doctor | Pendiente | Instalación limpia detecta requisitos y guía en español hasta primera conversación real con acceso del dueño. |
+| A-69 | Onboarding, asistente de sistema y doctor | Avance contractual parcial; cierre pendiente | Instalación limpia detecta requisitos y guía en español hasta primera conversación real con acceso del dueño. |
 | A-70 | Logs, auditoría, actividad, métricas y límites | Avance contractual parcial; cierre pendiente | Reproducir error y reconstruir solicitud/autorización/despacho/resultado por IDs en auditoría saneada. |
-| A-71 | Backup, restauración, actualización y rollback | Pendiente | Respaldar perfil artificial, actualizar paquete propio y restaurar sesiones/config/artefactos verificando hashes. |
+| A-71 | Backup, restauración, actualización y rollback | Avance contractual parcial; cierre pendiente | Respaldar perfil artificial, actualizar paquete propio y restaurar sesiones/config/artefactos verificando hashes. |
 | A-72 | Distribución, instalación y firma propias | Avance contractual parcial; cierre pendiente | Construir app desde checkout limpio, instalar en destino de prueba y verificar firma/identidad/chat con backend propio. |
 | A-73 | Defensas de red, contenido, archivos y abuso | Avance contractual parcial; cierre pendiente | Corpus adversarial ensaya prompt externo, SSRF, traversal, spam y replay sin bloquear operación legítima. |
 | A-74 | Clientes y nodos iOS/Android | Pendiente; port de referencia pendiente de decision | En cada plataforma adoptada instalar cliente propio, emparejar, conversar y comprobar sólo comandos consentidos. |

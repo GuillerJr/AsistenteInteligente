@@ -12,11 +12,13 @@ import hashlib
 import json
 import math
 import re
+import threading
 import time
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, replace
+from enum import StrEnum
 from types import MappingProxyType
 from typing import Any
 from uuid import uuid4
@@ -94,6 +96,211 @@ def operation_digest(operation: ApprovalRequest) -> str:
                            "arguments_json": operation.arguments_json}, sort_keys=True,
                           ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(identity.encode()).hexdigest()
+
+
+class HostPurpose(StrEnum):
+    """Fixed host effects, never offered to a model or added to ToolCatalog."""
+
+    BACKUP_CREATE = "backup.create"
+    RESTORE_STAGE = "restore.stage"
+    DOCTOR_REPAIR_APPLY = "doctor.repair.apply"
+
+
+@dataclass(frozen=True)
+class HostScope:
+    profile_id: str
+    generation: int
+
+    def __post_init__(self) -> None:
+        if (type(self.profile_id) is not str
+                or re.fullmatch(r"[A-Za-z0-9_-]{1,128}", self.profile_id) is None
+                or type(self.generation) is not int
+                or not 0 <= self.generation <= 2**52 - 1):
+            raise ToolError("invalid_host_scope")
+
+
+@dataclass(frozen=True)
+class HostApprovalRequest:
+    scope: HostScope
+    purpose: HostPurpose
+    operation_id: str
+    arguments_json: str
+    digest: str
+
+
+@dataclass(frozen=True)
+class HostApprovalGrant:
+    digest: str
+
+
+@dataclass(frozen=True)
+class PendingHostApproval:
+    approval_id: str
+    scope: HostScope
+    purpose: HostPurpose
+    operation_id: str
+    arguments_json: str
+    digest: str
+    expires_at_ns: int
+
+
+def canonical_host_arguments(arguments: Mapping[str, Any]) -> str:
+    """Bound metadata only; the trusted purpose handler validates its schema.
+
+    This is not a credential/content scanner. Callers must build metadata from
+    approved fields (identities, counts, digests, destination), never raw stores,
+    credentials, prompts or other private content.
+    """
+    try:
+        encoded = canonical_arguments(arguments)
+    except ToolError:
+        raise
+    except (ValueError, RecursionError):
+        raise ToolError("invalid_host_arguments") from None
+    if len(encoded.encode()) > 16384:
+        raise ToolError("host_data_limit")
+    return encoded
+
+
+def host_operation_digest(operation: HostApprovalRequest) -> str:
+    if (type(operation) is not HostApprovalRequest or type(operation.scope) is not HostScope
+            or type(operation.purpose) is not HostPurpose
+            or type(operation.operation_id) is not str
+            or re.fullmatch(r"[a-f0-9]{32}", operation.operation_id) is None):
+        raise ToolError("invalid_host_approval_request")
+    # Revalidate the frozen scope even for deliberately constructed objects.
+    HostScope(operation.scope.profile_id, operation.scope.generation)
+    if type(operation.arguments_json) is not str:
+        raise ToolError("invalid_host_arguments")
+    try:
+        size = len(operation.arguments_json.encode())
+    except UnicodeError:
+        raise ToolError("invalid_host_arguments") from None
+    if size > 16384:
+        raise ToolError("host_data_limit")
+    try:
+        arguments = json.loads(operation.arguments_json)
+    except (ValueError, TypeError, RecursionError):
+        raise ToolError("invalid_host_arguments") from None
+    if canonical_host_arguments(arguments) != operation.arguments_json:
+        raise ToolError("noncanonical_host_arguments")
+    identity = json.dumps({
+        "domain": "jarvis.host.approval/1",
+        "profile": operation.scope.profile_id,
+        "generation": operation.scope.generation,
+        "purpose": operation.purpose.value,
+        "operation": operation.operation_id,
+        "arguments_json": operation.arguments_json,
+    }, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(identity.encode()).hexdigest()
+
+
+class HostCancellation:
+    """An irreversible cancellation latch usable by the owning loop and workers.
+
+    set() fixes the thread event before scheduling waiter notification. There is
+    deliberately no clear/rearm API. Workers need only the read-only is_set()
+    protocol and never need an asyncio loop.
+    """
+
+    def __init__(self) -> None:
+        self._event = threading.Event()
+        self._lock = threading.Lock()
+        self._waiters: set[tuple[asyncio.AbstractEventLoop, asyncio.Future]] = set()
+
+    def is_set(self) -> bool:
+        return self._event.is_set()
+
+    def set(self) -> None:
+        with self._lock:
+            if self._event.is_set():
+                return
+            self._event.set()
+            waiters = tuple(self._waiters)
+        for loop, future in waiters:
+            try:
+                loop.call_soon_threadsafe(self._notify, future)
+            except RuntimeError:
+                # A closed waiter loop cannot use a grant; the latch stays set.
+                pass
+
+    @staticmethod
+    def _notify(future: asyncio.Future) -> None:
+        if not future.done():
+            future.set_result(None)
+
+    async def wait(self) -> None:
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        waiter = loop, future
+        with self._lock:
+            if self._event.is_set():
+                return
+            self._waiters.add(waiter)
+        try:
+            await future
+        finally:
+            with self._lock:
+                self._waiters.discard(waiter)
+
+
+@dataclass
+class _HostPending:
+    view: PendingHostApproval
+    operation: HostApprovalRequest
+    cancellation: HostCancellation
+    future: asyncio.Future
+    epoch: int
+    deadline: float
+
+
+@dataclass
+class _HostIssued:
+    operation: HostApprovalRequest
+    grant: HostApprovalGrant
+    cancellation: HostCancellation
+    epoch: int
+    deadline: float
+
+
+@dataclass
+class _HostLease:
+    authority: ApprovalAuthority
+    issued: _HostIssued
+    committed: bool = False
+    active: bool = True
+
+    def check(self, operation: HostApprovalRequest, *, commit: bool, continuing: bool) -> None:
+        # to_thread propagates ContextVars but the same lease object/lock is used.
+        # Holding this lock linearizes revoke/close/commit against the last guard.
+        with self.authority._host_lock:
+            if (not self.active or operation != self.issued.operation
+                    or (continuing and not self.committed)
+                    or (not continuing and self.committed)):
+                raise ToolError("host_authority_mismatch")
+            self.authority._check_host_issued_locked(self.issued)
+            if commit:
+                self.committed = True
+
+
+_HOST_LEASE: ContextVar[_HostLease | None] = ContextVar("jarvis_host_authority", default=None)
+
+
+def check_host_authority(operation: HostApprovalRequest, *, commit: bool = False) -> None:
+    lease = _HOST_LEASE.get()
+    if lease is None:
+        raise ToolError("host_authority_required")
+    if type(commit) is not bool:
+        raise ToolError("invalid_host_commit")
+    lease.check(operation, commit=commit, continuing=False)
+
+
+def revalidate_committed_host_authority(operation: HostApprovalRequest) -> None:
+    """Continue the original bounded effect, never commit again or renew TTL."""
+    lease = _HOST_LEASE.get()
+    if lease is None:
+        raise ToolError("host_authority_required")
+    lease.check(operation, commit=False, continuing=True)
 
 
 @dataclass(frozen=True)
@@ -185,6 +392,13 @@ class ApprovalAuthority:
         self._seen_operations: set[tuple[str, str, str]] = set()
         self._closed = False
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._host_lock = threading.RLock()
+        self._host_scope: HostScope | None = None
+        self._host_epoch = 0
+        self._host_pending: dict[str, _HostPending] = {}
+        self._host_issued: dict[int, _HostIssued] = {}
+        self._host_active: dict[int, _HostLease] = {}
+        self._host_seen: set[tuple[str, str]] = set()
 
     def _on_loop(self) -> None:
         loop = asyncio.get_running_loop()
@@ -199,7 +413,16 @@ class ApprovalAuthority:
                 or self._versions.get(issued.operation.session_id, 0) != issued.version):
             raise ToolError("tool_authority_revoked")
 
+    def _capacity(self) -> int:
+        with self._host_lock:
+            # A decided ticket and its grant are one request, not two.
+            return (sum(not entry.future.done() for entry in self._pending.values())
+                    + len(self._issued)
+                    + sum(not entry.future.done() for entry in self._host_pending.values())
+                    + len(self._host_issued) + len(self._host_active))
+
     def _sweep(self) -> None:
+        self._sweep_host()
         for key, entry in tuple(self._pending.items()):
             if (entry.cancellation.is_set() or time.monotonic() >= entry.deadline
                     or self._closed):
@@ -227,9 +450,9 @@ class ApprovalAuthority:
         identity = operation.session_id, operation.run_id, operation.operation_id
         if identity in self._seen_operations:
             raise ToolError("approval_operation_replayed")
-        if len(self._seen_operations) >= 65536:
+        if len(self._seen_operations) + len(self._host_seen) >= 65536:
             raise ToolError("approval_operation_capacity")
-        if len(self._pending) + len(self._issued) >= self.max_pending:
+        if self._capacity() >= self.max_pending:
             raise ToolError("approval_capacity")
         self._seen_operations.add(identity)
         approval_id = uuid4().hex
@@ -244,6 +467,21 @@ class ApprovalAuthority:
         self._pending[approval_id] = entry
         cancelled = asyncio.create_task(cancellation.wait())
         delivered = False
+
+        def discard_unacknowledged() -> None:
+            # The same operation_id may legitimately exist in another session or
+            # run. Only this request's exact future/grant may be discarded.
+            if not future.done() or future.cancelled():
+                return
+            unacknowledged = future.result()
+            if unacknowledged is None:
+                return
+            issued = self._issued.get(id(unacknowledged))
+            if (issued is not None and issued.grant is unacknowledged
+                    and issued.operation == operation
+                    and issued.grant.digest == operation.digest):
+                self._issued.pop(id(unacknowledged), None)
+
         try:
             done, _ = await asyncio.wait((future, cancelled), timeout=self.ttl,
                                          return_when=asyncio.FIRST_COMPLETED)
@@ -257,14 +495,22 @@ class ApprovalAuthority:
                 self._check_issued(issued)
                 delivered = True
             return grant
+        except asyncio.CancelledError:
+            cancellation.set()
+            raise
         finally:
             self._pending.pop(approval_id, None)
             cancelled.cancel()
             if not delivered:
-                for key, issued in tuple(self._issued.items()):
-                    if issued.operation.operation_id == operation.operation_id:
-                        self._issued.pop(key, None)
-            await asyncio.gather(cancelled, return_exceptions=True)
+                discard_unacknowledged()
+            try:
+                await asyncio.gather(cancelled, return_exceptions=True)
+            except asyncio.CancelledError:
+                # A prepared return is not an acknowledged capability if the
+                # caller is cancelled during the waiter's final cleanup.
+                cancellation.set()
+                discard_unacknowledged()
+                raise
 
     def list_pending(self, session_id: str | None = None) -> tuple[PendingApproval, ...]:
         self._on_loop()
@@ -328,11 +574,215 @@ class ApprovalAuthority:
             lease.active = False
             _LEASE.reset(token)
 
+    def _check_host_issued_locked(self, issued: _HostIssued) -> None:
+        # This guard intentionally has no _on_loop/get_running_loop dependency.
+        if (self._closed or issued.cancellation.is_set()
+                or time.monotonic() >= issued.deadline
+                or self._host_scope != issued.operation.scope
+                or self._host_epoch != issued.epoch):
+            raise ToolError("host_authority_revoked")
+
+    def _sweep_host(self) -> None:
+        # Only the owning loop edits futures. Workers only inspect locked leases.
+        with self._host_lock:
+            for key, entry in tuple(self._host_pending.items()):
+                if (self._closed or entry.cancellation.is_set()
+                        or time.monotonic() >= entry.deadline
+                        or self._host_scope != entry.operation.scope
+                        or self._host_epoch != entry.epoch):
+                    if not entry.future.done():
+                        entry.future.set_result(None)
+                    self._host_pending.pop(key, None)
+            for key, issued in tuple(self._host_issued.items()):
+                try:
+                    self._check_host_issued_locked(issued)
+                except ToolError:
+                    self._host_issued.pop(key, None)
+
+    def bind_host_scope(self, scope: HostScope) -> None:
+        """Bind one profile; same scope is idempotent, newer generation revokes."""
+        self._on_loop()
+        if type(scope) is not HostScope:
+            raise ToolError("invalid_host_scope")
+        HostScope(scope.profile_id, scope.generation)
+        with self._host_lock:
+            if self._closed:
+                raise ToolError("host_authority_closed")
+            current = self._host_scope
+            if current is not None:
+                if current.profile_id != scope.profile_id:
+                    raise ToolError("host_profile_mismatch")
+                if current.generation > scope.generation:
+                    raise ToolError("host_generation_stale")
+                if current == scope:
+                    return
+            self._host_scope = scope
+            self._host_epoch += 1
+            self._sweep_host()
+
+    def revoke_host(self, scope: HostScope) -> int:
+        self._on_loop()
+        if type(scope) is not HostScope:
+            raise ToolError("invalid_host_scope")
+        with self._host_lock:
+            if scope != self._host_scope:
+                raise ToolError("host_scope_mismatch")
+            count = (len(self._host_pending) + len(self._host_issued)
+                     + len(self._host_active))
+            self._host_epoch += 1
+            self._sweep_host()
+            return count
+
+    async def request_host(
+        self, operation: HostApprovalRequest, cancellation: HostCancellation,
+    ) -> HostApprovalGrant | None:
+        self._on_loop()
+        if type(cancellation) is not HostCancellation:
+            raise ToolError("invalid_host_cancellation")
+        digest = host_operation_digest(operation)
+        if operation.digest != digest:
+            raise ToolError("host_approval_digest_mismatch")
+        self._sweep()
+        with self._host_lock:
+            if self._closed or cancellation.is_set():
+                return None
+            if self._host_scope != operation.scope:
+                raise ToolError("host_scope_mismatch")
+            identity = operation.scope.profile_id, operation.operation_id
+            if identity in self._host_seen:
+                raise ToolError("approval_operation_replayed")
+            if len(self._seen_operations) + len(self._host_seen) >= 65536:
+                raise ToolError("approval_operation_capacity")
+            if self._capacity() >= self.max_pending:
+                raise ToolError("approval_capacity")
+            self._host_seen.add(identity)
+            approval_id = uuid4().hex
+            future = asyncio.get_running_loop().create_future()
+            view = PendingHostApproval(
+                approval_id, operation.scope, operation.purpose, operation.operation_id,
+                operation.arguments_json, operation.digest,
+                time.time_ns() + int(self.ttl * 1_000_000_000),
+            )
+            entry = _HostPending(view, operation, cancellation, future,
+                                 self._host_epoch, time.monotonic() + self.ttl)
+            self._host_pending[approval_id] = entry
+        cancelled = asyncio.create_task(cancellation.wait())
+        delivered = False
+        try:
+            done, _ = await asyncio.wait((future, cancelled), timeout=self.ttl,
+                                         return_when=asyncio.FIRST_COMPLETED)
+            if cancelled in done or cancellation.is_set() or future not in done:
+                return None
+            grant = future.result()
+            if grant is not None:
+                with self._host_lock:
+                    issued = self._host_issued.get(id(grant))
+                    if issued is None:
+                        return None
+                    self._check_host_issued_locked(issued)
+                    delivered = True
+            return grant
+        except asyncio.CancelledError:
+            cancellation.set()
+            raise
+        finally:
+            with self._host_lock:
+                self._host_pending.pop(approval_id, None)
+                if not delivered and future.done() and not future.cancelled():
+                    grant = future.result()
+                    if grant is not None:
+                        self._host_issued.pop(id(grant), None)
+            cancelled.cancel()
+            try:
+                await asyncio.gather(cancelled, return_exceptions=True)
+            except asyncio.CancelledError:
+                # Cancellation during the final hand-off is still unacknowledged.
+                # Revoke the issued object even if the normal return was prepared.
+                cancellation.set()
+                with self._host_lock:
+                    if future.done() and not future.cancelled():
+                        unacknowledged = future.result()
+                        if unacknowledged is not None:
+                            self._host_issued.pop(id(unacknowledged), None)
+                raise
+
+    def pending_host(self, scope: HostScope) -> tuple[PendingHostApproval, ...]:
+        self._on_loop()
+        if type(scope) is not HostScope:
+            raise ToolError("invalid_host_scope")
+        self._sweep()
+        with self._host_lock:
+            if scope != self._host_scope:
+                return ()
+            return tuple(entry.view for entry in self._host_pending.values()
+                         if not entry.future.done() and entry.operation.scope == scope)
+
+    def decide_host(
+        self, approval_id: str, *, scope: HostScope, digest: str, allow: bool,
+    ) -> bool:
+        """For the authenticated native owner endpoint; not a model decision."""
+        self._on_loop()
+        if (type(allow) is not bool or type(scope) is not HostScope
+                or type(approval_id) is not str
+                or re.fullmatch(r"[a-f0-9]{32}", approval_id) is None
+                or type(digest) is not str or re.fullmatch(r"[a-f0-9]{64}", digest) is None):
+            raise ToolError("invalid_host_approval_decision")
+        self._sweep()
+        with self._host_lock:
+            entry = self._host_pending.get(approval_id)
+            if (entry is None or entry.future.done() or entry.operation.scope != scope
+                    or entry.operation.digest != digest):
+                return False
+            grant = HostApprovalGrant(digest) if allow else None
+            if grant is not None:
+                self._host_issued[id(grant)] = _HostIssued(
+                    entry.operation, grant, entry.cancellation, entry.epoch, entry.deadline,
+                )
+            entry.future.set_result(grant)
+            return True
+
+    @contextmanager
+    def execution_host(
+        self, operation: HostApprovalRequest, grant: HostApprovalGrant,
+    ) -> Iterator[None]:
+        self._on_loop()
+        with self._host_lock:
+            issued = self._host_issued.pop(id(grant), None)
+            if (issued is None or issued.grant is not grant or issued.operation != operation
+                    or type(grant) is not HostApprovalGrant
+                    or operation.digest != host_operation_digest(operation)):
+                raise ToolError("host_authority_invalid")
+            self._check_host_issued_locked(issued)
+            lease = _HostLease(self, issued)
+            self._host_active[id(lease)] = lease
+        token = _HOST_LEASE.set(lease)
+        try:
+            yield
+        finally:
+            with self._host_lock:
+                lease.active = False
+                self._host_active.pop(id(lease), None)
+            _HOST_LEASE.reset(token)
+
+    def check_host(self, operation: HostApprovalRequest, *, commit: bool = False) -> None:
+        lease = _HOST_LEASE.get()
+        if lease is None or lease.authority is not self:
+            raise ToolError("host_authority_required")
+        check_host_authority(operation, commit=commit)
+
+    def revalidate_committed_host(self, operation: HostApprovalRequest) -> None:
+        lease = _HOST_LEASE.get()
+        if lease is None or lease.authority is not self:
+            raise ToolError("host_authority_required")
+        revalidate_committed_host_authority(operation)
+
     async def close(self) -> None:
         self._on_loop()
-        self._closed = True
-        self._sweep()
-        self._issued.clear()
+        with self._host_lock:
+            self._closed = True
+            self._sweep()
+            self._issued.clear()
+            self._host_issued.clear()
 
 
 @dataclass(frozen=True)
