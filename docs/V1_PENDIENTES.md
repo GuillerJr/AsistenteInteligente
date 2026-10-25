@@ -80,3 +80,8 @@ La conexión elegida sigue siendo Codex con ChatGPT; NVIDIA queda excluido y no 
 respaldo automático entre proveedores. El dueño inicia sesión, escribe contraseñas,
 concede TCC y aprueba acciones reales. Los pendientes anteriores permanecen en el
 historial del commit `c97ed89`; no se han borrado de los inventarios.
+
+Checkpoint local posterior: 1234 pruebas Python y 129 nativas aprobadas. Se verificaron
+una escritura desde Telegram con aprobación y hash, una lectura HTTPS marcada como
+externa y un dictado local de español añadido al borrador sin enviarse. Son recorridos
+acotados en el perfil sintético, no cierre de las familias ni de la fase A.

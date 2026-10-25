@@ -79,4 +79,23 @@ final class TelegramModelsTests: XCTestCase {
             .contains("vuelve a revisarlas"))
         XCTAssertEqual(TelegramPresentation.errorMessage(RPCFailure.disconnected), RPCFailure.disconnected.localizedDescription)
     }
+
+    func testChannelDiagnosticsDistinguishBackendFailureClassesWithoutExposingRemoteDetails() {
+        let classes = [("telegram_transport_failed", "comunicación"), ("telegram_connect_timeout", "verificar"),
+                       ("telegram_webhook_timeout", "comprobar"), ("telegram_webhook_conflict", "conflicto"),
+                       ("telegram_rate_limited", "limitó"), ("telegram_api_rejected", "rechazó"),
+                       ("telegram_cleanup_incomplete", "cierre"), ("telegram_response_invalid", "respuesta válida"),
+                       ("telegram_dispatch_unconfirmed", "no están confirmados")]
+        for (code, meaning) in classes {
+            let message = TelegramPresentation.channelError(code)
+            XCTAssertEqual(message, TelegramPresentation.errorMessage(RPCFailure.remote(-32036, code)))
+            XCTAssertTrue(message.contains(meaning))
+            XCTAssertFalse(message.contains(code))
+        }
+        let generic = "No se confirmó la operación de Telegram. Actualiza el estado antes de continuar."
+        for diagnostic in [secret, "{\"description\":\"PRIVATE REMOTE BODY\"}", "tg://resolve?start=PRIVATE_NONCE",
+                           "telegram_future_failure", "telegram_transport_failed\nPRIVATE DETAIL"] {
+            XCTAssertEqual(TelegramPresentation.channelError(diagnostic), generic)
+        }
+    }
 }

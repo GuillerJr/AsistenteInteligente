@@ -204,7 +204,18 @@ idioma o su modelo local no están disponibles, muestra un error controlado. No
 guarda archivos de audio ni transporta PCM al servicio Python, Codex u otro
 proveedor. El controlador no consulta permisos, hardware o voces al construirse.
 
-La captura se limita a 30 segundos, la espera de permisos a 30 y la finalización a
+En macOS 26 o posterior se prepara `SpeechAnalyzer`/`SpeechTranscriber` con el
+idioma exacto que ya esté soportado e instalado. La preparación es cancelable y
+termina antes de activar el micrófono; no reserva, instala ni descarga idiomas.
+En sistemas anteriores sólo se acepta el reconocedor legacy si acredita soporte
+local para ese idioma. Un diagnóstico del host distinguió el recurso legacy de
+`es-ES` ausente del modelo moderno ya instalado; el estado de suscripción de
+AssetInventory no se usa como sustituto del catálogo y la preparación reales.
+La entrada PCM se copia y convierte antes de que el tap reutilice su buffer, con
+cola finita y fallo visible si desborda. Los segmentos estables/volátiles se
+agregan hasta finalizar la entrada; el primer segmento final no termina el dictado.
+
+La captura se limita a 30 segundos, la espera conjunta de permisos y preparación a 30 y la finalización a
 3. El texto final o parcial sólo se añade al borrador de la conversación y modo
 temporal/persistente originales, conserva lo escrito y señala que debe revisarse.
 No envía un mensaje automáticamente. Se bloquea el envío durante el dictado y se
@@ -217,7 +228,7 @@ las dos descripciones de privacidad necesarias; no concede permisos TCC por él.
 Las pruebas con driver sintético y reloj controlado acreditan el ciclo de vida y
 los límites, no la exactitud del dictado ni que un altavoz haya sido escuchado.
 
-La suite nativa incluye 97 pruebas de framing, gestión, voz y contratos Telegram,
+La suite nativa incluye 129 pruebas de framing, gestión, voz y contratos Telegram,
 incluido pairing con servicio/journal propios y Bot API/opener sintéticos. La
 validación privada previa utiliza una identidad de fuentes declarada y debe
 repetirse sobre el árbol integrado antes de publicar. No abre cuentas, Telegram,

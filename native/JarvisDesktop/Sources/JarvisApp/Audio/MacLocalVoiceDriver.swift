@@ -8,6 +8,13 @@ import DesktopCore
     func cancel() { active = false }
 }
 
+@MainActor private final class RecognitionPreparation: LocalVoiceCancellation {
+    var active = true
+    var task: Task<Void, Never>?
+    func cancel() { active = false; task?.cancel(); task = nil }
+    func complete() { active = false; task = nil }
+}
+
 /// The tap and teardown can run on different threads. Closing the gate stops
 /// appending before endAudio and removes its only retained buffer request.
 private final class AudioBufferGate: @unchecked Sendable {
@@ -33,6 +40,10 @@ private final class AudioBufferGate: @unchecked Sendable {
     private var recognizer: SFSpeechRecognizer?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var recognitionTicket: UUID?
+    private var preparationTicket: UUID?
+    private var preparation: RecognitionPreparation?
+    private var preparedLocale: String?
+    private var modernRecognition: (any PreparedLocalRecognition)?
     private var synthesizer: AVSpeechSynthesizer?
     private var utterance: AVSpeechUtterance?
     private var playbackReceiver: (@MainActor (LocalPlaybackEvent) -> Void)?
@@ -74,18 +85,53 @@ private final class AudioBufferGate: @unchecked Sendable {
         return request
     }
 
-    public func supportsOnDeviceRecognition(localeIdentifier: String) -> Bool {
-        guard validLocale(localeIdentifier),
-              let service = SFSpeechRecognizer(locale: Locale(identifier: localeIdentifier)) else { return false }
-        return service.isAvailable && service.supportsOnDeviceRecognition
+    public func prepareRecognition(localeIdentifier: String, completion: @escaping @MainActor (Result<Void, LocalVoiceIssue>) -> Void) -> any LocalVoiceCancellation {
+        cancelRecognition()
+        let request = RecognitionPreparation(), ticket = UUID()
+        preparation = request; preparationTicket = ticket
+        request.task = Task { @MainActor [weak self, weak request] in
+            guard let self, let request else { return }
+            let current: @MainActor () -> Bool = { [weak self, weak request] in
+                self?.preparationTicket == ticket && request?.active == true && !Task.isCancelled
+            }
+            do {
+                guard validLocale(localeIdentifier), LocalSpeechPolicy.canonicalLocale(localeIdentifier) != nil else { throw LocalVoiceIssue.onDeviceUnavailable }
+                if #available(macOS 26.0, *) {
+                    let ready = try await ModernLocalRecognition.prepare(localeIdentifier: localeIdentifier, isCurrent: current)
+                    guard current() else { ready.cancel(); return }
+                    self.modernRecognition = ready
+                } else {
+                    guard let service = SFSpeechRecognizer(locale: Locale(identifier: localeIdentifier)),
+                          LocalSpeechPolicy.canonicalLocale(service.locale.identifier) == LocalSpeechPolicy.canonicalLocale(localeIdentifier),
+                          service.isAvailable, service.supportsOnDeviceRecognition else { throw LocalVoiceIssue.onDeviceUnavailable }
+                    guard current() else { return }
+                    self.recognizer = service
+                }
+                guard current() else { return }
+                self.preparedLocale = LocalSpeechPolicy.canonicalLocale(localeIdentifier)
+                self.preparationTicket = nil; self.preparation = nil
+                request.complete()
+                completion(.success(()))
+            } catch {
+                guard current() else { return }
+                self.preparationTicket = nil; self.preparation = nil
+                request.complete()
+                completion(.failure((error as? LocalVoiceIssue) ?? .onDeviceUnavailable))
+            }
+        }
+        return request
     }
 
     public func beginRecognition(localeIdentifier: String, receive: @escaping @MainActor (LocalRecognitionEvent) -> Void) throws {
-        cancelRecognition()
         guard SFSpeechRecognizer.authorizationStatus() == .authorized else { throw LocalVoiceIssue.speechDenied }
         guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { throw LocalVoiceIssue.microphoneDenied }
         guard validLocale(localeIdentifier),
-              let service = SFSpeechRecognizer(locale: Locale(identifier: localeIdentifier)),
+              preparedLocale == LocalSpeechPolicy.canonicalLocale(localeIdentifier) else { throw LocalVoiceIssue.onDeviceUnavailable }
+        if let modernRecognition {
+            try modernRecognition.start(receive: receive)
+            return
+        }
+        guard let service = recognizer,
               service.isAvailable, service.supportsOnDeviceRecognition else {
             throw LocalVoiceIssue.onDeviceUnavailable
         }
@@ -128,11 +174,15 @@ private final class AudioBufferGate: @unchecked Sendable {
     }
 
     public func finishRecognition() {
+        if let modernRecognition { modernRecognition.finish(); return }
         stopInput()
         recognitionTask?.finish()
     }
 
     public func cancelRecognition() {
+        preparationTicket = nil
+        preparation?.cancel(); preparation = nil; preparedLocale = nil
+        modernRecognition?.cancel(); modernRecognition = nil
         recognitionTicket = nil
         stopInput()
         recognitionTask?.cancel(); recognitionTask = nil

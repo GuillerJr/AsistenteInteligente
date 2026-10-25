@@ -52,8 +52,8 @@ struct TelegramView: View {
             if let bot = snapshot.botID {
                 Text("Bot: \(snapshot.username.map { "@" + $0 } ?? "sin nombre público") · ID \(bot)")
             } else { Text("Bot desconectado").foregroundStyle(.secondary) }
-            if snapshot.errorCode != nil {
-                Text("El canal conserva un error. Revisa los registros y actualiza el estado antes de activarlo.")
+            if let error = snapshot.errorCode {
+                Text(TelegramPresentation.channelError(error))
                     .foregroundStyle(.red)
             }
             DisclosureGroup("Carpeta e identidad de configuración") {

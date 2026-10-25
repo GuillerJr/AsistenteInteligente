@@ -1,0 +1,324 @@
+{
+  "schema_version": 1,
+  "batch": "OC-14",
+  "topic": "Local snapshot repository, canonical SQLite copy, consistent backup/publication and integrity boundaries",
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "parent_evidence_id": "ev_3140fc23c8d0096de5b75ded466e7d2986b9844d41911575b6562e1bf329aba2",
+  "summary_evidence_id": "ev_e9582ea4ab1ec241a226b8ab9c1f23168ae65f708ca16f9d2fe4009453cc2e93",
+  "partition_sha256": "790e6e536b29d04ae6243c0e1239860f70203c562ce2f9e368cb3ee63b22d8ee",
+  "statistics": {
+    "relevant_files": 5,
+    "nested_asar_containers": 0,
+    "text_bytes_read": 247416,
+    "invalid_utf8_files": 0,
+    "parsed_javascript_files": 4,
+    "skipped_javascript_files": 0,
+    "visited_ast_nodes": 10472,
+    "findings": 235,
+    "modules": 0,
+    "parse_failures": 0
+  },
+  "source_selection": {
+    "requested_paths": [
+      "package.json",
+      "src/snapshot/local-repository.ts",
+      "src/snapshot/openclaw-snapshot-copy.ts",
+      "src/infra/sqlite-snapshot.ts",
+      "src/infra/sqlite-integrity.ts"
+    ],
+    "unselected_files": 0
+  },
+  "coverage": {
+    "application": {
+      "status": "partial",
+      "truncated": false,
+      "omitted_count": null,
+      "limits": []
+    },
+    "semantic": {
+      "status": "unknown",
+      "truncated": false,
+      "omitted_nodes": 0,
+      "omitted_relations": 0,
+      "limits": [],
+      "families": [
+        {
+          "family": "boundary",
+          "status": "partial",
+          "retained_relations": 7,
+          "omitted_relations": 0,
+          "unknown_count": 2
+        },
+        {
+          "family": "call-flow",
+          "status": "partial",
+          "retained_relations": 361,
+          "omitted_relations": 0,
+          "unknown_count": 654
+        },
+        {
+          "family": "child-process",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "closure",
+          "status": "partial",
+          "retained_relations": 698,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "configuration",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "data-flow",
+          "status": "partial",
+          "retained_relations": 4570,
+          "omitted_relations": 0,
+          "unknown_count": 640
+        },
+        {
+          "family": "event",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "object-flow",
+          "status": "partial",
+          "retained_relations": 672,
+          "omitted_relations": 0,
+          "unknown_count": 801
+        },
+        {
+          "family": "promise-ownership",
+          "status": "partial",
+          "retained_relations": 273,
+          "omitted_relations": 0,
+          "unknown_count": 245
+        },
+        {
+          "family": "request",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "resource-lifecycle",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "timer",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        }
+      ]
+    },
+    "application_unknowns": 0,
+    "semantic_unknowns": 2342
+  },
+  "view_coverage": {
+    "status": "complete-within-view",
+    "examined": 147,
+    "total": 151,
+    "next_offset": null,
+    "exhausted": true
+  },
+  "limitations": [
+    "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+    "Caller-selected source analysis leaves 0 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+    "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+    "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+    "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+    "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+    "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+    "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+    "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+    "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+    "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+    "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+    "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+    "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+    "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+    "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+    "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+    "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+  ],
+  "unknowns": [
+    "2342 semantic graph unknowns remain in the parent Evidence; no target code or reference tests were executed.",
+    "Zero unselected inventoried files does not mean complete coverage: REA records application partial and semantic unknown.",
+    "SQLite source/WAL/SHM acquisition, workers/native backup, sanitizer/cold archives, manifest/FD/fsync helpers, remote engines and multi-store consistency remain outside this partition.",
+    "The residual unknown ledger has zero registered entries; this does not resolve parent semantic unknowns or analyst questions.",
+    "Repository list/resolve can recover complete-pending snapshots and remove their marker; they are not purely read-only operations.",
+    "This research adds no backup/restore/doctor product implementation and closes no phase A capability."
+  ],
+  "runtime_executed": false,
+  "full_evidence_path": "/private/tmp/jarvis-openclaw-reference-20261024/part14/evidence.json",
+  "export_sha256": "e0b876d65ccf2cc5f95ccb9c1477419f1e6c5126b14c2e722c58d82fa6080de3",
+  "export_bytes": 13133880,
+  "export_record_count": 8,
+  "provenance": "REA_PART14_PROVENANCE.json",
+  "fine_grained_views": [
+    {
+      "evidence_id": "ev_2a7ca97e65603401a4195dc6a554c3c0669285f3951159b74f3b0935dfbe10a6",
+      "view": {
+        "collection": "modules",
+        "kind": "item",
+        "selector": {
+          "node_id": "jag_node_6addf546d864b81123efa38418b817cd8220fb3087ce77d698aa71d3839eb47b"
+        }
+      }
+    },
+    {
+      "evidence_id": "ev_53295fbd996022ddc225a40c8bdcbb539b9137133dbeb1ec17c4f421da1edbbd",
+      "view": {
+        "collection": "modules",
+        "kind": "item",
+        "selector": {
+          "node_id": "jag_node_9206657a962c9ea84a045ee67b6f93a2f88ac6e01da843e6d912b96b3affb65b"
+        }
+      }
+    },
+    {
+      "evidence_id": "ev_756fe2ae2fbe230021dc7aac7901710a64e4cca1dd6c26e335eb4fbdfb28f7e1",
+      "view": {
+        "collection": "modules",
+        "kind": "item",
+        "selector": {
+          "node_id": "jag_node_6e3b0ecae2ef678d7fee770c3fe6d958b94843e236357af56be6d2a831b48031"
+        }
+      }
+    },
+    {
+      "evidence_id": "ev_85fbec7e3faf26844a5017037f75695ad799922962822afd5dbdc9314437e48a",
+      "view": {
+        "collection": "modules",
+        "kind": "item",
+        "selector": {
+          "node_id": "jag_node_66e78a9f1d5c89ee1ca814dab36f78c0e1c1891b21f1ebc79d3001f9c94c226a"
+        }
+      }
+    },
+    {
+      "evidence_id": "ev_e0232263b12a2d2ffabaf408f332e2ebbe9df3c2158cef4da96a968cf62427cd",
+      "view": {
+        "collection": "modules",
+        "kind": "item",
+        "selector": {
+          "node_id": "jag_node_26decec0cc446d4865dffbdb7fb790f317fac76604d680f99316574164e16956"
+        }
+      }
+    },
+    {
+      "evidence_id": "ev_fab81a294dc098d596c2bbed7004519d7977691d7ea44368e8e8ffaece3f8f1c",
+      "view": {
+        "collection": "modules",
+        "kind": "item",
+        "selector": {
+          "node_id": "jag_node_e25b241073cfa86357e4593f27d59d3d8fa0a55fe5c3e4bdaeea61e806545bf2"
+        }
+      }
+    }
+  ],
+  "analyst_questions": [
+    {
+      "id": "OC14-U1",
+      "question": "¿Cómo adquiere una familia SQLite/WAL/SHM coherente y acotada el helper source/readonly-location frente al propietario nativo vivo?",
+      "status": "partially_answered_static_only",
+      "observed": "Se observó readOnly+BEGIN, pin de schema_version, llamada a online backup y normalización de la copia privada.",
+      "remaining": "sqlite-snapshot-source, readonly-location, workers y sqlite-backup no seleccionados; no ejecución ni prueba de concurrencia.",
+      "source": "src/infra/sqlite-snapshot.ts:552"
+    },
+    {
+      "id": "OC14-U2",
+      "question": "¿Qué filas y credenciales elimina realmente el sanitizador y cómo embebe archivos fríos sin leer rutas ajenas?",
+      "status": "unresolved",
+      "observed": "createOpenClawSnapshotCopy diferencia global/agente, llama sanitización y cold archive embedding.",
+      "remaining": "Sanitizer, esquema, validadores de owner y cold-storage-backup fuera de partición.",
+      "source": "src/snapshot/openclaw-snapshot-copy.ts:77"
+    },
+    {
+      "id": "OC14-U3",
+      "question": "¿Son correctos los hashes FD y recibos de identidad/publicación en cada plataforma y filesystem?",
+      "status": "unresolved",
+      "observed": "Se observan llamadas a hash/identidad antes y después de publicar, directory sync y recibo unknown en reemplazo incierto.",
+      "remaining": "directory-durability, sqlite-snapshot-file, copias nativas y políticas de directorios no seleccionados.",
+      "source": "src/infra/sqlite-snapshot.ts:358"
+    },
+    {
+      "id": "OC14-U4",
+      "question": "¿Qué parser/límites/canonicalización exactos protege el manifiesto de snapshot?",
+      "status": "unresolved",
+      "observed": "El proveedor contrasta hash, tamaño, identidad, esquema/role y contenido permitido.",
+      "remaining": "snapshot/manifest.ts y restore-paths importados; no inferir sus límites del wrapper.",
+      "source": "src/snapshot/local-repository.ts:380"
+    },
+    {
+      "id": "OC14-U5",
+      "question": "¿Cómo se coordina recuperación de pending con autorización/mantenimiento y otros procesos?",
+      "status": "partially_answered_static_only",
+      "observed": "list y resolve pueden recuperar complete-pending validando y eliminando .pending con identity rechecks y sync.",
+      "remaining": "No es consulta puramente read-only. Contrato de coordinación/autoridad con otros entrypoints y fallos runtime no ensayados.",
+      "source": "src/snapshot/local-repository.ts:500"
+    },
+    {
+      "id": "OC14-U6",
+      "question": "¿Qué presupuestos de tiempo/memoria se aplican al chequeo completo/FK/FTS en bases arbitrarias?",
+      "status": "unresolved",
+      "observed": "PRAGMA directo, clasificación FTS exacta y reporte FK limitado a cinco conservando total.",
+      "remaining": "allFindings puede pedir todos los resultados; worker/admission/deadline y pruebas de tamaños fuera de selección.",
+      "source": "src/infra/sqlite-integrity.ts:321"
+    },
+    {
+      "id": "OC14-U7",
+      "question": "¿Qué garantías de crash, reanudación, cancelación y durabilidad muestran pruebas/ejecución reales?",
+      "status": "unresolved",
+      "observed": "Marcador pending, comparaciones hash/identidad y receipt unknown están presentes en texto estático.",
+      "remaining": "No tests ni target ejecutados; mocks/compilación o intención no acreditan comportamiento.",
+      "source": "all_four_selected_sources"
+    },
+    {
+      "id": "OC14-U8",
+      "question": "¿Cómo opera el mismo proveedor con PostgreSQL/Git/remoto y qué coherencia ofrece entre distintas bases del producto?",
+      "status": "out_of_current_partition",
+      "observed": "El factory envuelve motores y compone operaciones de snapshot individuales.",
+      "remaining": "database-backup/motores, retención, backup integral y protocolo de corte multi-store no seleccionados.",
+      "source": "src/snapshot/local-repository.ts:110"
+    }
+  ],
+  "semantic_unknown_details": {
+    "path": "/private/tmp/jarvis-openclaw-reference-20261024/part14/semantic-unknowns.json",
+    "count": 2342,
+    "sha256": "a51fae884c561b5ef1ddc9238a61648774587c5b3ce08d231657efcd4ce7762d"
+  },
+  "analysis_lifecycle": {
+    "analysis_route": "target_free_static_javascript",
+    "native_target_opened": false,
+    "reference_executed": false,
+    "credentials_or_owner_data_read": false,
+    "repo_modified_by_this_research": false,
+    "reference_clone_read": false,
+    "reference_clone_modified": false,
+    "rea_or_provider_repair_attempted": false,
+    "evidence_exported_before_close": true,
+    "close_binary_result": null,
+    "close_binary_call_completed": true,
+    "snapshot_requested": false,
+    "retained_references_after_close": "not_used"
+  },
+  "implementation_status": "not_implemented_by_this_research"
+}

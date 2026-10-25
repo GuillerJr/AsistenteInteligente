@@ -12,7 +12,6 @@ final class CapabilityIntegrationTests: XCTestCase {
         let directory = "/private/tmp/jarvis-cap-swift-" + UUID().uuidString.prefix(8)
         try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: false,
                                                 attributes: [.posixPermissions: 0o700])
-        defer { try? FileManager.default.removeItem(atPath: directory) }
         let child = Process()
         child.executableURL = URL(fileURLWithPath: python)
         // This peer is a synthetic contract fixture. It performs no tool effect.
@@ -66,8 +65,7 @@ final class CapabilityIntegrationTests: XCTestCase {
         child.environment = ["PATH": "/usr/bin:/bin", "PYTHONPATH": source,
                              "PYTHONNOUSERSITE": "1", "PYTHONDONTWRITEBYTECODE": "1"]
         child.standardOutput = FileHandle.nullDevice; child.standardError = FileHandle.nullDevice
-        try child.run()
-        defer { if child.isRunning { child.terminate(); child.waitUntilExit() } }
+        try startFixtureProcess(child, directory: directory)
         try await ServiceBootstrap.waitForHealth(stateDirectory: directory) { child.isRunning }
         let client = LocalRPCClient(stateDirectory: directory)
         do { try await operation(client); await client.close() }

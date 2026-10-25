@@ -7,6 +7,25 @@ public enum TelegramPresentation {
         switch code {
         case "telegram_token_invalid", "telegram_auth_failed", "telegram_login_required":
             return "Revisa el token del bot y conecta Telegram de nuevo. El token no se guarda."
+        case "telegram_transport_failed":
+            return "No se pudo completar la comunicación con Telegram. Revisa la conexión y actualiza el estado."
+        case "telegram_connect_timeout":
+            return "Se agotó la espera para verificar la identidad y conexión del bot. Actualiza el estado antes de intentarlo de nuevo."
+        case "telegram_webhook_timeout":
+            return "Se agotó la espera al comprobar si el bot tiene un webhook. No se confirmó su disponibilidad para este canal."
+        case "telegram_webhook_conflict":
+            return "El acceso al bot tiene un conflicto. Revisa si tiene un webhook activo o si otro programa está leyendo sus actualizaciones."
+        case "telegram_rate_limited":
+            return "Telegram limitó temporalmente las solicitudes. Espera antes de volver a activar el canal."
+        case "telegram_api_rejected":
+            return "Telegram rechazó la solicitud del bot. Revisa su acceso y configuración antes de continuar."
+        case "telegram_response_invalid", "telegram_http_invalid", "telegram_http_encoding_unsupported",
+             "telegram_http_limit", "telegram_response_limit", "telegram_updates_invalid":
+            return "No se recibió una respuesta válida para este canal de Telegram. Actualiza el estado y revisa la conexión."
+        case "telegram_client_closed":
+            return "La conexión del bot está cerrada. Revisa su estado y conecta el bot para continuar."
+        case "telegram_runner_failed":
+            return "El canal se detuvo por un fallo interno que no quedó identificado. Revisa su estado antes de volver a activarlo."
         case "telegram_configuration_changed", "telegram_route_revision_conflict":
             return "Las rutas cambiaron desde la revisión. Actualiza y vuelve a revisarlas antes de continuar."
         case "telegram_stop_required", "telegram_runner_in_use":
@@ -26,13 +45,17 @@ public enum TelegramPresentation {
             return "El cierre del lector de Telegram sigue sin confirmar. Solicita su cancelación explícita antes de continuar."
         case "telegram_route_unavailable", "telegram_workspace_unavailable":
             return "La conversación, el agente o la carpeta de esta ruta ya no están disponibles. Revisa las rutas."
-        case "telegram_delivery_unconfirmed", "telegram_durability_uncertain":
+        case "telegram_delivery_unconfirmed", "telegram_durability_uncertain", "telegram_dispatch_unconfirmed",
+             "telegram_delivery_ack_invalid", "telegram_receipt_unavailable":
             return "La entrega o el guardado no están confirmados. Revisa los registros; no se repetirá la operación automáticamente."
         default:
             // Remote diagnostics can contain secrets. Never display an arbitrary
             // Telegram error body or response, including an echoed credential.
             return "No se confirmó la operación de Telegram. Actualiza el estado antes de continuar."
         }
+    }
+    public static func channelError(_ code: String) -> String {
+        errorMessage(RPCFailure.remote(-32036, code))
     }
     public static func state(_ value: String) -> String {
         ["claimed": "reservado", "dispatching": "en ejecución", "send_pending": "envío pendiente",

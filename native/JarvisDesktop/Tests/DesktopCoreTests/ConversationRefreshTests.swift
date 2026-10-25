@@ -12,7 +12,6 @@ final class ConversationRefreshTests: XCTestCase {
         let directory = "/private/tmp/jvs-refresh-" + UUID().uuidString.prefix(8)
         try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: false,
                                                 attributes: [.posixPermissions: 0o700])
-        defer { try? FileManager.default.removeItem(atPath: directory) }
         let child = Process()
         child.executableURL = URL(fileURLWithPath: python)
         child.arguments = ["-c", """
@@ -67,8 +66,7 @@ final class ConversationRefreshTests: XCTestCase {
         child.environment = ["PATH": "/usr/bin:/bin", "PYTHONPATH": source,
                              "PYTHONNOUSERSITE": "1", "PYTHONDONTWRITEBYTECODE": "1"]
         child.standardOutput = FileHandle.nullDevice; child.standardError = FileHandle.nullDevice
-        try child.run()
-        defer { if child.isRunning { child.terminate(); child.waitUntilExit() } }
+        try startFixtureProcess(child, directory: directory)
         try await ServiceBootstrap.waitForHealth(stateDirectory: directory) { child.isRunning }
         let reading = LocalRPCClient(stateDirectory: directory)
         let control = LocalRPCClient(stateDirectory: directory)

@@ -34,12 +34,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard !terminating else { return .terminateLater }
         terminating = true
         Task {
-            let graceful = await store?.shutdown() ?? true
-            if !graceful {
+            let confirmed = await store?.shutdown() ?? true
+            if !confirmed {
                 let alert = NSAlert()
-                alert.messageText = "El servicio no terminó de cerrar a tiempo"
-                alert.informativeText = "Jarvis forzó el cierre. Una ejecución pendiente puede haber quedado interrumpida; se consultará su registro al volver a abrir. No se repetirá automáticamente."
-                alert.addButton(withTitle: "Cerrar Jarvis")
+                alert.messageText = "No se confirmó el cierre del servicio"
+                alert.informativeText = "Jarvis conserva la supervisión del proceso y no iniciará otro servicio. Puedes volver a elegir Salir para reintentar el cierre."
+                alert.addButton(withTitle: "Conservar Jarvis abierto")
+                alert.runModal()
+                terminating = false
+                NSApp.reply(toApplicationShouldTerminate: false)
+                return
+            }
+            if let warning = store?.shutdownWarning {
+                let alert = NSAlert()
+                alert.messageText = "El servicio terminó de forma no habitual"
+                alert.informativeText = warning
+                alert.addButton(withTitle: "Salir de Jarvis")
                 alert.runModal()
             }
             if let hotKey { UnregisterEventHotKey(hotKey) }

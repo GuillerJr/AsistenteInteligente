@@ -1832,6 +1832,157 @@
         "Application partial, semantic unknown1429; zero unselected files is not full semantic or repository coverage.",
         "No backup/restore/doctor product implementation or phase A closure is credited by this research."
       ]
+    },
+    {
+      "id": "OC-14",
+      "topic": "Local snapshot repository, canonical SQLite copy, consistent backup/publication and integrity boundaries",
+      "parent_evidence_id": "ev_3140fc23c8d0096de5b75ded466e7d2986b9844d41911575b6562e1bf329aba2",
+      "summary_evidence_id": "ev_e9582ea4ab1ec241a226b8ab9c1f23168ae65f708ca16f9d2fe4009453cc2e93",
+      "partition_sha256": "790e6e536b29d04ae6243c0e1239860f70203c562ce2f9e368cb3ee63b22d8ee",
+      "statistics": {
+        "relevant_files": 5,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 247416,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 4,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 10472,
+        "findings": 235,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "partial",
+          "truncated": false,
+          "omitted_count": null,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 7,
+              "omitted_relations": 0,
+              "unknown_count": 2
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 361,
+              "omitted_relations": 0,
+              "unknown_count": 654
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 698,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 4570,
+              "omitted_relations": 0,
+              "unknown_count": 640
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 672,
+              "omitted_relations": 0,
+              "unknown_count": 801
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 273,
+              "omitted_relations": 0,
+              "unknown_count": 245
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 0,
+        "semantic_unknowns": 2342
+      },
+      "runtime_executed": false,
+      "full_evidence_path": "/private/tmp/jarvis-openclaw-reference-20261024/part14/evidence.json",
+      "source_paths": [
+        "package.json",
+        "src/snapshot/local-repository.ts",
+        "src/snapshot/openclaw-snapshot-copy.ts",
+        "src/infra/sqlite-snapshot.ts",
+        "src/infra/sqlite-integrity.ts"
+      ],
+      "source_selection": {
+        "requested_paths": [
+          "package.json",
+          "src/snapshot/local-repository.ts",
+          "src/snapshot/openclaw-snapshot-copy.ts",
+          "src/infra/sqlite-snapshot.ts",
+          "src/infra/sqlite-integrity.ts"
+        ],
+        "unselected_files": 0
+      },
+      "semantic_unknowns": 2342,
+      "provenance": "REA_PART14_PROVENANCE.json",
+      "summary": "REA_PART14_SUMMARY.json",
+      "export_sha256": "e0b876d65ccf2cc5f95ccb9c1477419f1e6c5126b14c2e722c58d82fa6080de3",
+      "export_bytes": 13133880,
+      "limitations": [
+        "Four inert selected TypeScript modules plus package metadata only; dependencies and runtime behavior remain unknown.",
+        "Application partial, semantic unknown2342; zero unselected files is not semantic or repository completeness.",
+        "No backup/restore/doctor product implementation or phase A closure is credited by this research."
+      ]
     }
   ],
   "remaining_parts": [
@@ -1902,7 +2053,7 @@
       "original_plan_id": "OC-11"
     }
   ],
-  "rea_parsed_unique_source_files": 52,
+  "rea_parsed_unique_source_files": 56,
   "remaining_parts_id_note": "Los scopes restantes usan SCOPE para no confundir etiquetas del plan inicial con lotes OC completados. Un lote estático no cierra un scope.",
   "rea_parsed_unique_source_paths": [
     "extensions/codex/src/app-server/connection-health.ts",
@@ -1947,6 +2098,8 @@
     "src/gateway/session-observer.ts",
     "src/infra/net/ssrf.pinning.test.ts",
     "src/infra/net/ssrf.ts",
+    "src/infra/sqlite-integrity.ts",
+    "src/infra/sqlite-snapshot.ts",
     "src/mcp/tools-stdio-server.ts",
     "src/process/supervisor/adapters/env.ts",
     "src/process/supervisor/cancellation-policy.ts",
@@ -1955,6 +2108,8 @@
     "src/skills/library/authoring.ts",
     "src/skills/library/import.kernel.ts",
     "src/skills/library/selection-read.kernel.ts",
+    "src/snapshot/local-repository.ts",
+    "src/snapshot/openclaw-snapshot-copy.ts",
     "src/web-fetch/content-extractors.runtime.ts",
     "src/web-fetch/runtime.ts"
   ],

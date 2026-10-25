@@ -33,6 +33,8 @@ import XCTest
     var selectedVoices: [LocalVoiceChoice] = []
     var voiceQueries: [String] = []
     var availabilityQueries: [String] = []
+    var preparations: [(Cancellation, @MainActor (Result<Void, LocalVoiceIssue>) -> Void)] = []
+    var deferPreparation = false
     var supportsLocal = true
     var beginRecognitionError: Error?
     var beginPlaybackError: Error?
@@ -52,8 +54,14 @@ import XCTest
     func authorize(_ permissions: LocalVoicePermissions = .init(speech: .authorized, microphone: .authorized), index: Int? = nil) {
         permissionRequests[index ?? (permissionRequests.count - 1)].1(permissions)
     }
-    func supportsOnDeviceRecognition(localeIdentifier: String) -> Bool {
-        availabilityQueries.append(localeIdentifier); return supportsLocal
+    func prepareRecognition(localeIdentifier: String, completion: @escaping @MainActor (Result<Void, LocalVoiceIssue>) -> Void) -> any LocalVoiceCancellation {
+        availabilityQueries.append(localeIdentifier)
+        let token = Cancellation(); preparations.append((token, completion))
+        if !deferPreparation { completion(supportsLocal ? .success(()) : .failure(.onDeviceUnavailable)) }
+        return token
+    }
+    func prepare(_ result: Result<Void, LocalVoiceIssue> = .success(()), index: Int? = nil) {
+        preparations[index ?? (preparations.count - 1)].1(result)
     }
     func beginRecognition(localeIdentifier: String, receive: @escaping @MainActor (LocalRecognitionEvent) -> Void) throws {
         if let beginRecognitionError { throw beginRecognitionError }
@@ -139,6 +147,92 @@ final class LocalVoiceControllerTests: XCTestCase {
         XCTAssertEqual(f.driver.availabilityQueries, ["es-ES"])
         XCTAssertTrue(f.driver.recognitionReceivers.isEmpty)
         XCTAssertTrue(f.sink.values.isEmpty)
+    }
+
+    @MainActor func testReadinessUsesTheOriginalPermissionBudgetAndDoesNotOpenCapture() {
+        let f = Fixture(); f.driver.deferPreparation = true
+        f.controller.startDictation(contextID: "one")
+        let original = f.clock.entries[0]
+        f.driver.authorize()
+        XCTAssertEqual(f.controller.phase, .authorizing)
+        XCTAssertTrue(original.active)
+        XCTAssertEqual(f.clock.entries.count, 1)
+        XCTAssertTrue(f.driver.recognitionLocales.isEmpty)
+        original.fire()
+        XCTAssertEqual(f.controller.issue, .authorizationTimeout)
+        XCTAssertFalse(f.driver.preparations[0].0.active)
+        f.driver.prepare()
+        XCTAssertTrue(f.driver.recognitionLocales.isEmpty)
+        XCTAssertTrue(f.sink.values.isEmpty)
+    }
+
+    @MainActor func testLateReadinessOrOldCleanupCannotStopTheNextContext() {
+        let f = Fixture(); f.driver.deferPreparation = true
+        f.controller.startDictation(contextID: "old"); f.driver.authorize()
+        let oldDeadline = f.clock.entries[0]
+        f.controller.cancel()
+        let cleanupCount = f.driver.cancelCalls
+        f.controller.startDictation(contextID: "new"); f.driver.authorize()
+        f.driver.prepare(index: 0)
+        oldDeadline.fire(evenIfCancelled: true)
+        XCTAssertEqual(f.controller.phase, .authorizing)
+        XCTAssertEqual(f.controller.contextID, "new")
+        XCTAssertEqual(f.driver.cancelCalls, cleanupCount)
+        XCTAssertTrue(f.driver.recognitionLocales.isEmpty)
+        f.driver.prepare(index: 1)
+        XCTAssertEqual(f.controller.phase, .listening)
+        f.driver.prepare(.failure(.onDeviceUnavailable), index: 0)
+        XCTAssertEqual(f.controller.phase, .listening)
+        XCTAssertNil(f.controller.issue)
+        f.driver.recognitionReceivers[0](.final("sólo nuevo"))
+        XCTAssertEqual(f.sink.values.map(\.contextID), ["new"])
+    }
+
+    @MainActor func testMissingExactAssetsAndDuplicatePermissionCallbackNeverStartOrRetry() {
+        let f = Fixture(); f.driver.deferPreparation = true
+        f.controller.startDictation(contextID: "one")
+        f.driver.authorize(); f.driver.authorize()
+        XCTAssertEqual(f.driver.preparations.count, 1)
+        f.driver.prepare(.failure(.onDeviceUnavailable))
+        XCTAssertEqual(f.controller.issue, .onDeviceUnavailable)
+        XCTAssertEqual(f.driver.availabilityQueries, ["es-ES"])
+        XCTAssertTrue(f.driver.recognitionLocales.isEmpty)
+        XCTAssertTrue(f.sink.values.isEmpty)
+        XCTAssertEqual(f.clock.activeCount, 0)
+    }
+
+    @MainActor func testStopDuringPreparationDiscardsReadinessAndLeavesDraftUntouched() {
+        let f = Fixture(); f.driver.deferPreparation = true
+        f.controller.startDictation(contextID: "one"); f.driver.authorize()
+        f.controller.stopDictation()
+        f.driver.prepare()
+        XCTAssertEqual(f.controller.phase, .idle)
+        XCTAssertTrue(f.driver.recognitionLocales.isEmpty)
+        XCTAssertTrue(f.sink.values.isEmpty)
+        XCTAssertFalse(f.driver.preparations[0].0.active)
+    }
+
+    @MainActor func testSegmentUpdatesStayInTheDraftPreviewUntilSessionCompletion() {
+        let f = Fixture(); f.start("origin")
+        f.driver.recognitionReceivers[0](.partial("Primera frase."))
+        f.driver.recognitionReceivers[0](.partial("Primera frase. Segunda frase"))
+        XCTAssertEqual(f.controller.phase, .listening)
+        XCTAssertTrue(f.sink.values.isEmpty)
+        f.controller.stopDictation()
+        f.driver.recognitionReceivers[0](.final("Primera frase. Segunda frase."))
+        XCTAssertEqual(f.sink.values.map(\.text), ["Primera frase. Segunda frase."])
+        f.driver.recognitionReceivers[0](.final("duplicado"))
+        XCTAssertEqual(f.sink.values.count, 1)
+    }
+
+    @MainActor func testAudioQueueFailureIsVisibleAndDoesNotPublishPartialAsSuccess() {
+        let f = Fixture(); f.start()
+        f.driver.recognitionReceivers[0](.partial("parcial no confirmado"))
+        f.driver.recognitionReceivers[0](.issue(.captureFailed))
+        XCTAssertEqual(f.controller.phase, .idle)
+        XCTAssertEqual(f.controller.issue, .captureFailed)
+        XCTAssertTrue(f.sink.values.isEmpty)
+        XCTAssertEqual(f.clock.activeCount, 0)
     }
 
     @MainActor func testFinalTranscriptIsDraftMaterialForItsOriginalContextOnly() {

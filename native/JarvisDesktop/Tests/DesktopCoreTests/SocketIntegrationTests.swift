@@ -22,11 +22,7 @@ final class SocketIntegrationTests: XCTestCase {
     }
 
     func testIdleConnectionRenewsBeforeSingleMutationAndRevalidatesPermissions() async throws {
-        let (directory, child) = try await startIdleFixture(timeout: 0.1)
-        defer {
-            if child.isRunning { child.terminate(); child.waitUntilExit() }
-            try? FileManager.default.removeItem(atPath: directory)
-        }
+        let (directory, _) = try await startIdleFixture(timeout: 0.1)
         let client = LocalRPCClient(stateDirectory: directory, timeout: 1, connectionIdleLimit: 0.05)
         let health = try await client.call("health")
         XCTAssertEqual(health["service"].string, "jarvis")
@@ -53,11 +49,7 @@ final class SocketIntegrationTests: XCTestCase {
     }
 
     func testIdleRenewalNeverClearsAuthorizationDenialWithoutExplicitReconnect() async throws {
-        let (directory, child) = try await startIdleFixture(timeout: 2)
-        defer {
-            if child.isRunning { child.terminate(); child.waitUntilExit() }
-            try? FileManager.default.removeItem(atPath: directory)
-        }
+        let (directory, _) = try await startIdleFixture(timeout: 2)
         let client = LocalRPCClient(stateDirectory: directory, timeout: 1, connectionIdleLimit: 0.5)
         let health = try await client.call("health")
         XCTAssertEqual(health["service"].string, "jarvis")
@@ -118,7 +110,7 @@ final class SocketIntegrationTests: XCTestCase {
         child.standardOutput = FileHandle.nullDevice
         child.standardError = FileHandle.nullDevice
         do {
-            try child.run()
+            try await startFixtureProcess(child, directory: directory)
             // Readiness uses only our fixture's metadata, so the trace counts
             // actual client requests exactly, including rejected credentials.
             for _ in 0..<100 {
@@ -129,11 +121,7 @@ final class SocketIntegrationTests: XCTestCase {
                 try await Task.sleep(for: .milliseconds(20))
             }
             throw RPCFailure.unavailable
-        } catch {
-            if child.isRunning { child.terminate(); child.waitUntilExit() }
-            try? FileManager.default.removeItem(atPath: directory)
-            throw error
-        }
+        } catch { throw error }
     }
 
     func testMissingSocketIsUnavailableButExistingUnsafeEndpointsStillFailClosed() async throws {
@@ -168,7 +156,6 @@ final class SocketIntegrationTests: XCTestCase {
         let directory = "/private/tmp/jarvis-swift-" + UUID().uuidString.prefix(8)
         try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: false,
                                                 attributes: [.posixPermissions: 0o700])
-        defer { try? FileManager.default.removeItem(atPath: directory) }
         let child = Process()
         child.executableURL = URL(fileURLWithPath: python)
         child.arguments = ["-c", """
@@ -191,10 +178,7 @@ final class SocketIntegrationTests: XCTestCase {
         child.environment = environment
         child.standardOutput = FileHandle.nullDevice
         child.standardError = FileHandle.nullDevice
-        try child.run()
-        defer {
-            if child.isRunning { child.terminate(); child.waitUntilExit() }
-        }
+        try await startFixtureProcess(child, directory: directory)
         let client = LocalRPCClient(stateDirectory: directory)
         var health: RPCValue?
         for _ in 0..<60 {

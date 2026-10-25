@@ -356,5 +356,46 @@ separado de reparaciones autorizadas. **No añaden implementación de respaldo,
 restauración o doctor a Jarvis ni cierran una capacidad de A.** El export conserva
 ocho preguntas de alcance, además de las incógnitas semánticas; proveedores de
 snapshots, parser/manifiesto, credenciales, motores remotos y ejecución permanecen
-desconocidos. Trece lotes y 52 rutas TS/JS únicas amplían la investigación parcial;
-no equivalen a paridad ni revisión exhaustiva.
+desconocidos. Con OC-13 se alcanzaron trece lotes y 52 rutas TS/JS únicas;
+ese antecedente no acredita paridad ni revisión exhaustiva.
+
+## Bloque OC-14: copia SQLite, publicación e integridad
+
+Cuatro imports del bloque anterior conducen al proveedor local, su copia canónica
+y los helpers de snapshot/integridad. La [procedencia](REA_PART14_PROVENANCE.json)
+recalcula la cadena Git Root/Src/Snapshot/Infra y los blobs de la revisión fija.
+El [resumen](REA_PART14_SUMMARY.json) conserva aplicación **partial**, semántica
+**unknown** con 2342 incógnitas y seis vistas finas. No se ejecutó la referencia.
+
+La [ruta de copia](https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/infra/sqlite-snapshot.ts#L552)
+liga validación y llamada a backup bajo lectura/transacción fijada, normaliza el
+journal de la copia privada y por defecto la compacta después de transformarla.
+Comprueba integridad/owner de la salida y publica con digest e identidad. La ruta
+de bytes crudos está separada para un dueño detenido/checkpointed. El wrapper
+canónico distingue global/agente y llama sanitizadores importados: no acredita
+todavía qué filas o credenciales eliminan. Vistas
+`ev_e0232263b12a2d2ffabaf408f332e2ebbe9df3c2158cef4da96a968cf62427cd` y
+`ev_53295fbd996022ddc225a40c8bdcbb539b9137133dbeb1ec17c4f421da1edbbd`.
+
+La [publicación](https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/infra/sqlite-snapshot.ts#L358)
+revalida bytes/identidad y durabilidad y conserva un recibo unknown si un intento
+de reemplazo queda incierto. Un snapshot usa .pending hasta verificar DB/manifiesto
+y sincronizar. La [lista del proveedor](https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/snapshot/local-repository.ts#L491)
+puede recuperar un complete-pending y retirar ese marcador: **no es sólo lectura**.
+El contrato propio futuro debe separar listar/diagnosticar de recuperación
+explícita, conservando esa capacidad de A. restoreFresh exige destino nuevo,
+sin sidecars y fuera del repositorio. Vistas de publicación/resultado incierto:
+`ev_fab81a294dc098d596c2bbed7004519d7977691d7ea44368e8e8ffaece3f8f1c` y
+`ev_85fbec7e3faf26844a5017037f75695ad799922962822afd5dbdc9314437e48a`.
+
+La [integridad](https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/infra/sqlite-integrity.ts#L208)
+incluye PRAGMA directo, claves foráneas y clasificación FTS sólo con definiciones
+propias exactas. No sustituye presupuestos de trabajo ni validación de motores.
+Evidence ID `ev_2a7ca97e65603401a4195dc6a554c3c0669285f3951159b74f3b0935dfbe10a6`.
+
+La coherencia de un snapshot individual no vuelve atómico un perfil multi-store.
+Siguen fuera de la partición los helpers de familia DB/WAL/SHM, workers/backup
+nativo, sanitización/archivos fríos, manifiesto/FD/fsync, motores remotos y ejecución
+real. **No se implementan ni se cualifican backup/restore/doctor en Jarvis por esta
+lectura.** Catorce lotes y 56 rutas TS/JS únicas amplían una investigación parcial;
+no cierran la fase A ni la equivalencia de ninguna familia.

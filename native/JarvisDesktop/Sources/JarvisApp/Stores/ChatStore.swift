@@ -48,6 +48,9 @@ final class ChatStore {
     @ObservationIgnored private var conversationRefresh: ConversationRefresh?
     @ObservationIgnored private var observedConversationRunID: String?
 
+    var isShuttingDown: Bool { stopping }
+    var shutdownWarning: String? { service.lastStopReport?.warning }
+
     var selected: ChatSession? { sessions.first { $0.id == selectedID } }
     var canSend: Bool { ready && connected && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !telegram.isChanging && !voice.canStopDictation && activeRunID == nil && selected != nil
                        && selected?.archived == false
@@ -454,7 +457,7 @@ final class ChatStore {
     }
 
     func reconnect() async {
-        guard !starting, let options else { return }
+        guard !stopping, !starting, let options else { return }
         conversationRefresh?.setScope(nil)
         voice.cancel(); dictationNotice = nil
         starting = true
@@ -465,10 +468,12 @@ final class ChatStore {
         await mcp.close()
         await management.close()
         await telegram.close()
+        guard !stopping else { return }
         do {
             let restarted = !service.isRunning
             if restarted {
-                _ = await service.stop()
+                guard await service.stop() else { throw ServiceProcessFailure.cleanupUnconfirmed }
+                guard !stopping else { return }
                 try service.start(options)
                 drafts.clearTemporary()
                 sessions.removeAll(where: \.temporary)
@@ -615,13 +620,18 @@ final class ChatStore {
         management.setContext(nil)
         // Stopping the owned service wakes blocked RPC readers. Waiting for a
         // socket queue before sending SIGTERM could otherwise delay shutdown.
-        let graceful = await service.stop()
+        let confirmed = await service.stop()
+        guard confirmed else {
+            statusText = "Cierre del servicio sin confirmar"
+            errorMessage = ServiceProcessFailure.cleanupUnconfirmed.localizedDescription
+            return false
+        }
         await client?.close()
         await access.close()
         await mcp.close()
         await management.close()
         await telegram.close()
-        return graceful
+        return true
     }
 
     private func report(_ error: Error) {

@@ -1,0 +1,77 @@
+{
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "partition_sha256": "790e6e536b29d04ae6243c0e1239860f70203c562ce2f9e368cb3ee63b22d8ee",
+  "source_root_role": "private_inert_reference_only_not_product_source",
+  "source_copy_root": "/private/tmp/jarvis-openclaw-reference-20261024/part14/analysis-input",
+  "original_clone_modified": false,
+  "reference_executed": false,
+  "tree_link_verification": "recomputed_canonical_git_tree_hashes_and_blob_bytes_for_fixed_root_src_snapshot_infra_chains",
+  "files": [
+    {
+      "path": "src/snapshot/local-repository.ts",
+      "bytes": 45196,
+      "sha256": "475be77dfc7330c878d68c57ac23123d02473ebf13052ae73c3bbb29f88d9856",
+      "selected_for_analysis": true,
+      "git_blob": "4dfae233ed9397c1f8c9acbb8ebcd36df60ccb6e"
+    },
+    {
+      "path": "src/snapshot/openclaw-snapshot-copy.ts",
+      "bytes": 4216,
+      "sha256": "02670db6753c8057fa80b1ab16aeb6c4dd65b04cab475fe8e59196656ea01442",
+      "selected_for_analysis": true,
+      "git_blob": "15924bac310b961f85e35faa450e37936d6c5aac"
+    },
+    {
+      "path": "src/infra/sqlite-snapshot.ts",
+      "bytes": 28121,
+      "sha256": "a0f17374919f8cdb4530f305df748815cc6ca510e4e4b93133e7b0e79abf5657",
+      "selected_for_analysis": true,
+      "git_blob": "c029114c24b0900adb487b8f3d94654f58753c5a"
+    },
+    {
+      "path": "src/infra/sqlite-integrity.ts",
+      "bytes": 16858,
+      "sha256": "c686287b8aae5055746fcb2576919d62a6f54a29baa9364a101b0344b691a037",
+      "selected_for_analysis": true,
+      "git_blob": "8d552cc8996bf9f2e27b97124b5d49e3021613f4"
+    },
+    {
+      "path": "package.json",
+      "bytes": 153025,
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "selected_for_analysis": true,
+      "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1076,
+      "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+      "selected_for_analysis": false,
+      "git_blob": "ed064819ab537575d0cad902f7e5af4a3488b1d0"
+    }
+  ],
+  "acquisition_metadata_sha256": "6eabb18546edaa85d5333cc02518720206361d470ac48058de71bbc9288fa26a",
+  "reference_tree": "197c70097790e30087bbef323b0f2cc5148ab9b7",
+  "git_tree_chain_verified_in_acquisition": true,
+  "canonical_tree_hashes_recomputed": true,
+  "original_clone_read_during_acquisition": false,
+  "acquisition_method": "Official GitHub connector fetch_blob by SHA. Root/Src tree responses and package/LICENSE reused from verified part13; Snapshot/Infra trees fetched from GitHub and all canonical tree/blob hashes recomputed.",
+  "verified_tree_chain": [
+    {
+      "role": "Root",
+      "git_tree_sha1": "197c70097790e30087bbef323b0f2cc5148ab9b7"
+    },
+    {
+      "role": "Src",
+      "git_tree_sha1": "2016fce75d48ab2afbf221cf2c00b8b3b70018b7"
+    },
+    {
+      "role": "Snapshot",
+      "git_tree_sha1": "3fbf30d444f684ce08937ebcfb9adba2769cdb2a"
+    },
+    {
+      "role": "Infra",
+      "git_tree_sha1": "1efa84c79d161dcfbe0f3861e6299d99bfb976d3"
+    }
+  ]
+}

@@ -25,7 +25,7 @@ struct ContentView: View {
                     if !store.connected {
                         Button("Conectar ChatGPT") { Task { await store.login() } }.disabled(!store.ready)
                     }
-                    if !store.ready && !store.starting {
+                    if !store.ready && !store.starting && !store.isShuttingDown {
                         Button("Reconectar") { Task { await store.reconnect() } }
                     }
                 }.padding(.horizontal, 24).padding(.vertical, 12)

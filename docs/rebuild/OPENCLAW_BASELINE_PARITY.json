@@ -14059,7 +14059,9 @@
           "tests/test_telegram_pairing.py",
           "tests/test_telegram_timing.py",
           "native/JarvisDesktop/Tests/DesktopCoreTests/TelegramIntegrationTests.swift",
-          "native/JarvisDesktop/Tests/DesktopCoreTests/TelegramPairingIntegrationTests.swift"
+          "native/JarvisDesktop/Tests/DesktopCoreTests/TelegramPairingIntegrationTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/ConversationRefreshTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/TelegramModelsTests.swift"
         ],
         "capability_ids": [
           "A-03",
@@ -14068,10 +14070,10 @@
           "A-60",
           "A-72"
         ],
-        "verified_scope": "Código propio y pruebas RPC/HTTP con cuentas/modelo sintéticos. Dos revisiones, token/nonce RAM, chat/agente/sesión exactos, recibo durable, tombstone físico, límites, cancelación y no replay. Recorrido real limitado de vinculación y suma con salida confirmada; cualificación final integrada PENDIENTE.",
-        "remaining": "Completar denegación, revocación, expiración/cancelación y cualificación del refresh nativo corregido. No grupos, adjuntos, otros canales ni exclusividad externa acreditada por la lease local. Fase A abierta.",
+        "verified_scope": "Pruebas RPC/HTTP sintéticas y recorridos reales limitados: vinculación, suma, y workspace_write con aprobación nativa y archivo/hash verificado. Tarjeta y resultado observados en el chat seleccionado sin recarga del agente.",
+        "remaining": "Matriz completa de denegación/revocación/expiración, resiliencia prolongada y causa del canal detenido posterior aún pendientes. No grupos, adjuntos, otros canales ni exclusividad externa acreditada por lease local.",
         "qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json",
-        "live_scope": "El dueño completó ambas revisiones, confirmó una ruta y activó canal; control ignorado sin run. Se observó 2 + 2 → 4 con journal completed y salida confirmada, sin herramientas. Después desconectó; el servicio anterior cerró antes del reemplazo. Snapshot previo al fix de refresh, pendiente de cualificación; no IDs ni secretos registrados."
+        "live_scope": "Suma y salida confirmada; archivo sintético de20bytes/hash coincide con recibo tras aprobación del dueño. Token/nonce no documentados. Una detención posterior tuvo causa no establecida; nueva UI distingue errores futuros seguros."
       },
       {
         "id": "P-VOICE-LOCAL",
@@ -14080,19 +14082,21 @@
         "code": [
           "native/JarvisDesktop/Sources/JarvisApp/Audio/MacLocalVoiceDriver.swift",
           "native/JarvisDesktop/Sources/DesktopCore/LocalVoiceController.swift",
-          "native/JarvisDesktop/Sources/DesktopCore/LocalVoiceDraftBridge.swift"
+          "native/JarvisDesktop/Sources/DesktopCore/LocalVoiceDraftBridge.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Audio/ModernLocalRecognition.swift"
         ],
         "tests": [
           "native/JarvisDesktop/Tests/DesktopCoreTests/LocalVoiceControllerTests.swift",
-          "native/JarvisDesktop/Tests/DesktopCoreTests/LocalVoiceDraftBridgeTests.swift"
+          "native/JarvisDesktop/Tests/DesktopCoreTests/LocalVoiceDraftBridgeTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/LocalSpeechPolicyTests.swift"
         ],
         "capability_ids": [
           "A-54",
           "A-55",
           "A-60"
         ],
-        "verified_scope": "Implementación de STT sólo on-device y TTS con voces locales instaladas; borrador revisable de conversación de origen, sin autoSend. Control de callbacks, permisos y límites mediante drivers sintéticos; cualificación final integrada PENDIENTE.",
-        "remaining": "TCC del dueño, micrófono/idioma/voz y prueba audible en Mac objetivo. No nube, wakeword, escucha permanente, llamadas ni voz continua. iPhone aplazado por decisión explícita.",
+        "verified_scope": "SpeechAnalyzer exactlocale ya instalado en macOS26+, legacy sólo con soporte local real, preparación/captura cancelables y borrador sin autoSend. Una frase es-ES real se añadió preservando BORRADOR BASE; reproducción sintética volvió a idle sin error visible.",
+        "remaining": "Resto de idiomas/dispositivos, denegación/revocación TCC real y matriz acústica. Sin wakeword, escucha permanente, llamadas ni voz continua. iPhone aplazado por el dueño.",
         "qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json"
       },
       {
@@ -14112,10 +14116,10 @@
           "A-11",
           "A-33"
         ],
-        "verified_scope": "Herramienta propia de GET HTTPS público aprobado, DNS/IP fijados, TLS, framing/límites, tres redirects de mismo origen y contenido externo no verificado. Pruebas privadas no sustituyen cualificación global ni recorrido real; ambos PENDIENTES aquí.",
-        "remaining": "No buscador/proveedor de búsqueda, JS, navegador, cuentas, cookies o descarga de archivos. REA12 estática y acotada registrada; falta recorrido real y cualificación del ajuste de cierre posterior.",
+        "verified_scope": "GET HTTPS público con aprobación, IP/DNS fijados y límites; suite Python1234 incluye las regresiones de cierre. Un GET real example.com completó HTTP200 con contenido externo no verificado, sin JS ni seguimiento de enlaces.",
+        "remaining": "Buscador/proveedor de búsqueda, JS, navegador, cuentas, cookies y descarga de archivos no implementados. Una URL real no cualifica sitios arbitrarios ni toda la familia.",
         "qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json",
-        "post_close_fix_validation": "156 pruebas acotadas aprobadas en 1,37 s; cuatro regresiones adicionales de cierre/cancelación. Integral posterior pendiente."
+        "post_close_fix_validation": "156 pruebas acotadas y posterior suite1234 aprobadas; cuatro regresiones de cierre/cancelación, además del recorrido HTTPS real limitado."
       },
       {
         "id": "P-CLEANUP-OWNERS",
@@ -14125,12 +14129,16 @@
           "src/jarvis_core/codex.py",
           "src/jarvis_core/mcp.py",
           "src/jarvis_core/mcp_registry.py",
-          "src/jarvis_core/service.py"
+          "src/jarvis_core/service.py",
+          "native/JarvisDesktop/Sources/DesktopCore/ServiceProcess.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/App/AppDelegate.swift"
         ],
         "tests": [
           "tests/test_mcp_cleanup.py",
           "tests/test_codex_cleanup.py",
-          "tests/test_service_management.py"
+          "tests/test_service_management.py",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/ServiceProcessLifecycleTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/FixtureProcessTests.swift"
         ],
         "capability_ids": [
           "A-01",
@@ -14142,16 +14150,16 @@
           "A-46",
           "A-48"
         ],
-        "verified_scope": "Siete regresiones MCP del bloque083729885258c355f855963f09d4d59cdacf2dc4: señal/probe/barrido denegados no equivalen a cierre, propietarios/HOME retenidos y cierre posterior sin replay. Continuación de Codex/Telegram y cierres Scheduler/RPC: snapshot integrado anterior aprobado; cambios posteriores y recorridos finales pendientes.",
-        "remaining": "No certificar árboles arbitrarios, hijos escapados del grupo o compatibilidad Linux a partir de fixtures macOS sin fork. Añadir resultados finales y hashes de recursos/artefactos al registro de cualificación.",
+        "verified_scope": "Regresiones MCP/Codex/Telegram y servicio integradas en1234 Python; supervisor nativo con dueño retenido, stop compartido,35s monotónicos y señales tras identidad/propiedad kernel.129 nativas incluyen12 lifecycle y teardown acotado de fixtures.",
+        "remaining": "No certifica árboles arbitrarios ni descendientes escapados. Identidad kernel inmediata más señal PID no es primitiva atómica de audit-token. Recuperación productiva completa sigue pendiente.",
         "qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json"
       }
     ],
     "detail_file": "PHASE_A_CHANNELS_VOICE_WEB.md",
     "rea": {
       "source_file": "REA_COVERAGE.json",
-      "static_batches": 13,
-      "unique_typescript_paths_in_completed_batches": 52,
+      "static_batches": 14,
+      "unique_typescript_paths_in_completed_batches": 56,
       "global_status": "partial",
       "runtime_executed": false,
       "semantic_unknowns_remain": true,
@@ -14168,13 +14176,14 @@
         "OC-10",
         "OC-11",
         "OC-12",
-        "OC-13"
+        "OC-13",
+        "OC-14"
       ],
       "limits": "Contar rutas examinadas no significa comprensión semántica ni revisión global. IDs y evidencias completos en REA_COVERAGE.json/provenance."
     },
     "previous_detail_file": "PHASE_A_MANAGEMENT.md",
     "qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json",
-    "latest_qualification_status": "pending_after_additional_fixes"
+    "latest_qualification_status": "129native_1234python_bounded_live_cases_passed_ci_pending_phase_a_open"
   },
   "target_decisions": {
     "date": "2026-10-24",

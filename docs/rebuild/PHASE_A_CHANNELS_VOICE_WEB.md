@@ -29,8 +29,8 @@ un control local de desarrollo en distribución o paridad cualificadas.
 | Arranque del bundle corregido | Conexión con ChatGPT y tres chats sintéticos restaurados sin pulsar Reconectar. Ruta de Telegram conservada; bot desconectado hasta decisión explícita. |
 | App nueva observada | Tras Reconectar, la interfaz mostró Codex con ChatGPT conectado, dos conversaciones sintéticas restauradas, herramientas y panel Telegram. No se atribuye una causa interna a la demora inicial. |
 | Telegram | Conexión y ambas revisiones de vinculación observadas; una ruta activa en el checkpoint de la suma. Una suma de prueba recibió 4 en el chat dedicado, con journal completed y salida confirmada; sin herramientas. Pendiente el resto de recorridos del canal. |
-| Voz y web reales | Pendientes de permisos/recorrido en el Mac elegido. Las pruebas sintéticas no los sustituyen. |
-| Cualificación final del árbol posterior | 1234 Python y 97 Swift aprobadas; bundle de desarrollo validado. Recorridos reales posteriores aún pendientes. |
+| Voz y web reales | HTTPS público observado con recibo externo no verificado; TTS volvió a idle sin error visible. Dictado legacy es-ES falló localmente; motor moderno implementado, prueba real pendiente. |
+| Cualificación final del árbol posterior | Checkpoint1234 Python/97 Swift y bundle de desarrollo registrados. Correcciones adicionales de lifecycle, fixtures y motor moderno en validación separada; no calificadas por ese checkpoint. |
 | CI | El primer bloque publicado pasó Linux; macOS tuvo siete fallos relacionados con el runtime Python framework. Se integraron doce regresiones del ajuste; un CI nuevo sigue pendiente. |
 
 El diario propio de Telegram observado tras vincular tenía modo 0600, una ruta y
@@ -61,6 +61,51 @@ adicionales de cierre/cancelación. Después pasaron las 1234 pruebas integrales
 fuera del sandbox, sin relajar el aislamiento del producto. También pasaron las
 97 nativas del árbol corregido. El bundle posterior también se construyó y validó;
 los recorridos reales posteriores siguen pendientes.
+
+## Comprobaciones posteriores del checkpoint de escritorio
+
+El ejecutable `d588d680927cfe4d53b9235dc8b323a25fddf38858c7449a6d5f211981cf4857`
+mostró una propuesta `workspace_write` llegada desde Telegram en el chat abierto,
+sin recarga del agente. El dueño confirmó la aprobación. El archivo sintético
+`fase-a-telegram.txt` contiene exactamente 20 bytes, sin salto final; el SHA-256
+`a3f52c66d7474b34b1282c3151236336ea2d9fb8b7f8ddc9db8ccb576d702bb8`
+coincide con el recibo separado verificado. También se observó el resultado sin
+recargar el chat. No acredita grupos, otros chats, permisos persistentes ni revocación.
+
+En un chat temporal, una aprobación web caducada quedó cancelada y asentada. Una
+petición posterior de texto no propuso herramienta; no equivale a una tarjeta.
+Tras pedir una propuesta explícita, `web_fetch` completó `https://example.com/`
+con HTTP 200, 577 bytes, sin redirecciones, JavaScript ni navegación de enlaces.
+La interfaz conservó `external_untrusted` y `verified=false`; el modelo reportó
+«Example Domain». La vista del recibo era explícitamente parcial; no se presenta
+el título como comprobación independiente. Tampoco acredita búsqueda o navegación general.
+
+El dictado legacy rechazó `es-ES` antes de capturar: el borrador base quedó intacto
+y no se envió mensaje. Un diagnóstico de sólo lectura fuera del sandbox comprobó
+que faltaba el recurso legacy de ese idioma, pero el modelo moderno `es-ES` de
+SpeechTranscriber ya estaba soportado e instalado (host macOS 27.0.1/SDK 27).
+La corrección usa SpeechAnalyzer en macOS 26 o posterior, con readiness cancelable y sólo ese idioma
+exacto instalado; no descarga recursos ni cambia de dialecto/proveedor. Sus tipos
+y pruebas de contrato no sustituyen la transcripción con micrófono pendiente.
+El dueño completó la lectura de una frase sintética y la interfaz volvió a idle
+sin error visible; no hubo medición acústica independiente.
+
+Después de los casos exitosos de Telegram se observó el canal detenido con un
+error genérico; el último evento del diario seguía completado sin error. Su causa
+no está establecida. El panel añade mensajes seguros de una whitelist para poder
+distinguir fallos futuros de red, conflicto, respuesta y cierre sin revelar cuerpos
+remotos ni credenciales; no introduce reconexiones automáticas.
+
+La segunda publicación de este checkpoint se detuvo en el teardown de XCTest:
+`Process.waitUntilExit` esperaba indefinidamente aunque su fixture ya no era hijo.
+Se muestreó sólo ese test y se terminó para reparar la limpieza. Siete clases
+usan ahora teardown async acotado que falla si fuerza o no confirma cierre.
+La revisión del supervisor detectó además pérdida del dueño y reentrancia de
+shutdown/reconnect; el cierre mantiene identidad y aviso hasta observar salida.
+La primera suite conjunta posterior aprobó 123 pruebas en 17,933 s. La revisión
+adicional del adapter ante cache de Foundation obsoleto y la preparación moderna
+posterior aprobaron después 129 pruebas integradas en 18,497 s. El bundle final
+se construyó y validó aparte; el dictado con micrófono sigue pendiente.
 
 ## Contrato de Telegram
 
@@ -254,3 +299,11 @@ Siguen pendientes los recorridos reales, permisos y decisiones del dueño, la
 identidad final de artefactos tras los ajustes y la cualificación de distribución.
 Un error o dependencia se conserva en el registro. No se marca una familia completa
 por compilar o por aprobar fixtures; la fase B todavía no empieza.
+
+El bundle moderno final (`c7e6a34d07e136958c803884fd0d7339770998e52ac4512d8087c4a1850e64c3`,
+6.706.384 bytes, 29,60 s de construcción, firma ad hoc estricta) inició sin
+reconexión manual. El dueño dictó una frase: se observó «BORRADOR BASE» seguido de
+«Prueba de voz local 42.» en el campo de edición, con aviso de revisión y sin
+mensaje enviado. Es un caso corto de micrófono a borrador en este Mac, no prueba
+de todos los idiomas, escucha permanente o la matriz completa de TCC. La app
+anterior no fue reemplazada y el nuevo bundle sigue usando Python/Codex externos.
