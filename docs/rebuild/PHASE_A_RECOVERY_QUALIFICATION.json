@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-24",
+  "phase": "A",
+  "phase_a_complete": false,
+  "phase_b_started": false,
+  "product_checkpoint": "a6e08f38fb974f4c1917a45f6429934ccd47b98a",
+  "scope": "own_synthetic_profile_only",
+  "automated": {
+    "python_passed": 1538,
+    "native_passed": 161,
+    "lint_bytecode_packages": "passed",
+    "ci_run": 40161981025,
+    "ubuntu_24_04": "success",
+    "macos_26": "success"
+  },
+  "development_bundle": {
+    "executable_bytes": 7656400,
+    "executable_sha256": "78abb7cc3795abf6007a60fd700fd545f1961206377332b623d3c548894f4a78",
+    "signing": "ad_hoc_strict_verification_passed",
+    "standalone": false,
+    "previous_installed_app_replaced": false
+  },
+  "native_live": {
+    "owner_made_both_real_approvals": true,
+    "agent_clicked_allow": false,
+    "backup": {
+      "operation_id": "a95db36e44fd4ad6aa26aa15730bbea8",
+      "phase": "completed",
+      "durable_receipt_confirmed": true,
+      "manifest_sha256": "e52f6d7e1dcc9d49257e2a3a0b5b31f67451b395e1e90f09170647a8f4997bf3"
+    },
+    "verification": {
+      "operation_id": "d9eafc97528a426fa0d1b8e1700cf8a7",
+      "phase": "completed",
+      "expected_manifest_matched": true,
+      "independent_core_verification": "passed",
+      "directories_mode": "0700",
+      "files_mode": "0600",
+      "pending_markers": 0,
+      "present_roles": [
+        "state", "memory", "schedules", "agents", "telegram", "configuration_portable"
+      ],
+      "absent_roles": ["skills"]
+    },
+    "restore": {
+      "operation_id": "827782ca02d04678bd8f2d84a128a04f",
+      "native_result": "profile_prepared_disarmed",
+      "active_profile_replaced": false,
+      "activated": false
+    },
+    "window_lifecycle": {
+      "close_reopen_discards_unsubmitted_readonly_review": true,
+      "settled_receipt_survives_settings_close_reopen": true,
+      "chat_available_after_maintenance": true,
+      "unsent_draft_preserved": true,
+      "new_inference_requested_for_this_flow": false
+    }
+  },
+  "limits": [
+    "One native successful backup, verification and staged restore do not qualify all denial, revocation, cancellation or lost-response scenarios.",
+    "No restoration activation, workspace files, external skill resources, provider credentials, live grants or transport are qualified by this case.",
+    "Hashes and schema checks do not establish signer authenticity or verify historical external effects.",
+    "Cold SQLite host export, reconciliation, repair, updates, rollback and standalone distribution remain phase A work."
+  ]
+}

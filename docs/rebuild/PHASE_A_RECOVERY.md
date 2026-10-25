@@ -1,6 +1,7 @@
 # Fase A: respaldos, restauración preparada y diagnóstico
 
-Implementación propia con contratos verificados; recorrido real de la app pendiente. Este registro no acredita el cierre de
+Implementación propia con contratos verificados y un recorrido nativo acotado con
+decisiones reales del dueño sobre datos sintéticos. Este registro no acredita el cierre de
 A-69 (onboarding/doctor), A-71 (recuperación) ni de la fase A. La activación de un
 perfil restaurado, las reparaciones y la distribución permanecen pendientes.
 
@@ -107,7 +108,27 @@ correctos, con skills ausentes. Se reprodujo y corrigió la retención de una re
 al cerrar Ajustes: el ciclo real cerrar/reabrir libera el chat, conserva su borrador
 sin enviarlo y descarta la revisión local anterior. Los eventos se ligan a la ventana
 concreta; el cierre conserva los trabajos o respuestas que siguen sin confirmar.
-Quedan los recorridos desde la app con decisiones reales del dueño. También siguen pendientes la exportación del host de fuentes frías,
+El checkpoint `a6e08f3` pasó Python (1538 casos), Swift (161 casos), lint, bytecode,
+paquetes y CI en Ubuntu 24.04 y macOS 26. El bundle de desarrollo observado tiene
+7.656.400 bytes y SHA-256
+`78abb7cc3795abf6007a60fd700fd545f1961206377332b623d3c548894f4a78`.
+Utiliza Python y Codex externos y firma ad hoc; no sustituye la app instalada.
+
+En ese bundle el dueño autorizó una copia del perfil sintético y, después de
+verificarla desde Jarvis, autorizó preparar un perfil nuevo. La app presentó los
+recibos «Completada» y «Perfil preparado y desarmado». El manifiesto observado fue
+`e52f6d7e1dcc9d49257e2a3a0b5b31f67451b395e1e90f09170647a8f4997bf3`.
+La verificación independiente del respaldo confirmó seis roles presentes, skills
+ausente explícitamente, hashes/formato coincidentes, directorios 0700, archivos
+0600 y ausencia de `.pending`. Esto acredita el artefacto y su recibo, no la
+autenticidad de un firmante ni los efectos de herramientas externas.
+Los identificadores de operación y el alcance de la evidencia están en el
+[registro de cualificación](PHASE_A_RECOVERY_QUALIFICATION.json). Al cerrar y
+reabrir Ajustes se conservó el recibo; después el chat quedó disponible con el
+mismo borrador sin enviar.
+
+El recorrido no acredita todavía denegación, revocación, cancelación y pérdida
+de respuesta reales en toda la interfaz. También siguen pendientes la exportación del host de fuentes frías,
 incluidas WAL, la inclusión de archivos y
 artefactos del workspace, activación/reconciliación de memoria y canales, reparación
 explícita, migraciones y distribución autocontenida. Son trabajo de la fase A;

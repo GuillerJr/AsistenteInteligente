@@ -84,6 +84,9 @@ declara completa por los tests sintéticos.
   desarmada y diagnóstico sin inicializar fuentes ausentes.
 - [ ] Cualificar la interfaz integrada y el recorrido nativo de respaldo,
   verificación y restauración con las decisiones reales del dueño.
+- [x] Observar una copia, su verificación y la preparación de otro perfil desde
+  la app con aprobaciones del dueño, usando únicamente datos sintéticos. Recibos
+  de publicación y perfil desarmado observados; faltan los demás escenarios reales.
 - [ ] Completar fuentes frías, archivos/artefactos de workspace, activación y
   reconciliación, reparaciones, actualización, rollback y distribución.
 
