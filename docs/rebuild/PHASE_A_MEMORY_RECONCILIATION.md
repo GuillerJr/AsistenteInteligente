@@ -1,8 +1,8 @@
 # Fase A: copia explícita de memoria conservada
 
-El núcleo y la compatibilidad SQLite están integrados. El coordinador del host,
-su corte de mutación y la interfaz nativa siguen en desarrollo privado. Este
-documento no acredita una copia desde la app, una decisión real del dueño ni el
+El núcleo, la compatibilidad SQLite, el coordinador del host y la interfaz nativa
+están integrados. Las decisiones de las pruebas son sintéticas. Este documento
+no acredita todavía una copia desde la app con una decisión real del dueño ni el
 cierre de A-71 o de la fase A. La fase B no ha comenzado.
 
 ## Contrato del núcleo
@@ -66,8 +66,9 @@ El núcleo privado pasó 153 casos: 43 nuevos y 110 de memoria anterior. La
 compatibilidad pasó 212 casos con 32 nuevos, incluido un roundtrip producido por
 la copia real del núcleo: backup, verificación, nueva restauración, activación de
 fixture y resolución de citas. El árbol integrado pasó 494 pruebas focalizadas,
-Ruff, bytecode y revisión de diferencias. Los gates globales y CI del checkpoint
-se registrarán después de la publicación.
+Ruff, bytecode y revisión de diferencias. El checkpoint `f8e5a67` pasó 1829 pruebas
+Python, 175 Swift, empaquetado y los gates, con CI aprobada en macOS y Linux
+([ejecución 40170656817](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40170656817)).
 
 Los casos cubren UTF-8, IDs y citas, origen intacto, destino con tombstone, cambios
 físicos, contextos no prestables, límites, fallo SQL a mitad de lote, SQLITE_FULL,
@@ -76,9 +77,27 @@ comprueban propietario retenido, historial posterior a edición/borrado, lectura
 v1 sin migración y rechazo de SQL de esquema sobredimensionado antes de analizarlo.
 Todas las decisiones de estos fixtures son sintéticas.
 
-Faltan el host y su autoridad/corte integrados, sus presupuestos agregados, los
-DTOs y el panel nativo, las carreras de RPC/cierre y la copia de dos notas de
-prueba desde la app con aprobación del dueño. Las dos notas se prepararon como
+El host pasó 85 casos nuevos y de auditoría independiente en 42,37 s, incluidos
+57 del registro de recibos y cuatro de cierre con propietario retenido, más 154
+casos anteriores en 19,21 s. Los 239 casos son distintos. Swift pasó 21 casos
+headless y dos recorridos Swift→RPC autenticado→SQLite en 2,62 s. En ellos se
+comparan hashes independientes del contenido origen/destino, IDs nuevos,
+revisión 1, denegación sin cambios y cero llamadas al SDK. Los 38 módulos Python
+del recorrido IPC son idénticos a los integrados; no se extrapola una prueba
+de fixture a la decisión real del dueño.
+
+La auditoría reprodujo un fallo de custodia nativa: tras perder el ACK de una
+consulta, una segunda lectura rechazada podía borrar su estado de espera.
+La misma regresión falló tres aserciones antes y pasó después de impedir lecturas
+superpuestas. Cerrar Ajustes conserva el efecto, su revisión y cualquier limpieza
+pendiente; una consulta SQL nunca reescribe el recibo histórico ni autoriza replay.
+
+El árbol integrado pasó 1914 pruebas Python en 121,14 s y 198 Swift en 24,45 s,
+además de Ruff, bytecode, base limpia y comprobación de hooks. El empaquetado,
+pre-push y CI de este bloque se comprobarán al publicarlo.
+
+Falta la copia de dos notas de prueba desde la app con aprobación del dueño.
+Las dos notas se prepararon como
 datos sintéticos, con revisiones 2 y 1; no se ha ejecutado esa copia ni simulado
 su aprobación. WAL frío, recuperación de archivos de workspace, otros canales y
 la distribución autocontenida continúan pendientes dentro de la fase A.
@@ -87,3 +106,32 @@ La investigación estática que orienta estas decisiones es
 [OC-17](REA_PART17_SUMMARY.json), con [procedencia](REA_PART17_PROVENANCE.json).
 No se importa ni ejecuta código de OpenClaw y sus helpers no examinados siguen
 siendo desconocidos.
+
+## Autoridad, corte e interfaz integrados
+
+El panel «Memoria conservada» exige elegir agente y ámbito explícitamente. El
+inventario pagina 32 filas, excluye ámbitos ligados a sesión y sólo publica
+metadatos: no transmite texto, URI, IDs de documentos ni claves históricas de
+workspace. La lista no deduce cuál es el origen más reciente. La revisión y la
+aprobación caducan; el destino actual debe seguir vacío.
+
+`memory.restore.copy_scope` usa la autoridad central del host y fija la revisión
+semántica del núcleo dentro de sus argumentos canónicos. La apertura fría, la
+transacción y COMMIT revalidan esa decisión. Sólo se delega el recurso de memoria
+seleccionado al store, conexión e identidad fijados; las fuentes hermanas siguen
+congeladas. El contexto de autorización sale en su Task original y la limpieza
+desde otra Task conserva exactamente el mismo corte, sin una aprobación nueva.
+La generación del perfil avanza una sola vez después del cierre real del corte.
+
+La revisión deriva el límite físico restante del presupuesto agregado de 128 MiB
+y comprueba las filas proyectadas de documentos, chunks, FTS e historia contra
+el inspector portátil. No ofrece una aprobación si la copia dejaría una base
+que respaldo o diagnóstico no pudieran admitir. La consulta de un registro
+anterior es independiente de la carpeta de trabajo actual y del ACK original.
+
+La app bloquea conversación, cambio de sesión, reconexión y apertura de otro
+perfil mientras conserve una lectura no asentada, una solicitud incierta o un
+propietario pendiente. Sus recibos sobreviven al avance de generación; los
+previews antiguos se invalidan. Los tests del Store ejercen estas condiciones;
+las conexiones concretas de ChatStore fueron revisadas en código, sin presentar
+un XCTest del Store como prueba de toda la app.

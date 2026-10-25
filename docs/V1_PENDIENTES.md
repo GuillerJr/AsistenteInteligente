@@ -107,8 +107,11 @@ declara completa por los tests sintéticos.
 - [x] Integrar el núcleo de copia atómica de ámbitos de memoria y compatibilidad
   de esquema v1/v2 con respaldo, diagnóstico y restauración de historia.
   [Contrato y pruebas](rebuild/PHASE_A_MEMORY_RECONCILIATION.md).
-- [ ] Conectar esa copia a la autoridad y corte del host y a la interfaz nativa;
-  comprobar sus carreras y la decisión real del dueño con notas sintéticas.
+- [x] Conectar esa copia a la autoridad y corte del host y a la interfaz nativa;
+  probar lectura sin efectos, copia/denegación, carreras, límites y cierre mediante
+  fixtures propios, incluida la custodia tras perder una respuesta.
+- [ ] Comprobar la decisión real del dueño y el resultado de la copia de dos notas
+  sintéticas desde la app; los fixtures no sustituyen ese recorrido.
 - [ ] Investigar la demora inicial observada en el perfil nuevo: se recuperó por
   supervisión lectora, sin reinicio; su causa no quedó establecida.
 - [ ] Completar familias frías con WAL/journals, archivos/artefactos de workspace, activación y

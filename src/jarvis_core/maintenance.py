@@ -21,6 +21,7 @@ from jarvis_core.activation_management import ActivationManagement, _Prepared
 from jarvis_core.doctor import DoctorContext, DoctorInventory, inspect_report
 from jarvis_core.host_profile import freeze_sources
 from jarvis_core.maintenance_journal import MaintenanceJournal, wire
+from jarvis_core.memory_management import MemoryManagement, _MemoryRead
 from jarvis_core.protocol import RpcError
 from jarvis_core.recovery import (
     DISARMS,
@@ -83,7 +84,8 @@ def _code(error):
     # Never return exception text: it can include a path, SQL or external data.
     code = getattr(error, "code", None)
     if type(code) is str and re.fullmatch(
-        r"(?:activation|recovery|snapshot|doctor|host|profile|maintenance)_[a-z0-9_]{1,100}", code
+        r"(?:memory|activation|recovery|snapshot|doctor|host|profile|maintenance)_[a-z0-9_]{1,100}",
+        code
     ):
         return code
     return "maintenance_failed"
@@ -125,6 +127,7 @@ class _Operation:
     review_id: str | None = None
     review_digest: str | None = None
     cleanup_owner: object = field(default=None, repr=False)
+    memory_cut: object = field(default=None, repr=False)
 
     def snapshot(self):
         return {"operation_id": self.operation_id, "kind": self.kind,
@@ -156,7 +159,7 @@ def _receipt_phase(receipt):
     return receipt.status if receipt.status in {"cancelled", "failed"} else "publication_unknown"
 
 
-class MaintenanceCoordinator(ActivationManagement):
+class MaintenanceCoordinator(MemoryManagement, ActivationManagement):
     def __init__(self, service, gate, *, clock=time.monotonic):
         self.service, self.gate, self.clock = service, gate, clock
         self.authority = service.authority
@@ -165,6 +168,7 @@ class MaintenanceCoordinator(ActivationManagement):
         self._operations: dict[str, _Operation] = {}
         self._verification: dict[str, tuple[Path, object]] = {}
         self._closing = False
+        self._initialize_memory_limits()
 
     def handlers(self):
         methods = {"maintenance.status": self.status, "maintenance.pending": self.pending,
@@ -173,6 +177,7 @@ class MaintenanceCoordinator(ActivationManagement):
                    "backup.verify": self.verify, "restore.review": self.review_restore,
                    "restore.stage": self.restore, "doctor.report": self.doctor}
         methods.update(self.activation_handlers())
+        methods.update(self.memory_handlers())
 
         def safe(callback):
             async def invoke(params):
@@ -455,7 +460,11 @@ class MaintenanceCoordinator(ActivationManagement):
                 if outcome.error is not None:
                     raise outcome.error
                 result = outcome.value
-                if isinstance(result, _Prepared):
+                if isinstance(result, _MemoryRead):
+                    if operation.cancellation.is_set():
+                        raise RecoveryFsError("recovery_cancelled")
+                    operation.result = self._publish_memory_result(result)
+                elif isinstance(result, _Prepared):
                     if operation.cancellation.is_set():
                         raise RecoveryFsError("recovery_cancelled")
                     operation.result = {"review": self._publish_activation_review(result)}
@@ -577,7 +586,9 @@ class MaintenanceCoordinator(ActivationManagement):
                 raise TimeoutError("maintenance_cleanup_incomplete")
         for row in self._operations.values():
             if row.cleanup_owner is not None:
-                row.task = asyncio.create_task(self._cleanup_owner(row))
+                callback = (self._cleanup_memory if row.kind == "memory.restore.copy_scope"
+                            else self._cleanup_owner)
+                row.task = asyncio.create_task(callback(row))
                 _, pending = await asyncio.wait((row.task,), timeout=25)
                 if pending or row.cleanup_owner is not None:
                     raise TimeoutError("maintenance_cleanup_incomplete")

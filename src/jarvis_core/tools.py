@@ -104,6 +104,7 @@ class HostPurpose(StrEnum):
     BACKUP_CREATE = "backup.create"
     RESTORE_STAGE = "restore.stage"
     PROFILE_RESTORE_ACTIVATE = "profile.restore.activate"
+    MEMORY_RESTORE_COPY_SCOPE = "memory.restore.copy_scope"
     DOCTOR_REPAIR_APPLY = "doctor.repair.apply"
 
 

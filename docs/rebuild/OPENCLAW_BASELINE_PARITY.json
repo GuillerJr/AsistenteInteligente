@@ -14198,7 +14198,13 @@
           "src/jarvis_core/activation_management.py",
           "src/jarvis_core/provider_choice.py",
           "native/JarvisDesktop/Sources/DesktopCore/ProfileHandoff.swift",
-          "native/JarvisDesktop/Sources/JarvisApp/Views/RestoreProfileView.swift"
+          "native/JarvisDesktop/Sources/JarvisApp/Views/RestoreProfileView.swift",
+          "src/jarvis_core/memory.py",
+          "src/jarvis_core/memory_host_cut.py",
+          "src/jarvis_core/memory_host_read.py",
+          "src/jarvis_core/memory_management.py",
+          "native/JarvisDesktop/Sources/DesktopCore/RestoredMemoryStore.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Views/RestoredMemoryView.swift"
         ],
         "tests": [
           "tests/test_host_authority.py",
@@ -14221,7 +14227,16 @@
           "tests/test_restored_provider_service.py",
           "tests/test_provider_reply_policy.py",
           "native/JarvisDesktop/Tests/DesktopCoreTests/RestoredProfileTests.swift",
-          "native/JarvisDesktop/Tests/DesktopCoreTests/RestoredProfileIntegrationTests.swift"
+          "native/JarvisDesktop/Tests/DesktopCoreTests/RestoredProfileIntegrationTests.swift",
+          "tests/test_memory_scope_copy.py",
+          "tests/test_memory_copy_portability.py",
+          "tests/test_memory_mutation_cut.py",
+          "tests/test_memory_management.py",
+          "tests/test_memory_journal_contract.py",
+          "tests/test_independent_memory_shutdown.py",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/RestoredMemoryTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/RestoredMemoryIntegrationTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/IndependentMemoryReadOwnershipTests.swift"
         ],
         "capability_ids": [
           "A-01",
@@ -14231,8 +14246,8 @@
           "A-70",
           "A-71"
         ],
-        "verified_scope": "Checkpoint b8ce4bc con 1585 Python / 162 Swift y CI aprobados; respaldo, verificación y staging sintéticos desde la app con decisiones reales del dueño. Captura/diagnóstico frío DELETE y rechazo de bootstrap restaurado; los tres SQLite de otro recorrido nativo no vacío conservaron bytes/metadatos. Alcances y demora inicial no atribuida registrados por separado. Ampliación local integrada: 1754 Python/175 Swift, admisión contextual y handoff explícito sin SDK inicial; revisión GUI descartada conservando borrador. Checkpoint 1d378a6 con CI macOS/Linux aprobado y activación/apertura reales del perfil sintético elegidas por el dueño. Estado local sin cuenta, diagnóstico y revisión de copia observados; límites y pruebas independientes en PHASE_A_ACTIVATION.md.",
-        "remaining": "WAL/journals fríos, workspace/artefactos, reinicio y escenarios negativos reales de activación, asociación de memoria/canales, reparación, actualización/rollback y distribución. No cierra familias ni inicia B.",
+        "verified_scope": "Checkpoint b8ce4bc con 1585 Python / 162 Swift y CI aprobados; respaldo, verificación y staging sintéticos desde la app con decisiones reales del dueño. Captura/diagnóstico frío DELETE y rechazo de bootstrap restaurado; los tres SQLite de otro recorrido nativo no vacío conservaron bytes/metadatos. Alcances y demora inicial no atribuida registrados por separado. Ampliación local integrada: 1754 Python/175 Swift, admisión contextual y handoff explícito sin SDK inicial; revisión GUI descartada conservando borrador. Checkpoint 1d378a6 con CI macOS/Linux aprobado y activación/apertura reales del perfil sintético elegidas por el dueño. Estado local sin cuenta, diagnóstico y revisión de copia observados; límites y pruebas independientes en PHASE_A_ACTIVATION.md. Copia explícita de memoria conservada integrada con autoridad/corte, límites de perfil y panel nativo; 85 casos nuevos del host, 154 regresiones anteriores y 23 casos Swift focalizados, incluidas dos conexiones IPC reales con SQLite y decisiones sintéticas. Núcleo/compatibilidad f8e5a67 con CI macOS/Linux aprobada; contrato, fallo de custodia corregido y límites en PHASE_A_MEMORY_RECONCILIATION.md. Falta la decisión real de copia desde la app; no cierra la familia.",
+        "remaining": "Copia de memoria con decisión real del dueño y negativos reales, WAL/journals fríos, workspace/artefactos, otros escenarios negativos reales de activación, reconciliación de canales, reparación, actualización/rollback y distribución. No cierra familias ni inicia B.",
         "detail_file": "PHASE_A_RECOVERY.md",
         "qualification_file": "PHASE_A_RECOVERY_QUALIFICATION.json"
       }

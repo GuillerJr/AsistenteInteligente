@@ -578,6 +578,14 @@ class FrozenSources:
         return self.service.profile_gate.lease.identity
 
     def assert_current(self, cut, *, full=False):
+        return self._assert_current(cut, full=full, memory_mutating=False)
+
+    def _assert_nonmemory_current(self, cut):
+        # Only MemoryMutationCut invokes this after consuming an exact grant.
+        # The selected MemoryStore mutex/identity/CAS then own that one row.
+        return self._assert_current(cut, full=False, memory_mutating=True)
+
+    def _assert_current(self, cut, *, full, memory_mutating):
         cut.assert_current()
         if cut.gate is not self.service.profile_gate or cut.scope != self.scope:
             raise HostProfileError("profile_generation_stale")
@@ -590,6 +598,8 @@ class FrozenSources:
                 raise HostProfileError("profile_sources_changed")
         else:
             for row in self._sql:
+                if memory_mutating and row.role == "memory":
+                    continue
                 if row.cold is not None:
                     row.cold.assert_current()
                     current = (row.store._connection if row.role == "schedules"

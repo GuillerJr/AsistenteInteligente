@@ -121,6 +121,8 @@ async def test_all_registered_rpc_handlers_are_denied_before_validation_during_c
         "backup.review", "backup.create", "backup.verify", "restore.review", "restore.stage",
         "doctor.report", "profile.restore.review", "profile.restore.activate",
         "profile.restore.inspect", "maintenance.cleanup",
+        "memory.restore.inventory", "memory.restore.review", "memory.restore.copy_scope",
+        "memory.restore.receipt",
     }
     assert set(service.maintenance_coordinator.handlers()) == controls
     with gate.exclusive():

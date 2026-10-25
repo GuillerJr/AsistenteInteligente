@@ -6,6 +6,11 @@ A-69 (onboarding/doctor), A-71 (recuperación) ni de la fase A. La [activación 
 implementada con pruebas y un recorrido real acotado sobre el perfil sintético,
 elegido por el dueño. Reparaciones y distribución continúan abiertas.
 
+La [copia explícita de memoria conservada](PHASE_A_MEMORY_RECONCILIATION.md)
+añade autoridad y transacción propias, compatibilidad v1/v2 y un panel nativo.
+Sus pruebas de copia/denegación usan decisiones sintéticas; la copia real desde
+la app con aprobación del dueño sigue pendiente y no reasigna ámbitos al abrir.
+
 ## Referencia y separación del producto
 
 Los lotes REA 13 y 14 estudian, por separado, comandos de respaldo/restauración,

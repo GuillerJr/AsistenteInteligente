@@ -13,7 +13,8 @@ _TERMINAL = frozenset({"complete", "staged_disarmed", "activated_not_opened", "c
                        "denied", "failed",
                        "publication_unknown", "cleanup_pending", "interrupted_unknown"})
 _PHASES = _TERMINAL | {"awaiting_owner", "quiescing", "working"}
-_PURPOSES = {"backup.create", "restore.stage", "profile.restore.activate"}
+_PURPOSES = {"backup.create", "restore.stage", "profile.restore.activate",
+             "memory.restore.copy_scope"}
 
 
 def wire(value):
@@ -49,6 +50,9 @@ def _valid(value):
         seen.add(row["operation_id"])
         receipt = row["receipt"]
         if receipt is not None:
+            if row["purpose"] == "memory.restore.copy_scope":
+                _memory_receipt(row, receipt)
+                continue
             if row["purpose"] == "profile.restore.activate":
                 _activation_receipt(row, receipt)
                 continue
@@ -125,6 +129,53 @@ def _activation_receipt(row, receipt):
         if item is not None and (type(item) is not str
                 or re.fullmatch(r"[a-z][a-z0-9_]{0,127}", item) is None):
             raise PrivateJsonError("maintenance_journal_invalid")
+
+
+def _memory_receipt(row, receipt):
+    required = {"operation_id", "purpose", "request_digest", "core_review_digest", "status",
+                "effect_status", "document_count", "byte_length", "mapping_sha256",
+                "destination_generation_after", "error_code", "cleanup_pending"}
+    if (set(receipt) != required or receipt["operation_id"] != row["operation_id"]
+            or receipt["purpose"] != row["purpose"]
+            or receipt["request_digest"] != row["review_digest"]
+            or type(receipt["cleanup_pending"]) is not bool
+            or receipt["status"] not in {"completed", "cancelled", "failed", "unknown"}
+            or receipt["effect_status"] not in {
+                "scope_copy_committed", "no_scope_copy_committed", "scope_copy_unknown"}):
+        raise PrivateJsonError("maintenance_journal_invalid")
+    for key in ("request_digest", "core_review_digest"):
+        if type(receipt[key]) is not str or not _HASH.fullmatch(receipt[key]):
+            raise PrivateJsonError("maintenance_journal_invalid")
+    for key, maximum in (("document_count", 100_000), ("byte_length", 64 * 1024 * 1024)):
+        if type(receipt[key]) is not int or not 0 <= receipt[key] <= maximum:
+            raise PrivateJsonError("maintenance_journal_invalid")
+    mapping = receipt["mapping_sha256"]
+    if mapping is not None and (type(mapping) is not str or not _HASH.fullmatch(mapping)):
+        raise PrivateJsonError("maintenance_journal_invalid")
+    generation = receipt["destination_generation_after"]
+    if generation is not None and (type(generation) is not str
+            or re.fullmatch(r"0|[1-9][0-9]{0,15}", generation) is None
+            or int(generation) > (1 << 52) - 1):
+        raise PrivateJsonError("maintenance_journal_invalid")
+    error = receipt["error_code"]
+    if error is not None and (type(error) is not str
+            or re.fullmatch(r"[a-z][a-z0-9_]{0,127}", error) is None):
+        raise PrivateJsonError("maintenance_journal_invalid")
+    if receipt["status"] == "completed" and (
+            receipt["effect_status"] != "scope_copy_committed" or receipt["cleanup_pending"]
+            or not receipt["document_count"]
+            or receipt["byte_length"] < receipt["document_count"]
+            or mapping is None or generation is None or error is not None):
+        raise PrivateJsonError("maintenance_journal_invalid")
+    if receipt["status"] in {"cancelled", "failed"} and (
+            receipt["effect_status"] != "no_scope_copy_committed" or receipt["cleanup_pending"]
+            or receipt["document_count"] != 0 or receipt["byte_length"] != 0
+            or mapping is not None or generation is not None):
+        raise PrivateJsonError("maintenance_journal_invalid")
+    if receipt["status"] == "unknown" and receipt["effect_status"] != "scope_copy_unknown":
+        raise PrivateJsonError("maintenance_journal_invalid")
+    if receipt["cleanup_pending"] and receipt["status"] != "unknown":
+        raise PrivateJsonError("maintenance_journal_invalid")
 
 
 class MaintenanceJournal:

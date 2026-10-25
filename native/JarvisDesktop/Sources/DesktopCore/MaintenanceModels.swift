@@ -126,7 +126,7 @@ public struct MaintenanceApproval: Identifiable, Sendable {
         try MaintenanceValidation.keys(value, ["approval_id", "scope", "purpose", "operation_id", "arguments_json", "digest", "expires_at_ns"])
         guard let id = value["approval_id"].string, ManagementValidation.identifier(id),
               let operation = value["operation_id"].string, ManagementValidation.identifier(operation),
-              let purpose = value["purpose"].string, ["backup.create", "restore.stage", "profile.restore.activate"].contains(purpose),
+              let purpose = value["purpose"].string, ["backup.create", "restore.stage", "profile.restore.activate", "memory.restore.copy_scope"].contains(purpose),
               let digest = value["digest"].string, ManagementValidation.hash(digest),
               let arguments = value["arguments_json"].string, arguments.utf8.count <= 16_384,
               let expiry = value["expires_at_ns"].string, expiry.range(of: "^[0-9]{1,20}\\z", options: .regularExpression) != nil,
@@ -191,6 +191,7 @@ public struct MaintenanceOperation: Identifiable, Sendable {
     public let receiptDurable: Bool
     public let receipt: MaintenanceReceipt?
     public let activationReceipt: RestoreActivationReceipt?
+    public let memoryCopyReceipt: MemoryCopyReceipt?
     public let cleanupOwnerPending: Bool
     public let errorCode: String?
     public let result: RPCValue
@@ -201,11 +202,13 @@ public struct MaintenanceOperation: Identifiable, Sendable {
     public func follows(_ previous: MaintenanceOperation) -> Bool {
         guard id == previous.id, kind == previous.kind, scope.profileID == previous.scope.profileID,
               reviewID == previous.reviewID, reviewDigest == previous.reviewDigest else { return false }
-        if ["backup.verify", "doctor.report", "profile.restore.review", "profile.restore.inspect"].contains(kind) { return scope.generation >= previous.scope.generation }
+        if ["backup.verify", "doctor.report", "profile.restore.review", "profile.restore.inspect"].contains(kind) || RestoredMemoryValidation.reads.contains(kind) { return scope.generation >= previous.scope.generation }
         return scope == previous.scope
     }
     public var settled: Bool { Self.terminal.contains(phase) && !workerPending }
     public var success: Bool {
+        if kind == RestoredMemoryValidation.effect { return settled && phase == "complete" && receiptDurable && !cleanupOwnerPending && memoryCopyReceipt?.status == "completed" }
+        if RestoredMemoryValidation.reads.contains(kind) { return settled && phase == "complete" }
         if kind == "profile.restore.activate" { return settled && phase == "activated_not_opened" && receiptDurable && !cleanupOwnerPending && activationReceipt?.status == "completed" }
         return settled && ["complete", "staged_disarmed"].contains(phase) && (["doctor.report", "backup.verify", "profile.restore.review", "profile.restore.inspect"].contains(kind) || (receiptDurable && receipt?.status == "completed"))
     }
@@ -216,15 +219,15 @@ public struct MaintenanceOperation: Identifiable, Sendable {
         if keys.contains("cleanup_owner_pending") { guard let pending = value["cleanup_owner_pending"].bool else { throw RPCFailure.invalidResponse }; cleanupOwnerPending = pending }
         else { cleanupOwnerPending = false }
         guard let id = value["operation_id"].string, ManagementValidation.identifier(id),
-              let kind = value["kind"].string, ["backup.create", "restore.stage", "backup.verify", "doctor.report", "profile.restore.review", "profile.restore.inspect", "profile.restore.activate"].contains(kind),
+              let kind = value["kind"].string, Set(["backup.create", "restore.stage", "backup.verify", "doctor.report", "profile.restore.review", "profile.restore.inspect", "profile.restore.activate"]).union(RestoredMemoryValidation.kinds).contains(kind),
               let phase = value["phase"].string, Self.terminal.union(["awaiting_owner", "quiescing", "working"]).contains(phase),
               let pending = value["worker_pending"].bool, let cancelled = value["cancellation_requested"].bool,
               let durable = value["receipt_durable"].bool else { throw RPCFailure.invalidResponse }
-        if kind.hasPrefix("profile.restore."), !keys.contains("cleanup_owner_pending") { throw RPCFailure.invalidResponse }
+        if (kind.hasPrefix("profile.restore.") || RestoredMemoryValidation.kinds.contains(kind)), !keys.contains("cleanup_owner_pending") { throw RPCFailure.invalidResponse }
         self.id = id; self.kind = kind; self.phase = phase; workerPending = pending; cancellationRequested = cancelled; receiptDurable = durable
         try MaintenanceValidation.keys(value["scope"], ["profile_id", "generation"])
         scope = try MaintenanceScope(value["scope"])
-        if ["backup.create", "restore.stage", "profile.restore.activate"].contains(kind) {
+        if ["backup.create", "restore.stage", "profile.restore.activate", "memory.restore.copy_scope"].contains(kind) {
             guard let review = value["review_id"].string, ManagementValidation.identifier(review),
                   let digest = value["review_digest"].string, ManagementValidation.hash(digest) else { throw RPCFailure.invalidResponse }
             reviewID = review; reviewDigest = digest
@@ -234,12 +237,28 @@ public struct MaintenanceOperation: Identifiable, Sendable {
         }
         stage = try MaintenanceValidation.code(value["stage"]); errorCode = try MaintenanceValidation.code(value["error_code"])
         if kind == "profile.restore.activate" {
-            receipt = nil; activationReceipt = value["receipt"] == .null ? nil : try RestoreActivationReceipt(value["receipt"], operationID: id)
+            memoryCopyReceipt = nil; receipt = nil; activationReceipt = value["receipt"] == .null ? nil : try RestoreActivationReceipt(value["receipt"], operationID: id)
+        } else if kind == RestoredMemoryValidation.effect {
+            receipt = nil; activationReceipt = nil; memoryCopyReceipt = value["receipt"] == .null ? nil : try MemoryCopyReceipt(value["receipt"], operationID: id)
+            if let memoryCopyReceipt, memoryCopyReceipt.requestDigest != reviewDigest { throw RPCFailure.invalidResponse }
         } else {
-            activationReceipt = nil; receipt = value["receipt"] == .null ? nil : try MaintenanceReceipt(value["receipt"], operation: id, kind: kind)
+            memoryCopyReceipt = nil; activationReceipt = nil; receipt = value["receipt"] == .null ? nil : try MaintenanceReceipt(value["receipt"], operation: id, kind: kind)
         }
         result = value["result"]
         guard result == .null || result.object != nil else { throw RPCFailure.invalidResponse }
+        if RestoredMemoryValidation.kinds.contains(kind) {
+            if kind == RestoredMemoryValidation.effect {
+                guard result == .null else { throw RPCFailure.invalidResponse }
+                if phase == "complete" { guard durable, memoryCopyReceipt?.status == "completed", !cleanupOwnerPending else { throw RPCFailure.invalidResponse } }
+            } else {
+                guard value["receipt"] == .null, !durable else { throw RPCFailure.invalidResponse }
+                if result != .null {
+                    if kind == "memory.restore.inventory" { try MaintenanceValidation.keys(result, ["inventory"]); _ = try RestoredMemoryInventory(result["inventory"]) }
+                    else if kind == "memory.restore.review" { try MaintenanceValidation.keys(result, ["review"]); _ = try RestoredMemoryReview(result["review"]) }
+                    else { try MemoryCopyObservation.validateResult(result) }
+                } else if phase == "complete" { throw RPCFailure.invalidResponse }
+            }
+        }
         if phase == "complete", kind == "backup.verify" { _ = try MaintenanceVerification(result) }
         if phase == "complete", kind == "doctor.report" { _ = try DoctorSummary(result) }
         if phase == "staged_disarmed", kind != "restore.stage" { throw RPCFailure.invalidResponse }
