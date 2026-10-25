@@ -1,8 +1,9 @@
 # Fase A: recuperación WAL sobre copias privadas
 
 Primer incremento propio conectado a respaldo y diagnóstico. Su cualificación
-automática usa únicamente datos y autorizaciones sintéticos. La comprobación
-visual con una decisión real del dueño sigue pendiente; no se sustituye la app
+automática usa únicamente datos y autorizaciones sintéticos. Se comprobaron el
+diagnóstico y la revisión en la app; la copia con una decisión real del dueño
+sigue pendiente. No se sustituye la app
 anterior ni se declara completa la fase A. La fase B no ha comenzado.
 
 ## Alcance implementado
@@ -106,6 +107,20 @@ Dos regresiones reproducen la omisión y un helper obsoleto: antes fallaban y
 después pasaron junto a los otros 34 casos del guard. Las 66 pruebas WAL también
 pasaron desde el sdist extraído, verificando que módulo y helper procedían de
 ese árbol; no cambiaron las fuentes del runtime ni las nativas.
+
+El [recorrido nativo acotado](PHASE_A_WAL_RECOVERY_LIVE.json) verificó el diagnóstico
+de un perfil sintético con memoria WAL y estado/tareas DELETE. Los tres recursos
+resultaron correctos; el informe global fue parcial por agentes, skills y Telegram
+ausentes y relaciones no acreditadas. Los cinco miembros SQLite mantuvieron
+bytes, identidad, permisos, tamaño, mtime y ctime.
+
+La revisión visual detectó una colisión de identidad entre la fila de memoria y
+su aviso WAL que no cubrían los contratos. Se separaron esas identidades y se
+añadieron dos regresiones estables, incluidas en 225 pruebas Swift aprobadas.
+La app corregida muestra ambas filas y el aviso completo; se comprobó mediante
+accesibilidad y captura visual. El intento de XCTest con AX devolvía una vista
+vacía y se retiró: no se usa como evidencia visual. Las revisiones se descartaron
+antes de pedir aprobación y el respaldo nativo continúa pendiente del dueño.
 
 Siguen pendientes los journals de rollback, WAL vacío o sin WAL asociado,
 recuperación de prefijos ante corrupción/reset antiguo, reparaciones, archivos

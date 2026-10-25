@@ -108,7 +108,15 @@
       "tests/test_clean_base.py": "c645f80c8cde91e3792d458e2792792de5be75f71682c2b2d213fa8dcf33f354"
     },
     "runtime_or_native_sources_changed": false,
-    "complete_gates": "required_at_publication_of_this_followup_not_recorded_as_passed_here"
+    "complete_gates": {
+      "pre_commit_python_passed": 1982,
+      "pre_push_python_passed": 1982,
+      "pre_push_swift_passed": 223,
+      "sdist_wheel_smoke_and_development_bundle": "passed",
+      "ci_run": 40216908249,
+      "ci_conclusion": "success"
+    },
+    "publication_commit": "eb4bdf4b653032c9bcb1fdb69b631b2512529398"
   },
   "implementation_publication": {
     "commit": "8bd1641c41cd2b07b1299216a07d2e0686b9daa3",
@@ -123,5 +131,6 @@
       "ubuntu_24": "success"
     },
     "owner_backup_approval_pending": true
-  }
+  },
+  "native_readonly_observation": "PHASE_A_WAL_RECOVERY_LIVE.json"
 }

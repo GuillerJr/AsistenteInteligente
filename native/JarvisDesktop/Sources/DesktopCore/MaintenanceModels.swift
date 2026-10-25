@@ -68,7 +68,7 @@ public struct MaintenanceSource: Identifiable, Sendable {
 
 public struct MaintenanceSqliteRecovery: Identifiable, Sendable {
     public let role: String
-    public var id: String { role }
+    public var id: String { "maintenance-recovery:\(role)" }
     init(_ value: RPCValue) throws {
         try MaintenanceValidation.keys(value, ["role", "mode", "semantics"])
         guard let role = value["role"].string, ["state", "memory", "schedules"].contains(role),

@@ -95,6 +95,9 @@ declara completa por los tests sintéticos.
   limpieza incierta. [Alcance y pruebas](rebuild/PHASE_A_WAL_RECOVERY.md).
 - [ ] Comprobar ese recorrido WAL en la app con aprobación real del dueño,
   usando únicamente un perfil sintético. Los recorridos IPC no sustituyen ese paso.
+- [x] Comprobar diagnóstico y revisión WAL de sólo lectura en la app de prueba,
+  con originales intactos; corregir la colisión que ocultaba el aviso de último
+  commit y comprobarlo visualmente. [Evidencia y límites](rebuild/PHASE_A_WAL_RECOVERY_LIVE.json).
 - [x] Observar diagnóstico y revisión nativos con memoria y tarea sintéticas no
   vacías, conservando los tres SQLite. El informe global fue parcial por recursos
   ausentes; no se ejecutó otro roundtrip nativo en ese recorrido de lectura.

@@ -86,13 +86,7 @@ struct MaintenanceView: View {
         Section(review.kind == "backup.create" ? "Revisión de copia" : "Revisión de restauración") {
             Text("Destino nuevo: \(review.destinationParent)/\(review.destinationName)").textSelection(.enabled)
             Text("Identidad del padre: \(review.destinationIdentity.device):\(review.destinationIdentity.inode)").font(.caption.monospaced()).textSelection(.enabled)
-            ForEach(review.sources) { source in
-                HStack { Text(MaintenancePresentation.role(source.role)); Spacer(); Text(source.disposition == "absent" ? "Ausente" : source.disposition == "unavailable" ? "Pendiente de cargar" : source.disposition == "generated_builtin" ? "Base integrada · \(source.bytes) bytes" : "\(source.bytes) bytes").foregroundStyle(.secondary) }
-            }
-            ForEach(review.sqliteRecovery) { recovery in
-                Text("\(MaintenancePresentation.role(recovery.role)): recuperación WAL en una copia privada, sólo de transacciones confirmadas. El original se conserva.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
+            MaintenanceReviewSourceRows(review: review)
             Text("No se sobrescribe un destino existente. Las autorizaciones, fuentes externas de skills, archivos de la carpeta de trabajo y credenciales quedan excluidos.").font(.caption)
             if review.kind == "restore.stage" { Text("Agentes y memoria conservan sus ámbitos; skills, tareas y rutas quedan deshabilitadas. La asociación con otra carpeta de trabajo necesita una revisión posterior.").font(.caption) }
             Text("Revisión exacta: \(review.digest)").font(.caption.monospaced()).textSelection(.enabled)

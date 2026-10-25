@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "record_kind": "jarvis_phase_a_wal_native_live",
+  "date": "2026-10-25",
+  "phase_a_complete": false,
+  "phase_b_started": false,
+  "scope": "own_explicit_synthetic_profile; memory_WAL; state_and_schedules_DELETE; no_owner_data",
+  "fixture": {
+    "writer_exited_before_service": true,
+    "memory_commits": 3,
+    "last_title": "JARVIS WAL COMMIT TRES memory",
+    "owner_approval_simulated": false
+  },
+  "source_oracles_sha256": {
+    "source-oracle.json": "b657ebf0031822ab071baeb0772418f224018bec3017360993618883106047df",
+    "before-native-maintenance.json": "8318e5113ded41b372a9e4e56b3cf531deb64adff539ba9c6a5b4e46751ba515",
+    "native-doctor-observation.json": "4956cfcb0865344edabeb08e17c5b7530d3ec38a9380e24bc9d781e043ab7540"
+  },
+  "doctor": {
+    "operation_id": "66946b1bca0249068f60ffb1bce3cb68",
+    "kind": "doctor.report",
+    "phase": "complete",
+    "error_code": null,
+    "worker_pending": false,
+    "cleanup_owner_pending": false,
+    "report_status": "partial",
+    "checks": [
+      {
+        "role": "state",
+        "status": "ok",
+        "inspection_source": "host_ram_snapshot"
+      },
+      {
+        "role": "memory",
+        "status": "ok",
+        "inspection_source": "host_ram_snapshot"
+      },
+      {
+        "role": "schedules",
+        "status": "ok",
+        "inspection_source": "host_ram_snapshot"
+      },
+      {
+        "role": "agents",
+        "status": "absent",
+        "inspection_source": "metadata"
+      },
+      {
+        "role": "skills",
+        "status": "absent",
+        "inspection_source": "metadata"
+      },
+      {
+        "role": "telegram",
+        "status": "absent",
+        "inspection_source": "metadata"
+      },
+      {
+        "role": "configuration_portable",
+        "status": "ok",
+        "inspection_source": "metadata"
+      },
+      {
+        "role": "cross_references",
+        "status": "unknown",
+        "inspection_source": "metadata"
+      }
+    ],
+    "all_five_source_members_unchanged": true
+  },
+  "first_native_review": {
+    "source_commit": "8bd1641c41cd2b07b1299216a07d2e0686b9daa3",
+    "bundle_binary_sha256": "2973ec0cd052be9d1aa9eed9bdf42bfe3c88bdd501c125eceef3aab3d9eef6a2",
+    "review_digest": "b7e31f393c9c9962e28629ce6f0b34aa9f5a4909b8546407f70bdd318444b785",
+    "observed_defect": "The WAL notice was rendered as a duplicate memory source row; accessibility and screenshot agreed.",
+    "cause": "Adjacent SwiftUI ForEach children shared the memory role identity.",
+    "review_discarded_before_approval_request": true,
+    "owner_approval_requested": false,
+    "backup_created": false,
+    "all_five_original_members_unchanged_after_graceful_close": true
+  },
+  "native_backup": "pending_owner_decision_after_notice_fix",
+  "remaining": "This bounded observation does not qualify every WAL variant, journal, recovery family or the whole Phase A.",
+  "native_review_fix": {
+    "base_commit": "eb4bdf4b653032c9bcb1fdb69b631b2512529398",
+    "source_sha256": {
+      "native/JarvisDesktop/Sources/DesktopCore/MaintenanceModels.swift": "05e3e6f4e219f39fe8266c6989d723aed429cb16b64afed48bed173bb0009e3e",
+      "native/JarvisDesktop/Sources/DesktopCore/MaintenanceReviewSourceRows.swift": "6d9d25bef83a846d4b8194873f789aaedc293446fdd7e6d9dcc4089248737ea8",
+      "native/JarvisDesktop/Sources/JarvisApp/Views/MaintenanceView.swift": "2b6d62fcfe1f410269eb382a769d421ab20acbb05aea665e1fefd0ad71916f88",
+      "native/JarvisDesktop/Tests/DesktopCoreTests/MaintenanceReviewCompositionTests.swift": "48355a8e9804df064236f652777c6fa7167c077fb58283f6d36517928b5214f5"
+    },
+    "regression": "disjoint_stable_identity_of_the_actual_source_and_recovery_collections",
+    "new_test_cases": 2,
+    "focused_cases_passed": 40,
+    "full_swift_cases_passed": 225,
+    "full_swift_seconds": 28.794,
+    "swift_log_sha256": "861e515613f07f6b701f2e43e445b86b804a4ea9d80e9ad393213f282e84794c",
+    "build": "development_bundle_with_external_byte_identical_Python_source",
+    "bundle_binary_sha256": "680182e5e7c892e11e13602a3ceb21e2a5a08db937a66cf8fd11c3e6ec367f6d",
+    "runtime_manifest_sha256": "f2901a3fdffe163e4ff16c504fb177ace7a5a469fdfb84a5da9209d6984ffb0c",
+    "actual_gui_accessibility_and_screenshot_checked": true,
+    "source_row_and_confirmed_transactions_notice_both_visible": true,
+    "notice_text": "Memoria: recuperación WAL en una copia privada, sólo de transacciones confirmadas. El original se conserva.",
+    "checked_review_digest": "de0a247767c7f42d254f17db865569e79b7fc3b3cdc47a1d48cec82eb3b4bd6f",
+    "review_discarded_before_approval_request": true,
+    "all_five_original_members_still_unchanged": true,
+    "rendered_AX_XCTest": "not_retained; harness_returned_empty_tree_and_is_not_visual_reproduction_evidence"
+  },
+  "packaging_publication": {
+    "commit": "eb4bdf4b653032c9bcb1fdb69b631b2512529398",
+    "python_passed": 1982,
+    "swift_passed": 223,
+    "sdist_wheel_isolated_smoke_and_native_bundle": "passed",
+    "ci_run": 40216908249,
+    "ci_conclusion": "success"
+  },
+  "independent_backup_verifier_sha256": "f836a2e19405d32870273542f2216f90c11417d16838955869a1c003ab292c5c"
+}
