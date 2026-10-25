@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "record_kind": "jarvis_phase_a_live_memory_copy",
+  "date": "2026-10-25",
+  "phase_a_complete": false,
+  "phase_b_started": false,
+  "scope": "owner_selected_synthetic_restored_profile_only",
+  "product_commit": "985b72a9c4c9ef2593a799b873a46d140eac17da",
+  "native_binary_sha256": "10bad385ba40555758cb7f8e4e0ffe4c139b4bacd5ef89ed180ae307c3aa2c17",
+  "profile_identity": {
+    "device": 16777230,
+    "inode": 67545006,
+    "admission_sha256": "ce0a799227f507b0182805ff4779b9cd52734a7c5553282dc353a5776ac0dc54"
+  },
+  "copy": {
+    "operation_id": "a81b1205f2a649e69323278e74f4883b",
+    "kind": "memory.restore.copy_scope",
+    "scope": {
+      "profile_id": "4177cf13ff524fc6baf4e566a527993e",
+      "generation": 2
+    },
+    "review_id": "0f48fed773c0486eb30923bce90ead44",
+    "review_digest": "cc72e2b2fee8fd67d355ec93029b1d7c286658cfc753a51f78c3202b5a565508",
+    "phase": "complete",
+    "stage": null,
+    "result": null,
+    "error_code": null,
+    "receipt": {
+      "operation_id": "a81b1205f2a649e69323278e74f4883b",
+      "purpose": "memory.restore.copy_scope",
+      "request_digest": "cc72e2b2fee8fd67d355ec93029b1d7c286658cfc753a51f78c3202b5a565508",
+      "core_review_digest": "637f3621db6278aa68af5b3f7d9036bea4e74de358a65575a65733c214d4de1f",
+      "status": "completed",
+      "effect_status": "scope_copy_committed",
+      "document_count": 2,
+      "byte_length": 175,
+      "mapping_sha256": "6fc4f0e3fd5eb46b15e17831654b7f990376dc1d9a4130d63f315d47b8437ebb",
+      "destination_generation_after": "1",
+      "error_code": null,
+      "cleanup_pending": false
+    },
+    "receipt_durable": true,
+    "worker_pending": false,
+    "cancellation_requested": false,
+    "cleanup_owner_pending": false
+  },
+  "independent_readonly_verification": {
+    "scope": "own_synthetic_profile_only",
+    "operation_id": "a81b1205f2a649e69323278e74f4883b",
+    "review_digest": "cc72e2b2fee8fd67d355ec93029b1d7c286658cfc753a51f78c3202b5a565508",
+    "sqlite_sha256": "e8fb4ef9e7bac055b00665e077aa526f4857cf460d9a133cd530718317c6a847",
+    "schema": 2,
+    "source_records_unchanged": true,
+    "source_revisions": [
+      2,
+      1
+    ],
+    "destination_documents": 2,
+    "destination_revision_one": true,
+    "ids_disjoint": true,
+    "payload_exact": true,
+    "citation_ranges_match": true,
+    "local_mapping_records": 2,
+    "mapping_rows_exact": true,
+    "mapping_hash_matches": true,
+    "total_local_copy_receipts": 1,
+    "destination_generation": 1,
+    "provider_used": false,
+    "original_path_opened_with_sqlite": false,
+    "read_only": true
+  },
+  "local_record_observation": {
+    "operation_id": "79ddeacef2b84c47889252fa82294c5f",
+    "kind": "memory.restore.receipt",
+    "scope": {
+      "profile_id": "4177cf13ff524fc6baf4e566a527993e",
+      "generation": 3
+    },
+    "review_id": null,
+    "review_digest": null,
+    "phase": "complete",
+    "stage": "memory_receipt_read",
+    "result": {
+      "observation": {
+        "operation_id": "a81b1205f2a649e69323278e74f4883b",
+        "request_digest": "cc72e2b2fee8fd67d355ec93029b1d7c286658cfc753a51f78c3202b5a565508",
+        "origin_kind": "local",
+        "document_count": 2,
+        "byte_length": 175,
+        "mapping_sha256": "6fc4f0e3fd5eb46b15e17831654b7f990376dc1d9a4130d63f315d47b8437ebb",
+        "current_matching_documents": 2,
+        "current_destination_generation": "1",
+        "current_documents_match": true,
+        "current_scope_generation_matches": true,
+        "state": "local_record_present",
+        "prior_acknowledgement": "not_established"
+      },
+      "permits_replay": false
+    },
+    "error_code": null,
+    "receipt": null,
+    "receipt_durable": false,
+    "worker_pending": false,
+    "cancellation_requested": false,
+    "cleanup_owner_pending": false
+  },
+  "profile_after": {
+    "generation": 3,
+    "closing": false,
+    "blockers": []
+  },
+  "native_observation": {
+    "copy_summary": "Completada Copia confirmada: 2 notas, 175 bytes.",
+    "local_record_summary": "Existe un registro local de 2 notas y 175 bytes. Las notas actuales aún coinciden con ese registro.",
+    "approval_rpc_sent_by_observer": false,
+    "physical_owner_click_trace_available": false
+  },
+  "evidence": {
+    "readonly_verifier_sha256": "4f519a02ca9de3ce840edde0561fceebbcc73ee3b9fc6dc57e9ba71a8be449d0",
+    "verification_sha256": "9b5160376935736fbe71cd4b218626f0a1928bd952dcd449b10f1363c68f78ad",
+    "status_sha256": "c2b29fd8ca4948acca6bd1187a9ac2ed785a0e6696cab9d805829b7b6a3f0857",
+    "oracle_sha256": "311d388573d7ee6afaa216ead304ac8caa6685e1f0af7723a9da1078ec117a6f"
+  },
+  "qualification": {
+    "python_tests": 1914,
+    "swift_tests": 207,
+    "pre_commit": "passed",
+    "pre_push": "passed",
+    "packaging_and_install_smoke": "passed",
+    "ci": {
+      "run_id": 40174917627,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40174917627",
+      "macos_26": "success",
+      "ubuntu_24": "success"
+    }
+  },
+  "runtime_isolation": {
+    "source_modules": 38,
+    "source_byte_identical_to_product_commit": true,
+    "runtime_manifest_sha256": "120739cdb361a3c074336fb8f9bb97c64a55eb5cdfc1db95d33b2777ad0ae50e",
+    "python": "3.11.15",
+    "sqlite": "3.53.1",
+    "external_python_and_codex": true,
+    "account_disconnected": true,
+    "bundle_is_self_contained_distribution": false,
+    "startup_sample_report_sha256": "c5939b256e38c0bc2e0ed184305d1a6b3e9c33e19606e5991773cab8c233a62d",
+    "startup_observation": "An earlier attempt blocked inside CPython path initialization before a Jarvis frame or socket. The exact file and OS cause remain unknown. The same 38 source modules started using canonical Python and a private byte-identical source snapshot."
+  },
+  "limits": [
+    "Only two explicitly prepared synthetic notes were copied; no personal data or prior installed app was used.",
+    "The completed operation differs from the expired request 7918eadea6d54f2abedd08f94b48032a; that expired operation has no copy receipt.",
+    "The observer sent only health/status and the native read-only receipt query; no maintenance.decide or copy replay.",
+    "The local SQL observation does not establish a historical acknowledgement and never permits replay.",
+    "The live owner gesture was not instrumented; the reproduced click race and synthetic gesture evidence remain separate.",
+    "This closes one real happy-path memory-copy check, not all activation/recovery/memory scenarios or Phase A."
+  ]
+}

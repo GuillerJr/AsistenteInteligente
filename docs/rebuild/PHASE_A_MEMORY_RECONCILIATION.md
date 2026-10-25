@@ -1,9 +1,9 @@
 # Fase A: copia explícita de memoria conservada
 
 El núcleo, la compatibilidad SQLite, el coordinador del host y la interfaz nativa
-están integrados. Las decisiones de las pruebas son sintéticas. Este documento
-no acredita todavía una copia desde la app con una decisión real del dueño ni el
-cierre de A-71 o de la fase A. La fase B no ha comenzado.
+están integrados. Las decisiones de las pruebas automáticas son sintéticas. Una
+copia autorizada desde la app de dos notas de prueba quedó verificada por separado;
+su alcance se registra abajo. No cierra A-71 ni la fase A. La fase B no ha comenzado.
 
 ## Contrato del núcleo
 
@@ -98,11 +98,10 @@ además de Ruff, bytecode, base limpia, paquetes y pre-push. Su
 también pasó. La prueba real posterior encontró un defecto de interacción que
 esos controles no cubrían; se documenta a continuación.
 
-Falta la copia de dos notas de prueba desde la app con aprobación del dueño.
-Las dos notas se prepararon como
-datos sintéticos, con revisiones 2 y 1; no se ha ejecutado esa copia ni simulado
-su aprobación. WAL frío, recuperación de archivos de workspace, otros canales y
-la distribución autocontenida continúan pendientes dentro de la fase A.
+La copia de dos notas de prueba desde la app quedó completada y asentada con
+aprobación real, sin simularla. Sus originales sintéticos tenían revisiones 2 y 1.
+Los escenarios reales negativos, WAL frío, recuperación de archivos de workspace,
+otros canales y distribución autocontenida continúan pendientes dentro de la fase A.
 
 La investigación estática que orienta estas decisiones es
 [OC-17](REA_PART17_SUMMARY.json), con [procedencia](REA_PART17_PROVENANCE.json).
@@ -163,5 +162,34 @@ mismo escenario pasó de cero a una decisión y la respuesta tardía no restaur�
 tarjeta. Esa prueba no ejecutó una aprobación ni una copia reales. Un espejo de
 botones aisló estilos y zonas de clic sin hallar otro defecto confirmado. Fuentes,
 hashes y límites están en [el registro de la regresión](PHASE_A_OWNER_CLICK_REGRESSION.json).
-El árbol integrado pasó 207 pruebas Swift en 26,18 s. El backend Python no cambió;
-los hooks y CI vuelven a comprobar el conjunto antes de publicar este arreglo.
+El producto `985b72a` pasó 1914 pruebas Python y 207 Swift, paquetes, smoke de
+instalación y ambos hooks. Su [CI macOS/Linux](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40174917627)
+también pasó. El backend Python no cambió en ese arreglo.
+
+## Copia autorizada observada en la app
+
+El [registro del recorrido real](PHASE_A_MEMORY_COPY_LIVE.json) conserva la
+operación `a81b1205f2a649e69323278e74f4883b`, su digest y la identidad del perfil
+sintético. La app mostró «Copia confirmada: 2 notas, 175 bytes»; el servicio
+confirmó `complete`, recibo durable y ninguna limpieza pendiente. Una solicitud
+anterior había caducado sin efecto; no se reintentó esa operación.
+
+Un verificador independiente de sólo lectura comparó la imagen SQLite con el
+oráculo preparado antes de la prueba. Confirmó esquema 2, originales completos
+intactos, dos IDs nuevos con revisión 1, contenido y citas exactos, generación
+destino 1, un solo recibo local y sus dos filas de procedencia, incluido su hash.
+No abrió la fuente mediante SQLite ni realizó otra copia. La consulta nativa
+«Consultar registro local» confirmó documentos y generación coincidentes; no
+reescribió el recibo ni acreditó el ACK histórico y mantuvo `permits_replay=false`.
+
+Se utilizó un bundle de desarrollo con Python externo y una copia privada de los
+38 módulos propios, verificados byte por byte contra el producto. Un arranque
+anterior quedó dentro de la inicialización de rutas de CPython, antes de Jarvis;
+el archivo concreto y la causa del sistema operativo siguen desconocidos. El
+runtime aislado arrancó con las mismas fuentes y cuenta desconectada. Este
+aislamiento no acredita una distribución autocontenida ni sustituye la app anterior.
+
+El observador no envió una decisión de autorización. No se instrumentó el gesto
+real del dueño; esa evidencia es distinta de la reproducción sintética de la
+carrera. El recorrido cierra sólo este caso feliz de copia, sin extrapolarlo a
+los demás escenarios de recuperación o a la fase A completa.

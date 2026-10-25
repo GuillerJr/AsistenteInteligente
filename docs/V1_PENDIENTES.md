@@ -110,8 +110,9 @@ declara completa por los tests sintéticos.
 - [x] Conectar esa copia a la autoridad y corte del host y a la interfaz nativa;
   probar lectura sin efectos, copia/denegación, carreras, límites y cierre mediante
   fixtures propios, incluida la custodia tras perder una respuesta.
-- [ ] Comprobar la decisión real del dueño y el resultado de la copia de dos notas
-  sintéticas desde la app; los fixtures no sustituyen ese recorrido.
+- [x] Comprobar la copia autorizada desde la app de dos notas sintéticas (175 bytes):
+  originales intactos, IDs nuevos, revisión 1, recibo único y procedencia verificados
+  independientemente; consulta nativa coincidente sin replay. [Evidencia y límites](rebuild/PHASE_A_MEMORY_COPY_LIVE.json).
 - [x] Reproducir y corregir el descarte de una pulsación durante el sondeo de
   estado, con pruebas del Store, gesto en vista real con transporte falso y cola
   IPC serial real; [evidencia y límites](rebuild/PHASE_A_OWNER_CLICK_REGRESSION.json).

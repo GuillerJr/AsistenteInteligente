@@ -88,10 +88,23 @@
     "native_failures": 0,
     "native_seconds": 26.179,
     "python_sources": "unchanged_from_0e383c7",
-    "publication_gates": "required_pre_commit_pre_push_and_CI_pending"
+    "publication_gates": "pre_commit_pre_push_packaging_smoke_and_CI_passed",
+    "product_commit": "985b72a9c4c9ef2593a799b873a46d140eac17da",
+    "python_cases": 1914,
+    "ci_run_id": 40174917627,
+    "ci_macos": "success",
+    "ci_ubuntu": "success"
   },
   "remaining": [
-    "Verificar una decisión real del dueño y la copia de las dos notas sintéticas en la app corregida.",
-    "Completar los demás recorridos y familias de la fase A según la matriz; este arreglo no declara paridad completa."
-  ]
+    "Completar negativos reales y los demás recorridos y familias de la fase A según la matriz; esta copia no declara paridad completa."
+  ],
+  "live_validation": {
+    "record_file": "PHASE_A_MEMORY_COPY_LIVE.json",
+    "operation_id": "a81b1205f2a649e69323278e74f4883b",
+    "document_count": 2,
+    "byte_length": 175,
+    "source_unchanged": true,
+    "complete_and_settled": true,
+    "independent_verification_sha256": "9b5160376935736fbe71cd4b218626f0a1928bd952dcd449b10f1363c68f78ad"
+  }
 }
