@@ -103,6 +103,7 @@ class HostPurpose(StrEnum):
 
     BACKUP_CREATE = "backup.create"
     RESTORE_STAGE = "restore.stage"
+    PROFILE_RESTORE_ACTIVATE = "profile.restore.activate"
     DOCTOR_REPAIR_APPLY = "doctor.repair.apply"
 
 
@@ -635,10 +636,17 @@ class ApprovalAuthority:
 
     async def request_host(
         self, operation: HostApprovalRequest, cancellation: HostCancellation,
+        *, deadline: float | None = None,
     ) -> HostApprovalGrant | None:
         self._on_loop()
         if type(cancellation) is not HostCancellation:
             raise ToolError("invalid_host_cancellation")
+        if deadline is not None and (type(deadline) not in {int, float}
+                or not math.isfinite(deadline)):
+            raise ToolError("invalid_host_deadline")
+        remaining = self.ttl if deadline is None else min(self.ttl, deadline - time.monotonic())
+        if remaining <= 0:
+            return None
         digest = host_operation_digest(operation)
         if operation.digest != digest:
             raise ToolError("host_approval_digest_mismatch")
@@ -661,15 +669,15 @@ class ApprovalAuthority:
             view = PendingHostApproval(
                 approval_id, operation.scope, operation.purpose, operation.operation_id,
                 operation.arguments_json, operation.digest,
-                time.time_ns() + int(self.ttl * 1_000_000_000),
+                time.time_ns() + int(remaining * 1_000_000_000),
             )
             entry = _HostPending(view, operation, cancellation, future,
-                                 self._host_epoch, time.monotonic() + self.ttl)
+                                 self._host_epoch, time.monotonic() + remaining)
             self._host_pending[approval_id] = entry
         cancelled = asyncio.create_task(cancellation.wait())
         delivered = False
         try:
-            done, _ = await asyncio.wait((future, cancelled), timeout=self.ttl,
+            done, _ = await asyncio.wait((future, cancelled), timeout=remaining,
                                          return_when=asyncio.FIRST_COMPLETED)
             if cancelled in done or cancellation.is_set() or future not in done:
                 return None

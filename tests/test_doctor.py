@@ -393,7 +393,7 @@ def test_schema_header_old_format_never_migrates_or_calls_a_store(root):
     assert fingerprint(root) == before
 
 
-def test_configuration_is_only_frozen_safe_metadata_and_restore_is_explicitly_unknown(
+def test_configuration_is_only_frozen_safe_metadata_and_restore_absence_is_checked(
     root,
 ):
     metadata = {
@@ -411,7 +411,7 @@ def test_configuration_is_only_frozen_safe_metadata_and_restore_is_explicitly_un
     report = inspect_report(inv, context())
     assert report.status == "partial"
     assert dict(report.checks[0].counts)["bindings_excluded"] == 1
-    assert report.checks[1].status == "unknown"
+    assert report.checks[1].status == "absent"
 
 
 @pytest.mark.parametrize(

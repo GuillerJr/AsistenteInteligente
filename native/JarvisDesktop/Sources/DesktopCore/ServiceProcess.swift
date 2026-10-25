@@ -149,9 +149,7 @@ final class FoundationServiceChild: OwnedServiceChild {
     convenience init(_ options: LaunchOptions) throws {
         let child = Process()
         child.executableURL = URL(fileURLWithPath: options.python)
-        child.arguments = ["-m", "jarvis_core.service", "--state", options.state,
-                           "--codex", options.codex]
-        if let providerState = options.providerState { child.arguments! += ["--provider-state", providerState] }
+        child.arguments = options.serviceArguments
         var environment = ProcessInfo.processInfo.environment
         environment["PYTHONPATH"] = options.source
         environment["PYTHONUNBUFFERED"] = "1"
@@ -208,6 +206,10 @@ public final class ServiceProcess {
 
     public var isRunning: Bool { process?.isRunning == true }
     public var isStopping: Bool { stopTask != nil }
+    public var ownedIdentity: ServiceOwnerIdentity? {
+        guard let process, let ownerID else { return nil }
+        return ServiceOwnerIdentity(ownerID: ownerID, processIdentifier: process.processIdentifier)
+    }
 
     public func start(_ options: LaunchOptions) throws {
         guard stopTask == nil, !requiresCleanupConfirmation else {

@@ -4,6 +4,7 @@ import Carbon
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var store: ChatStore?
+    var profiles: AppProfileCoordinator?
     var openMainWindow: (() -> Void)?
     var shortcutError: String?
     private var hotKey: EventHotKeyRef?
@@ -34,7 +35,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard !terminating else { return .terminateLater }
         terminating = true
         Task {
-            let confirmed = await store?.shutdown() ?? true
+            let confirmed: Bool
+            if let profiles { confirmed = await profiles.shutdown() }
+            else { confirmed = await store?.shutdown() ?? true }
             if !confirmed {
                 let alert = NSAlert()
                 alert.messageText = "No se confirmó el cierre del servicio"
@@ -45,7 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NSApp.reply(toApplicationShouldTerminate: false)
                 return
             }
-            if let warning = store?.shutdownWarning {
+            if let warning = profiles?.shutdownWarning ?? store?.shutdownWarning {
                 let alert = NSAlert()
                 alert.messageText = "El servicio terminó de forma no habitual"
                 alert.informativeText = warning

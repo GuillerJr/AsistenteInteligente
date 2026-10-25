@@ -140,5 +140,86 @@
       "ubuntu_24_04": "success",
       "macos_26": "success"
     }
+  },
+  "activation_followup": {
+    "schema_version": 1,
+    "phase": "A",
+    "phase_a_complete": false,
+    "phase_b_started": false,
+    "source_parent": "d8a8b5bedb0914611971a8e42def1d009a1ac494",
+    "qualification_status": "integrated_local_tests_passed_owner_activation_and_ci_pending",
+    "root_results": {
+      "python_passed": 1754,
+      "python_seconds": 108.63,
+      "native_passed": 175,
+      "native_seconds": 29.839,
+      "new_python_cases": 169,
+      "new_native_cases": 13,
+      "ruff": "passed",
+      "bytecode": "passed",
+      "clean_base": "passed",
+      "product_sources_edited_after_tests": false,
+      "publication_gates": "pending",
+      "ci": "pending"
+    },
+    "product_checkpoint": null,
+    "development_bundle": {
+      "executable_bytes": 8485360,
+      "executable_sha256": "553ba3ecd8827b7fcc57134555b71b7d82903508a84aa35b7106174e834fff64",
+      "signing": "ad_hoc_strict_verification_passed",
+      "standalone": false,
+      "previous_installed_app_replaced": false
+    },
+    "native_live": {
+      "status": "pending",
+      "scope": "own_synthetic_profiles_only",
+      "credentials_required_for_planned_checks": false,
+      "owner_makes_real_approval": true,
+      "agent_may_approve": false,
+      "activation_observed": false,
+      "explicit_open_observed": false,
+      "first_restored_start_local_without_sdk_observed": false,
+      "memory_reassociation_qualified": false,
+      "readonly_preflight": {
+        "review_observed": true,
+        "review_discarded": true,
+        "original_durable_draft_preserved_unsent": true,
+        "activation_requested": false,
+        "source_profile_unchanged": true,
+        "target_identity": {
+          "device": "16777230",
+          "inode": "67545006"
+        }
+      }
+    },
+    "contracts": {
+      "same_approval_authority": true,
+      "admission_opens_profile": false,
+      "opening_always_explicit": true,
+      "unknown_receipt_preserved": true,
+      "historical_unknown_recreates_owner": false,
+      "owner_kept_until_cleanup_confirmed": true,
+      "inspect_can_prove_prior_fsync_or_ack": false,
+      "bootstrap_expectations_before_lock_and_stores": true,
+      "bootstrap_still_requires_real_flock": true,
+      "restored_provider_state_override_allowed": false,
+      "provider_choice_portable": false,
+      "auth_json_read_to_choose_connection": false,
+      "memory_silently_reassociated": false
+    },
+    "private_delivery_sha256": {
+      "activation-core.patch": "b5cda884d3044c5c21e243bb0772fc1608db1aaa8a289b0b1b18de922443f21c",
+      "provider-choice.patch": "b2f83a5174d0c5ce043cd77fb91f66eb3a3c6325e86dba873869a8c90d8c54ea",
+      "activation-host.patch": "4e02be50ea95215d65f1aacbd1a1dbb2dcef192f436071bfe1af8de4b6696cb2",
+      "source-snapshot-final.json": "5603f80c1be2e287b3aafb0d43f93ab8d759058a1cb3f4b9240e97c18ee7f2ff",
+      "native-activation.patch": "d9b70bb0e6f65fe24eee8a97d46332b7fc94d17fb5202c21b1474b499eb6b280"
+    },
+    "limits": [
+      "Integrated local tests passed; production signing, CI publication and the native owner activation/open walkthrough remain independently qualified.",
+      "Local admission and current readback do not prove signer authenticity or a historical operation's fsync, ACK or cleanup.",
+      "Memory scopes remain unchanged; no reassociation to the new private empty workspace is qualified.",
+      "Cold WAL/journals, workspace artifacts, repair, migration, channel reconciliation and standalone distribution remain phase A work."
+    ],
+    "date": "2026-10-25"
   }
 }

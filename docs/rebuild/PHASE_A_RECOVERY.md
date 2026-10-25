@@ -2,8 +2,9 @@
 
 Implementación propia con contratos verificados y un recorrido nativo acotado con
 decisiones reales del dueño sobre datos sintéticos. Este registro no acredita el cierre de
-A-69 (onboarding/doctor), A-71 (recuperación) ni de la fase A. La activación de un
-perfil restaurado, las reparaciones y la distribución permanecen pendientes.
+A-69 (onboarding/doctor), A-71 (recuperación) ni de la fase A. La [activación local y apertura](PHASE_A_ACTIVATION.md) tiene una ampliación
+implementada con pruebas; su recorrido real todavía está pendiente. Reparaciones
+y distribución continúan abiertas.
 
 ## Referencia y separación del producto
 
@@ -81,11 +82,13 @@ no conserva permisos ni transporte y deja tareas, canales y skills deshabilitado
 Los recibos anteriores siguen siendo históricos; no acreditan efectos actuales.
 `restore_record.json` enumera exclusiones y pasos todavía necesarios. No se abre
 sesión, inicia un programa MCP, envía mensajes ni activa el perfil resultante.
-La presencia de ese marcador impide arrancar el perfil, antes de crear el lock
-del host, construir stores o iniciar proveedor/IPC. También se comprueba una
-lease entregada por otro llamador antes de inicializar el servicio. No se lee
-su cuerpo ni se interpreta JSON como autorización. La activación explícita sigue
-pendiente; no se habilita borrando o reparando el marcador desde Jarvis.
+El marcador sin admisión impide arrancar el perfil, antes de crear el lock
+del host, construir stores o iniciar proveedor/IPC; en ese caso no se lee su cuerpo.
+También se comprueba una lease entregada por otro llamador. La ampliación de
+activación conserva el marcador y publica otra admisión local tras aprobación
+exacta: se valida la pareja antes del bootstrap, sin interpretar JSON como un
+permiso de herramientas. La apertura posterior siempre es explícita del dueño;
+no se habilita borrando o reparando el marcador desde Jarvis.
 Este control de arranque se mantiene separado de las comprobaciones de identidad
 durante la vida del servicio, para conservar el cierre y la limpieza de un host
 que ya estaba abierto si un proceso externo añade ese nombre.

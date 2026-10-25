@@ -145,6 +145,8 @@ public struct SessionDrafts: Sendable {
     }
     public mutating func remove(_ scope: SessionScope) { values.removeValue(forKey: scope) }
     public mutating func clearTemporary() { values = values.filter { !$0.key.temporary } }
+    public var byteLength: Int { values.values.reduce(0) { $0 + $1.utf8.count } }
+    public var durableOnly: SessionDrafts { var copy = self; copy.clearTemporary(); return copy }
 }
 
 public struct ActionReceipt: Identifiable, Equatable, Sendable {

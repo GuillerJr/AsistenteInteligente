@@ -30,6 +30,12 @@ final class ChatStore {
     let management = ManagementStore()
     let telegram = TelegramStore()
     let maintenance = MaintenanceStore()
+    let restored = RestoreProfileStore()
+    let runtime: ProfileRuntimeGuard
+    var localProfileStatus: LocalProfileStatus?
+    var handoffPreparing = false
+    @ObservationIgnored private let suppliedOptions: LaunchOptions?
+    @ObservationIgnored private let openTarget: ProfileOpenTarget?
     let voice: LocalVoiceController
     var dictationNotice: String?
     var newAgentID = "jarvis"
@@ -51,20 +57,29 @@ final class ChatStore {
     @ObservationIgnored private var observedConversationRunID: String?
 
     var isShuttingDown: Bool { stopping }
+    var launchOptions: LaunchOptions? { options }
+    var serviceOwner: ServiceOwnerIdentity? { service.ownedIdentity }
+    var durableDraftSnapshot: SessionDrafts { drafts.durableOnly }
+    var mayHandoff: Bool { ready && !starting && !stopping && !handoffPreparing && !busy && activeRunID == nil && !voice.canStopDictation && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !telegram.isChanging && !maintenance.blocksInteraction && !restored.isRequesting && !restored.responseUnconfirmed && restored.operation?.workerPending != true && restored.operation?.cleanupOwnerPending != true }
     var shutdownWarning: String? { service.lastStopReport?.warning }
 
     var selected: ChatSession? { sessions.first { $0.id == selectedID } }
-    var canSend: Bool { ready && connected && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !telegram.isChanging && !maintenance.blocksInteraction && !voice.canStopDictation && activeRunID == nil && selected != nil
+    var canSend: Bool { ready && connected && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !telegram.isChanging && !maintenance.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil && selected != nil
                        && selected?.archived == false
                        && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    var canChangeSession: Bool { ready && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !telegram.isChanging && !maintenance.blocksInteraction && !voice.canStopDictation && activeRunID == nil }
+    var canChangeSession: Bool { ready && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !telegram.isChanging && !maintenance.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil }
     var selectedAgentName: String { management.agents.first(where: { $0.id == selected?.agentID })?.name ?? selected?.agentID ?? "Jarvis" }
     var canUseVoice: Bool { canChangeSession && connected && selected?.archived == false && selected != nil }
 
-    init(voice: LocalVoiceController? = nil) {
+    init(voice: LocalVoiceController? = nil, options: LaunchOptions? = nil, target: ProfileOpenTarget? = nil, runtime: ProfileRuntimeGuard = ProfileRuntimeGuard()) {
+        self.runtime = runtime; suppliedOptions = options; openTarget = target
         self.voice = voice ?? LocalVoiceController(driver: MacLocalVoiceDriver())
         self.voice.onTranscript = { [weak self] transcript in self?.acceptDictation(transcript) }
         maintenance.waitForSupervisionIdle = { [weak self] in
+            guard let self else { throw RPCFailure.configuration }
+            try await self.waitForMonitorSettlement()
+        }
+        restored.waitForSupervisionIdle = { [weak self] in
             guard let self else { throw RPCFailure.configuration }
             try await self.waitForMonitorSettlement()
         }
@@ -73,19 +88,19 @@ final class ChatStore {
     func startDictation() {
         guard canUseVoice, let selected else { return }
         dictationNotice = nil
-        voice.startDictation(contextID: LocalVoiceDraftBridge.contextID(selected.scope))
+        voice.startDictation(contextID: LocalVoiceDraftBridge.contextID(selected.scope, runtimeID: runtime.id))
     }
 
     func readMessage(_ message: ChatMessage) {
         guard canUseVoice, message.role == "assistant", messages.contains(where: { $0.id == message.id }), let selected else { return }
-        voice.play(text: message.text, contextID: LocalVoiceDraftBridge.contextID(selected.scope))
+        voice.play(text: message.text, contextID: LocalVoiceDraftBridge.contextID(selected.scope, runtimeID: runtime.id))
     }
 
     func stopVoice() { voice.cancel() }
 
     private func acceptDictation(_ transcript: LocalVoiceTranscript) {
-        let mayAcceptDraft = ready && connected && !stopping && selected?.archived == false && selected != nil
-        guard let value = LocalVoiceDraftBridge.append(transcript, scope: selected?.scope, existing: draft, eligible: mayAcceptDraft) else {
+        let mayAcceptDraft = ready && connected && !stopping && !handoffPreparing && selected?.archived == false && selected != nil
+        guard let value = LocalVoiceDraftBridge.append(transcript, scope: selected?.scope, existing: draft, eligible: mayAcceptDraft, runtimeID: runtime.id) else {
             dictationNotice = "El dictado no se añadió: la conversación cambió o se alcanzó el límite del borrador."
             return
         }
@@ -96,32 +111,39 @@ final class ChatStore {
     }
 
     func start() async {
-        guard !started else { return }
+        guard !started, runtime.isActive else { return }
         started = true
         starting = true
         defer { starting = false }
         do {
-            let options = try LaunchOptions.parse(Array(CommandLine.arguments.dropFirst()))
+            let options = try suppliedOptions ?? LaunchOptions.parse(Array(CommandLine.arguments.dropFirst()))
             self.options = options
-            let connection = LocalRPCClient(stateDirectory: options.state)
+            let connection = LocalRPCClient(stateDirectory: options.state, runtime: runtime)
             client = connection
             conversationRefresh = ConversationRefresh(reader: ConversationReader(transport: connection))
-            access.configure(client: LocalRPCClient(stateDirectory: options.state))
-            mcp.configure(client: LocalRPCClient(stateDirectory: options.state))
-            management.configure(client: LocalRPCClient(stateDirectory: options.state))
-            telegram.configure(client: LocalRPCClient(stateDirectory: options.state))
-            maintenance.configure(client: LocalRPCClient(stateDirectory: options.state))
+            access.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+            mcp.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+            management.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+            telegram.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+            maintenance.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+            restored.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
             try service.start(options)
             try await ServiceBootstrap.waitForHealth(stateDirectory: options.state) { service.isRunning }
             try await refreshStatus()
             try await management.refresh()
             try await refreshSessions()
-            if sessions.isEmpty { await createSession(temporary: false) }
+            if sessions.isEmpty, options.expectedRestore == nil { await createSession(temporary: false) }
             else if let first = sessions.first { await selectSession(first.id) }
             try await access.refreshCatalog()
             try await mcp.refresh()
             startMonitor()
         } catch {
+            if openTarget != nil, error as? RPCFailure == .invalidResponse {
+                _ = await shutdown()
+                statusText = "El nuevo perfil no coincide con el destino revisado"
+                report(error)
+                return
+            }
             if recordStartupFailure(error) { startMonitor() }
             else { statusText = "Jarvis necesita configuración" }
         }
@@ -134,7 +156,7 @@ final class ChatStore {
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(2)) } catch { return }
                 guard let self else { return }
-                if self.starting || self.maintenance.monitorPaused { continue }
+                if self.starting || self.maintenance.monitorPaused || self.restored.monitorPaused || self.handoffPreparing { continue }
                 do {
                     try await self.refreshMonitoredState()
                 } catch {
@@ -167,28 +189,28 @@ final class ChatStore {
     }
 
     private func refreshMonitoredState() async throws {
-        guard !maintenance.monitorPaused else { return }
+        guard !maintenance.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         monitorReadActive = true
         defer { monitorReadActive = false }
         guard service.isRunning else { throw RPCFailure.disconnected }
         if awaitingStartupReadiness, let options = options {
             try await ServiceBootstrap.waitForHealth(stateDirectory: options.state, timeout: 1) { service.isRunning }
-        guard !maintenance.monitorPaused else { return }
+        guard !maintenance.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         }
         try await refreshStatus()
-        guard !maintenance.monitorPaused else { return }
+        guard !maintenance.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         try await access.refreshCatalog()
-        guard !maintenance.monitorPaused else { return }
+        guard !maintenance.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         try await mcp.refresh()
-        guard !maintenance.monitorPaused else { return }
+        guard !maintenance.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         try await management.refresh()
-        guard !maintenance.monitorPaused else { return }
+        guard !maintenance.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         if canChangeSession { try await refreshSessions() }
-        guard !maintenance.monitorPaused else { return }
+        guard !maintenance.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         try await refreshSelectedConversation()
-        guard !maintenance.monitorPaused else { return }
+        guard !maintenance.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         if activeRunID == nil { try await access.refreshApprovals(runID: nil) }
-        guard !maintenance.monitorPaused else { return }
+        guard !maintenance.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         if runPhase == "disconnected", activeRunID != nil { resumeStatus() }
         // Recovery performs only reads. It never selects/creates a
         // conversation, relaunches a child, or resends an operation.
@@ -196,24 +218,38 @@ final class ChatStore {
     }
 
     private func rpc(_ method: String, _ params: [String: RPCValue] = [:]) async throws -> RPCValue {
-        guard !stopping else { throw CancellationError() }
+        guard !stopping, !handoffPreparing || method == "service.local_status" else { throw CancellationError() }
+        try runtime.check()
         guard let client else { throw RPCFailure.configuration }
-        return try await client.call(method, params: params)
+        let result = try await client.call(method, params: params)
+        try runtime.check()
+        return result
+    }
+
+    func readLocalStatus() async throws -> LocalProfileStatus {
+        let value = try await LocalProfileStatus(rpc("service.local_status"))
+        if let target = openTarget, !value.matches(target) { throw RPCFailure.invalidResponse }
+        return value
     }
 
     private func refreshStatus() async throws {
+        let local = try await readLocalStatus()
+        localProfileStatus = local
+        // The host returns local capabilities without touching an SDK while
+        // provider choice is absent; integration tests require zero calls.
         let result = try await rpc("service.status")
         guard !stopping else { throw CancellationError() }
         guard let serverReady = result["ready"].bool,
               let accountConnected = result["provider"]["connected"].bool else {
             throw RPCFailure.invalidResponse
         }
+        guard local.providerQueryAllowed || !accountConnected else { throw RPCFailure.invalidResponse }
         ready = serverReady
-        connected = accountConnected
+        connected = local.providerQueryAllowed && accountConnected
         if !serverReady || !accountConnected { voice.cancel() }
         capabilities = result["capabilities"]
         access.refreshCapabilities(capabilities)
-        statusText = accountConnected ? "Codex con ChatGPT conectado" : "Inicia sesión con ChatGPT"
+        statusText = !local.providerQueryAllowed ? "Perfil local abierto · elige conectar tu cuenta de ChatGPT" : accountConnected ? "Codex con ChatGPT conectado" : "Inicia sesión con ChatGPT"
     }
 
     private func refreshSessions() async throws {
@@ -489,7 +525,7 @@ final class ChatStore {
     }
 
     func reconnect() async {
-        guard !stopping, !starting, !maintenance.blocksInteraction, let options else { return }
+        guard runtime.isActive, !stopping, !starting, !handoffPreparing, !maintenance.blocksInteraction, !restored.blocksInteraction, let options else { return }
         conversationRefresh?.setScope(nil)
         voice.cancel(); dictationNotice = nil
         starting = true
@@ -501,13 +537,19 @@ final class ChatStore {
         await management.close()
         await telegram.close()
         await maintenance.close()
-        maintenance.configure(client: LocalRPCClient(stateDirectory: options.state))
+        await restored.close()
+        restored.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+        maintenance.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
         guard !stopping else { return }
         do {
             let restarted = !service.isRunning
             if restarted {
+                let predecessor = service.ownedIdentity
                 guard await service.stop() else { throw ServiceProcessFailure.cleanupUnconfirmed }
-                guard !stopping else { return }
+                if let predecessor {
+                    guard let report = service.lastStopReport, predecessor.matches(report), report.graceful else { throw ServiceProcessFailure.cleanupUnconfirmed }
+                } else if let report = service.lastStopReport, !report.graceful { throw ServiceProcessFailure.cleanupUnconfirmed }
+                guard runtime.isActive, !stopping else { return }
                 try service.start(options)
                 drafts.clearTemporary()
                 sessions.removeAll(where: \.temporary)
@@ -557,7 +599,7 @@ final class ChatStore {
         voice.cancel(); dictationNotice = nil
         guard canChangeSession,
               OwnerManagementReview.confirm(title: "Ramificar conversación", action: "Crear rama",
-                detail: "Se copiará únicamente el contexto completado de «\(session.title)» a una conversación nueva del mismo agente. No se ejecutan ni copian acciones, runs o autorizaciones.") else { return }
+                detail: "Se copiará únicamente el contexto completado de «\(session.title)» a una conversación nueva del mismo agente. No se ejecutan ni copian acciones, runs o autorizaciones.", isCurrent: { runtime.isActive && !stopping && !handoffPreparing }) else { return }
         busy = true
         do {
             let result = try await rpc("sessions.fork", scope(session))
@@ -625,6 +667,7 @@ final class ChatStore {
     }
 
     func login() async {
+        guard !handoffPreparing, runtime.isActive else { return }
         do {
             let result = try await rpc("provider.login")
             guard let raw = result["url"].string, let url = URL(string: raw), url.scheme == "https",
@@ -632,6 +675,8 @@ final class ChatStore {
                   url.port == nil || url.port == 443 else {
                 throw RPCFailure.invalidResponse
             }
+            try runtime.check()
+            guard !stopping, !handoffPreparing else { throw CancellationError() }
             guard NSWorkspace.shared.open(url) else { throw RPCFailure.unavailable }
         } catch { report(error) }
     }
@@ -643,7 +688,13 @@ final class ChatStore {
         catch { report(error) }
     }
 
+    func stopForHandoff() async -> ServiceStopReport? {
+        _ = await shutdown()
+        return service.lastStopReport
+    }
+
     func shutdown() async -> Bool {
+        runtime.retire()
         conversationRefresh?.setScope(nil)
         voice.cancel(); dictationNotice = nil
         stopping = true
@@ -666,6 +717,7 @@ final class ChatStore {
         await management.close()
         await telegram.close()
         await maintenance.close()
+        await restored.close()
         return true
     }
 

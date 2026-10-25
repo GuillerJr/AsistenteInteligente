@@ -41,7 +41,7 @@ public struct MaintenanceScope: Equatable, Sendable {
     }
 }
 
-public struct MaintenanceFileIdentity: Equatable, Sendable {
+public struct MaintenanceFileIdentity: Hashable, Sendable {
     public let device: String
     public let inode: String
     public init(_ value: RPCValue) throws {
@@ -126,7 +126,7 @@ public struct MaintenanceApproval: Identifiable, Sendable {
         try MaintenanceValidation.keys(value, ["approval_id", "scope", "purpose", "operation_id", "arguments_json", "digest", "expires_at_ns"])
         guard let id = value["approval_id"].string, ManagementValidation.identifier(id),
               let operation = value["operation_id"].string, ManagementValidation.identifier(operation),
-              let purpose = value["purpose"].string, ["backup.create", "restore.stage"].contains(purpose),
+              let purpose = value["purpose"].string, ["backup.create", "restore.stage", "profile.restore.activate"].contains(purpose),
               let digest = value["digest"].string, ManagementValidation.hash(digest),
               let arguments = value["arguments_json"].string, arguments.utf8.count <= 16_384,
               let expiry = value["expires_at_ns"].string, expiry.range(of: "^[0-9]{1,20}\\z", options: .regularExpression) != nil,
@@ -190,31 +190,41 @@ public struct MaintenanceOperation: Identifiable, Sendable {
     public let cancellationRequested: Bool
     public let receiptDurable: Bool
     public let receipt: MaintenanceReceipt?
+    public let activationReceipt: RestoreActivationReceipt?
+    public let cleanupOwnerPending: Bool
     public let errorCode: String?
     public let result: RPCValue
-    public static let terminal = Set(["complete", "staged_disarmed", "cancelled", "denied", "failed", "publication_unknown", "cleanup_pending"])
+    public static let terminal = Set(["complete", "staged_disarmed", "activated_not_opened", "cancelled", "denied", "failed", "publication_unknown", "cleanup_pending"])
     public func matches(_ review: MaintenanceReview) -> Bool {
         scope == review.scope && kind == review.kind && reviewID == review.id && reviewDigest == review.digest
     }
     public func follows(_ previous: MaintenanceOperation) -> Bool {
         guard id == previous.id, kind == previous.kind, scope.profileID == previous.scope.profileID,
               reviewID == previous.reviewID, reviewDigest == previous.reviewDigest else { return false }
-        if ["backup.verify", "doctor.report"].contains(kind) { return scope.generation >= previous.scope.generation }
+        if ["backup.verify", "doctor.report", "profile.restore.review", "profile.restore.inspect"].contains(kind) { return scope.generation >= previous.scope.generation }
         return scope == previous.scope
     }
     public var settled: Bool { Self.terminal.contains(phase) && !workerPending }
-    public var success: Bool { settled && ["complete", "staged_disarmed"].contains(phase) && (["doctor.report", "backup.verify"].contains(kind) || (receiptDurable && receipt?.status == "completed")) }
+    public var success: Bool {
+        if kind == "profile.restore.activate" { return settled && phase == "activated_not_opened" && receiptDurable && !cleanupOwnerPending && activationReceipt?.status == "completed" }
+        return settled && ["complete", "staged_disarmed"].contains(phase) && (["doctor.report", "backup.verify", "profile.restore.review", "profile.restore.inspect"].contains(kind) || (receiptDurable && receipt?.status == "completed"))
+    }
     public init(_ value: RPCValue) throws {
-        try MaintenanceValidation.keys(value, ["operation_id", "kind", "phase", "stage", "result", "error_code", "receipt", "receipt_durable", "worker_pending", "cancellation_requested", "scope", "review_id", "review_digest"])
+        var keys: Set<String> = ["operation_id", "kind", "phase", "stage", "result", "error_code", "receipt", "receipt_durable", "worker_pending", "cancellation_requested", "scope", "review_id", "review_digest"]
+        if value.object?["cleanup_owner_pending"] != nil { keys.insert("cleanup_owner_pending") }
+        try MaintenanceValidation.keys(value, keys)
+        if keys.contains("cleanup_owner_pending") { guard let pending = value["cleanup_owner_pending"].bool else { throw RPCFailure.invalidResponse }; cleanupOwnerPending = pending }
+        else { cleanupOwnerPending = false }
         guard let id = value["operation_id"].string, ManagementValidation.identifier(id),
-              let kind = value["kind"].string, ["backup.create", "restore.stage", "backup.verify", "doctor.report"].contains(kind),
+              let kind = value["kind"].string, ["backup.create", "restore.stage", "backup.verify", "doctor.report", "profile.restore.review", "profile.restore.inspect", "profile.restore.activate"].contains(kind),
               let phase = value["phase"].string, Self.terminal.union(["awaiting_owner", "quiescing", "working"]).contains(phase),
               let pending = value["worker_pending"].bool, let cancelled = value["cancellation_requested"].bool,
               let durable = value["receipt_durable"].bool else { throw RPCFailure.invalidResponse }
+        if kind.hasPrefix("profile.restore."), !keys.contains("cleanup_owner_pending") { throw RPCFailure.invalidResponse }
         self.id = id; self.kind = kind; self.phase = phase; workerPending = pending; cancellationRequested = cancelled; receiptDurable = durable
         try MaintenanceValidation.keys(value["scope"], ["profile_id", "generation"])
         scope = try MaintenanceScope(value["scope"])
-        if ["backup.create", "restore.stage"].contains(kind) {
+        if ["backup.create", "restore.stage", "profile.restore.activate"].contains(kind) {
             guard let review = value["review_id"].string, ManagementValidation.identifier(review),
                   let digest = value["review_digest"].string, ManagementValidation.hash(digest) else { throw RPCFailure.invalidResponse }
             reviewID = review; reviewDigest = digest
@@ -223,12 +233,17 @@ public struct MaintenanceOperation: Identifiable, Sendable {
             reviewID = nil; reviewDigest = nil
         }
         stage = try MaintenanceValidation.code(value["stage"]); errorCode = try MaintenanceValidation.code(value["error_code"])
-        receipt = value["receipt"] == .null ? nil : try MaintenanceReceipt(value["receipt"], operation: id, kind: kind)
+        if kind == "profile.restore.activate" {
+            receipt = nil; activationReceipt = value["receipt"] == .null ? nil : try RestoreActivationReceipt(value["receipt"], operationID: id)
+        } else {
+            activationReceipt = nil; receipt = value["receipt"] == .null ? nil : try MaintenanceReceipt(value["receipt"], operation: id, kind: kind)
+        }
         result = value["result"]
         guard result == .null || result.object != nil else { throw RPCFailure.invalidResponse }
         if phase == "complete", kind == "backup.verify" { _ = try MaintenanceVerification(result) }
         if phase == "complete", kind == "doctor.report" { _ = try DoctorSummary(result) }
         if phase == "staged_disarmed", kind != "restore.stage" { throw RPCFailure.invalidResponse }
+        if phase == "activated_not_opened" { guard kind == "profile.restore.activate", durable, activationReceipt?.status == "completed", !cleanupOwnerPending else { throw RPCFailure.invalidResponse } }
         if ["complete", "staged_disarmed"].contains(phase), ["backup.create", "restore.stage"].contains(kind) {
             guard durable, receipt?.status == "completed" else { throw RPCFailure.invalidResponse }
         }
@@ -301,7 +316,7 @@ public enum MaintenancePresentation {
         return (error as? RPCFailure)?.localizedDescription ?? "No se pudo confirmar el mantenimiento. Actualiza el estado; la operación no se repetirá automáticamente."
     }
     public static func phase(_ phase: String) -> String {
-        ["awaiting_owner":"Esperando tu aprobación", "quiescing":"Comprobando disponibilidad", "working":"En curso", "complete":"Completada", "staged_disarmed":"Perfil preparado y desarmado", "cancelled":"Cancelada", "denied":"No autorizada", "failed":"Fallida", "publication_unknown":"Resultado sin confirmar", "cleanup_pending":"Limpieza pendiente"][phase] ?? "Sin confirmar"
+        ["awaiting_owner":"Esperando tu aprobación", "quiescing":"Comprobando disponibilidad", "working":"En curso", "complete":"Completada", "staged_disarmed":"Perfil preparado y desarmado", "activated_not_opened":"Perfil activado; aún sin abrir", "cancelled":"Cancelada", "denied":"No autorizada", "failed":"Fallida", "publication_unknown":"Resultado sin confirmar", "cleanup_pending":"Limpieza pendiente"][phase] ?? "Sin confirmar"
     }
     public static func role(_ role: String) -> String {
         ["state":"Conversaciones y recibos", "memory":"Memoria", "schedules":"Tareas", "agents":"Agentes", "skills":"Skills", "telegram":"Registro de Telegram", "configuration_portable":"Configuración del respaldo", "cross_references":"Relaciones entre recursos"][role] ?? "Recurso propio"

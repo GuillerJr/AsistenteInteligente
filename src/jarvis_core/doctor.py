@@ -720,7 +720,21 @@ def _resource(inventory, root, role, context, inspector, facts, images):
     if role == "configuration_portable":
         return _projection(inventory)
     if role == "restore_record":
-        return DoctorCheck(role, "unknown", "doctor_restore_record_unsupported")
+        from jarvis_core.activation import ActivationError, validate_bootstrap_admission
+        try:
+            context.checkpoint("restore_admission")
+            admission = validate_bootstrap_admission(
+                inventory.root, check_current=lambda: context.checkpoint("restore_admission"))
+            return DoctorCheck(role, "ok" if admission is not None else "absent",
+                               "doctor_local_admission_valid" if admission else None)
+        except ActivationError as error:
+            # The validator preserves callback codes in its safe wrapper. A
+            # latched doctor cancellation/deadline/barrier failure stays a stop,
+            # never a diagnosis that the admission itself is invalid.
+            context.checkpoint("restore_admission_failed")
+            code = ("doctor_activation_required" if error.code == "profile_activation_required"
+                    else "doctor_restore_admission_invalid")
+            return DoctorCheck(role, "blocked", code)
     parent = descriptor = None
     base = {}
     image = images.get(role)

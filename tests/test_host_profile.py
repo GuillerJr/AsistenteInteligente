@@ -119,7 +119,8 @@ async def test_all_registered_rpc_handlers_are_denied_before_validation_during_c
     controls = {
         "maintenance.status", "maintenance.pending", "maintenance.decide", "maintenance.cancel",
         "backup.review", "backup.create", "backup.verify", "restore.review", "restore.stage",
-        "doctor.report",
+        "doctor.report", "profile.restore.review", "profile.restore.activate",
+        "profile.restore.inspect", "maintenance.cleanup",
     }
     assert set(service.maintenance_coordinator.handlers()) == controls
     with gate.exclusive():
@@ -264,7 +265,7 @@ async def test_unknown_and_restore_resources_block_without_reading_them(service)
     unknown.unlink()
     (root / "restore_record.json").write_bytes(b"not parsed")
     with service.profile_gate.exclusive() as cut:
-        with pytest.raises(HostProfileError, match=r"^profile_restore_record_unsupported$"):
+        with pytest.raises(HostProfileError, match=r"^profile_activation_required$"):
             freeze_sources(service, cut)
 
 

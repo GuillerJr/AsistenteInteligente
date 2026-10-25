@@ -2,7 +2,7 @@
 
 Requests return a job identity promptly. The coordinator owns approval waits,
 workers and their cleanup; neither an IPC timeout nor closing a panel abandons
-them. Model tools, automatic repair and profile activation are deliberately absent.
+them. Explicit local admission never starts another profile or grants model tools.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from uuid import uuid4
 
+from jarvis_core.activation_management import ActivationManagement, _Prepared
 from jarvis_core.doctor import DoctorContext, DoctorInventory, inspect_report
 from jarvis_core.host_profile import freeze_sources
 from jarvis_core.maintenance_journal import MaintenanceJournal, wire
@@ -82,7 +83,7 @@ def _code(error):
     # Never return exception text: it can include a path, SQL or external data.
     code = getattr(error, "code", None)
     if type(code) is str and re.fullmatch(
-        r"(?:recovery|snapshot|doctor|host|profile|maintenance)_[a-z0-9_]{1,100}", code
+        r"(?:activation|recovery|snapshot|doctor|host|profile|maintenance)_[a-z0-9_]{1,100}", code
     ):
         return code
     return "maintenance_failed"
@@ -123,6 +124,7 @@ class _Operation:
     receipt_durable: bool = False
     review_id: str | None = None
     review_digest: str | None = None
+    cleanup_owner: object = field(default=None, repr=False)
 
     def snapshot(self):
         return {"operation_id": self.operation_id, "kind": self.kind,
@@ -132,7 +134,8 @@ class _Operation:
                 "error_code": self.error_code, "receipt": wire(self.receipt),
                 "receipt_durable": self.receipt_durable,
                 "worker_pending": self.task is not None and not self.task.done(),
-                "cancellation_requested": self.cancellation.is_set()}
+                "cancellation_requested": self.cancellation.is_set(),
+                "cleanup_owner_pending": self.cleanup_owner is not None}
 
 
 @dataclass(frozen=True)
@@ -142,16 +145,18 @@ class _Verified:
 
 
 def _receipt_phase(receipt):
-    if receipt.status == "unknown":
-        return "publication_unknown"
     if receipt.cleanup_pending:
         return "cleanup_pending"
+    if receipt.status == "unknown":
+        return "publication_unknown"
+    if receipt.effect_status == "local_admission_published":
+        return "activated_not_opened"
     if receipt.status == "completed":
         return "staged_disarmed" if receipt.effect_status == "new_disarmed_profile" else "complete"
     return receipt.status if receipt.status in {"cancelled", "failed"} else "publication_unknown"
 
 
-class MaintenanceCoordinator:
+class MaintenanceCoordinator(ActivationManagement):
     def __init__(self, service, gate, *, clock=time.monotonic):
         self.service, self.gate, self.clock = service, gate, clock
         self.authority = service.authority
@@ -167,6 +172,7 @@ class MaintenanceCoordinator:
                    "backup.review": self.review_backup, "backup.create": self.backup,
                    "backup.verify": self.verify, "restore.review": self.review_restore,
                    "restore.stage": self.restore, "doctor.report": self.doctor}
+        methods.update(self.activation_handlers())
 
         def safe(callback):
             async def invoke(params):
@@ -189,13 +195,22 @@ class MaintenanceCoordinator:
         self.authority.bind_host_scope(scope)
         return scope
 
-    def _capacity(self):
+    def _capacity(self, *, allow_cleanup=False):
         self._current()
         if any(row.task is not None and not row.task.done()
                for row in self._operations.values()):
             raise RpcError(-32040, "Espera a que termine el mantenimiento actual.")
+        if not allow_cleanup and any(row.cleanup_owner is not None
+                                     for row in self._operations.values()):
+            raise RpcError(-32040, "Confirma primero la limpieza del mantenimiento anterior.")
         while len(self._operations) >= 16:
-            key = next(iter(self._operations))
+            key = next((key for key, row in self._operations.items()
+                        if row.cleanup_owner is None
+                        and row.phase not in {"publication_unknown", "cleanup_pending",
+                                             "interrupted_unknown"}
+                        and getattr(row.receipt, "status", None) != "unknown"), None)
+            if key is None:
+                raise RpcError(-32040, "Se alcanzó el límite de operaciones sin resolver.")
             self._operations.pop(key)
         now = self.clock()
         self._reviews = {key: row for key, row in self._reviews.items() if row.expires > now}
@@ -422,8 +437,8 @@ class MaintenanceCoordinator:
                 operation.error_code = "maintenance_receipt_unconfirmed"
                 operation.phase = "publication_unknown" if operation.receipt else "failed"
 
-    def _read_operation(self, kind, callback):
-        self._capacity()
+    def _read_operation(self, kind, callback, *, allow_cleanup=False):
+        self._capacity(allow_cleanup=allow_cleanup)
         operation = _Operation(uuid4().hex, kind, self.gate.lease.scope)
         self._operations[operation.operation_id] = operation
         operation.task = asyncio.create_task(self._read(operation, callback))
@@ -440,7 +455,11 @@ class MaintenanceCoordinator:
                 if outcome.error is not None:
                     raise outcome.error
                 result = outcome.value
-                if isinstance(result, _Verified):
+                if isinstance(result, _Prepared):
+                    if operation.cancellation.is_set():
+                        raise RecoveryFsError("recovery_cancelled")
+                    operation.result = {"review": self._publish_activation_review(result)}
+                elif isinstance(result, _Verified):
                     identity = uuid4().hex
                     while len(self._verification) >= 8:
                         self._verification.pop(next(iter(self._verification)))
@@ -455,7 +474,10 @@ class MaintenanceCoordinator:
             operation.phase = "cancelled"
         except Exception as error:
             operation.error_code = _code(error)
-            operation.phase = "cancelled" if operation.cancellation.is_set() else "failed"
+            operation.phase = ("cancelled" if operation.cancellation.is_set()
+                               or operation.error_code in {"recovery_cancelled",
+                                                           "recovery_deadline_exceeded"}
+                               else "failed")
 
     async def verify(self, params):
         _params(params, {"backup_path", "expected_manifest_sha256"}, {"backup_path"})
@@ -489,6 +511,9 @@ class MaintenanceCoordinator:
                 frozen.scope.profile_id, frozen.scope.generation, self.service.directory,
                 (self.gate.lease.identity.device, self.gate.lease.identity.inode),
                 "coherent_snapshot", configuration_metadata=frozen.configuration_metadata,
+                roles=tuple(row["role"] for row in frozen.metadata)
+                + ("configuration_portable",)
+                + (("restore_record",) if self.gate.lease.admission is not None else ()),
                 cut_id=cut.cut_id,
             )
             return {"report": inspect_report(inventory, context,
@@ -550,3 +575,9 @@ class MaintenanceCoordinator:
             _, pending = await asyncio.wait(tasks, timeout=25)
             if pending:
                 raise TimeoutError("maintenance_cleanup_incomplete")
+        for row in self._operations.values():
+            if row.cleanup_owner is not None:
+                row.task = asyncio.create_task(self._cleanup_owner(row))
+                _, pending = await asyncio.wait((row.task,), timeout=25)
+                if pending or row.cleanup_owner is not None:
+                    raise TimeoutError("maintenance_cleanup_incomplete")

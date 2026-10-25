@@ -17,10 +17,11 @@ final class ManagementStore {
     var isLoading = false
     @ObservationIgnored private var client: ManagementClient?
     @ObservationIgnored private var scope: SessionScope?
+    @ObservationIgnored private var runtimeIsActive: @Sendable () -> Bool = { false }
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var historyRequest = 0
 
-    func configure(client: LocalRPCClient) { self.client = ManagementClient(transport: client) }
+    func configure(client: LocalRPCClient) { self.client = ManagementClient(transport: client); runtimeIsActive = { client.isActive } }
     func close() async { generation += 1; await client?.close() }
     func setContext(_ value: SessionScope?) {
         guard scope != value else { return }
@@ -179,11 +180,11 @@ final class ManagementStore {
     }
     private func change(_ method: String, _ params: [String: RPCValue], title: String,
                         action: String, detail: String? = nil) async -> Bool {
-        guard !isChanging, let client else { return false }
+        guard runtimeIsActive(), !isChanging, let client else { return false }
         isChanging = true; generation += 1
         defer { isChanging = false }
         guard OwnerManagementReview.confirm(title: title, action: action,
-            detail: detail ?? "Revisa esta operación exacta. No autoriza herramientas ni ejecución de scripts.\n\n" + ManagementValidation.json(.object(params))) else { return false }
+            detail: detail ?? "Revisa esta operación exacta. No autoriza herramientas ni ejecución de scripts.\n\n" + ManagementValidation.json(.object(params)), isCurrent: runtimeIsActive) else { return false }
         var success = false
         do {
             let result = try await client.mutate(method, params: params)
@@ -208,7 +209,8 @@ final class ManagementStore {
 }
 
 @MainActor enum OwnerManagementReview {
-    static func confirm(title: String, action: String, detail: String) -> Bool {
+    static func confirm(title: String, action: String, detail: String, isCurrent: () -> Bool = { true }) -> Bool {
+        guard isCurrent() else { return false }
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = "Esta decisión corresponde al dueño de Jarvis."
@@ -228,6 +230,6 @@ final class ManagementStore {
         text.string = detail; text.setAccessibilityLabel("Operación exacta para revisión del dueño")
         text.sizeToFit()
         scroll.documentView = text; alert.accessoryView = scroll
-        return alert.runModal() == .alertFirstButtonReturn
+        return alert.runModal() == .alertFirstButtonReturn && isCurrent()
     }
 }

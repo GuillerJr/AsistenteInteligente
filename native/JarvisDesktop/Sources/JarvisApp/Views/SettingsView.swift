@@ -4,6 +4,7 @@ import SwiftUI
 @MainActor struct SettingsView: View {
     let store: ChatStore
     let delegate: AppDelegate
+    let profiles: AppProfileCoordinator
     @AppStorage("jarvis.openShortcut") private var shortcut = "commandShiftJ"
     @State private var selectedTab = "general"
     @State private var windowVisible = false
@@ -27,10 +28,14 @@ import SwiftUI
             Section("Cuenta de ChatGPT") {
                 Text(store.statusText)
                 HStack {
-                    Button("Abrir inicio de sesión") { Task { await store.login() } }.disabled(!store.ready || store.maintenance.blocksInteraction)
+                    Button("Abrir inicio de sesión") { Task { await store.login() } }.disabled(!store.ready || store.maintenance.blocksInteraction || store.restored.blocksInteraction || profiles.isOpening)
                     Button("Cerrar sesión") { Task { await store.logout() } }
-                        .disabled(!store.connected || store.activeRunID != nil || store.maintenance.blocksInteraction)
+                        .disabled(!store.connected || store.activeRunID != nil || store.maintenance.blocksInteraction || store.restored.blocksInteraction || profiles.isOpening)
                 }
+            }
+            Section("Perfil actual") {
+                if let path = store.launchOptions?.state { Text(path).font(.caption).textSelection(.enabled) }
+                Text("La elección del perfil es local a esta sesión de la app; no cambia el perfil de un próximo inicio.").font(.caption).foregroundStyle(.secondary)
             }
             Section("Estado de esta base") {
                 Text("Cliente nativo de desarrollo. Requiere el servicio Python del repositorio y el cliente oficial de Codex.")
@@ -38,21 +43,25 @@ import SwiftUI
                     .font(.caption).foregroundStyle(.secondary)
             }
         }.formStyle(.grouped).tabItem { Label("General", systemImage: "gearshape") }.tag("general")
-            MaintenanceView(maintenance: store.maintenance, mayBegin: store.ready && !store.busy && store.activeRunID == nil && !store.voice.canStopDictation).tabItem { Label("Mantenimiento", systemImage: "externaldrive.badge.timemachine") }.tag("maintenance")
+            MaintenanceView(maintenance: store.maintenance, mayBegin: store.ready && !store.starting && !store.handoffPreparing && !store.busy && store.activeRunID == nil && !store.voice.canStopDictation).tabItem { Label("Mantenimiento", systemImage: "externaldrive.badge.timemachine") }.tag("maintenance")
+            RestoreProfileView(restored: store.restored, profiles: profiles, runtimeID: store.runtime.id, mayBegin: store.ready && !store.starting && !store.handoffPreparing && !store.busy && store.activeRunID == nil && !store.voice.canStopDictation && !profiles.isOpening).tabItem { Label("Perfil restaurado", systemImage: "arrow.triangle.2.circlepath") }.tag("restored")
         }.frame(width: 760, height: 680)
             .background(SettingsWindowVisibilityBridge(delivery: visibilityDelivery) { visible in
                 windowVisible = visible
                 // Use the delivered value directly: teardown can outlive the
                 // SwiftUI storage while still needing to retire this owner.
                 store.maintenance.setVisible(maintenanceViewID, visible: visible && selectedTab == "maintenance")
+                store.restored.setVisible(maintenanceViewID, visible: visible && selectedTab == "restored")
             })
             .onChange(of: selectedTab) { _, _ in updateMaintenanceVisibility() }
             .onDisappear {
                 windowVisible = false
                 store.maintenance.setVisible(maintenanceViewID, visible: false)
+                store.restored.setVisible(maintenanceViewID, visible: false)
             }
     }
     private func updateMaintenanceVisibility() {
         store.maintenance.setVisible(maintenanceViewID, visible: windowVisible && selectedTab == "maintenance")
+        store.restored.setVisible(maintenanceViewID, visible: windowVisible && selectedTab == "restored")
     }
 }

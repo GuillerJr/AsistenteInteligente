@@ -13,6 +13,7 @@ import math
 import os
 import signal
 from collections.abc import Awaitable, Callable, Sequence
+from contextvars import Context, copy_context
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -57,6 +58,7 @@ class _ToolTurn:
     budget: _InferenceBudget | None = None
     ready: asyncio.Event = field(default_factory=asyncio.Event)
     turn_id: str | None = None
+    context: Context = field(default_factory=copy_context, repr=False)
     seen: set[str] = field(default_factory=set)
     tasks: set[asyncio.Task] = field(default_factory=set)
 
@@ -85,6 +87,8 @@ class CodexClient:
         self._closed = False
         self._cleanup_pending = False
         self._shutdown_timeout = 2.0
+        # Optional host-owned policy, checked at the final process/write boundary.
+        self.before_io: Callable[[str], None] | None = None
 
     async def start(self) -> None:
         async with self._start_lock:
@@ -100,6 +104,8 @@ class CodexClient:
                 ):
                     raise CodexError("codex_disconnected")
                 return
+            if self.before_io is not None:
+                self.before_io("start")
             directory = ensure_private_directory(self.directory)
             home = ensure_private_directory(directory / "home")
             codex_home = ensure_private_directory(directory / "client")
@@ -148,7 +154,7 @@ class CodexClient:
                 await self._stop_process_locked()
                 raise
 
-    async def _write(self, message: dict) -> None:
+    async def _write(self, message: dict, *, cleanup_reply: bool = False) -> None:
         data = json.dumps(message, allow_nan=False, separators=(",", ":")).encode() + b"\n"
         if len(data) > 1024 * 1024:
             raise CodexError("codex_frame_too_large")
@@ -158,6 +164,9 @@ class CodexClient:
             process = self._process
             if process is None or process.stdin is None or process.returncode is not None:
                 raise CodexError("codex_disconnected")
+            if self.before_io is not None:
+                self.before_io("cleanup.reply" if cleanup_reply
+                               else message.get("method", "reply"))
             try:
                 process.stdin.write(data)
                 await asyncio.wait_for(process.stdin.drain(), self.timeout)
@@ -198,7 +207,7 @@ class CodexClient:
                                     "code": -32601,
                                     "message": "Jarvis no ha habilitado esta acción",
                                 },
-                            }
+                            }, cleanup_reply=True,
                         )
                         continue
                     params = message.get("params", {})
@@ -240,7 +249,10 @@ class CodexClient:
         if turn is None or identity in self._server_requests or len(turn.tasks) >= 16:
             return False
         self._server_requests.add(identity)
-        task = asyncio.create_task(self._serve_tool_request(identity, params, turn))
+        # The reader may have been started by an older login/status call. Each
+        # callback and final reply belongs to this turn's captured host policy.
+        task = asyncio.create_task(self._serve_tool_request(identity, params, turn),
+                                   context=turn.context.copy())
         turn.tasks.add(task)
         task.add_done_callback(turn.tasks.discard)
         return True
@@ -298,9 +310,9 @@ class CodexClient:
                                 }
                             ],
                         },
-                    }
+                    }, cleanup_reply=True,
                 )
-            except (CodexError, OSError):
+            except (CodexError, OSError, ValueError):
                 pass
         finally:
             self._server_requests.discard(identity)

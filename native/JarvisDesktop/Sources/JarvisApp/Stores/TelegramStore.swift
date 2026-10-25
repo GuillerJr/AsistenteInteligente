@@ -16,9 +16,11 @@ final class TelegramStore {
     @ObservationIgnored private var client: TelegramClient?
     @ObservationIgnored private var pairingClient: TelegramPairingClient?
     @ObservationIgnored private let opener = TelegramNativeOpener()
+    @ObservationIgnored private var runtimeIsActive: @Sendable () -> Bool = { false }
     @ObservationIgnored private var generation = 0
 
     func configure(client: LocalRPCClient) {
+        runtimeIsActive = { client.isActive }
         self.client = TelegramClient(transport: client)
         pairingClient = TelegramPairingClient(transport: client)
     }
@@ -31,7 +33,7 @@ final class TelegramStore {
     }
 
     func refreshFromUI() async {
-        guard !isChanging, !isLoading, let client else { return }
+        guard runtimeIsActive(), !isChanging, !isLoading, let client else { return }
         isLoading = true
         defer { isLoading = false }
         let version = generation
@@ -100,7 +102,7 @@ final class TelegramStore {
     }
 
     func pairingReview(agentID: String) async -> TelegramPairingReview? {
-        guard !isChanging, let pairingClient else { return nil }
+        guard runtimeIsActive(), !isChanging, let pairingClient else { return nil }
         do {
             let result = try await pairingClient.review(agentID: agentID)
             errorMessage = nil; return result
@@ -108,7 +110,7 @@ final class TelegramStore {
     }
 
     func startPairing(_ review: TelegramPairingReview, updateConsumption: Bool, noOtherConsumer: Bool) async -> Bool {
-        guard !isChanging, let pairingClient, updateConsumption, noOtherConsumer else { return false }
+        guard runtimeIsActive(), !isChanging, let pairingClient, updateConsumption, noOtherConsumer else { return false }
         return await pairingChange(title: "Iniciar enlace privado con Telegram", action: "Iniciar este enlace",
             detail: "Durante un máximo de 180 segundos se leerán y avanzarán las actualizaciones del bot, incluso las ignoradas. Confirmas que este bot no tiene otro consumidor: el bloqueo de Jarvis sólo excluye lectores locales. Telegram conservará el mensaje de inicio con el código privado; Jarvis no lo mostrará ni enviará al modelo. Si no se puede abrir Telegram, el intento se cancelará. Todavía no se crea una ruta ni se activa el canal.\n\n" + ManagementValidation.json(review.reviewValue)) {
                 .state(try await pairingClient.start(review, acknowledgeUpdateConsumption: updateConsumption,
@@ -117,14 +119,14 @@ final class TelegramStore {
     }
 
     func openPairing() async {
-        guard !isChanging, let pairingClient, let pairing, pairing.state == "listening", let challenge = pairing.challengeID,
+        guard runtimeIsActive(), !isChanging, let pairingClient, let pairing, pairing.state == "listening", let challenge = pairing.challengeID,
               openingChallengeID != challenge else { return }
         isChanging = true; generation += 1
         let version = generation
         openingChallengeID = challenge
         defer { isChanging = false }
         do {
-            try await pairingClient.open(pairing, using: opener) { [weak self] in self?.generation == version }
+            try await pairingClient.open(pairing, using: opener) { [weak self] in self?.generation == version && self?.runtimeIsActive() == true }
             guard version == generation else { return }
             errorMessage = nil
         }
@@ -161,11 +163,11 @@ final class TelegramStore {
     private enum PairingChangeResult { case state(TelegramPairingStatus), snapshot(TelegramSnapshot) }
 
     private func pairingChange(title: String, action: String, detail: String, operation: () async throws -> PairingChangeResult) async -> Bool {
-        guard !isChanging, let pairingClient, let client else { return false }
+        guard runtimeIsActive(), !isChanging, let pairingClient, let client else { return false }
         isChanging = true; generation += 1
         let version = generation
         defer { isChanging = false }
-        guard OwnerManagementReview.confirm(title: title, action: action, detail: detail) else { return false }
+        guard OwnerManagementReview.confirm(title: title, action: action, detail: detail, isCurrent: runtimeIsActive) else { return false }
         var success = false
         do {
             let result = try await operation()
@@ -189,11 +191,11 @@ final class TelegramStore {
     @discardableResult
     private func change(title: String, action: String, detail: String,
                         operation: () async throws -> TelegramSnapshot) async -> Bool {
-        guard !isChanging, let client else { return false }
+        guard runtimeIsActive(), !isChanging, let client else { return false }
         isChanging = true; generation += 1
         let version = generation
         defer { isChanging = false }
-        guard OwnerManagementReview.confirm(title: title, action: action, detail: detail) else { return false }
+        guard OwnerManagementReview.confirm(title: title, action: action, detail: detail, isCurrent: runtimeIsActive) else { return false }
         var success = false
         do {
             let result = try await operation()

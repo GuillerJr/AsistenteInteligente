@@ -14193,7 +14193,12 @@
           "src/jarvis_core/recovery_sqlite.py",
           "src/jarvis_core/doctor.py",
           "native/JarvisDesktop/Sources/JarvisApp/Views/MaintenanceView.swift",
-          "src/jarvis_core/cold_sqlite.py"
+          "src/jarvis_core/cold_sqlite.py",
+          "src/jarvis_core/activation.py",
+          "src/jarvis_core/activation_management.py",
+          "src/jarvis_core/provider_choice.py",
+          "native/JarvisDesktop/Sources/DesktopCore/ProfileHandoff.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Views/RestoreProfileView.swift"
         ],
         "tests": [
           "tests/test_host_authority.py",
@@ -14208,7 +14213,15 @@
           "native/JarvisDesktop/Tests/DesktopCoreTests/MaintenanceTests.swift",
           "tests/test_cold_sqlite.py",
           "tests/test_restored_profile_bootstrap.py",
-          "native/JarvisDesktop/Tests/DesktopCoreTests/MaintenanceIntegrationTests.swift"
+          "native/JarvisDesktop/Tests/DesktopCoreTests/MaintenanceIntegrationTests.swift",
+          "tests/test_activation.py",
+          "tests/test_activation_management.py",
+          "tests/test_activation_host_boundaries.py",
+          "tests/test_provider_choice.py",
+          "tests/test_restored_provider_service.py",
+          "tests/test_provider_reply_policy.py",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/RestoredProfileTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/RestoredProfileIntegrationTests.swift"
         ],
         "capability_ids": [
           "A-01",
@@ -14218,8 +14231,8 @@
           "A-70",
           "A-71"
         ],
-        "verified_scope": "Checkpoint b8ce4bc con 1585 Python / 162 Swift y CI aprobados; respaldo, verificación y staging sintéticos desde la app con decisiones reales del dueño. Captura/diagnóstico frío DELETE y rechazo de bootstrap restaurado; los tres SQLite de otro recorrido nativo no vacío conservaron bytes/metadatos. Alcances y demora inicial no atribuida registrados por separado.",
-        "remaining": "WAL/journals fríos, archivos/artefactos de workspace, activación explícita y asociación de memoria/canales, reparación, actualización/rollback, distribución y cualificación completa. No cierra familias ni inicia B.",
+        "verified_scope": "Checkpoint b8ce4bc con 1585 Python / 162 Swift y CI aprobados; respaldo, verificación y staging sintéticos desde la app con decisiones reales del dueño. Captura/diagnóstico frío DELETE y rechazo de bootstrap restaurado; los tres SQLite de otro recorrido nativo no vacío conservaron bytes/metadatos. Alcances y demora inicial no atribuida registrados por separado. Ampliación local integrada: 1754 Python/175 Swift, admisión contextual y handoff explícito sin SDK inicial; revisión GUI descartada conservando borrador. Aprobación/apertura reales y CI del cambio pendientes; ver PHASE_A_ACTIVATION.md.",
+        "remaining": "WAL/journals fríos, workspace/artefactos, recorrido nativo real de activación y apertura, asociación de memoria/canales, reparación, actualización/rollback y distribución. No cierra familias ni inicia B.",
         "detail_file": "PHASE_A_RECOVERY.md",
         "qualification_file": "PHASE_A_RECOVERY_QUALIFICATION.json"
       }
@@ -14256,7 +14269,7 @@
     },
     "previous_detail_file": "PHASE_A_CHANNELS_VOICE_WEB.md",
     "qualification_file": "PHASE_A_RECOVERY_QUALIFICATION.json",
-    "latest_qualification_status": "162native_1585python_ci_macos_linux_passed_bounded_recovery_live_phase_a_open"
+    "latest_qualification_status": "175native_1754python_local_activation_tests_passed_owner_walkthrough_and_ci_pending"
   },
   "target_decisions": {
     "date": "2026-10-24",

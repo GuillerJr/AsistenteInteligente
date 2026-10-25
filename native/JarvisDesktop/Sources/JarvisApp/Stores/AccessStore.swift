@@ -116,7 +116,7 @@ final class AccessStore {
     }
 
     func chooseWorkspace() async {
-        guard !isChangingWorkspace else { return }
+        guard client?.isActive == true, !isChangingWorkspace else { return }
         isChangingWorkspace = true
         defer { isChangingWorkspace = false }
         let panel = NSOpenPanel()
@@ -125,7 +125,7 @@ final class AccessStore {
         panel.prompt = "Usar esta carpeta"
         panel.canChooseDirectories = true; panel.canChooseFiles = false
         panel.allowsMultipleSelection = false; panel.resolvesAliases = false
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard panel.runModal() == .OK, client?.isActive == true, let url = panel.url else { return }
         do {
             // The chooser is the owner's explicit selection. Send its physical
             // directory so macOS aliases such as /tmp do not become a second root.

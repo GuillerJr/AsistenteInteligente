@@ -94,6 +94,11 @@ declara completa por los tests sintéticos.
   ausentes; no se ejecutó otro roundtrip nativo en ese recorrido de lectura.
 - [x] Impedir arranque accidental del perfil restaurado antes de crear locks,
   stores o conexiones, sin impedir el cierre de un host que ya estaba abierto.
+- [x] Implementar activación local con autoridad central y apertura explícita con
+  servicio nuevo, controles de identidad y elección independiente del proveedor;
+  [pruebas y límites](rebuild/PHASE_A_ACTIVATION.md). No reasocia memoria ni reactiva canales.
+- [ ] Completar su recorrido nativo con aprobación real del dueño y apertura del
+  perfil sintético. La revisión de sólo lectura y el borrador conservado ya se observaron.
 - [ ] Investigar la demora inicial observada en el perfil nuevo: se recuperó por
   supervisión lectora, sin reinicio; su causa no quedó establecida.
 - [ ] Completar familias frías con WAL/journals, archivos/artefactos de workspace, activación y

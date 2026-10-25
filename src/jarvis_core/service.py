@@ -24,6 +24,7 @@ from jarvis_core.config import ConfigError, ProfileConfig
 from jarvis_core.host_profile import (
     READ_RPCS,
     BoundProfileResource,
+    ExpectedRestore,
     HostProfileError,
     ProfileLease,
     ServiceProfileGate,
@@ -33,6 +34,7 @@ from jarvis_core.host_profile import (
     service_fingerprint,
 )
 from jarvis_core.maintenance import MaintenanceCoordinator
+from jarvis_core.maintenance_journal import wire
 from jarvis_core.management import ManagementAPI
 from jarvis_core.mcp_registry import McpRegistry, McpRegistryError, ServerSpec
 from jarvis_core.memory import Citation, MemoryError, MemoryLimits, MemoryScope, MemoryStore
@@ -41,6 +43,8 @@ from jarvis_core.private_json import PrivateJsonError
 from jarvis_core.processes import ProcessTools
 from jarvis_core.profiles import ProfileError, ProfilesStore
 from jarvis_core.protocol import LocalRpcServer, RpcError, TransportSecurityError
+from jarvis_core.provider_choice import ProviderChoice, ProviderChoiceError
+from jarvis_core.recovery_fs import FileIdentity
 from jarvis_core.runtime import AgentRuntime, RunContext, RunHandle, ToolResult
 from jarvis_core.scheduler import Scheduler, SchedulerError, SchedulerLimits, ScheduleStore
 from jarvis_core.skills import SkillError, SkillsStore
@@ -92,8 +96,13 @@ class _ProviderAdapter:
     async def next_step(self, context: RunContext):
         service = self.service
         service._active_ref.set(service._refs[context.run_id])
+        epoch = service._provider_epochs[context.run_id]
+        token = service._provider_context.set(epoch)
         try:
-            return await self.bridge.next_step(context)
+            service.provider_choice.assert_current(epoch)
+            result = await self.bridge.next_step(context)
+            service.provider_choice.assert_current(epoch)
+            return result
         except (
             CodexError,
             ConfigError,
@@ -101,9 +110,12 @@ class _ProviderAdapter:
             ProfileError,
             SkillError,
             PrivateJsonError,
+            ProviderChoiceError,
         ) as error:
             service._errors[context.run_id] = str(error)
             raise
+        finally:
+            service._provider_context.reset(token)
 
     async def cleanup(self, context: RunContext) -> None:
         try:
@@ -151,6 +163,16 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
 
     def _initialize(self, directory, provider):
         self.directory = directory
+        if (self.profile_lease.admission is not None and isinstance(provider, CodexClient)
+                and provider.directory != directory / "provider"):
+            raise HostProfileError("profile_provider_override_forbidden")
+        self.provider_choice = ProviderChoice(directory, self.profile_lease,
+                                              self.profile_lease.admission)
+        self._provider_context = ContextVar("jarvis_provider_epoch", default=None)
+        self._provider_epochs = {}
+        self._provider_transition = None
+        if isinstance(provider, CodexClient):
+            provider.before_io = self._provider_io
         self.maintenance_coordinator = None
         self._run_writers = {}
         self.profile_gate = ServiceProfileGate(
@@ -290,6 +312,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
     @contextmanager
     def _execution_scope(self, operation, grant):
         with self.profile_gate.admit("run.effect", mutating=True, closing=True):
+            self.provider_choice.assert_current(self._provider_epochs[operation.run_id])
             self._adapter.bridge.assert_can_execute(operation.run_id)
             with self.authority.execution_scope(operation, grant):
                 yield
@@ -309,6 +332,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
 
     @profile_callback("run.event")
     def _event(self, context: RunContext, kind: str, payload: dict) -> None:
+        if kind in {"answer.delta", "tool.requested"}:
+            self.provider_choice.assert_current(self._provider_epochs[context.run_id])
         self.store.append_event(self._refs[context.run_id], context.run_id, kind, payload)
 
     @staticmethod
@@ -327,6 +352,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
 
     @profile_callback("run.prepare")
     def _prepare_turn(self, context: RunContext) -> dict:
+        self.provider_choice.assert_current(self._provider_epochs[context.run_id])
         ref = self._refs[context.run_id]
         if self.config.workspace != self._configured_workspace:
             raise ConfigError("workspace_configuration_changed_restart")
@@ -404,6 +430,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
 
     @profile_callback("run.bind")
     def _bind_thread(self, context: RunContext, thread_id: str) -> None:
+        self.provider_choice.assert_current(self._provider_epochs[context.run_id])
         ref = self._refs[context.run_id]
         self.store.set_provider_thread(ref, thread_id)
         if ref.temporary:
@@ -414,6 +441,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
     def handlers(self) -> dict[str, Callable[[dict], Awaitable[dict]]]:
         methods = {
             "service.status": self.status,
+            "service.local_status": self.local_status,
             "provider.login": self.login,
             "provider.logout": self.logout,
             "sessions.create": self.create_session,
@@ -449,7 +477,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
                 try:
                     with self.profile_gate.admit(name, mutating=name not in READ_RPCS):
                         return await callback(params)
-                except HostProfileError as error:
+                except (HostProfileError, ProviderChoiceError) as error:
                     raise RpcError(-32037, error.code) from None
                 except StateError as error:
                     raise RpcError(-32010, error.code) from None
@@ -497,7 +525,19 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
 
     async def status(self, params: dict) -> dict:
         _params(params, set())
-        provider = await self.provider.account_status()
+        provider = {"connected": False, "mode": None}
+        if self._provider_transition is None and self.provider_choice.allowed:
+            epoch = self.provider_choice.epoch()
+            token = self._provider_context.set(epoch)
+            try:
+                value = await self.provider.account_status()
+                self.provider_choice.assert_current(epoch)
+                provider = value
+            except ProviderChoiceError:
+                # A late account/read may not revive a locally revoked choice.
+                provider = {"connected": False, "mode": None}
+            finally:
+                self._provider_context.reset(token)
         return {
             "ready": not self._closing,
             "provider": provider,
@@ -814,15 +854,71 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
             "has_more": len(records) == 100,
         }
 
+    def _provider_io(self, method: str) -> None:
+        # Replies and interrupt/logout settle an already owned client. They may
+        # never start a process; start has its own selected-choice guard.
+        if method in {"cleanup.reply", "turn/interrupt", "account/logout"}:
+            self.profile_lease.assert_current()
+            return
+        self.provider_choice.assert_current(self._provider_context.get())
+
+    async def local_status(self, params: dict) -> dict:
+        _params(params, set())
+        self.profile_lease.check_bootstrap_ready()
+        return {"profile_id": self.profile_lease.scope.profile_id,
+                "generation": self.profile_lease.scope.generation,
+                "root_identity": wire(self.profile_lease.identity),
+                "restore_admission": wire(self.profile_lease.admission),
+                "provider_choice": self.provider_choice.local_status()}
+
     async def login(self, params: dict) -> dict:
         _params(params, set())
-        return await self.provider.login()
+        if self._handles or self._provider_transition is not None:
+            raise RpcError(-32011, "Espera a que termine la conexión o ejecución actual.")
+        # Reserve the transition before persistence/await; scheduled/channel runs
+        # cannot start under an account while its connection is being changed.
+        self._provider_transition = "login"
+        try:
+            self.provider_choice.select()
+            epoch = self.provider_choice.epoch()
+            token = self._provider_context.set(epoch)
+            try:
+                result = await self.provider.login()
+                self.provider_choice.assert_current(epoch)
+                return result
+            finally:
+                self._provider_context.reset(token)
+        finally:
+            self._provider_transition = None
 
     async def logout(self, params: dict) -> dict:
         _params(params, set())
         if self._handles:
             raise RpcError(-32011, "Cancela las ejecuciones antes de cerrar la conexión.")
-        return await self.provider.logout()
+        if self._provider_transition == "logout":
+            return {"connected": False, "mode": None, "logout_confirmed": False,
+                    "error_code": "profile_logout_unconfirmed"}
+        self.provider_choice.disable()
+        if self._provider_transition == "login":
+            # Revoke immediately, but do not race account/logout against a login
+            # handshake or launch a second client. Its stale await cannot deliver.
+            return {"connected": False, "mode": None, "logout_confirmed": False,
+                    "error_code": "profile_logout_unconfirmed"}
+        if isinstance(self.provider, CodexClient) and self.provider._process is None:
+            return {"connected": False, "mode": None, "logout_confirmed": False,
+                    "error_code": "profile_logout_not_started"}
+        epoch = self.provider_choice.epoch()
+        self._provider_transition = "logout"
+        try:
+            await self.provider.logout()
+            self.provider_choice.assert_current(epoch, require_selected=False)
+        except Exception:
+            return {"connected": False, "mode": None, "logout_confirmed": False,
+                    "error_code": "profile_logout_unconfirmed"}
+        finally:
+            self._provider_transition = None
+        return {"connected": False, "mode": None, "logout_confirmed": True,
+                "error_code": None}
 
     async def create_session(self, params: dict) -> dict:
         _params(params, {"title", "temporary", "agent_id"})
@@ -930,6 +1026,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
         _params(params, _BASE | {"message", "request_id"}, {"session_id", "message"})
         if self._closing:
             raise RpcError(-32011, "Jarvis está cerrando el servicio.")
+        if self._provider_transition is not None:
+            raise RpcError(-32011, "Espera a que termine la conexión del proveedor.")
         if self._maintenance:
             raise RpcError(-32011, "Espera a que termine la conexión MCP actual.")
         if tuple(spec.name for spec in self.mcp.specs()) != self._mcp_signature:
@@ -965,6 +1063,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
                 return {"run_id": previous.run_id, "status": previous.status}
         if self._busy(ref):
             raise RpcError(-32011, "Espera a que termine la ejecución de esta conversación.")
+        self.provider_choice.assert_current()
+        provider_epoch = self.provider_choice.epoch()
         writer = self.profile_gate.hold("run.owner", mutating=True, closing=True)
         try:
             record = self.store.create_run(ref, run_id=request_id, user_text=message)
@@ -973,6 +1073,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
             raise
         self._run_writers[record.run_id] = writer
         self._refs[record.run_id] = ref
+        self._provider_epochs[record.run_id] = provider_epoch
         handle = self.runtime.start(ref.session_id, message, run_id=record.run_id)
         self._handles[handle.run_id] = handle
         observer = asyncio.create_task(self._settle(ref, handle))
@@ -1029,6 +1130,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
             self._handles.pop(handle.run_id, None)
             self._refs.pop(handle.run_id, None)
             self._run_fingerprints.pop(handle.run_id, None)
+            self._provider_epochs.pop(handle.run_id, None)
             writer = self._run_writers.pop(handle.run_id, None)
             if writer is not None:
                 writer.close()
@@ -1179,8 +1281,20 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
 
 
 async def _serve(args: argparse.Namespace) -> None:
-    lease = ProfileLease.acquire(args.state)
+    values = [getattr(args, "expected_restore_" + key, None) for key in
+              ("device", "inode", "marker_sha256", "admission_sha256", "operation_id")]
+    if any(value is not None for value in values) and any(value is None for value in values):
+        raise HostProfileError("profile_expected_restore_incomplete")
+    expected = None
+    if values[0] is not None:
+        if any(not value.isascii() or not value.isdecimal() or len(value) > 20
+               for value in values[:2]):
+            raise HostProfileError("profile_expected_restore_invalid")
+        expected = ExpectedRestore(FileIdentity(int(values[0]), int(values[1])), *values[2:])
+    lease = ProfileLease.acquire(args.state, expected_restore=expected)
     try:
+        if lease.admission is not None and args.provider_state is not None:
+            raise HostProfileError("profile_provider_override_forbidden")
         provider = CodexClient(args.codex, args.provider_state or args.state / "provider")
         service = JarvisService(args.state, provider, profile_lease=lease)
     except BaseException:
@@ -1206,6 +1320,9 @@ def main() -> None:
         type=Path,
         help="Conexión oficial explícita de este Jarvis; no busca ni importa cuentas.",
     )
+    for name in ("device", "inode", "marker-sha256", "admission-sha256", "operation-id"):
+        parser.add_argument("--expected-restore-" + name,
+                            help="Restricción exacta del perfil seleccionado; no concede permisos.")
     args = parser.parse_args()
     try:
         asyncio.run(_serve(args))
@@ -1215,6 +1332,7 @@ def main() -> None:
         OSError,
         TransportSecurityError,
         HostProfileError,
+        ProviderChoiceError,
         ProfileError,
         SkillError,
         PrivateJsonError,

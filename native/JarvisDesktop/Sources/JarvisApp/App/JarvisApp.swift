@@ -3,32 +3,37 @@ import SwiftUI
 @main @MainActor
 struct JarvisApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    @State private var store = ChatStore()
+    @State private var profiles = AppProfileCoordinator()
+    private var store: ChatStore { profiles.active.store }
     @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
         WindowGroup("Jarvis", id: "main") {
             ContentView(store: store)
+                .id(profiles.active.runtimeID)
+                .disabled(profiles.isOpening)
                 .background(WindowIdentity())
                 .onAppear {
                     delegate.store = store
+                    delegate.profiles = profiles
                     delegate.openMainWindow = { openWindow(id: "main") }
                 }
-                .task { await store.start() }
+                .onChange(of: profiles.active.runtimeID) { _, _ in delegate.store = store }
+                .task { await profiles.start() }
         }
         .defaultSize(width: 1040, height: 720)
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("Nueva conversación") { Task { await store.createSession(temporary: false) } }
+                Button("Nueva conversación") { let origin = store; Task { await origin.createSession(temporary: false) } }
                     .keyboardShortcut("n")
                     .disabled(!store.canChangeSession)
-                Button("Chat temporal") { Task { await store.createSession(temporary: true) } }
+                Button("Chat temporal") { let origin = store; Task { await origin.createSession(temporary: true) } }
                     .keyboardShortcut("t", modifiers: [.command, .shift])
                     .disabled(!store.canChangeSession)
             }
             CommandMenu("Conversación") {
                 Button("Mostrar Jarvis") { delegate.showMainWindow() }
-                Button("Cancelar ejecución") { Task { await store.cancel() } }
+                Button("Cancelar ejecución") { let origin = store; Task { await origin.cancel() } }
                     .keyboardShortcut(".")
                     .disabled(store.activeRunID == nil)
             }
@@ -36,15 +41,16 @@ struct JarvisApp: App {
         MenuBarExtra("Jarvis", systemImage: "sparkle") {
             Button("Abrir Jarvis") { delegate.showMainWindow() }
             Button("Nueva conversación") {
+                let origin = store
                 delegate.showMainWindow()
-                Task { await store.createSession(temporary: false) }
+                Task { await origin.createSession(temporary: false) }
             }.disabled(!store.canChangeSession)
             Divider()
             Text(store.connected ? "ChatGPT conectado" : "Sin conexión a ChatGPT")
             SettingsLink { Text("Ajustes…") }
             Button("Salir de Jarvis") { NSApp.terminate(nil) }.keyboardShortcut("q")
         }
-        Settings { SettingsView(store: store, delegate: delegate) }
+        Settings { SettingsView(store: store, delegate: delegate, profiles: profiles).id(profiles.active.runtimeID).disabled(profiles.isOpening) }
     }
 }
 

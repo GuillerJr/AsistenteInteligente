@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
+from jarvis_core.activation import ActivationError, validate_bootstrap_admission
 from jarvis_core.cold_sqlite import ColdFamily, inspect_cold_family
 from jarvis_core.recovery import (
     JsonSource,
@@ -53,37 +54,105 @@ def _regular(info, *, limit=None):
         raise HostProfileError("profile_file_unsafe")
 
 
-def _reject_restore_marker(directory: Directory) -> None:
-    """Admission only: any marker entry requires explicit future activation.
+@dataclass(frozen=True)
+class ExpectedRestore:
+    """Bootstrap restrictions only: never a provider, tool or activation grant."""
 
-    Never open its body, follow a link, create a lock or treat JSON as authority.
-    This is separate from lifetime identity checks so an existing host can close.
-    """
+    identity: FileIdentity
+    marker_sha256: str
+    admission_sha256: str
+    operation_id: str
+
+    def __post_init__(self):
+        import re
+        if (type(self.identity) is not FileIdentity
+                or any(type(v) is not int or not 0 <= v < 2**64
+                       for v in (self.identity.device, self.identity.inode))
+                or any(type(v) is not str or re.fullmatch(r"[a-f0-9]{64}", v) is None
+                       for v in (self.marker_sha256, self.admission_sha256))
+                or type(self.operation_id) is not str
+                or re.fullmatch(r"[a-f0-9]{32}", self.operation_id) is None):
+            raise HostProfileError("profile_expected_restore_invalid")
+
+
+def _bootstrap_files(directory: Directory):
     directory.check()
+    rows = []
     try:
-        os.stat("restore_record.json", dir_fd=directory.fd, follow_symlinks=False)
-    except FileNotFoundError:
-        return
+        for name in ("restore_record.json", "restore_admission.json"):
+            try:
+                info = os.stat(name, dir_fd=directory.fd, follow_symlinks=False)
+            except FileNotFoundError:
+                rows.append((name, None))
+            else:
+                rows.append((name, (*_file_info(info), info.st_mode)))
     except OSError:
         raise HostProfileError("profile_bootstrap_unavailable") from None
-    raise HostProfileError("profile_activation_required")
+    directory.check()
+    return tuple(rows)
+
+
+def assert_restored_namespace(directory: Directory, admission) -> None:
+    """Metadata-only refusal of ambiguous current activation leftovers.
+
+    A historical unknown receipt is not a permanent veto. Current entries are
+    checked without deleting, acquiring a target lock or reconstructing an owner.
+    The real bootstrap flock remains the cross-process ownership boundary.
+    """
+    if admission is None:
+        return
+    directory.check()
+    if any(name.startswith(".jarvis-activation-") for name in os.listdir(directory.fd)):
+        raise HostProfileError("profile_activation_cleanup_unresolved")
+    try:
+        lock = os.stat("profile.lock", dir_fd=directory.fd, follow_symlinks=False)
+    except FileNotFoundError:
+        pass
+    else:
+        _regular(lock, limit=0)
+    directory.check()
+
+
+def _bootstrap_admission(directory: Directory, expected=None):
+    if expected is not None and directory.identity != expected.identity:
+        raise HostProfileError("profile_expected_restore_mismatch")
+    try:
+        admission = validate_bootstrap_admission(directory)
+    except ActivationError as error:
+        raise HostProfileError("profile_bootstrap_unavailable"
+                               if error.code == "activation_failed" else error.code) from None
+    assert_restored_namespace(directory, admission)
+    if expected is not None and (admission is None
+            or admission.root_identity != expected.identity
+            or admission.marker_sha256 != expected.marker_sha256
+            or admission.admission_sha256 != expected.admission_sha256
+            or admission.operation_id != expected.operation_id):
+        raise HostProfileError("profile_expected_restore_mismatch")
+    return admission
 
 
 class ProfileLease:
     """One explicitly selected physical profile; a fresh host identity per service."""
 
-    def __init__(self, root: Path, *, create: bool = True):
+    def __init__(self, root: Path, *, create: bool = True,
+                 expected_restore: ExpectedRestore | None = None):
         self.root = Path(root)
         self._lock = threading.RLock()
         self._directory = None
         self._fd = -1
         self._scope = HostScope(uuid4().hex, 0)
         try:
-            if create:
+            if expected_restore is not None and type(expected_restore) is not ExpectedRestore:
+                raise HostProfileError("profile_expected_restore_invalid")
+            if create and expected_restore is None:
                 ensure_private_directory(self.root)
             self._directory = Directory(self.root)
             self.identity = self._directory.identity
-            _reject_restore_marker(self._directory)
+            self.expected_restore = expected_restore
+            self._admission_state = _bootstrap_files(self._directory)
+            self.admission = _bootstrap_admission(self._directory, expected_restore)
+            if _bootstrap_files(self._directory) != self._admission_state:
+                raise HostProfileError("profile_bootstrap_changed")
             flags = os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
             if create:
                 flags |= os.O_CREAT
@@ -103,8 +172,9 @@ class ProfileLease:
             raise
 
     @classmethod
-    def acquire(cls, root: Path, *, create: bool = True):
-        return cls(root, create=create)
+    def acquire(cls, root: Path, *, create: bool = True,
+                expected_restore: ExpectedRestore | None = None):
+        return cls(root, create=create, expected_restore=expected_restore)
 
     @property
     def scope(self) -> HostScope:
@@ -132,7 +202,17 @@ class ProfileLease:
         """Reject restored staging before constructors, preserving cleanup rights."""
         with self._lock:
             self.assert_current()
-            _reject_restore_marker(self._directory)
+            current = _bootstrap_admission(self._directory, self.expected_restore)
+            self.assert_admission_current()
+            if current != self.admission:
+                raise HostProfileError("profile_bootstrap_changed")
+
+    def assert_admission_current(self) -> None:
+        """Fast immutable-control check for workers after one complete validation."""
+        with self._lock:
+            self.assert_current()
+            if _bootstrap_files(self._directory) != self._admission_state:
+                raise HostProfileError("profile_bootstrap_changed")
 
     def advance_generation(self) -> HostScope:
         with self._lock:
@@ -409,17 +489,20 @@ def _json_state(role, document):
             os.close(fd)
 
 
-def _inventory(service):
+def _inventory(service, *, full_admission=True):
     root_allowed = {"profile.lock", "configuration.json", "configuration.lock",
                     "maintenance.json", "maintenance.json.lock", "transport.token", "service.sock",
-                    "provider", "mcp", "workspace", "profiles", "telegram", "auth.json"}
+                    "provider", "mcp", "workspace", "profiles", "telegram", "auth.json",
+                    "restore_record.json", "restore_admission.json", "provider_choice.json"}
     for name in ("jarvis.sqlite3", "memory.sqlite3", "schedules.sqlite3"):
         root_allowed.update(name + suffix for suffix in (
             "", ".lock", ".init.lock", ".runner.lock", "-journal", "-wal", "-shm",
         ))
     entries = set(os.listdir(service.profile_lease._directory.fd))
-    if "restore_record.json" in entries:
-        raise HostProfileError("profile_restore_record_unsupported")
+    if full_admission:
+        service.profile_lease.check_bootstrap_ready()
+    else:
+        service.profile_lease.assert_admission_current()
     if entries - root_allowed:
         raise HostProfileError("profile_inventory_unclassified")
     for document, allowed in (
@@ -498,7 +581,7 @@ class FrozenSources:
         cut.assert_current()
         if cut.gate is not self.service.profile_gate or cut.scope != self.scope:
             raise HostProfileError("profile_generation_stale")
-        _inventory(self.service)
+        _inventory(self.service, full_admission=full)
         if full:
             sql, docs = _states(self.service)
             current = _fingerprint(self.scope, self.root_identity, sql, docs,
@@ -744,7 +827,8 @@ def service_blockers(service):
 # Reads may initialize SQLite or provider/pairing state, so ALL handlers are
 # admitted. This set only avoids false generation bumps for unchanged polling.
 READ_RPCS = frozenset({
-    "service.status", "sessions.list", "sessions.messages", "runs.get", "events.poll",
+    "service.status", "service.local_status", "sessions.list", "sessions.messages",
+    "runs.get", "events.poll",
     "runs.list", "tools.list", "workspace.get", "approvals.list", "memory.list",
     "memory.search", "memory.resolve", "mcp.list", "agents.list", "skills.list",
     "skills.inspect", "skills.get", "schedules.list", "schedules.history",

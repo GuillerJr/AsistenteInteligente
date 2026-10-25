@@ -4,6 +4,7 @@ import Foundation
 /// Private GCD queue owns the blocking descriptor. No network work runs on the UI actor.
 /// Tokens and POSIX ownership are base authentication, not signed macOS client attestation.
 public final class LocalRPCClient: @unchecked Sendable {
+    private let runtime: ProfileRuntimeGuard
     private let directory: String
     private let timeout: TimeInterval
     private let connectionIdleLimit: TimeInterval
@@ -15,13 +16,16 @@ public final class LocalRPCClient: @unchecked Sendable {
     private var authorizationFailure: RPCFailure?
 
     public init(stateDirectory: String, timeout: TimeInterval = 30,
-                connectionIdleLimit: TimeInterval = 20) {
+                connectionIdleLimit: TimeInterval = 20, runtime: ProfileRuntimeGuard? = nil) {
         precondition(timeout.isFinite && timeout > 0 && timeout <= 30)
         precondition(connectionIdleLimit.isFinite && connectionIdleLimit > 0 && connectionIdleLimit <= 30)
+        self.runtime = runtime ?? ProfileRuntimeGuard()
         directory = stateDirectory
         self.timeout = timeout
         self.connectionIdleLimit = connectionIdleLimit
     }
+
+    public var isActive: Bool { runtime.isActive }
 
     public func call(_ method: String, params: [String: RPCValue] = [:]) async throws -> RPCValue {
         try await withCheckedThrowingContinuation { continuation in
@@ -31,6 +35,8 @@ public final class LocalRPCClient: @unchecked Sendable {
             }
         }
     }
+
+    public func retire() async { runtime.retire(); await close() }
 
     public func close() async {
         await withCheckedContinuation { continuation in
@@ -142,6 +148,7 @@ public final class LocalRPCClient: @unchecked Sendable {
     }
 
     private func perform(_ method: String, params: [String: RPCValue]) throws -> RPCValue {
+        try runtime.check()
         // No request has been written yet. A modal owner review can outlive
         // the server's idle deadline; renew that stale connection once before
         // sending new work. This is not a retry after an ambiguous mutation.
@@ -150,16 +157,17 @@ public final class LocalRPCClient: @unchecked Sendable {
            ProcessInfo.processInfo.systemUptime - lastResponseAt >= connectionIdleLimit {
             disconnect()
         }
-        if descriptor < 0 { try connect() }
+        if descriptor < 0 { try runtime.check(); try connect() }
         nextID = nextID % 9_007_199_254_740_991 + 1
         let frame = try RPCFrame.request(id: nextID, method: method, params: params, token: token)
         let deadline = ProcessInfo.processInfo.systemUptime + timeout
         do {
+            try runtime.check()
             try frame.withUnsafeBytes { buffer in
                 var sent = 0
                 while sent < buffer.count {
                     try waitForDescriptor(Int16(POLLOUT), deadline: deadline)
-                    let count = Darwin.write(descriptor, buffer.baseAddress!.advanced(by: sent), buffer.count - sent)
+                    let count = try runtime.withActive { Darwin.write(descriptor, buffer.baseAddress!.advanced(by: sent), buffer.count - sent) }
                     if count < 0, errno == EINTR || errno == EAGAIN { continue }
                     guard count > 0 else { throw RPCFailure.disconnected }
                     sent += count
@@ -176,6 +184,7 @@ public final class LocalRPCClient: @unchecked Sendable {
                 if bytes.prefix(count).contains(10) {
                     let result = try RPCFrame.response(response, expectedID: nextID)
                     lastResponseAt = ProcessInfo.processInfo.systemUptime
+                    try runtime.check()
                     return result
                 }
             }

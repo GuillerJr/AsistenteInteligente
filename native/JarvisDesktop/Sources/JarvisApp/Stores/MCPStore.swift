@@ -12,14 +12,15 @@ final class MCPStore {
     var isLoading = false
     var didLoad = false
 
+    @ObservationIgnored private var runtimeIsActive: @Sendable () -> Bool = { false }
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var client: MCPManagementClient?
 
-    func configure(client: LocalRPCClient) { self.client = MCPManagementClient(transport: client) }
+    func configure(client: LocalRPCClient) { self.client = MCPManagementClient(transport: client); runtimeIsActive = { client.isActive } }
     func close() async { await client?.close() }
 
     func refresh() async throws {
-        guard !isChanging, !isLoading else { return }
+        guard runtimeIsActive(), !isChanging, !isLoading else { return }
         guard let client else { throw RPCFailure.unavailable }
         isLoading = true
         defer { isLoading = false }
@@ -37,7 +38,7 @@ final class MCPStore {
     }
 
     func add(_ configuration: MCPConfiguration) async -> Bool {
-        guard !isChanging, let client else { return false }
+        guard runtimeIsActive(), !isChanging, let client else { return false }
         guard supportedProtocols.contains(configuration.protocolVersion) else {
             errorMessage = MCPConfigurationError.protocolVersion.localizedDescription
             return false
@@ -54,7 +55,7 @@ final class MCPStore {
     }
 
     func connect(_ server: MCPServerSnapshot) async {
-        guard !isChanging, !server.connected, servers.contains(server), let client else { return }
+        guard runtimeIsActive(), !isChanging, !server.connected, servers.contains(server), let client else { return }
         generation += 1
         isChanging = true
         defer { isChanging = false }
@@ -67,7 +68,7 @@ final class MCPStore {
         alert.buttons.first?.keyEquivalent = ""
         alert.buttons.last?.keyEquivalent = "\r"
         alert.accessoryView = Self.commandReview(server.configuration.commandJSON)
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        guard alert.runModal() == .alertFirstButtonReturn, runtimeIsActive() else { return }
         // This is only the owner's process-launch choice. Tool effects still
         // use the one run/session/digest authority in AccessStore and the host.
         errorMessage = nil
@@ -79,7 +80,7 @@ final class MCPStore {
     }
 
     func disconnect(_ server: MCPServerSnapshot) async {
-        guard !isChanging, server.connected, servers.contains(server), let client else { return }
+        guard runtimeIsActive(), !isChanging, server.connected, servers.contains(server), let client else { return }
         generation += 1
         isChanging = true
         errorMessage = nil
@@ -90,7 +91,7 @@ final class MCPStore {
     }
 
     func remove(_ server: MCPServerSnapshot) async {
-        guard !isChanging, servers.contains(server), let client else { return }
+        guard runtimeIsActive(), !isChanging, servers.contains(server), let client else { return }
         generation += 1
         isChanging = true
         defer { isChanging = false }
@@ -99,7 +100,7 @@ final class MCPStore {
         alert.informativeText = "Se cerrará su conexión y se eliminará su configuración de Jarvis. No se borrará el programa."
         alert.addButton(withTitle: "Cancelar")
         alert.addButton(withTitle: "Quitar servidor")
-        guard alert.runModal() == .alertSecondButtonReturn else { return }
+        guard alert.runModal() == .alertSecondButtonReturn, runtimeIsActive() else { return }
         errorMessage = nil
         do {
             try await client.remove(server.id)
