@@ -3,8 +3,8 @@
 Implementación propia con contratos verificados y un recorrido nativo acotado con
 decisiones reales del dueño sobre datos sintéticos. Este registro no acredita el cierre de
 A-69 (onboarding/doctor), A-71 (recuperación) ni de la fase A. La [activación local y apertura](PHASE_A_ACTIVATION.md) tiene una ampliación
-implementada con pruebas; su recorrido real todavía está pendiente. Reparaciones
-y distribución continúan abiertas.
+implementada con pruebas y un recorrido real acotado sobre el perfil sintético,
+elegido por el dueño. Reparaciones y distribución continúan abiertas.
 
 ## Referencia y separación del producto
 

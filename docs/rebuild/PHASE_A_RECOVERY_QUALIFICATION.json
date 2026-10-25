@@ -147,7 +147,7 @@
     "phase_a_complete": false,
     "phase_b_started": false,
     "source_parent": "d8a8b5bedb0914611971a8e42def1d009a1ac494",
-    "qualification_status": "integrated_local_tests_passed_owner_activation_and_ci_pending",
+    "qualification_status": "bounded_native_activation_and_explicit_open_passed_phase_a_open",
     "root_results": {
       "python_passed": 1754,
       "python_seconds": 108.63,
@@ -159,10 +159,13 @@
       "bytecode": "passed",
       "clean_base": "passed",
       "product_sources_edited_after_tests": false,
-      "publication_gates": "pending",
-      "ci": "pending"
+      "publication_gates": "passed",
+      "ci": "success",
+      "ci_run": 40167465783,
+      "ubuntu_24_04": "success",
+      "macos_26": "success"
     },
-    "product_checkpoint": null,
+    "product_checkpoint": "1d378a6358b8a339777ad72062f5ff6524a398f3",
     "development_bundle": {
       "executable_bytes": 8485360,
       "executable_sha256": "553ba3ecd8827b7fcc57134555b71b7d82903508a84aa35b7106174e834fff64",
@@ -171,14 +174,14 @@
       "previous_installed_app_replaced": false
     },
     "native_live": {
-      "status": "pending",
+      "status": "bounded_live_passed",
       "scope": "own_synthetic_profiles_only",
       "credentials_required_for_planned_checks": false,
       "owner_makes_real_approval": true,
       "agent_may_approve": false,
-      "activation_observed": false,
-      "explicit_open_observed": false,
-      "first_restored_start_local_without_sdk_observed": false,
+      "activation_observed": true,
+      "explicit_open_observed": true,
+      "first_restored_start_local_without_sdk_observed": true,
       "memory_reassociation_qualified": false,
       "readonly_preflight": {
         "review_observed": true,
@@ -190,7 +193,38 @@
           "device": "16777230",
           "inode": "67545006"
         }
-      }
+      },
+      "activation_operation_id": "570c7f5d53e84d87ac294b57dcb1476f",
+      "receipt_status": "completed",
+      "effect_status": "local_admission_published",
+      "receipt_durable": true,
+      "cleanup_pending": false,
+      "admission_sha256": "ce0a799227f507b0182805ff4779b9cd52734a7c5553282dc353a5776ac0dc54",
+      "both_owner_decisions_reported": true,
+      "old_service_absent_observed": true,
+      "expected_five_restore_constraints_verified": true,
+      "provider_override_present": false,
+      "new_service_children_observed": 0,
+      "provider_directory_absent": true,
+      "provider_choice_absent": true,
+      "original_durable_draft_preserved_before_open": true,
+      "restored_chat_draft_empty": true,
+      "workspace_private_empty": true,
+      "bindings": 0,
+      "mcp_programs": 0,
+      "enabled_telegram_routes": 0,
+      "doctor_phase": "complete",
+      "doctor_operation_id": "462be2ae21ff4bc79b9e874c2a7ffc44",
+      "doctor_global_status": "partial_skills_absent",
+      "backup_review_discarded": true,
+      "memory_documents_in_current_scope": 0,
+      "schedule_definitions": 0,
+      "independent_predecessor_exit_code_obtained": false,
+      "continuous_process_trace": false,
+      "real_reopen_before_login_qualified": false,
+      "independent_admission_metadata_sha256": "14a03f8c31f4c8f3e00a1794c192dd44c050bcffae27eca1c07ed683a43e9910",
+      "independent_opened_metadata_sha256": "417f480ea60c44b812dfdd3248fd12c91aca01f0c46b2c7d7a3d56f7442ef46f",
+      "native_open_proof_sha256": "78f0352656797636cb559045e94bceae2823978333182278423eb61bb38190ea"
     },
     "contracts": {
       "same_approval_authority": true,
@@ -215,7 +249,7 @@
       "native-activation.patch": "d9b70bb0e6f65fe24eee8a97d46332b7fc94d17fb5202c21b1474b499eb6b280"
     },
     "limits": [
-      "Integrated local tests passed; production signing, CI publication and the native owner activation/open walkthrough remain independently qualified.",
+      "Integrated local tests, product commit CI and a bounded native owner activation/open walkthrough passed. Production signing, a later real reopen, negative live cases and complete phase A qualification remain pending.",
       "Local admission and current readback do not prove signer authenticity or a historical operation's fsync, ACK or cleanup.",
       "Memory scopes remain unchanged; no reassociation to the new private empty workspace is qualified.",
       "Cold WAL/journals, workspace artifacts, repair, migration, channel reconciliation and standalone distribution remain phase A work."

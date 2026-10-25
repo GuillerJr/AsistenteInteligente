@@ -14231,8 +14231,8 @@
           "A-70",
           "A-71"
         ],
-        "verified_scope": "Checkpoint b8ce4bc con 1585 Python / 162 Swift y CI aprobados; respaldo, verificación y staging sintéticos desde la app con decisiones reales del dueño. Captura/diagnóstico frío DELETE y rechazo de bootstrap restaurado; los tres SQLite de otro recorrido nativo no vacío conservaron bytes/metadatos. Alcances y demora inicial no atribuida registrados por separado. Ampliación local integrada: 1754 Python/175 Swift, admisión contextual y handoff explícito sin SDK inicial; revisión GUI descartada conservando borrador. Aprobación/apertura reales y CI del cambio pendientes; ver PHASE_A_ACTIVATION.md.",
-        "remaining": "WAL/journals fríos, workspace/artefactos, recorrido nativo real de activación y apertura, asociación de memoria/canales, reparación, actualización/rollback y distribución. No cierra familias ni inicia B.",
+        "verified_scope": "Checkpoint b8ce4bc con 1585 Python / 162 Swift y CI aprobados; respaldo, verificación y staging sintéticos desde la app con decisiones reales del dueño. Captura/diagnóstico frío DELETE y rechazo de bootstrap restaurado; los tres SQLite de otro recorrido nativo no vacío conservaron bytes/metadatos. Alcances y demora inicial no atribuida registrados por separado. Ampliación local integrada: 1754 Python/175 Swift, admisión contextual y handoff explícito sin SDK inicial; revisión GUI descartada conservando borrador. Checkpoint 1d378a6 con CI macOS/Linux aprobado y activación/apertura reales del perfil sintético elegidas por el dueño. Estado local sin cuenta, diagnóstico y revisión de copia observados; límites y pruebas independientes en PHASE_A_ACTIVATION.md.",
+        "remaining": "WAL/journals fríos, workspace/artefactos, reinicio y escenarios negativos reales de activación, asociación de memoria/canales, reparación, actualización/rollback y distribución. No cierra familias ni inicia B.",
         "detail_file": "PHASE_A_RECOVERY.md",
         "qualification_file": "PHASE_A_RECOVERY_QUALIFICATION.json"
       }
@@ -14269,7 +14269,7 @@
     },
     "previous_detail_file": "PHASE_A_CHANNELS_VOICE_WEB.md",
     "qualification_file": "PHASE_A_RECOVERY_QUALIFICATION.json",
-    "latest_qualification_status": "175native_1754python_local_activation_tests_passed_owner_walkthrough_and_ci_pending"
+    "latest_qualification_status": "175native_1754python_ci_and_bounded_native_activation_open_passed_phase_a_open"
   },
   "target_decisions": {
     "date": "2026-10-24",

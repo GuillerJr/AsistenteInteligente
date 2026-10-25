@@ -1,8 +1,8 @@
 # Fase A: activación local y apertura de perfiles restaurados
 
 Implementación propia integrada, con 1.754 pruebas Python y 175 nativas aprobadas.
-La revisión de sólo lectura se observó en la app; todavía falta la aprobación real
-de activación y la apertura explícita del perfil sintético. No cierra A-69, A-71
+La activación y la apertura explícita del perfil sintético se observaron en la app
+con ambas decisiones del dueño; el nuevo perfil quedó local y desconectado. No cierra A-69, A-71
 ni la fase A. La fase B sigue pendiente.
 
 La referencia se estudió mediante REA por partes, incluidos los contratos de
@@ -101,9 +101,33 @@ ausente. Descartar la revisión y cerrar Ajustes devolvió el chat original con
 «BORRADOR RECUPERACIÓN SIN ENVIAR», sin enviarlo. No se solicitó ni aprobó activación
 en este preflight. Los controles de publicación y CI se registran por separado.
 
-Faltan la decisión real del dueño y «Abrir perfil activado», el cierre/reinicio
-local sin cuenta, y los casos reales de denegación, cancelación y resultado incierto.
-Los fixtures cubren estos estados pero no sustituyen el recorrido nativo del dueño.
+Después del preflight, el dueño autorizó la activación local y eligió
+«Abrir perfil activado». La operación `570c7f5d53e84d87ac294b57dcb1476f` quedó
+`completed/local_admission_published`, con journal durable y sin cleanup pendiente.
+La comprobación independiente fijó marcador, admisión, raíz física y permisos.
+Cerrar y reabrir Ajustes conservó el recibo y el borrador original sin enviarlo.
+
+La apertura posterior mostró la raíz seleccionada y «Perfil local abierto», con
+ChatGPT desconectado. El servicio anterior ya no existía; el nuevo hijo de la app
+llevaba las cinco restricciones de restauración y ningún override del proveedor.
+La rama nativa de apertura satisfactoria exige el reporte limpio del propietario
+anterior; no se obtuvo por separado su código de salida ya recogido por la app.
+No se observaron hijos del nuevo servicio ni directorio de proveedor o elección
+local. Son comprobaciones acotadas, no un registro continuo de procesos.
+
+El borrador del chat restaurado estaba vacío. Memoria se pudo consultar sin
+conectar cuenta. Doctor completó la operación `462be2ae21ff4bc79b9e874c2a7ffc44`:
+recursos presentes, admisión y relaciones correctos; resultado global parcial
+por skills ausente. Una revisión de respaldo posterior se descartó sin publicar.
+Los controles conservaban sus hashes; workspace privado vacío, cero bindings/MCP
+y la ruta de Telegram deshabilitada. La memoria y las tareas de esta copia estaban
+vacías; este recorrido no acredita una reconciliación no vacía.
+
+El checkpoint de producto `1d378a6358b8a339777ad72062f5ff6524a398f3` pasó pre-commit,
+pre-push y [CI en Ubuntu/macOS](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40167465783).
+Faltan reinicio real posterior sin cuenta y los casos reales de denegación,
+cancelación y resultado incierto. Los fixtures cubren estos estados, con límites
+separados de este recorrido nativo del dueño.
 Los borradores duraderos anteriores se retienen sólo en RAM durante esta sesión;
 no hay selector para recuperarlos. Chats y borradores temporales no se trasladan.
 
