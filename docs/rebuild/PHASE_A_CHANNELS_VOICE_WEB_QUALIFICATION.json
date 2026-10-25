@@ -4,7 +4,7 @@
   "phase": "A",
   "complete_reference_variant": false,
   "phase_b_started": false,
-  "git_parent": "c53189cc87a1520a3925f76caf3f842b911ae7cc",
+  "git_parent": "a29c28231871c616e4a3171e1c336e66b990f35f",
   "scope_document": "PHASE_A_CHANNELS_VOICE_WEB.md",
   "qualification_status": "local_automated_checks_development_bundle_and_bounded_live_cases_passed_ci_pending",
   "automated": {
@@ -41,7 +41,23 @@
         "framework_related_failures": 7
       },
       "framework_fix_regressions_integrated": 12,
-      "new_ci": "pending"
+      "new_ci": "pending_after_fixture_portability_fix",
+      "a29_checkpoint": {
+        "run_id": 40156536970,
+        "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40156536970",
+        "macos_26": "passed",
+        "ubuntu_24_04": "63 fixture setup errors: shared Telegram fixture used macOS-only/private/tmp",
+        "runtime_product_failure_observed": false
+      },
+      "fixture_portability_fix": {
+        "files": [
+          "tests/test_service_telegram.py"
+        ],
+        "scope": "platform temporal root only; no product/native source change",
+        "local_affected_tests_passed": 67,
+        "seconds": 4.71,
+        "fresh_ci": "pending_after_publication"
+      }
     },
     "web_post_close_fix": {
       "passed": 156,
@@ -98,7 +114,10 @@
       "ruff": "passed_before_unchanged_python_source",
       "compileall": "passed_before_unchanged_python_source",
       "clean_base": "passed_runtime_dependencies_0",
-      "scope": "Development host; no full capability-family closure."
+      "scope": "Development host; no full capability-family closure.",
+      "fixture_followup": {
+        "scope": "Only shared temporary-root setup changed after full1234 pass; affected67 tests passed locally; commit/push hooks rerun complete suite."
+      }
     },
     "publication_attempts": [
       {
@@ -516,7 +535,7 @@
       "tests/test_service_management.py": "a1e762293a8f4df19c0300b122ace723fb5d0be9f0fbfa1d56a3fcc5b9067168",
       "tests/test_service_mcp.py": "2b1971e612c078f7742818505fdd27273ffcd2914ac1b60701c8d9ceaa718eb8",
       "tests/test_service_review.py": "769028d4a5396c78a7a87c98fff10fb0a8499fda60e91e3b7ad99bf6cf31cbb7",
-      "tests/test_service_telegram.py": "893f5921aba861d8eed2acf1aea3ae9070f4243128c694aa3a3d548480f6262b",
+      "tests/test_service_telegram.py": "ac934a236d735ea2f40b64581df0124655c7b75b5d55e09eb8a24f6551fb6f5f",
       "tests/test_skills.py": "808ae2f88382528652036e07f886ded012d43401780df894a8c441b28d418e4d",
       "tests/test_state.py": "15f8f5d63535b66a2a2ff673c5f58ead68f0ddd0f080abcf457b2174c3e28ef2",
       "tests/test_state_sessions.py": "c3a51aa378300d8277500420926c6b7078c019aab03e66e61aff666134a22607",
@@ -529,7 +548,7 @@
       "tests/test_workspace.py": "e9f0e690058426659fc968e728e424ad8a585903a802ee0366fd2d75f0dd69ca",
       "uv.lock": "c1c3c6550f3eef32b498e82763ff8b9b2137c5a2ea1c338d13984edfd40d7c70"
     },
-    "manifest_sha256": "2abcb6955847011fc3b5404c0629aa4a5be8a09cd7e14440f6e159aec6720a22"
+    "manifest_sha256": "05bb0b16d8e84c127aea1fbd8e4179b9d404565215c221edb3102c74f01f89f8"
   },
   "limits": [
     "Phase A remains open, phase B not started, and no complete reference parity or family closure claimed.",

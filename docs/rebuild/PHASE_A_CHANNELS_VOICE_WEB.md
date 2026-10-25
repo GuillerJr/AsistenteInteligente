@@ -307,3 +307,10 @@ reconexión manual. El dueño dictó una frase: se observó «BORRADOR BASE» se
 mensaje enviado. Es un caso corto de micrófono a borrador en este Mac, no prueba
 de todos los idiomas, escucha permanente o la matriz completa de TCC. La app
 anterior no fue reemplazada y el nuevo bundle sigue usando Python/Codex externos.
+
+CI del checkpoint `a29c282`: macOS 26 aprobó la suite y el bundle completos;
+Ubuntu detectó 63 errores de setup en un único fixture compartido de Telegram
+que usaba `/private/tmp`. Se corrigió para conservar la ruta corta en macOS y
+usar la carpeta temporal del sistema en otros hosts. Las 67 pruebas afectadas
+pasaron localmente en 4,71 s; el CI posterior a este ajuste se verifica aparte.
+No cambió el código del producto ni se reinstaló la app por un ajuste de fixture.

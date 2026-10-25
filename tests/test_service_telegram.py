@@ -3,6 +3,7 @@
 import asyncio
 import json
 import shutil
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -52,7 +53,8 @@ class TelegramPeer:
 
 @pytest.fixture
 async def telegram_service():
-    root = Path(tempfile.mkdtemp(prefix="jarvis-telegram-service-", dir="/private/tmp")).resolve()
+    temporary_root = "/private/tmp" if sys.platform == "darwin" else tempfile.gettempdir()
+    root = Path(tempfile.mkdtemp(prefix="jarvis-telegram-service-", dir=temporary_root)).resolve()
     bot = FakeBot()
     await bot.start()
     peer = TelegramPeer()
