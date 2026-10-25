@@ -18,7 +18,12 @@ verificación, bloqueo de mantenimiento e internals de snapshots del pin
 `1e3ff306abaff29f03e7668d53b01c07f10294ac` de OpenClaw. Sus fuentes, hashes,
 Evidence IDs y límites están en [REA_COVERAGE.json](REA_COVERAGE.json).
 Se derivan contratos de comportamiento; no se importa ni ejecuta su implementación.
-El total de diecisiete lotes y 71 rutas TS/JS mantiene cobertura semántica parcial.
+OC-18 añade cinco módulos sobre adquisición privada de familias SQLite, backup
+nativo y custodia del staging. El total de dieciocho lotes y 76 rutas TS/JS
+mantiene cobertura semántica parcial. La [procedencia](REA_PART18_PROVENANCE.json)
+y el [resultado](REA_PART18_SUMMARY.json) conservan hashes, Evidence IDs e
+incógnitas; el [contrato propio WAL](PHASE_A_COLD_WAL_CONTRACT.md) aún no habilita
+WAL/journals fríos ni cierra ninguna familia.
 
 Una observación de esa referencia es especialmente relevante: algunas operaciones
 de listado/resolución también resuelven marcadores pendientes. Jarvis separa el

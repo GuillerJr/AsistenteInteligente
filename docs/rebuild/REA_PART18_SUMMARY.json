@@ -1,0 +1,430 @@
+{
+  "schema_version": 1,
+  "batch": "OC-18",
+  "topic": "Private SQLite family acquisition, online backup and retained staging cleanup",
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "parent_evidence_id": "ev_5bc7e7e59a1353fb601f6b903eaecd4266cb15e98cdb0f921d3c3a26005340e1",
+  "summary_evidence_id": "ev_38a087dd839ab0a1e4492ace2be5e5a78e360b056f73a703648dffad574b27cf",
+  "partition_sha256": "25f6cb269ae25fc38ae789414054f333965d9546a69da2e357322644c06fca79",
+  "statistics": {
+    "findings": 211,
+    "invalid_utf8_files": 0,
+    "modules": 0,
+    "nested_asar_containers": 0,
+    "parse_failures": 0,
+    "parsed_javascript_files": 5,
+    "relevant_files": 6,
+    "skipped_javascript_files": 0,
+    "text_bytes_read": 220224,
+    "visited_ast_nodes": 7185
+  },
+  "source_selection": {
+    "requested_paths": [
+      "package.json",
+      "src/infra/sqlite-snapshot-source.ts",
+      "src/infra/sqlite-readonly-location.ts",
+      "src/infra/sqlite-readonly-location-cleanup.ts",
+      "src/infra/sqlite-backup.ts",
+      "src/infra/sqlite-private-directory.ts"
+    ],
+    "unselected_files": 0
+  },
+  "coverage": {
+    "application": {
+      "limits": [],
+      "omitted_count": null,
+      "status": "partial",
+      "truncated": false
+    },
+    "application_unknowns": 0,
+    "semantic": {
+      "families": [
+        {
+          "family": "boundary",
+          "omitted_relations": 0,
+          "retained_relations": 4,
+          "status": "partial",
+          "unknown_count": 0
+        },
+        {
+          "family": "call-flow",
+          "omitted_relations": 0,
+          "retained_relations": 421,
+          "status": "partial",
+          "unknown_count": 371
+        },
+        {
+          "family": "child-process",
+          "omitted_relations": 0,
+          "retained_relations": 0,
+          "status": "partial",
+          "unknown_count": 0
+        },
+        {
+          "family": "closure",
+          "omitted_relations": 0,
+          "retained_relations": 545,
+          "status": "partial",
+          "unknown_count": 0
+        },
+        {
+          "family": "configuration",
+          "omitted_relations": 0,
+          "retained_relations": 0,
+          "status": "partial",
+          "unknown_count": 0
+        },
+        {
+          "family": "data-flow",
+          "omitted_relations": 0,
+          "retained_relations": 3389,
+          "status": "partial",
+          "unknown_count": 531
+        },
+        {
+          "family": "event",
+          "omitted_relations": 0,
+          "retained_relations": 1,
+          "status": "partial",
+          "unknown_count": 0
+        },
+        {
+          "family": "object-flow",
+          "omitted_relations": 0,
+          "retained_relations": 345,
+          "status": "partial",
+          "unknown_count": 398
+        },
+        {
+          "family": "promise-ownership",
+          "omitted_relations": 0,
+          "retained_relations": 71,
+          "status": "partial",
+          "unknown_count": 55
+        },
+        {
+          "family": "request",
+          "omitted_relations": 0,
+          "retained_relations": 0,
+          "status": "partial",
+          "unknown_count": 0
+        },
+        {
+          "family": "resource-lifecycle",
+          "omitted_relations": 0,
+          "retained_relations": 0,
+          "status": "partial",
+          "unknown_count": 0
+        },
+        {
+          "family": "timer",
+          "omitted_relations": 0,
+          "retained_relations": 2,
+          "status": "partial",
+          "unknown_count": 0
+        }
+      ],
+      "limits": [],
+      "omitted_nodes": 0,
+      "omitted_relations": 0,
+      "status": "unknown",
+      "truncated": false
+    },
+    "semantic_unknowns": 1355
+  },
+  "runtime_executed": false,
+  "input_kind": "inert_source_partition_not_observed_runtime",
+  "selected_module_identities": [
+    {
+      "module": "src/infra/sqlite-readonly-location-cleanup.ts",
+      "node_id": "jag_node_8c7d4ee59594cf6c45459929891ccdf69a3a8dfe714b4d4dfe47a54104f3b5ae",
+      "observation_id": "jag_observation_913e42485ae7e85567eb719d1a7e7ea8722f215db18bf43203f3bdc15fe7bb29",
+      "source_range": {
+        "end": {
+          "column": 0,
+          "line": 586
+        },
+        "kind": "source-range",
+        "source": "src/infra/sqlite-readonly-location-cleanup.ts",
+        "start": {
+          "column": 0,
+          "line": 1
+        }
+      },
+      "sha256": "44cc3a390aae66fec17b37d7f5d60bc1111580f18ff5d5dba13a73a199ad83f2"
+    },
+    {
+      "module": "src/infra/sqlite-backup.ts",
+      "node_id": "jag_node_8ccf5f66d6f580c6276aafd2247ebeb12d7096e4059cfdd9adb02fa65a78d841",
+      "observation_id": "jag_observation_07ba2dd4014238caa0f1876a7bec18dcf8bcb503a2f73187d5f3e594efd65137",
+      "source_range": {
+        "end": {
+          "column": 0,
+          "line": 26
+        },
+        "kind": "source-range",
+        "source": "src/infra/sqlite-backup.ts",
+        "start": {
+          "column": 0,
+          "line": 1
+        }
+      },
+      "sha256": "8d43c215a51fcbf391e744a6258f4eb6dd121e622116d0da53a75846eac997ee"
+    },
+    {
+      "module": "src/infra/sqlite-snapshot-source.ts",
+      "node_id": "jag_node_d62224c92b13fa5b4659bf61e43e8337d1de1577e9b446eb6828a38e4385b02c",
+      "observation_id": "jag_observation_127d363a683112ea47547d606a39fbaef2ebd492b947379ef5718a4282cff558",
+      "source_range": {
+        "end": {
+          "column": 0,
+          "line": 438
+        },
+        "kind": "source-range",
+        "source": "src/infra/sqlite-snapshot-source.ts",
+        "start": {
+          "column": 0,
+          "line": 1
+        }
+      },
+      "sha256": "977fb63e50e10a3f3f8cc648e29255491fdaa85994d5259935080510ed059a9d"
+    },
+    {
+      "module": "src/infra/sqlite-readonly-location.ts",
+      "node_id": "jag_node_dd38aa41e20daf555a5f9acbf93b2e4fcaaba2912e423eb0042408e699d9bb23",
+      "observation_id": "jag_observation_be4da538da0bd4b5a08f81c19be979f685ba11d986faa4db8a693174241999c1",
+      "source_range": {
+        "end": {
+          "column": 0,
+          "line": 768
+        },
+        "kind": "source-range",
+        "source": "src/infra/sqlite-readonly-location.ts",
+        "start": {
+          "column": 0,
+          "line": 1
+        }
+      },
+      "sha256": "794c99ebcdbb909ae098a00330cbcd548ce80a6af2c120d93f4b512eaeacc441"
+    },
+    {
+      "module": "src/infra/sqlite-private-directory.ts",
+      "node_id": "jag_node_e0f6d6a73199026c4cf72214aceb6348c9461e516f5d6a65a34b8bf01728252c",
+      "observation_id": "jag_observation_1644b2115bbf3f1cb780fd3f25db525d37f1d393a635a1971561f1ab65d8f9c4",
+      "source_range": {
+        "end": {
+          "column": 0,
+          "line": 69
+        },
+        "kind": "source-range",
+        "source": "src/infra/sqlite-private-directory.ts",
+        "start": {
+          "column": 0,
+          "line": 1
+        }
+      },
+      "sha256": "0987431959180f548fbfa946f2bfaceb9366a9039f4ce26c97b87cb2e1a2b325"
+    }
+  ],
+  "semantic_reading": [
+    {
+      "source": "src/infra/sqlite-snapshot-source.ts",
+      "lines": [
+        55,
+        89
+      ],
+      "observation": "El ámbito de preservación prepara ubicación privada y conserva el lector hasta cerrar; la apertura ordinaria puede abrir el original de sólo lectura. No toda lectura de referencia preserva artefactos."
+    },
+    {
+      "source": "src/infra/sqlite-snapshot-source.ts",
+      "lines": [
+        269,
+        345
+      ],
+      "observation": "La preparación retenida conserva un retiro que reconcilia staging, espera worker.close y worker.closed, y sólo después elimina el directorio; agrega fallos de preparación y limpieza."
+    },
+    {
+      "source": "src/infra/sqlite-snapshot-source.ts",
+      "lines": [
+        391,
+        430
+      ],
+      "observation": "El wrapper de journal puede ejecutar de nuevo el callback tras un fallo si aparece una fuente preparada; no es una garantía universal de ejecución única."
+    },
+    {
+      "source": "src/infra/sqlite-readonly-location.ts",
+      "lines": [
+        292,
+        405
+      ],
+      "observation": "La rama preservadora crea una familia privada. Delega prefijo WAL a un helper fuera de esta partición; la alternativa copia sidecars y main y vuelve a comparar contenido/presencia/modo antes de publicar."
+    },
+    {
+      "source": "src/infra/sqlite-readonly-location.ts",
+      "lines": [
+        236,
+        284
+      ],
+      "observation": "La recuperación de journal actúa sobre copia privada y rechaza un trailer de super-journal antes de abrirla; no acredita otros journals arbitrarios."
+    },
+    {
+      "source": "src/infra/sqlite-readonly-location.ts",
+      "lines": [
+        484,
+        519
+      ],
+      "observation": "Online backup fija una lectura con BEGIN y schema_version, espera backup, revierte/cierra fuente y cambia sólo el destino a DELETE. No equivale por sí solo a preservar originales."
+    },
+    {
+      "source": "src/infra/sqlite-readonly-location-cleanup.ts",
+      "lines": [
+        395,
+        474
+      ],
+      "observation": "Retiradas concurrentes comparten operación retenida. Lectores activos impiden retiro y un rechazo no acredita eliminación."
+    },
+    {
+      "source": "src/infra/sqlite-readonly-location-cleanup.ts",
+      "lines": [
+        476,
+        584
+      ],
+      "observation": "Publicar una familia .partial no demuestra una imagen DELETE independiente ni su integridad. La adopción conserva propietario activo hasta eliminación confirmada y une cleanup concurrente."
+    },
+    {
+      "source": "src/infra/sqlite-backup.ts",
+      "lines": [
+        10,
+        24
+      ],
+      "observation": "El intervalo de 100 ms atiende una particularidad del runtime Node mientras espera backup nativo; su conteo resuelto entrega progreso final. No es algoritmo de consistencia para copiar a Python."
+    },
+    {
+      "source": "src/infra/sqlite-private-directory.ts",
+      "lines": [
+        13,
+        67
+      ],
+      "observation": "Crea directorios Unix0700; selección de caché/TMPDIR y políticas Windows se delegan a helpers no revisados."
+    }
+  ],
+  "semantic_reading_authority": "analyst_interpretation_of_pinned_source_bodies; not runtime evidence",
+  "unknowns": [
+    {
+      "contradicting_evidence_ids": [],
+      "domain": "openclaw.phase-a.cold-sqlite-recovery",
+      "mutation_evidence_ids": [
+        "ev_1b23fe605406936edabb62dfdd3108a87a9fb4362561b35e1873f4d6a3b5dd0b"
+      ],
+      "previous_revision_digest": null,
+      "question": "¿Cómo valida el helper no seleccionado sqlite-snapshot-wal-prefix.ts los frames, checksums, commits, resets y colas incompletas de la familia SQLite fijada en OpenClaw 1e3ff306abaff29f03e7668d53b01c07f10294ac?",
+      "recommended_probes": [
+        {
+          "operation": "analyze_javascript_application",
+          "rationale": "Adquirir y analizar una nueva partición exacta del helper WAL y sus dependencias, sin ejecutar OpenClaw."
+        }
+      ],
+      "relationships": [],
+      "required_authority": "historical-reference",
+      "required_confidence": "observed",
+      "required_environment": null,
+      "resolution": null,
+      "revision": 1,
+      "revision_digest": "5ffe2f7dd95939486fa6cbe4c831d8cb588958e1bf8cf434ad09b3b500627b59",
+      "scope_digest": null,
+      "severity": "high",
+      "status": "open",
+      "supporting_evidence_ids": [
+        "ev_5bc7e7e59a1353fb601f6b903eaecd4266cb15e98cdb0f921d3c3a26005340e1"
+      ],
+      "unknown_id": "unk_1d4f79b4eefcec465a4e79a641810ce21b08107cd31b7c298963d0a87e3dc77c"
+    },
+    {
+      "contradicting_evidence_ids": [],
+      "domain": "openclaw.phase-a.cold-sqlite-recovery",
+      "mutation_evidence_ids": [
+        "ev_dbe4c6cab06de141259dee371309a530c25116390cf319b23c677941c3c4809a"
+      ],
+      "previous_revision_digest": null,
+      "question": "¿Qué garantías efectivas conservan los workers, staging owner y tokens no seleccionados sobre cierre nativo, muerte del propietario y reclamación de snapshots SQLite del pin OpenClaw?",
+      "recommended_probes": [
+        {
+          "operation": "analyze_javascript_application",
+          "rationale": "Examinar una partición futura de worker/staging/retirement; distinguir contratos estáticos de crash y runtime aún no observados."
+        }
+      ],
+      "relationships": [],
+      "required_authority": "historical-reference",
+      "required_confidence": "observed",
+      "required_environment": null,
+      "resolution": null,
+      "revision": 1,
+      "revision_digest": "22bc827f32833662f7b23f95636e8faa246802e61f1256f1f34ef6297d9381d9",
+      "scope_digest": null,
+      "severity": "high",
+      "status": "open",
+      "supporting_evidence_ids": [
+        "ev_5bc7e7e59a1353fb601f6b903eaecd4266cb15e98cdb0f921d3c3a26005340e1"
+      ],
+      "unknown_id": "unk_722d74e53fb9f3b512012562102dcc569480c44a2e740a567542ba30e5e3bda7"
+    },
+    {
+      "contradicting_evidence_ids": [],
+      "domain": "openclaw.phase-a.cold-sqlite-recovery",
+      "mutation_evidence_ids": [
+        "ev_d5cba5e945675fcd015fc43ef8b73dd7effc5ec1f1e4b06b90bd62366dfc4eb0"
+      ],
+      "previous_revision_digest": null,
+      "question": "¿Dónde se imponen límites globales de bytes/filas/trabajo y garantías nativas de copia/locks/durabilidad que no aparecen acreditadas en los cinco módulos SQLite seleccionados en OC-18?",
+      "recommended_probes": [
+        {
+          "operation": "analyze_javascript_application",
+          "rationale": "Seguir node-sqlite, fs-safe, snapshot-policy y validadores en particiones acotadas; su importación no acredita comportamiento."
+        }
+      ],
+      "relationships": [],
+      "required_authority": "historical-reference",
+      "required_confidence": "observed",
+      "required_environment": null,
+      "resolution": null,
+      "revision": 1,
+      "revision_digest": "9a6ea1ae76ba9bf1867f2a177734b0b67763ffd9c2ae089fc1a4d3b7a588af33",
+      "scope_digest": null,
+      "severity": "high",
+      "status": "open",
+      "supporting_evidence_ids": [
+        "ev_5bc7e7e59a1353fb601f6b903eaecd4266cb15e98cdb0f921d3c3a26005340e1"
+      ],
+      "unknown_id": "unk_c38984f6d7317b83100d0441d547089038a5b57e117b72b6a5bfaef2a0134a87"
+    }
+  ],
+  "full_evidence_path": "/private/tmp/jarvis-openclaw-reference-20261024/part18/rea-evidence-with-unknowns.json",
+  "export_sha256": "91f26e05381fb3a0c83da430cdd449621ef9050215ce2ff295bce44618a11ab8",
+  "export_bytes": 9344544,
+  "implementation_status": "research_and_own_contract_only; WAL_and_journals_remain_blocked_in_product",
+  "limitations": [
+    "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+    "Caller-selected source analysis leaves 0 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+    "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+    "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+    "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+    "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+    "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+    "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+    "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+    "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+    "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+    "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+    "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+    "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+    "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+    "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+    "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+    "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code.",
+    "All five selected TS files parsed without parser failures or omitted semantic nodes; application relationships remain partial and semantic coverage unknown.",
+    "The 1355 static unknowns are distinct from the three deliberately triaged residual unknown records.",
+    "The selected inert partition is not the whole OpenClaw repository; imported helpers and all runtime behavior remain unknown.",
+    "The connected generic analyzer labels authority shipped-artifact; the supplied input is explicitly historical source text, not shipped runtime execution.",
+    "No source or resources were copied into Jarvis, no OpenClaw runtime executed and no personal data read."
+  ]
+}

@@ -105,6 +105,9 @@ El [bloque de recuperación y diagnóstico](PHASE_A_RECOVERY.md) añade revision
 del host, respaldo portátil, preparación de un perfil restaurado desarmado e
 inspección sin reparación. Distingue los contratos y pruebas de la cualificación
 en la app y de la activación, actualización y distribución todavía pendientes.
+La [partición OC-18](REA_PART18_SUMMARY.json) continúa la lectura de adquisición
+SQLite privada y limpieza retenida. Su [contrato propio WAL](PHASE_A_COLD_WAL_CONTRACT.md)
+es un plan con criterios de prueba; el producto todavía rechaza WAL y journals fríos.
 
 El prototipo prueba serialización por sesión, propuesta/validación/autorización,
 resultado explícito, cancelación y asentamiento. El prototipo aislado no acredita permisos persistentes, cifrado, herramientas

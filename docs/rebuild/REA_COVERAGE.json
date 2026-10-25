@@ -2474,6 +2474,184 @@
         "Complete application coverage is restricted to this seven-source inert partition. Imported runtime helpers and end-to-end maintenance remain unreviewed.",
         "The complete private export includes earlier OC-16 public-reference records; all records are source-reference evidence and none contain owner data."
       ]
+    },
+    {
+      "topic": "Private SQLite family acquisition, online backup and retained staging cleanup",
+      "parent_evidence_id": "ev_5bc7e7e59a1353fb601f6b903eaecd4266cb15e98cdb0f921d3c3a26005340e1",
+      "summary_evidence_id": "ev_38a087dd839ab0a1e4492ace2be5e5a78e360b056f73a703648dffad574b27cf",
+      "partition_sha256": "25f6cb269ae25fc38ae789414054f333965d9546a69da2e357322644c06fca79",
+      "statistics": {
+        "findings": 211,
+        "invalid_utf8_files": 0,
+        "modules": 0,
+        "nested_asar_containers": 0,
+        "parse_failures": 0,
+        "parsed_javascript_files": 5,
+        "relevant_files": 6,
+        "skipped_javascript_files": 0,
+        "text_bytes_read": 220224,
+        "visited_ast_nodes": 7185
+      },
+      "coverage": {
+        "application": {
+          "limits": [],
+          "omitted_count": null,
+          "status": "partial",
+          "truncated": false
+        },
+        "application_unknowns": 0,
+        "semantic": {
+          "families": [
+            {
+              "family": "boundary",
+              "omitted_relations": 0,
+              "retained_relations": 4,
+              "status": "partial",
+              "unknown_count": 0
+            },
+            {
+              "family": "call-flow",
+              "omitted_relations": 0,
+              "retained_relations": 421,
+              "status": "partial",
+              "unknown_count": 371
+            },
+            {
+              "family": "child-process",
+              "omitted_relations": 0,
+              "retained_relations": 0,
+              "status": "partial",
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "omitted_relations": 0,
+              "retained_relations": 545,
+              "status": "partial",
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "omitted_relations": 0,
+              "retained_relations": 0,
+              "status": "partial",
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "omitted_relations": 0,
+              "retained_relations": 3389,
+              "status": "partial",
+              "unknown_count": 531
+            },
+            {
+              "family": "event",
+              "omitted_relations": 0,
+              "retained_relations": 1,
+              "status": "partial",
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "omitted_relations": 0,
+              "retained_relations": 345,
+              "status": "partial",
+              "unknown_count": 398
+            },
+            {
+              "family": "promise-ownership",
+              "omitted_relations": 0,
+              "retained_relations": 71,
+              "status": "partial",
+              "unknown_count": 55
+            },
+            {
+              "family": "request",
+              "omitted_relations": 0,
+              "retained_relations": 0,
+              "status": "partial",
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "omitted_relations": 0,
+              "retained_relations": 0,
+              "status": "partial",
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "omitted_relations": 0,
+              "retained_relations": 2,
+              "status": "partial",
+              "unknown_count": 0
+            }
+          ],
+          "limits": [],
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "status": "unknown",
+          "truncated": false
+        },
+        "semantic_unknowns": 1355
+      },
+      "runtime_executed": false,
+      "source_selection": {
+        "requested_paths": [
+          "package.json",
+          "src/infra/sqlite-snapshot-source.ts",
+          "src/infra/sqlite-readonly-location.ts",
+          "src/infra/sqlite-readonly-location-cleanup.ts",
+          "src/infra/sqlite-backup.ts",
+          "src/infra/sqlite-private-directory.ts"
+        ],
+        "unselected_files": 0
+      },
+      "id": "OC-18",
+      "full_evidence_path": "/private/tmp/jarvis-openclaw-reference-20261024/part18/rea-evidence-with-unknowns.json",
+      "source_paths": [
+        "package.json",
+        "src/infra/sqlite-snapshot-source.ts",
+        "src/infra/sqlite-readonly-location.ts",
+        "src/infra/sqlite-readonly-location-cleanup.ts",
+        "src/infra/sqlite-backup.ts",
+        "src/infra/sqlite-private-directory.ts"
+      ],
+      "semantic_unknowns": 1355,
+      "residual_unknown_ids": [
+        "unk_1d4f79b4eefcec465a4e79a641810ce21b08107cd31b7c298963d0a87e3dc77c",
+        "unk_722d74e53fb9f3b512012562102dcc569480c44a2e740a567542ba30e5e3bda7",
+        "unk_c38984f6d7317b83100d0441d547089038a5b57e117b72b6a5bfaef2a0134a87"
+      ],
+      "provenance": "REA_PART18_PROVENANCE.json",
+      "summary": "REA_PART18_SUMMARY.json",
+      "export_sha256": "91f26e05381fb3a0c83da430cdd449621ef9050215ce2ff295bce44618a11ab8",
+      "export_bytes": 9344544,
+      "limitations": [
+        "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+        "Caller-selected source analysis leaves 0 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+        "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+        "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+        "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+        "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+        "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+        "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+        "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+        "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code.",
+        "All five selected TS files parsed without parser failures or omitted semantic nodes; application relationships remain partial and semantic coverage unknown.",
+        "The 1355 static unknowns are distinct from the three deliberately triaged residual unknown records.",
+        "The selected inert partition is not the whole OpenClaw repository; imported helpers and all runtime behavior remain unknown.",
+        "The connected generic analyzer labels authority shipped-artifact; the supplied input is explicitly historical source text, not shipped runtime execution.",
+        "No source or resources were copied into Jarvis, no OpenClaw runtime executed and no personal data read."
+      ]
     }
   ],
   "remaining_parts": [
@@ -2540,7 +2718,16 @@
       "id": "SCOPE-10",
       "scope": "Distribution, update, secrets, sandbox and recovery",
       "status": "pending",
-      "original_plan_id": "OC-10"
+      "original_plan_id": "OC-10",
+      "reviewed_subsets": [
+        "OC-13",
+        "OC-14",
+        "OC-15",
+        "OC-16",
+        "OC-17",
+        "OC-18"
+      ],
+      "remaining_note": "WAL-prefix algorithm, worker/staging/token retirement, native filesystem helpers, global resource limits and real crash behavior remain unreviewed or unqualified. OC-18 is partial source research, not WAL support in Jarvis."
     },
     {
       "id": "SCOPE-11",
@@ -2549,7 +2736,7 @@
       "original_plan_id": "OC-11"
     }
   ],
-  "rea_parsed_unique_source_files": 71,
+  "rea_parsed_unique_source_files": 76,
   "remaining_parts_id_note": "Los scopes restantes usan SCOPE para no confundir etiquetas del plan inicial con lotes OC completados. Un lote estático no cierra un scope.",
   "rea_parsed_unique_source_paths": [
     "cli-parent-lifetime.mjs",
@@ -2607,7 +2794,12 @@
     "src/infra/package-update-activation-immutable-pointer.ts",
     "src/infra/package-update-activation-immutable-recovery.ts",
     "src/infra/package-update-activation-immutable.ts",
+    "src/infra/sqlite-backup.ts",
     "src/infra/sqlite-integrity.ts",
+    "src/infra/sqlite-private-directory.ts",
+    "src/infra/sqlite-readonly-location-cleanup.ts",
+    "src/infra/sqlite-readonly-location.ts",
+    "src/infra/sqlite-snapshot-source.ts",
     "src/infra/sqlite-snapshot.ts",
     "src/mcp/tools-stdio-server.ts",
     "src/plugin-sdk/memory-core-host-engine-schema.ts",

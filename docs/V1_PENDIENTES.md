@@ -64,8 +64,9 @@ Estos recorridos acotados no cierran todas las capacidades del canal, voz o web.
   HTTP 200; contenido externo no verificado, sin JavaScript ni enlaces adicionales.
 - [ ] Registrar controles finales de cierre Codex/MCP/Telegram/scheduler/RPC,
   reteniendo Stores y propietarios ante incertidumbre y sin reconexión/replay.
-- [ ] Completar la investigación semántica pendiente: REA 13–17 amplían respaldo,
-  snapshots, actualización, cierre y migración de memoria; diecisiete lotes y 71 rutas TS/JS no cierran la matriz ni toda la referencia.
+- [ ] Completar la investigación semántica pendiente: REA 13–18 amplían respaldo,
+  snapshots, actualización, cierre, migración de memoria y custodia SQLite;
+  dieciocho lotes y 76 rutas TS/JS no cierran la matriz ni toda la referencia.
 - [ ] Repetir Python/Swift/paquete/CI tras los últimos ajustes y registrar identidades
   finales. No sustituir la instalación anterior por un bundle de desarrollo.
 
@@ -120,6 +121,9 @@ declara completa por los tests sintéticos.
   supervisión lectora, sin reinicio; su causa no quedó establecida.
 - [ ] Completar familias frías con WAL/journals, archivos/artefactos de workspace, activación y
   reconciliación, reparaciones, actualización, rollback y distribución.
+  La [investigación OC-18](rebuild/REA_PART18_SUMMARY.json) y el
+  [contrato propio WAL](rebuild/PHASE_A_COLD_WAL_CONTRACT.md) fijan adquisición,
+  presupuestos, custodia y pruebas; todavía no habilitan esas familias.
 
 ## Fase B — después de acreditar A
 

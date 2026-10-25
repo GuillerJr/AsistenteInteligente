@@ -1,0 +1,73 @@
+{
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "reference_tree": "197c70097790e30087bbef323b0f2cc5148ab9b7",
+  "source_provider": "official GitHub GET at fixed revision; independently checked Git blob SHA1 and SHA256",
+  "files": [
+    {
+      "path": "src/infra/sqlite-backup.ts",
+      "git_blob": "f298af63e7744ac28725f165dcf3ff2bb2fe8a1d",
+      "size": 900,
+      "sha256": "8d43c215a51fcbf391e744a6258f4eb6dd121e622116d0da53a75846eac997ee"
+    },
+    {
+      "path": "src/infra/sqlite-private-directory.ts",
+      "git_blob": "b777cc48fe3211085a07ac75942f60b9b0425a0e",
+      "size": 2757,
+      "sha256": "0987431959180f548fbfa946f2bfaceb9366a9039f4ce26c97b87cb2e1a2b325"
+    },
+    {
+      "path": "src/infra/sqlite-readonly-location-cleanup.ts",
+      "git_blob": "851b9cb4ed4f6880712bc48fbdf1423087a97e8c",
+      "size": 19659,
+      "sha256": "44cc3a390aae66fec17b37d7f5d60bc1111580f18ff5d5dba13a73a199ad83f2"
+    },
+    {
+      "path": "src/infra/sqlite-readonly-location.ts",
+      "git_blob": "88655e371c77001dec0c881b9291dc0e0bfe2ce3",
+      "size": 27508,
+      "sha256": "794c99ebcdbb909ae098a00330cbcd548ce80a6af2c120d93f4b512eaeacc441"
+    },
+    {
+      "path": "src/infra/sqlite-snapshot-source.ts",
+      "git_blob": "df64ac035728a24e7b3a72774bf242856d792ad0",
+      "size": 16375,
+      "sha256": "977fb63e50e10a3f3f8cc648e29255491fdaa85994d5259935080510ed059a9d"
+    },
+    {
+      "path": "package.json",
+      "size": 153025,
+      "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d",
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "reuse_context_from_part": 17
+    },
+    {
+      "path": "LICENSE",
+      "size": 1076,
+      "git_blob": "ed064819ab537575d0cad902f7e5af4a3488b1d0",
+      "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+      "reuse_context_from_part": 17
+    }
+  ],
+  "validated_tree_chain": [
+    {
+      "sha": "197c70097790e30087bbef323b0f2cc5148ab9b7",
+      "role": "root",
+      "reused_from_part": 17
+    },
+    {
+      "sha": "2016fce75d48ab2afbf221cf2c00b8b3b70018b7",
+      "role": "src",
+      "entries": 120,
+      "infra_child_sha": "1efa84c79d161dcfbe0f3861e6299d99bfb976d3"
+    },
+    {
+      "sha": "1efa84c79d161dcfbe0f3861e6299d99bfb976d3",
+      "role": "src/infra",
+      "entries": 2506,
+      "truncated": false
+    }
+  ],
+  "acquisition_limit": "The preliminary contents directory response stopped at 1000 names; it was not treated as evidence of absence. The complete non-recursive Git tree above resolved selected identities.",
+  "reference_checkout_modified": false,
+  "source_or_runtime_executed": false
+}
