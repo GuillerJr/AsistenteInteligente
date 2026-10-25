@@ -106,3 +106,40 @@ permite usar la conexión oficial ya autorizada del perfil de pruebas junto a un
 `--state` nuevo sin importar conversaciones. El cliente sólo pasa la ruta al
 servicio; no busca, copia ni lee credenciales. Sin ese flag conserva el directorio
 de proveedor predeterminado del perfil seleccionado.
+
+## Gestión de la base A
+
+El menú «Gestionar» abre agentes, skills, programador y procesos. El agente se
+elige para conversaciones nuevas; una conversación existente conserva su agente.
+«Ramificar conversación» copia sólo contexto completado a un chat nuevo, sin
+runs, recibos, credenciales ni aprobaciones. Las tareas pueden abrir su propio
+chat desde el historial para que el dueño vea y decida sus operaciones.
+
+La gestión usa un canal RPC separado de conversación, decisiones y MCP. Agentes,
+importación/edición/activación de skills, cambios de tareas y activación/detención
+del programador requieren revisión humana nativa de los parámetros exactos. La
+app no pulsa esas decisiones. Las revisiones y hashes protegen los snapshots
+frente a cambios entre lectura y confirmación; un fallo no reenvía una mutación.
+
+Una skill se importa de una carpeta escogida mediante NSOpenPanel, tras mostrar
+el texto de SKILL.md y cotejar su SHA-256 localmente. Se guarda deshabilitada. Los
+recursos son sólo metadatos y no se leen ni ejecutan. Habilitarla muestra la
+versión actual y conserva la autoridad central para cualquier acción posterior.
+
+Las tareas se crean deshabilitadas. El programador se activa expresamente tras
+revisar el catálogo completo ligado a su hash; no arranca al listar ni al abrir
+la app. Una regla es una fecha UTC, un intervalo o una hora diaria con zona IANA.
+La vista indica carpeta vinculada, agente, próxima ocurrencia e historial; un
+resultado incierto conserva ese estado. No se concede aprobación por programar.
+
+La vista de procesos sólo lista y consulta el ámbito de la conversación actual,
+con backend de aislamiento, código de salida, salida paginada y hash del flujo.
+Un proceso con exit 0 no acredita efectos físicos. Pedir su detención prepara un
+borrador para la herramienta process_stop: el dueño todavía debe enviarlo y
+aprobar la tarjeta normal. No existe una ruta RPC de gestión que evite esa
+aprobación. Cambiar de conversación descarta las salidas de su ámbito anterior.
+
+Las pruebas nuevas ejercitan el servicio Python/SQLite/sockets reales con
+proveedor, prompts y decisiones sintéticos. Cubren ausencia de despacho implícito,
+versiones/hash obsoletos, activación explícita de una tarea, enlace a su sesión,
+ramificación, aislamiento de DTO y resultados de procesos sin falsa verificación.

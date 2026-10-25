@@ -237,7 +237,7 @@ class McpRegistry:
                                else "mcp_" + error.code if isinstance(error, McpError)
                                else str(error) if isinstance(error, McpRegistryError)
                                else "mcp_connect_failed")
-                await client.aclose()
+                await self._disconnect(entry, retry=False)
                 if isinstance(error, asyncio.CancelledError):
                     raise
                 raise McpRegistryError(entry.error) from None
@@ -246,12 +246,18 @@ class McpRegistry:
         async with self._lock:
             return tuple(self._status(self._entries[key]) for key in sorted(self._entries))
 
-    async def _disconnect(self, entry: _Entry) -> None:
+    async def _disconnect(self, entry: _Entry, *, retry: bool = True) -> None:
         entry.active = False
         for binding in entry.bindings:
             self._bindings.pop(binding.public_name, None)
         entry.bindings = ()
-        await entry.client.aclose()
+        try:
+            await entry.client.aclose(retry=retry)
+        except McpError:
+            entry.error = "mcp_cleanup_incomplete"
+            raise McpRegistryError(entry.error) from None
+        if entry.error == "mcp_cleanup_incomplete":
+            entry.error = "mcp_disconnected"
 
     async def disconnect(self, server_id: str) -> bool:
         if not isinstance(server_id, str) or not _SERVER_ID.fullmatch(server_id):
@@ -372,5 +378,11 @@ class McpRegistry:
         async with self._lock:
             self._closed = True
             self._bindings.clear()
+            incomplete = False
             for entry in self._entries.values():
-                await self._disconnect(entry)
+                try:
+                    await self._disconnect(entry)
+                except McpRegistryError:
+                    incomplete = True
+            if incomplete:
+                raise McpRegistryError("mcp_cleanup_incomplete")

@@ -22,6 +22,8 @@ app instalada. Codex recibe el catálogo propio de Jarvis: archivos, memoria loc
 y servidores MCP stdio configurados por el dueño. Las mutaciones pasan por una
 única autoridad de aprobación por operación; los recibos se muestran separados del
 texto del modelo. Las herramientas incorporadas de Codex continúan desactivadas.
+La continuación añade procesos aislados, perfiles de agente, skills locales,
+tareas programadas con activación explícita y ramas de conversación sin acciones.
 El dueño completó el acceso oficial y se verificaron inferencia, archivos, memoria
 tras reinicio y una llamada MCP de prueba. Un peer sintético no acredita por sí
 solo una conexión o una acción real; ver alcance y límites en los registros.
@@ -56,6 +58,8 @@ El paquete Python no incluye el ejecutable oficial Codex ni un intérprete embeb
 - [Paridad funcional de la referencia](docs/rebuild/OPENCLAW_BASELINE_PARITY.md).
 - [Verificación del recorrido inicial](docs/rebuild/BASELINE_VERTICAL_SLICE.md).
 - [Herramientas, memoria y MCP conectados](docs/rebuild/PHASE_A_TOOLS_MEMORY_MCP.md).
+- [Procesos, agentes, skills y programador](docs/rebuild/PHASE_A_MANAGEMENT.md).
+- [Plataformas y conexiones elegidas](docs/rebuild/PHASE_A_TARGETS.md).
 - [Verificación de este avance](docs/rebuild/PHASE_A_QUALIFICATION.json).
 - [Limpieza y recuperación del producto anterior](docs/rebuild/CLEAN_START.md).
 - [Pendientes](docs/V1_PENDIENTES.md).

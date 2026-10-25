@@ -1,0 +1,41 @@
+{
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "files": [
+    {
+      "path": "package.json",
+      "bytes": 153025,
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1076,
+      "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+      "git_blob": "ed064819ab537575d0cad902f7e5af4a3488b1d0"
+    },
+    {
+      "path": "src/agents/agent-scope.ts",
+      "bytes": 23337,
+      "sha256": "b10a7f782fc5f8c0501d0ba3f7caa349b81fb29d7b72e0a748bc54ae2d69aace",
+      "git_blob": "ade2b41b826c21dbf59fa9758d3939dfab8c3c81"
+    },
+    {
+      "path": "src/skills/library/import.kernel.ts",
+      "bytes": 3766,
+      "sha256": "b7543d98a7a5bf27e4546b741ef469e9c1444d104184d9120566efb67c6b43ba",
+      "git_blob": "2efe73cead988d60aa83699aa7937ba39c219214"
+    },
+    {
+      "path": "src/skills/library/selection-read.kernel.ts",
+      "bytes": 2353,
+      "sha256": "0db408b4c6ddf6571521a502e8866f5cd09031b44ab82a0db0ded2b93a99343b",
+      "git_blob": "8d8889fd472efc48e2a7abfc410d0ee35ce17b61"
+    },
+    {
+      "path": "src/skills/library/authoring.ts",
+      "bytes": 2652,
+      "sha256": "fd9adc899848d616035a8546ecb556cafd6e1c6602866dba2f84c0ce823ac0c3",
+      "git_blob": "a1acfb710d568ceb68b5db700ebcf404a57003e1"
+    }
+  ]
+}

@@ -245,8 +245,15 @@ async def test_duplicate_cli_start_fails_cleanly_without_replacing_socket(connec
         "--codex", sys.executable, env={"PYTHONPATH": source},
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
     )
-    output, error = await asyncio.wait_for(process.communicate(), 5)
-    assert process.returncode == 1 and not output
-    assert "No se pudo iniciar" in error.decode()
-    assert b"Traceback" not in error
-    assert (await client.call("health"))["service"] == "jarvis"
+    try:
+        # The assertion concerns exclusive service ownership, not cold imports
+        # from a filesystem that may need to materialize project files.
+        output, error = await asyncio.wait_for(process.communicate(), 15)
+        assert process.returncode == 1 and not output
+        assert "No se pudo iniciar" in error.decode()
+        assert b"Traceback" not in error
+        assert (await client.call("health"))["service"] == "jarvis"
+    finally:
+        if process.returncode is None:
+            process.kill()
+        await asyncio.wait_for(process.wait(), 5)

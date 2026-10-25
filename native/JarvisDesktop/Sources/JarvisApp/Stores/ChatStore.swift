@@ -27,6 +27,8 @@ final class ChatStore {
     var capabilities: RPCValue = .null
     let access = AccessStore()
     let mcp = MCPStore()
+    let management = ManagementStore()
+    var newAgentID = "jarvis"
     var lostTemporaryRun = false
 
     @ObservationIgnored private var client: LocalRPCClient?
@@ -40,10 +42,11 @@ final class ChatStore {
     @ObservationIgnored private var stopping = false
 
     var selected: ChatSession? { sessions.first { $0.id == selectedID } }
-    var canSend: Bool { ready && connected && !busy && !access.isChangingWorkspace && !mcp.isChanging && activeRunID == nil && selected != nil
+    var canSend: Bool { ready && connected && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && activeRunID == nil && selected != nil
                        && selected?.archived == false
                        && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    var canChangeSession: Bool { ready && !busy && !access.isChangingWorkspace && !mcp.isChanging && activeRunID == nil }
+    var canChangeSession: Bool { ready && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && activeRunID == nil }
+    var selectedAgentName: String { management.agents.first(where: { $0.id == selected?.agentID })?.name ?? selected?.agentID ?? "Jarvis" }
 
     func start() async {
         guard !started else { return }
@@ -57,9 +60,11 @@ final class ChatStore {
             client = connection
             access.configure(client: LocalRPCClient(stateDirectory: options.state))
             mcp.configure(client: LocalRPCClient(stateDirectory: options.state))
+            management.configure(client: LocalRPCClient(stateDirectory: options.state))
             try service.start(options)
             try await ServiceBootstrap.waitForHealth(stateDirectory: options.state) { service.isRunning }
             try await refreshStatus()
+            try await management.refresh()
             try await refreshSessions()
             if sessions.isEmpty { await createSession(temporary: false) }
             else if let first = sessions.first { await selectSession(first.id) }
@@ -85,6 +90,8 @@ final class ChatStore {
                     try await self.refreshStatus()
                     try await self.access.refreshCatalog()
                     try await self.mcp.refresh()
+                    try await self.management.refresh()
+                    if self.canChangeSession { try await self.refreshSessions() }
                     if self.activeRunID == nil { try await self.access.refreshApprovals(runID: nil) }
                     if self.runPhase == "disconnected", self.activeRunID != nil { self.resumeStatus() }
                 } catch {
@@ -142,15 +149,19 @@ final class ChatStore {
 
     func createSession(temporary: Bool) async {
         guard canChangeSession else { return }
+        guard management.agents.contains(where: { $0.id == newAgentID }) else {
+            errorMessage = "Selecciona un agente disponible para la conversación nueva."; return
+        }
         busy = true
         defer { busy = false }
         do {
             let result = try await rpc("sessions.create", ["title": .string(temporary ? "Chat temporal" : "Nueva conversación"),
-                                                            "temporary": .bool(temporary)])
+                                                            "temporary": .bool(temporary), "agent_id": .string(newAgentID)])
             guard let session = ChatSession(result["session"]) else { throw RPCFailure.invalidResponse }
             sessions.insert(session, at: 0)
             selectedID = session.id
             access.setContext(session.scope)
+            management.setContext(session.scope)
             messages = []; activities = []; draft = ""; streamingText = ""; errorMessage = nil
             receipts = []
         } catch { report(error) }
@@ -164,6 +175,7 @@ final class ChatStore {
             let rows = try await fetchMessages(session)
             selectedID = id
             access.setContext(session.scope)
+            management.setContext(session.scope)
             messages = try decodeMessages(rows)
             activities = []; streamingText = ""; errorMessage = nil
             receipts = []
@@ -357,6 +369,7 @@ final class ChatStore {
         await client?.close()
         await access.close()
         await mcp.close()
+        await management.close()
         do {
             let restarted = !service.isRunning
             if restarted {
@@ -365,18 +378,21 @@ final class ChatStore {
                 drafts.clearTemporary()
                 sessions.removeAll(where: \.temporary)
                 access.setContext(nil)
+                management.setContext(nil)
             }
             try await ServiceBootstrap.waitForHealth(stateDirectory: options.state) { service.isRunning }
             try await refreshStatus()
             try await refreshSessions()
             try await access.refreshCatalog()
             try await mcp.refresh()
+            try await management.refresh()
             if restarted, activeSession?.temporary == true {
                 lostTemporaryRun = true
                 runPhase = "disconnected"
                 errorMessage = "El chat temporal se perdió al reiniciar el servicio. No se puede confirmar el resultado de su ejecución y no se repetirá."
             } else if activeRunID != nil {
                 access.setContext((activeSession ?? selected)?.scope)
+                management.setContext((activeSession ?? selected)?.scope)
                 runPhase = "disconnected"
                 resumeStatus()
             }
@@ -391,6 +407,7 @@ final class ChatStore {
         lostTemporaryRun = false; activeRunID = nil; pendingSubmission = nil; activeSession = nil
         selectedID = nil; messages = []; streamingText = ""; activities = []; receipts = []
         access.setContext(nil)
+        management.setContext(nil)
         runPhase = "interrupted"
     }
 
@@ -398,6 +415,34 @@ final class ChatStore {
         guard canChangeSession else { return false }
         var parameters = scope(session); parameters["title"] = .string(title)
         return await updateSession(parameters)
+    }
+
+    func forkSession(_ session: ChatSession) async {
+        guard canChangeSession,
+              OwnerManagementReview.confirm(title: "Ramificar conversación", action: "Crear rama",
+                detail: "Se copiará únicamente el contexto completado de «\(session.title)» a una conversación nueva del mismo agente. No se ejecutan ni copian acciones, runs o autorizaciones.") else { return }
+        busy = true
+        do {
+            let result = try await rpc("sessions.fork", scope(session))
+            guard let created = ChatSession(result["session"]), created.parentSessionID == session.id,
+                  created.agentID == session.agentID, created.temporary == session.temporary else { throw RPCFailure.invalidResponse }
+            try await refreshSessions()
+            if !sessions.contains(where: { $0.id == created.id }) { sessions.insert(created, at: 0) }
+            busy = false
+            await selectSession(created.id)
+        } catch { busy = false; report(error) }
+    }
+
+    func openScheduledSession(_ id: String) async {
+        guard canChangeSession else { return }
+        do { try await refreshSessions(); await selectSession(id) } catch { report(error) }
+    }
+
+    func prepareProcessStop(_ process: ProcessSnapshot) {
+        guard canChangeSession, draft.isEmpty, process.running else {
+            errorMessage = "Termina la ejecución o conserva primero el borrador actual antes de preparar otra solicitud."; return
+        }
+        draft = "Detén únicamente el proceso \(process.id) con process_stop. Espera mi aprobación de esa operación."
     }
 
     func setArchived(_ session: ChatSession, archived: Bool) async {
@@ -431,6 +476,7 @@ final class ChatStore {
             if selectedID == session.id {
                 selectedID = nil; messages = []; activities = []; streamingText = ""; receipts = []
                 access.setContext(nil)
+                management.setContext(nil)
             }
         } catch { report(error) }
         busy = false
@@ -461,12 +507,14 @@ final class ChatStore {
         statusText = "Cerrando el servicio y asentando las ejecuciones…"
         monitor?.cancel(); polling?.cancel()
         access.setContext(nil)
+        management.setContext(nil)
         // Stopping the owned service wakes blocked RPC readers. Waiting for a
         // socket queue before sending SIGTERM could otherwise delay shutdown.
         let graceful = await service.stop()
         await client?.close()
         await access.close()
         await mcp.close()
+        await management.close()
         return graceful
     }
 

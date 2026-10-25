@@ -6,15 +6,21 @@ import Foundation
 public final class LocalRPCClient: @unchecked Sendable {
     private let directory: String
     private let timeout: TimeInterval
+    private let connectionIdleLimit: TimeInterval
     private let queue = DispatchQueue(label: "jarvis.local-rpc")
     private var descriptor: Int32 = -1
     private var token = ""
     private var nextID = 0
+    private var lastResponseAt: TimeInterval?
+    private var authorizationFailure: RPCFailure?
 
-    public init(stateDirectory: String, timeout: TimeInterval = 30) {
+    public init(stateDirectory: String, timeout: TimeInterval = 30,
+                connectionIdleLimit: TimeInterval = 20) {
         precondition(timeout.isFinite && timeout > 0 && timeout <= 30)
+        precondition(connectionIdleLimit.isFinite && connectionIdleLimit > 0 && connectionIdleLimit <= 30)
         directory = stateDirectory
         self.timeout = timeout
+        self.connectionIdleLimit = connectionIdleLimit
     }
 
     public func call(_ method: String, params: [String: RPCValue] = [:]) async throws -> RPCValue {
@@ -28,19 +34,25 @@ public final class LocalRPCClient: @unchecked Sendable {
 
     public func close() async {
         await withCheckedContinuation { continuation in
-            queue.async { [self] in disconnect(); continuation.resume() }
+            queue.async { [self] in disconnect(clearAuthorization: true); continuation.resume() }
         }
     }
 
-    private func disconnect() {
+    private func disconnect(clearAuthorization: Bool = false) {
         if descriptor >= 0 { Darwin.close(descriptor) }
         descriptor = -1
         token = ""
+        lastResponseAt = nil
+        if clearAuthorization { authorizationFailure = nil }
     }
 
     private func inspect(_ path: String, type: mode_t, mode: mode_t) throws -> stat {
         var info = stat()
-        guard lstat(path, &info) == 0, (info.st_mode & S_IFMT) == type,
+        guard lstat(path, &info) == 0 else {
+            if errno == ENOENT || errno == ENOTDIR { throw RPCFailure.unavailable }
+            throw RPCFailure.insecurePath
+        }
+        guard (info.st_mode & S_IFMT) == type,
               info.st_uid == getuid(), (info.st_mode & 0o777) == mode else {
             throw RPCFailure.insecurePath
         }
@@ -109,6 +121,7 @@ public final class LocalRPCClient: @unchecked Sendable {
         }
         descriptor = fd
         token = secret
+        lastResponseAt = ProcessInfo.processInfo.systemUptime
     }
 
     private func waitForDescriptor(_ events: Int16, deadline: TimeInterval) throws {
@@ -125,6 +138,14 @@ public final class LocalRPCClient: @unchecked Sendable {
     }
 
     private func perform(_ method: String, params: [String: RPCValue]) throws -> RPCValue {
+        // No request has been written yet. A modal owner review can outlive
+        // the server's idle deadline; renew that stale connection once before
+        // sending new work. This is not a retry after an ambiguous mutation.
+        if let authorizationFailure { throw authorizationFailure }
+        if descriptor >= 0, let lastResponseAt,
+           ProcessInfo.processInfo.systemUptime - lastResponseAt >= connectionIdleLimit {
+            disconnect()
+        }
         if descriptor < 0 { try connect() }
         nextID = nextID % 9_007_199_254_740_991 + 1
         let frame = try RPCFrame.request(id: nextID, method: method, params: params, token: token)
@@ -148,11 +169,17 @@ public final class LocalRPCClient: @unchecked Sendable {
                 if count < 0, errno == EINTR || errno == EAGAIN { continue }
                 guard count > 0 else { throw RPCFailure.disconnected }
                 response.append(contentsOf: bytes.prefix(count))
-                if bytes.prefix(count).contains(10) { return try RPCFrame.response(response, expectedID: nextID) }
+                if bytes.prefix(count).contains(10) {
+                    let result = try RPCFrame.response(response, expectedID: nextID)
+                    lastResponseAt = ProcessInfo.processInfo.systemUptime
+                    return result
+                }
             }
             throw RPCFailure.oversized
         } catch RPCFailure.remote(let code, let message) {
             // A complete, validated remote error leaves framing synchronized.
+            lastResponseAt = ProcessInfo.processInfo.systemUptime
+            if code == -32001 { authorizationFailure = .remote(code, message) }
             throw RPCFailure.remote(code, message)
         } catch {
             disconnect()

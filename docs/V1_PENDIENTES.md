@@ -5,6 +5,9 @@ de OpenClaw con el nombre Jarvis, mediante investigación con REA y código prop
 Las mejoras propias se harán después. Se limpió este repositorio; el código del
 producto anterior sigue en Git y sus inventarios están congelados.
 
+Alcance inicial elegido: macOS Apple Silicon y Telegram como primer canal externo.
+El dueño aplazó expresamente la app de iPhone; ver [decisiones](rebuild/PHASE_A_TARGETS.md).
+
 ## Fase A — base completa primero
 
 - [x] Limpiar el árbol de trabajo y conservar puntos de recuperación.
@@ -21,6 +24,8 @@ producto anterior sigue en Git y sus inventarios están congelados.
   por coincidir con capacidades del Jarvis anterior.
   Avance conectado: autoridad de herramientas, archivos, memoria léxica local y
   gestión MCP stdio desde la app; ver [alcance y límites](rebuild/PHASE_A_TOOLS_MEMORY_MCP.md).
+  La [continuación de gestión](rebuild/PHASE_A_MANAGEMENT.md) añade procesos aislados,
+  perfiles de agente, biblioteca local de skills, programador y ramas de conversación.
 - [ ] Completar aislamiento de ejecución y autorizaciones reales del dueño, sin
   confundir token local con identidad firmada, ni un ACK con cierre de una acción.
 - [ ] Distribución nativa autocontenida, actualización, recuperación e instalación

@@ -18,6 +18,9 @@ struct SidebarView: View {
                 .accessibilityLabel("Nueva conversación")
                 .disabled(!store.canChangeSession)
             }.padding(16)
+            Picker("Agente para chats nuevos", selection: $store.newAgentID) {
+                ForEach(store.management.agents) { agent in Text(agent.name).tag(agent.id) }
+            }.padding(.horizontal, 14).padding(.bottom, 10).disabled(!store.canChangeSession)
             List(selection: Binding(get: { store.selectedID }, set: { id in
                 if let id { Task { await store.selectSession(id) } }
             })) {
@@ -48,6 +51,9 @@ struct SidebarView: View {
         .sheet(item: $renaming) { session in
             RenameSessionView(session: session, store: store)
         }
+        .onChange(of: store.management.agents.map(\.id)) { _, identities in
+            if !identities.contains(store.newAgentID), identities.contains("jarvis") { store.newAgentID = "jarvis" }
+        }
         .confirmationDialog("¿Borrar esta conversación?", isPresented: Binding(
             get: { deleting != nil }, set: { if !$0 { deleting = nil } }
         ), presenting: deleting) { session in
@@ -59,10 +65,11 @@ struct SidebarView: View {
     }
 
     private func row(_ session: ChatSession) -> some View {
-        Label(session.title, systemImage: session.archived ? "archivebox" : session.temporary ? "clock.badge.questionmark" : "bubble.left")
+        Label(session.title, systemImage: session.archived ? "archivebox" : session.parentSessionID != nil ? "arrowshape.turn.up.right" : session.temporary ? "clock.badge.questionmark" : "bubble.left")
             .lineLimit(1).tag(session.id)
             .contextMenu {
                 Button("Renombrar…") { renaming = session }
+                Button("Ramificar conversación…") { Task { await store.forkSession(session) } }
                 Button(session.archived ? "Restaurar" : "Archivar") {
                     if !session.archived { showArchived = true }
                     Task { await store.setArchived(session, archived: !session.archived) }

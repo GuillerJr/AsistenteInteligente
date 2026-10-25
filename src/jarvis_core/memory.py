@@ -632,6 +632,22 @@ class MemoryStore:
                                (scope.key,))
             return count
 
+    def agent_has_documents(self, agent_id: str) -> bool:
+        """Host-only deletion guard across workspaces, without returning content."""
+        _id(agent_id)
+        for temporary in (False, True):
+            if temporary and self._memory is None:
+                continue
+            if not temporary and self._disk is None and not self.path.exists():
+                continue
+            scope = MemoryScope(agent_id, "deletion_guard",
+                                "guard" if temporary else None, temporary)
+            with self._transaction(scope) as connection:
+                keys = connection.execute("SELECT DISTINCT scope_key FROM documents").fetchall()
+                if any(json.loads(row[0])[0] == agent_id for row in keys):
+                    return True
+        return False
+
     def _page(self, limit: int, offset: int) -> None:
         if (type(limit) is not int or not 1 <= limit <= self.limits.max_page_size
                 or type(offset) is not int or offset < 0 or offset > 1_000_000):

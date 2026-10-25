@@ -398,7 +398,7 @@ async def test_remote_disconnect_after_dispatch_stays_unknown_and_is_never_repla
     assert repeated == {"run_id": identity, "status": "failed"}
     following = (await client.call("runs.start", {**ref, "message": "siguiente"}))["run_id"]
     assert (await completed(client, ref, following))["status"] == "completed"
-    assert len(peer.calls) == 2 and len(peer.calls[-1][1]["tool_specs"]) == 8
+    assert len(peer.calls) == 2 and len(peer.calls[-1][1]["tool_specs"]) == 12
     assert peer.calls[-1][1]["thread_id"] is None and peer.calls[-1][1]["history"] == []
     assert len([item for item in wire(root) if item["method"] == "tools/call"]) == 1
     assert (
@@ -429,7 +429,7 @@ async def test_catalog_change_during_approval_prevents_dispatch_and_refreshes_ne
     assert not [item for item in wire(root) if item["method"] == "tools/call"]
     following = (await client.call("runs.start", {**ref, "message": "siguiente"}))["run_id"]
     assert (await completed(client, ref, following))["status"] == "completed"
-    assert len(peer.calls[-1][1]["tool_specs"]) == 8
+    assert len(peer.calls[-1][1]["tool_specs"]) == 12
     assert not [
         item
         for item in (await client.call("tools.list"))["tools"]

@@ -303,9 +303,13 @@ async def test_revoked_authority_cannot_dispatch_after_callback_returns(server):
     ("call_huge", "message_limit"),
 ])
 async def test_dispatched_failure_is_uncertain_and_never_retried(server, mode, code):
-    client = await server[0](mode, authorize=allow, request_timeout=0.15,
+    # The short deadline exercises an already connected hung operation, not
+    # process scheduling during initialize (which varies under native builds).
+    client = await server[0](mode, authorize=allow, request_timeout=2,
                              max_line_bytes=2048).start()
     await client.list_tools()
+    if mode == "hang":
+        client.request_timeout = 0.15
     with pytest.raises(McpError, match=code) as caught:
         await client.call_tool("echo", {"text": "A"})
     assert caught.value.effect_status == "unknown"
@@ -425,7 +429,9 @@ async def test_stderr_is_drained_without_becoming_diagnostic_output(server):
 @pytest.mark.parametrize("mode,code", [("version", "unsupported_mcp_version"),
                                        ("init_hang", "request_timeout")])
 async def test_initialization_failure_is_bounded_and_reaps_child(server, mode, code):
-    client = server[0](mode, request_timeout=0.15)
+    # Protocol rejection needs the fixture to have time to answer; only the
+    # deliberately silent peer is supposed to exhaust the short deadline.
+    client = server[0](mode, request_timeout=0.15 if mode == "init_hang" else 2)
     with pytest.raises(McpError, match=code):
         await client.start()
     assert client._process.returncode is not None and not client._home.exists()

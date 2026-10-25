@@ -1,0 +1,41 @@
+{
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "files": [
+    {
+      "path": "package.json",
+      "bytes": 153025,
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1076,
+      "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+      "git_blob": "ed064819ab537575d0cad902f7e5af4a3488b1d0"
+    },
+    {
+      "path": "src/process/supervisor/supervisor.ts",
+      "bytes": 28210,
+      "sha256": "6f9ad348420fe6f37b935466412d6b5b780ee45a249462f759900a7d13d76aa6",
+      "git_blob": "0f58978a8e6a4e9ee3b031b57c598e2197626d61"
+    },
+    {
+      "path": "src/process/supervisor/cancellation-policy.ts",
+      "bytes": 131,
+      "sha256": "663824e31a8c18b12f973c4c2536acd95e1a75ef27637c9c7f8c3f00b82b8aee",
+      "git_blob": "8f5510d696de284499f606cda849e07907bb61e7"
+    },
+    {
+      "path": "src/process/supervisor/adapters/env.ts",
+      "bytes": 301,
+      "sha256": "2561f56ac900ce4455a1da24eebb1854b3012544d3bb3f1101977b3bbf08935a",
+      "git_blob": "4930c58f5c200d825d4fdc3bff713ac9a2160dd0"
+    },
+    {
+      "path": "src/process/supervisor/service-child-cleanup-deadline.ts",
+      "bytes": 2372,
+      "sha256": "31fe6dc3d2424f0cb9810f97c1b7eab0af5d5b5f97edce14434ceb5aae1eaad5",
+      "git_blob": "fc179287902f116d496bb45b06e88a074c9c7e77"
+    }
+  ]
+}

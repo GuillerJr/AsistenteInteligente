@@ -4,6 +4,21 @@ set -euo pipefail
 # Development bundle only: external Python source and Codex are explicit launch flags.
 JARVIS_REPO_DIR="$(cd "$(dirname "$0")/.." && pwd -P)"
 JARVIS_BUILD_DIR="$(mktemp -d /private/tmp/jarvis-desktop-build.XXXXXX)"
+cleanup_build_cache() {
+  JARVIS_BUILD_STATUS=$?
+  if [[ "$JARVIS_BUILD_STATUS" -eq 0 ]]; then
+    # The staged bundle may be inside output/. Retain it, remove only this
+    # invocation's reproducible compiler and package caches.
+    rm -rf -- "$JARVIS_BUILD_DIR/swift" "$JARVIS_BUILD_DIR/cache" \
+      "$JARVIS_BUILD_DIR/config" "$JARVIS_BUILD_DIR/security" \
+      "$JARVIS_BUILD_DIR/clang-cache"
+    rmdir "$JARVIS_BUILD_DIR" 2>/dev/null || true
+  else
+    printf 'Diagnóstico de compilación conservado en %s\n' "$JARVIS_BUILD_DIR" >&2
+  fi
+  exit "$JARVIS_BUILD_STATUS"
+}
+trap cleanup_build_cache EXIT
 if [[ $# -eq 0 ]]; then
   JARVIS_OUTPUT_DIR="$JARVIS_BUILD_DIR/output"
 elif [[ $# -eq 2 && "$1" == --output ]]; then

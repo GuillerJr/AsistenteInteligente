@@ -45,7 +45,7 @@
       "Contratos declarados y rutas UI no acreditan disponibilidad ni funcionamiento real.",
       "No se ejecutó OpenClaw ni se leyó configuración/cuenta del dueño."
     ],
-    "current_jarvis_state": "Recorrido de desarrollo con inferencia autenticada acreditada, SQLite, IPC y cliente SwiftUI; herramientas de archivos, autoridad por operación, memoria léxica local y registro MCP stdio conectados. Ver PHASE_A_TOOLS_MEMORY_MCP.md y PHASE_A_QUALIFICATION.json. La base completa sigue abierta; cero familias completas certificadas."
+    "current_jarvis_state": "Desarrollo propio con Codex oficial, herramientas/archivos, memoria léxica, MCP, procesos aislados, agentes, snapshots de skills, programador y ramas. Mac seleccionado; iPhone aplazado; Telegram es próximo canal. Pruebas y límites en PHASE_A_MANAGEMENT.md; ninguna familia completa de referencia se declara cerrada."
   },
   "status_vocabulary": {
     "no_implementado": "Sin evidencia productiva propia de cierre.",
@@ -184,6 +184,14 @@
         {
           "progress_id": "P-TOOLS",
           "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
+        },
+        {
+          "progress_id": "P-PROFILES",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-SCHEDULER",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
         }
       ],
       "acceptance": {
@@ -205,8 +213,13 @@
       "family": "ops",
       "name": "Supervisión y recuperación del servicio",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-PROCESS",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        }
+      ],
       "acceptance": {
         "observable_success": "Instalar servicio propio, provocar caída controlada y observar relanzamiento y diagnóstico efectivo.",
         "observable_failure_or_revocation": "Fallo reiterado produce estado reparable sin tormenta de reinicios ni adoptar procesos de otro perfil.",
@@ -270,6 +283,14 @@
         {
           "progress_id": "P-CODEX",
           "scope": "Ver avance parcial; no cierra la capacidad."
+        },
+        {
+          "progress_id": "P-PROCESS",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-SCHEDULER",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
         }
       ],
       "acceptance": {
@@ -295,6 +316,14 @@
         {
           "progress_id": "P-IPC",
           "scope": "Ver avance parcial; no cierra la capacidad."
+        },
+        {
+          "progress_id": "P-PROCESS",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-SCHEDULER",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
         }
       ],
       "acceptance": {
@@ -324,6 +353,14 @@
         {
           "progress_id": "P-TOOLS",
           "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
+        },
+        {
+          "progress_id": "P-PROCESS",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-SCHEDULER",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
         }
       ],
       "acceptance": {
@@ -380,6 +417,14 @@
         {
           "progress_id": "P-MEMORY",
           "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
+        },
+        {
+          "progress_id": "P-PROFILES",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-SKILLS",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
         }
       ],
       "acceptance": {
@@ -413,6 +458,14 @@
         {
           "progress_id": "P-TOOLS",
           "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
+        },
+        {
+          "progress_id": "P-PROCESS",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-SCHEDULER",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
         }
       ],
       "acceptance": {
@@ -442,6 +495,10 @@
         {
           "progress_id": "P-IPC",
           "scope": "Ver avance parcial; no cierra la capacidad."
+        },
+        {
+          "progress_id": "P-PROFILES",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
         }
       ],
       "acceptance": {
@@ -492,6 +549,10 @@
         {
           "progress_id": "P-STATE",
           "scope": "Ver avance parcial; no cierra la capacidad."
+        },
+        {
+          "progress_id": "P-PROFILES",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
         }
       ],
       "acceptance": {
@@ -552,8 +613,13 @@
       "family": "agents",
       "name": "Múltiples agentes, workspaces e instrucciones",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-PROFILES",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        }
+      ],
       "acceptance": {
         "observable_success": "Crear dos agentes con espacios separados y verificar que cada conversación usa las instrucciones/ruta elegidas.",
         "observable_failure_or_revocation": "Ninguno lee memoria, credenciales o archivos del otro ni cambia su ruta por texto del modelo.",
@@ -672,6 +738,10 @@
         {
           "progress_id": "P-MEMORY",
           "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
+        },
+        {
+          "progress_id": "P-PROFILES",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
         }
       ],
       "acceptance": {
@@ -779,6 +849,10 @@
         {
           "progress_id": "P-MEMORY",
           "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
+        },
+        {
+          "progress_id": "P-PROFILES",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
         }
       ],
       "acceptance": {
@@ -825,8 +899,13 @@
       "family": "exec",
       "name": "Exec, procesos, stdin, terminal y cancelación",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-PROCESS",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        }
+      ],
       "acceptance": {
         "observable_success": "Ejecutar programa benigno en sandbox, enviar stdin, observar exit/salida y cancelar desde app.",
         "observable_failure_or_revocation": "Timeout, salida grande y proceso hijo sobreviviente se acotan; revocación bloquea comandos nuevos.",
@@ -846,8 +925,13 @@
       "family": "exec",
       "name": "Sandbox, ubicación de ejecución y privilegios",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-PROCESS",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        }
+      ],
       "acceptance": {
         "observable_success": "Mostrar si efecto ocurre en host/sandbox/nodo; comando autorizado sólo modifica carpeta de prueba.",
         "observable_failure_or_revocation": "Denegación no usa ruta alternativa; privilegio real requiere aprobación del dueño antes del efecto.",
@@ -1135,8 +1219,13 @@
       "family": "skills",
       "name": "Skills, biblioteca, búsqueda y entrega",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-SKILLS",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        }
+      ],
       "acceptance": {
         "observable_success": "Crear skill propia con recursos de prueba y activarla sólo para agente previsto.",
         "observable_failure_or_revocation": "Skill inválida, recurso fuera de raíz y desactivación impiden carga; instrucciones no conceden herramientas.",
@@ -1156,8 +1245,13 @@
       "family": "skills",
       "name": "Workshop, propuestas, revisión y reversión",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-SKILLS",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        }
+      ],
       "acceptance": {
         "observable_success": "Proponer cambio, revisar diff, aprobar con dueño, aplicar y deshacer conservando versiones.",
         "observable_failure_or_revocation": "Propuesta sin revisar/caducada/ajena no se activa y un fallo conserva versión vigente.",
@@ -1177,8 +1271,13 @@
       "family": "automation",
       "name": "Cron, automatizaciones, heartbeat y wake",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-SCHEDULER",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        }
+      ],
       "acceptance": {
         "observable_success": "Programar trabajo de prueba con zona horaria, observar ejecución, reiniciar y comprobar persistencia; pausar/borrar funciona.",
         "observable_failure_or_revocation": "Cambio horario, duplicado, tarea larga y permiso revocado no duplican efectos ni ejecutan trabajo pausado.",
@@ -1486,6 +1585,18 @@
         {
           "progress_id": "P-NATIVE",
           "scope": "Ver avance parcial; no cierra la capacidad."
+        },
+        {
+          "progress_id": "P-PROFILES",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-SKILLS",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-SCHEDULER",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
         }
       ],
       "acceptance": {
@@ -1703,8 +1814,17 @@
       "family": "ops",
       "name": "Logs, auditoría, actividad, métricas y límites",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-PROCESS",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-SCHEDULER",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        }
+      ],
       "acceptance": {
         "observable_success": "Reproducir error y reconstruir solicitud/autorización/despacho/resultado por IDs en auditoría saneada.",
         "observable_failure_or_revocation": "Diagnóstico no contiene secretos/corpus personal; telemetría deshabilitada no hace conexiones ocultas.",
@@ -1782,6 +1902,10 @@
         {
           "progress_id": "P-TOOLS",
           "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
+        },
+        {
+          "progress_id": "P-PROCESS",
+          "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
         }
       ],
       "acceptance": {
@@ -13545,7 +13669,7 @@
   },
   "progress_snapshot": {
     "date": "2026-10-24",
-    "revision_scope": "Avance de desarrollo; primera inferencia real y reinicio acreditados en BASELINE_VERTICAL_SLICE.md. Herramientas, memoria y MCP y resultados finales en PHASE_A_TOOLS_MEMORY_MCP.md y PHASE_A_QUALIFICATION.json. No modifica hashes externos ni cierra familias completas.",
+    "revision_scope": "Continuación del bloque de gestión; ver PHASE_A_MANAGEMENT_QUALIFICATION.json para snapshots y recorridos. No se alteran hashes de la referencia ni se inicia B.",
     "complete_capability_count": 0,
     "complete_reference_parity": false,
     "authenticated_inference_verified": true,
@@ -13725,13 +13849,112 @@
         ],
         "verified_scope": "SQLite real propio y temporales RAM, ámbito host por agente/workspace, búsqueda local FTS5 o lexical_scan explícita, revisiones/hashes/citas y generación invalidables; guardar/olvidar pasa por autoridad común.",
         "remaining": "No embeddings ni híbrida/semántica, indexación automática, flush completo, wiki/motores externos, cifrado integral o migración de datos personales."
+      },
+      {
+        "id": "P-PROCESS",
+        "component": "Procesos y sandbox propios",
+        "status": "contract_tested_partial",
+        "code": [
+          "src/jarvis_core/processes.py"
+        ],
+        "tests": [
+          "tests/test_processes.py"
+        ],
+        "capability_ids": [
+          "A-06",
+          "A-08",
+          "A-09",
+          "A-10",
+          "A-13",
+          "A-30",
+          "A-31",
+          "A-70",
+          "A-73"
+        ],
+        "verified_scope": "Procesos reales en Seatbelt macOS con decisiones sintéticas: stdin/EOF/poll/stop, límites/cancel/cierre, red/fork/externos/privados denegados. En app Codex real y dueño aprobaron echo: output y exit0 con recibo sin falsa verificación de efectos.",
+        "remaining": "PTY, política completa de ubicaciones/privilegios y defensa contra un proceso malicioso concurrente del mismo usuario. Linux exige bubblewrap utilizable sin fallback."
+      },
+      {
+        "id": "P-PROFILES",
+        "component": "Agentes y ramas de conversación",
+        "status": "contract_tested_partial",
+        "code": [
+          "src/jarvis_core/profiles.py",
+          "src/jarvis_core/private_json.py",
+          "src/jarvis_core/state.py",
+          "src/jarvis_core/management.py"
+        ],
+        "tests": [
+          "tests/test_profiles.py",
+          "tests/test_state_sessions.py",
+          "tests/test_service_management.py"
+        ],
+        "capability_ids": [
+          "A-05",
+          "A-12",
+          "A-14",
+          "A-16",
+          "A-19",
+          "A-24",
+          "A-28",
+          "A-60"
+        ],
+        "verified_scope": "Perfiles CAS, contexto por revisión, memoria por agente/workspace, sesiones con agente inmutable, migración SQLitev1->v2 y fork de texto completado sin acciones/permisos/hilos.",
+        "remaining": "Agentes delegados/swarm, workspaces múltiples simultáneos, colaboración y rewind completo. No importa perfiles históricos."
+      },
+      {
+        "id": "P-SKILLS",
+        "component": "Biblioteca local de snapshots de skills",
+        "status": "contract_tested_partial",
+        "code": [
+          "src/jarvis_core/skills.py",
+          "src/jarvis_core/private_json.py"
+        ],
+        "tests": [
+          "tests/test_skills.py",
+          "tests/test_service_management.py",
+          "tests/test_codex_context.py"
+        ],
+        "capability_ids": [
+          "A-12",
+          "A-44",
+          "A-45",
+          "A-60"
+        ],
+        "verified_scope": "Importación explícita SKILL.md con hash, revisión, procedencia, contexto acotado y omisiones explícitas, habilitación por agente. Contenido hostil no concede permisos ni ejecuta recursos.",
+        "remaining": "Frontmatter completo, paquetes/recursos ejecutables, biblioteca remota/workshop completo y reversión versionada."
+      },
+      {
+        "id": "P-SCHEDULER",
+        "component": "Programador durable explícito",
+        "status": "contract_tested_partial",
+        "code": [
+          "src/jarvis_core/scheduler.py",
+          "src/jarvis_core/management.py"
+        ],
+        "tests": [
+          "tests/test_scheduler.py",
+          "tests/test_service_management.py"
+        ],
+        "capability_ids": [
+          "A-05",
+          "A-08",
+          "A-09",
+          "A-10",
+          "A-13",
+          "A-46",
+          "A-60",
+          "A-70"
+        ],
+        "verified_scope": "SQLite real, claims de dos stores, runner único, once/interval/daily IANA/DST, coalesce, CAS, recuperación incierta sin replay, start revisado por hash32jobs. Despacho por Runtime común; herramientas programadas esperan aprobación.",
+        "remaining": "Cron universal, heartbeat/hook/webhook/wake y reanudación automática de sistema. Bot/canal nunca aprueba herramientas."
       }
     ],
-    "detail_file": "PHASE_A_TOOLS_MEMORY_MCP.md",
+    "detail_file": "PHASE_A_MANAGEMENT.md",
     "rea": {
       "source_file": "REA_COVERAGE.json",
-      "static_batches": 6,
-      "unique_typescript_paths_in_completed_batches": 24,
+      "static_batches": 9,
+      "unique_typescript_paths_in_completed_batches": 36,
       "global_status": "partial",
       "runtime_executed": false,
       "semantic_unknowns_remain": true,
@@ -13741,9 +13964,22 @@
         "OC-03",
         "OC-04",
         "OC-05",
-        "OC-06"
+        "OC-06",
+        "OC-07",
+        "OC-08",
+        "OC-09"
       ],
       "limits": "Contar rutas examinadas no significa comprensión semántica ni revisión global. IDs y evidencias completos en REA_COVERAGE.json/provenance."
     }
+  },
+  "target_decisions": {
+    "date": "2026-10-24",
+    "initial_desktop": "macOS Apple Silicon",
+    "iphone": "deferred_by_owner_after_initial_selection",
+    "android_windows_linux_clients": "not_selected_for_initial_delivery",
+    "first_external_channel": "Telegram",
+    "decision_record": "PHASE_A_TARGETS.md",
+    "reference_catalogs_preserved": true,
+    "universal_parity_claim": false
   }
 }

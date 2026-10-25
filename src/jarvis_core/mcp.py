@@ -380,10 +380,10 @@ class McpClient:
                 self._ready = True
                 return self
             except OSError:
-                await self.aclose()
+                await self.aclose(retry=False)
                 raise McpError("server_start_failed") from None
             except BaseException:
-                await self.aclose()
+                await self.aclose(retry=False)
                 raise
 
     async def _write(
@@ -450,7 +450,7 @@ class McpClient:
                     async with asyncio.timeout(0.2):
                         await self._write({"jsonrpc": "2.0", "method": "notifications/cancelled",
                                            "params": {"requestId": request_id}})
-            await self.aclose()
+            await self.aclose(retry=False)
             if isinstance(error, asyncio.CancelledError):
                 raise McpCancelled(pending.effect_status) from None
             raise McpError("request_timeout", effect_status=pending.effect_status) from None
@@ -460,13 +460,13 @@ class McpClient:
                 "approval_revoked", "catalog_changed",
             }:
                 if self._failure is not None or self._closing is not None:
-                    await self.aclose()
+                    await self.aclose(retry=False)
                 if pending.effect_status == "unknown" and error.effect_status == "not_dispatched":
                     raise McpError(
                         error.code, effect_status="unknown", rpc_code=error.rpc_code,
                     ) from None
                 raise
-            await self.aclose()
+            await self.aclose(retry=False)
             code = error.code if isinstance(error, McpError) else "connection_lost"
             raise McpError(code, effect_status=pending.effect_status) from None
         finally:
@@ -552,7 +552,7 @@ class McpClient:
                 if not pending.future.done():
                     pending.future.set_exception(McpError(self._failure))
             if self._closing is None:
-                self._closing = asyncio.create_task(self._close())
+                self._begin_close()
 
     async def _drain_stderr(self) -> None:
         assert self._process and self._process.stderr
@@ -709,16 +709,69 @@ class McpClient:
             raise McpError("invalid_prompt_result")
         return _freeze(result)
 
-    async def aclose(self) -> None:
+    def _begin_close(self) -> None:
+        self._closing = asyncio.create_task(self._close())
+        # Reader-initiated cleanup may fail before a host awaits aclose. Consume
+        # diagnostics without changing what awaiting this task will raise.
+        self._closing.add_done_callback(
+            lambda task: None if task.cancelled() else task.exception()
+        )
+
+    async def aclose(self, *, retry: bool = True) -> None:
         if self._closing is None:
-            self._closing = asyncio.create_task(self._close())
+            self._begin_close()
+        elif retry and self._closing.done() and not self._closing.cancelled():
+            failure = self._closing.exception()
+            if isinstance(failure, McpError) and failure.code == "cleanup_incomplete":
+                # A new explicit close retries cleanup only. _closing never
+                # becomes None, so start/calls cannot reconnect or replay.
+                self._begin_close()
         await asyncio.shield(self._closing)
+
+    @staticmethod
+    def _signal_group(process, sig) -> None:
+        try:
+            os.killpg(process.pid, sig)
+        except ProcessLookupError:
+            pass
+        except OSError:
+            raise McpError("cleanup_incomplete", effect_status="unknown") from None
+
+    @staticmethod
+    def _group_absent(process) -> bool:
+        try:
+            os.killpg(process.pid, 0)
+        except ProcessLookupError:
+            return True
+        except OSError:
+            raise McpError("cleanup_incomplete", effect_status="unknown") from None
+        return False
+
+    async def _settle_group(self, process) -> None:
+        # Reaping only the direct child does not prove its inherited process
+        # group is empty. ESRCH on the selected group is the sole absence proof.
+        if self._group_absent(process):
+            return
+        for sig in (signal.SIGTERM, signal.SIGKILL):
+            self._signal_group(process, sig)
+            deadline = asyncio.get_running_loop().time() + self.shutdown_timeout
+            while not self._group_absent(process):
+                remaining = deadline - asyncio.get_running_loop().time()
+                if remaining <= 0:
+                    break
+                await asyncio.sleep(min(0.01, remaining))
+            else:
+                return
+        raise McpError("cleanup_incomplete", effect_status="unknown")
 
     async def _close(self) -> None:
         self._ready = False
         self._tools.clear()
         self._resources.clear()
         self._prompts.clear()
+        for pending in tuple(self._pending.values()):
+            if not pending.future.done():
+                pending.future.set_exception(McpError("client_closed"))
         process = self._process
         if process is None and self._spawn is not None:
             # A close/cancel may arrive while the operating system is still spawning.
@@ -729,27 +782,29 @@ class McpClient:
         if process is not None:
             if process.stdin:
                 process.stdin.close()
+            reaped = False
             for sig in (None, signal.SIGTERM, signal.SIGKILL):
                 if sig is not None:
-                    with contextlib.suppress(ProcessLookupError):
-                        os.killpg(process.pid, sig)
+                    self._signal_group(process, sig)
                 try:
                     async with asyncio.timeout(self.shutdown_timeout):
                         await process.wait()
+                    reaped = True
                     break
                 except TimeoutError:
                     continue
-            # Children that inherited the selected process group also belong to this client.
-            for sig in (signal.SIGTERM, signal.SIGKILL):
-                with contextlib.suppress(ProcessLookupError):
-                    os.killpg(process.pid, sig)
-        for task in (self._reader, self._stderr):
-            if task is not None:
+            if not reaped:
+                raise McpError("cleanup_incomplete", effect_status="unknown")
+            await self._settle_group(process)
+        readers = tuple(task for task in (self._reader, self._stderr) if task is not None)
+        for task in readers:
+            if not task.done():
                 task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await task
-        for pending in self._pending.values():
-            if not pending.future.done():
-                pending.future.set_exception(McpError("client_closed"))
+        await asyncio.gather(*readers, return_exceptions=True)
         if self._home is not None:
-            shutil.rmtree(self._home, ignore_errors=True)
+            try:
+                shutil.rmtree(self._home)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                raise McpError("cleanup_incomplete", effect_status="unknown") from None

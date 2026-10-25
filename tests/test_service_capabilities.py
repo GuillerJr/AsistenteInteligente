@@ -434,7 +434,10 @@ async def test_workspace_change_resets_thread_and_restores_only_completed_owned_
         "mi contexto",
         "Respuesta sintética: mi contexto",
     ]
-    assert len(options["tool_specs"]) == 8 and not list(alternate.iterdir())
+    assert {"process_run", "process_poll", "process_send", "process_stop"} <= {
+        item["name"] for item in options["tool_specs"]}
+    assert not any(item["name"].startswith("mcp_") for item in options["tool_specs"])
+    assert not list(alternate.iterdir())
     assert service._workspace_path == alternate
     events = (await client.call("events.poll", {**ref, "run_id": run_id}))["events"]
     assert any(event["kind"] == "context.restored" for event in events)
@@ -449,10 +452,10 @@ async def test_workspace_identity_change_fails_closed_until_owner_selects_again(
     chosen.mkdir(mode=0o700)
     ref = await create_session(client)
     peer.plans["escribe"] = [("workspace_write", {"path": "no.txt", "text": "NO"})]
-    result = await approved_run(client, ref, "escribe")
-    assert result["status"] == "completed"
-    receipt = result["action_receipts"][0]
-    assert not receipt["succeeded"] and receipt["error"] == "workspace_identity_changed"
+    identity = (await client.call("runs.start", {**ref, "message": "escribe"}))["run_id"]
+    result = await settled(client, ref, identity)
+    assert result["status"] == "failed" and result["error"] == "workspace_identity_changed"
+    assert result["action_receipts"] == [] and peer.calls == []
     assert not list(chosen.iterdir()) and not list((root / "apartada").iterdir())
     assert (await client.call("workspace.set", {"path": str(chosen)}))["workspace"]["available"]
     assert (await approved_run(client, ref, "escribe"))["action_receipts"][0]["verified"]

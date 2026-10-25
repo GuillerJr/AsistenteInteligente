@@ -16,6 +16,27 @@ from jarvis_core.codex import CodexClient, CodexError
 from jarvis_core.service import JarvisService
 
 
+def test_cli_reports_incomplete_mcp_cleanup_without_a_traceback(monkeypatch, capsys):
+    from jarvis_core import service as module
+    from jarvis_core.mcp_registry import McpRegistryError
+
+    async def incomplete(_arguments):
+        raise McpRegistryError("mcp_cleanup_incomplete")
+
+    monkeypatch.setattr(module, "_serve", incomplete)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["jarvis", "--state", "/tmp/synthetic-state", "--codex", "/tmp/synthetic-codex"],
+    )
+    with pytest.raises(SystemExit) as result:
+        module.main()
+    assert result.value.code == 1
+    stderr = capsys.readouterr().err
+    assert "No se pudo iniciar o cerrar" in stderr
+    assert "Traceback" not in stderr and "PermissionError" not in stderr
+
+
 class CleanupPeer:
     def __init__(self):
         self.entered = asyncio.Event()

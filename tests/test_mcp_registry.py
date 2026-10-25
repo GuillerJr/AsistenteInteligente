@@ -106,8 +106,10 @@ async def bundle_factory(tmp_path):
         log = tmp_path / f"wire-{index}.jsonl"
         effect = tmp_path / f"effect-{index}.txt"
         control = tmp_path / f"control-{index}"
-        registry = McpRegistry(root, request_timeout=options.pop("request_timeout", 1),
-                               shutdown_timeout=0.05, **options)
+        # Bootstrap latency is not the property of effect-timeout tests. Apply
+        # their short deadline only once the real peer is initialized/listed.
+        call_timeout = options.pop("request_timeout", 3)
+        registry = McpRegistry(root, request_timeout=3, shutdown_timeout=0.5, **options)
         version = MODERN_VERSION if mode.startswith("modern") else LEGACY_VERSION
         spec = ServerSpec(server_id, (
             sys.executable, str(script), mode, str(log), str(effect), str(control),
@@ -116,6 +118,7 @@ async def bundle_factory(tmp_path):
         bundle = registry, authority, spec, log, effect, control
         bundles.append(bundle)
         await registry.connect(spec)
+        registry._entries[server_id].client.request_timeout = call_timeout
         return bundle
 
     yield create

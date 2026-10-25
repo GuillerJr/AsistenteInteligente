@@ -26,7 +26,7 @@ La conexión elegida es Codex con ChatGPT por cliente/acceso oficiales. NVIDIA e
 
 ## Avance parcial posterior al inventario inicial
 
-El [recorrido inicial](BASELINE_VERTICAL_SLICE.md) acreditó conversación autenticada con Codex, cancelación y reinicio. El [avance conectado posterior](PHASE_A_TOOLS_MEMORY_MCP.md) añade archivos, autoridad por operación, memoria léxica y MCP stdio a la app. **Ninguna de las 80 familias completas se declara cerrada.** La app anterior instalada no se reemplazó.
+El [recorrido inicial](BASELINE_VERTICAL_SLICE.md) acreditó conversación autenticada con Codex, cancelación y reinicio. El [avance conectado posterior](PHASE_A_TOOLS_MEMORY_MCP.md) añadió archivos, autoridad por operación, memoria léxica y MCP stdio. La [continuación de gestión](PHASE_A_MANAGEMENT.md) añade procesos aislados, agentes, skills, programador y ramas. **Ninguna de las 80 familias completas se declara cerrada.** La app anterior instalada no se reemplazó.
 
 | Componente | Evidencia propia y límites |
 | --- | --- |
@@ -38,7 +38,9 @@ El [recorrido inicial](BASELINE_VERTICAL_SLICE.md) acreditó conversación auten
 | Herramientas de workspace y autoridad central | Filesystem real propio: listar/leer/escribir/editar/mkdir, raíz fijada, rutas privadas/enlaces rechazados, compare-and-swap de bytes, leases exactos de un uso y guard antes del efecto. Configuración privada transaccional con lock y merge. Pendiente: No exec/sandbox, parches completos, perfiles persistentes de permisos ni herramientas completas de referencia. |
 | Memoria local léxica con procedencia y citas de snapshot | SQLite real propio y temporales RAM, ámbito host por agente/workspace, búsqueda local FTS5 o lexical_scan explícita, revisiones/hashes/citas y generación invalidables; guardar/olvidar pasa por autoridad común. Pendiente: No embeddings ni híbrida/semántica, indexación automática, flush completo, wiki/motores externos, cifrado integral o migración de datos personales. |
 
-REA registra seis lotes estáticos con 24 rutas TypeScript únicas. La cobertura global sigue parcial, conserva incógnitas semánticas y no observó ejecución de OpenClaw. Fuentes, hashes y Evidence IDs están en REA_COVERAGE.json.
+REA registra nueve lotes estáticos con 36 rutas TypeScript únicas. La cobertura global sigue parcial, conserva incógnitas semánticas y no observó ejecución de OpenClaw. Fuentes, hashes y Evidence IDs están en REA_COVERAGE.json.
+
+La [decisión de destinos](PHASE_A_TARGETS.md) fija macOS como entrega inicial, aplaza iPhone y elige Telegram como primer canal externo. No acredita plataformas o conectores pendientes.
 
 ## Matriz funcional
 
@@ -51,7 +53,7 @@ Todas las filas mantienen pendiente la cualificación real propia. «Sintético 
 | A-03 | Autenticación, ámbitos, pairing y revocación | Avance contractual parcial; cierre pendiente | El dueño empareja cliente de prueba y una operación admitida funciona bajo su identidad y ámbito. |
 | A-04 | Acceso remoto seguro y descubrimiento | Pendiente | Dos equipos de prueba descubren el gateway elegido y conectan autenticados identificando el destino. |
 | A-05 | Configuración, esquema y recarga transaccional | Avance contractual parcial; cierre pendiente | Cambiar preferencia mediante API propia y comprobar efecto desde otro cliente y tras reinicio. |
-| A-06 | Supervisión y recuperación del servicio | Pendiente | Instalar servicio propio, provocar caída controlada y observar relanzamiento y diagnóstico efectivo. |
+| A-06 | Supervisión y recuperación del servicio | Avance contractual parcial; cierre pendiente | Instalar servicio propio, provocar caída controlada y observar relanzamiento y diagnóstico efectivo. |
 | A-07 | Ciclo de agente con herramientas y streaming | Avance contractual parcial; cierre pendiente | Con Codex elegido resolver consulta, ejecutar tool autorizada y continuar con su resultado en streaming. |
 | A-08 | Cancelación, asentamiento y efectos inciertos | Avance contractual parcial; cierre pendiente | Cancelar streaming y herramienta muestra recibo; el siguiente run espera que se liberen recursos. |
 | A-09 | Presupuestos, concurrencia, colas y steering | Avance contractual parcial; cierre pendiente | Dos sesiones avanzan separadas; una corrección dirige el run previsto y se ven límites de pasos/tiempo/bytes. |
@@ -64,7 +66,7 @@ Todas las filas mantienen pendiente la cualificación real propia. «Sintético 
 | A-16 | Ramas, fork, rewind y recuperación | Avance contractual parcial; cierre pendiente | Bifurcar conversación, rebobinar y recuperar run interrumpido conservando identidad y efectos. |
 | A-17 | Usuarios, propiedad y colaboración | Pendiente | Dos identidades de prueba colaboran por membresía explícita; la app atribuye petición y aprobación. |
 | A-18 | Decisiones, preguntas, progreso, presencia y sugerencias | Pendiente | Responder pregunta estructurada, actualizar progreso y aceptar/descartar sugerencia cambia el objeto previsto. |
-| A-19 | Múltiples agentes, workspaces e instrucciones | Pendiente | Crear dos agentes con espacios separados y verificar que cada conversación usa las instrucciones/ruta elegidas. |
+| A-19 | Múltiples agentes, workspaces e instrucciones | Avance contractual parcial; cierre pendiente | Crear dos agentes con espacios separados y verificar que cada conversación usa las instrucciones/ruta elegidas. |
 | A-20 | Subagentes, swarm, comunicación y objetivos | Pendiente | Padre delega dos tareas, recoge resultados correlacionados y registra objetivo con presupuesto. |
 | A-21 | Codex con ChatGPT oficial y aislado | Avance contractual parcial; cierre pendiente | El dueño completa login oficial en espacio dedicado; Jarvis obtiene catálogo, chatea, usa tool y continúa tras reinicio. |
 | A-22 | Contratos de proveedores y elección de modelo | Pendiente; proveedores adicionales requieren eleccion | Mostrar proveedor/modelo efectivo y capacidades; un proveedor explícitamente elegido usa sólo su transporte. |
@@ -75,8 +77,8 @@ Todas las filas mantienen pendiente la cualificación real propia. «Sintético 
 | A-27 | Motores opcionales, wiki y migración | Pendiente; opcional o experimental de referencia | Con capa elegida importar corpus artificial, consultar fuentes, exportar y restaurar sin pérdida/duplicado. |
 | A-28 | Almacenamiento, transacciones, migración y privacidad | Avance contractual parcial; cierre pendiente | En perfil aislado escribir estado durable, migrar y recuperar tras corte verificando identidad y contenido. |
 | A-29 | Listar, leer, escribir, editar y aplicar parches | Avance contractual parcial; cierre pendiente | En workspace temporal crear/editar texto, aplicar parche y verificar bytes y diff independientes. |
-| A-30 | Exec, procesos, stdin, terminal y cancelación | Pendiente | Ejecutar programa benigno en sandbox, enviar stdin, observar exit/salida y cancelar desde app. |
-| A-31 | Sandbox, ubicación de ejecución y privilegios | Pendiente | Mostrar si efecto ocurre en host/sandbox/nodo; comando autorizado sólo modifica carpeta de prueba. |
+| A-30 | Exec, procesos, stdin, terminal y cancelación | Avance contractual parcial; cierre pendiente | Ejecutar programa benigno en sandbox, enviar stdin, observar exit/salida y cancelar desde app. |
+| A-31 | Sandbox, ubicación de ejecución y privilegios | Avance contractual parcial; cierre pendiente | Mostrar si efecto ocurre en host/sandbox/nodo; comando autorizado sólo modifica carpeta de prueba. |
 | A-32 | Modo de código y llamadas compuestas | Pendiente; opcional o experimental de referencia | Si se habilita experimento, programa corto compone tools permitidas con límites y resultados correlacionados. |
 | A-33 | Búsqueda web, extracción y referencias | Pendiente | Con proveedor elegido buscar/extraer página pública de prueba y devolver referencias que abren el recurso consultado. |
 | A-34 | Navegador administrado, perfiles y pestañas | Pendiente | Abrir perfil aislado, navegar página local, localizar/rellenar/pulsar y verificar estado resultante. |
@@ -89,9 +91,9 @@ Todas las filas mantienen pendiente la cualificación real propia. «Sintético 
 | A-41 | Servidor/relay y eventos MCP | Pendiente | Cliente externo de prueba ve sólo catálogo admitido; suscripción entrega evento correlacionado. |
 | A-42 | Registro, contratos, hooks y lifecycle | Pendiente | Cargar extensión propia declarada, invocar tool y deshabilitar/recargar liberando recursos. |
 | A-43 | Catálogo, instalación, actualización y eliminación | Pendiente | Instalar paquete propio de prueba desde fuente explícita, inspeccionar, actualizar y desinstalar con UI/runtime coherentes. |
-| A-44 | Skills, biblioteca, búsqueda y entrega | Pendiente | Crear skill propia con recursos de prueba y activarla sólo para agente previsto. |
-| A-45 | Workshop, propuestas, revisión y reversión | Pendiente | Proponer cambio, revisar diff, aprobar con dueño, aplicar y deshacer conservando versiones. |
-| A-46 | Cron, automatizaciones, heartbeat y wake | Pendiente | Programar trabajo de prueba con zona horaria, observar ejecución, reiniciar y comprobar persistencia; pausar/borrar funciona. |
+| A-44 | Skills, biblioteca, búsqueda y entrega | Avance contractual parcial; cierre pendiente | Crear skill propia con recursos de prueba y activarla sólo para agente previsto. |
+| A-45 | Workshop, propuestas, revisión y reversión | Avance contractual parcial; cierre pendiente | Proponer cambio, revisar diff, aprobar con dueño, aplicar y deshacer conservando versiones. |
+| A-46 | Cron, automatizaciones, heartbeat y wake | Avance contractual parcial; cierre pendiente | Programar trabajo de prueba con zona horaria, observar ejecución, reiniciar y comprobar persistencia; pausar/borrar funciona. |
 | A-47 | Hooks, webhooks y flujos reanudables | Pendiente | Evento local y webhook autenticado disparan flujo correcto; pausa/aprobación/reanudación conserva correlación. |
 | A-48 | Entrada/salida, routing y entrega multicanal | Pendiente | Cuenta elegida recibe mensaje/adjunto y responde una vez al agente/sesión/hilo/destino exactos con recibo. |
 | A-49 | DM, grupos, menciones, pairing y acciones | Pendiente | Emparejar identidad, probar activación por mención y acciones que el canal anuncia como admitidas. |
@@ -115,7 +117,7 @@ Todas las filas mantienen pendiente la cualificación real propia. «Sintético 
 | A-67 | Workers, entornos, cloud sessions y escritorio remoto | Pendiente; opcional o experimental de referencia | En entorno elegido provisionar prueba, despachar sesión, recuperar resultado y liberar lease/recursos. |
 | A-68 | CLI, TUI, ACP y clientes de automatización | Pendiente | Controlar sesión desde CLI/TUI y cliente ACP de prueba con los mismos eventos y autoridad que app. |
 | A-69 | Onboarding, asistente de sistema y doctor | Pendiente | Instalación limpia detecta requisitos y guía en español hasta primera conversación real con acceso del dueño. |
-| A-70 | Logs, auditoría, actividad, métricas y límites | Pendiente | Reproducir error y reconstruir solicitud/autorización/despacho/resultado por IDs en auditoría saneada. |
+| A-70 | Logs, auditoría, actividad, métricas y límites | Avance contractual parcial; cierre pendiente | Reproducir error y reconstruir solicitud/autorización/despacho/resultado por IDs en auditoría saneada. |
 | A-71 | Backup, restauración, actualización y rollback | Pendiente | Respaldar perfil artificial, actualizar paquete propio y restaurar sesiones/config/artefactos verificando hashes. |
 | A-72 | Distribución, instalación y firma propias | Avance contractual parcial; cierre pendiente | Construir app desde checkout limpio, instalar en destino de prueba y verificar firma/identidad/chat con backend propio. |
 | A-73 | Defensas de red, contenido, archivos y abuso | Avance contractual parcial; cierre pendiente | Corpus adversarial ensaya prompt externo, SSRF, traversal, spam y replay sin bloquear operación legítima. |

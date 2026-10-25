@@ -38,7 +38,7 @@ from typing import Any
 from uuid import uuid4
 
 _APPLICATION_ID = 0x4A525653  # ASCII JRVS, the identity of this SQLite format.
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
 _ACTIVE = frozenset({"queued", "running", "waiting_approval", "cancelling", "cleaning"})
 _TERMINAL = frozenset({"completed", "failed", "cancelled", "interrupted"})
 _TRANSITIONS = {
@@ -52,7 +52,7 @@ _SCHEMA = """
 CREATE TABLE sessions (
     session_id TEXT PRIMARY KEY, title TEXT NOT NULL,
     archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN (0, 1)), created_ns INTEGER NOT NULL,
-    provider_thread_id TEXT
+    provider_thread_id TEXT, agent_id TEXT NOT NULL DEFAULT 'jarvis', parent_session_id TEXT
 );
 CREATE TABLE runs (
     run_id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES sessions ON DELETE CASCADE,
@@ -171,6 +171,8 @@ class SessionRecord:
     archived: bool
     created_ns: int
     provider_thread_id: str | None = None
+    agent_id: str = "jarvis"
+    parent_session_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -322,10 +324,17 @@ class StateStore:
             if created:
                 self._initialize(connection)
             elif (connection.execute("PRAGMA application_id").fetchone()[0] != _APPLICATION_ID
-                    or connection.execute("PRAGMA user_version").fetchone()[0] != _SCHEMA_VERSION
+                    or connection.execute("PRAGMA user_version").fetchone()[0] not in {1, 2}
                     or connection.execute("PRAGMA quick_check(1)").fetchone()[0] != "ok"
                     or connection.execute("PRAGMA foreign_key_check").fetchone() is not None):
                 raise StateError("invalid_database")
+            if connection.execute("PRAGMA user_version").fetchone()[0] == 1:
+                # The exclusive profile lock is held. Migrate our own v1 format
+                # atomically; no import from another product or owner profile.
+                connection.executescript("BEGIN IMMEDIATE;"
+                    "ALTER TABLE sessions ADD COLUMN agent_id TEXT NOT NULL DEFAULT 'jarvis';"
+                    "ALTER TABLE sessions ADD COLUMN parent_session_id TEXT;"
+                    "PRAGMA user_version=2;COMMIT;")
             # Private rollback journals inherit the database's 0600 mode; no WAL,
             # shared-memory sidecar or disk-backed temporary table is needed.
             if connection.execute("PRAGMA journal_mode=DELETE").fetchone()[0] != "delete":
@@ -453,7 +462,8 @@ class StateStore:
     @staticmethod
     def _session_record(row: sqlite3.Row, temporary: bool) -> SessionRecord:
         return SessionRecord(SessionRef(row["session_id"], temporary), row["title"],
-                             bool(row["archived"]), row["created_ns"], row["provider_thread_id"])
+                             bool(row["archived"]), row["created_ns"], row["provider_thread_id"],
+                             row["agent_id"], row["parent_session_id"])
 
     @staticmethod
     def _capacity(connection: sqlite3.Connection, sql: str, args: tuple, maximum: int) -> None:
@@ -461,20 +471,71 @@ class StateStore:
             raise StateError("capacity_exceeded")
 
     def create_session(self, title: str = "Nueva conversación", *,
-                       temporary: bool = False) -> SessionRecord:
+                       temporary: bool = False, agent_id: str = "jarvis") -> SessionRecord:
         title = self._text(title, nonempty=True)
+        if not isinstance(agent_id, str) or re.fullmatch(r"[A-Za-z0-9_-]{1,64}", agent_id) is None:
+            raise StateError("invalid_agent_identity")
         ref = SessionRef(uuid4().hex, temporary)
         with self._transaction(temporary) as connection:
             self._capacity(connection, "SELECT count(*) FROM sessions", (),
                            self.limits.max_sessions)
-            connection.execute("INSERT INTO sessions VALUES(?, ?, 0, ?, NULL)",
-                               (ref.session_id, title, time.time_ns()))
+            connection.execute("INSERT INTO sessions VALUES(?, ?, 0, ?, NULL, ?, NULL)",
+                               (ref.session_id, title, time.time_ns(), agent_id))
             return self._session_record(self._session(connection, ref), temporary)
+
+    def fork_session(self, ref: SessionRef, *, title: str | None = None,
+                     until_sequence: int | None = None) -> SessionRecord:
+        """Copy a bounded completed context into a new same-mode session.
+
+        Runs, approvals, receipts and provider thread identities never transfer.
+        An original message is a historical datum, not a request to replay.
+        """
+        self._ref(ref)
+        if until_sequence is not None and (type(until_sequence) is not int or until_sequence < 1):
+            raise StateError("invalid_page")
+        if title is not None:
+            title = self._text(title, nonempty=True)
+        with self._transaction(ref.temporary) as connection:
+            parent = self._session(connection, ref)
+            if connection.execute("SELECT 1 FROM runs WHERE session_id=? AND receipt_json IS NULL",
+                                  (ref.session_id,)).fetchone() is not None:
+                raise StateError("session_busy")
+            if until_sequence is not None and connection.execute(
+                "SELECT 1 FROM messages WHERE session_id=? AND sequence=?",
+                (ref.session_id, until_sequence),
+            ).fetchone() is None:
+                raise StateError("message_not_found")
+            self._capacity(connection, "SELECT count(*) FROM sessions", (),
+                           self.limits.max_sessions)
+            rows = connection.execute(
+                "SELECT m.role,m.text FROM messages m LEFT JOIN runs r ON m.run_id=r.run_id "
+                "WHERE m.session_id=? AND (? IS NULL OR m.sequence<=?) "
+                "AND m.role IN ('user','assistant') AND (m.run_id IS NULL OR r.status='completed') "
+                "ORDER BY m.sequence", (ref.session_id, until_sequence, until_sequence),
+            ).fetchall()
+            if len(rows) > 1000 or sum(len(row["text"].encode()) for row in rows) > 262144:
+                raise StateError("fork_context_too_large")
+            new = SessionRef(uuid4().hex, ref.temporary)
+            connection.execute("INSERT INTO sessions VALUES(?, ?, 0, ?, NULL, ?, ?)",
+                               (new.session_id, title or parent["title"], time.time_ns(),
+                                parent["agent_id"], ref.session_id))
+            connection.executemany("INSERT INTO messages VALUES(?,?,?,?,?,NULL,?)", (
+                (uuid4().hex, new.session_id, index, row["role"], row["text"], time.time_ns())
+                for index, row in enumerate(rows, 1)))
+            return self._session_record(self._session(connection, new), ref.temporary)
 
     def get_session(self, ref: SessionRef) -> SessionRecord:
         self._ref(ref)
         with self._transaction(ref.temporary) as connection:
             return self._session_record(self._session(connection, ref), ref.temporary)
+
+    def session_for_run(self, run_id: str, *, temporary: bool = False) -> SessionRef | None:
+        """Host lookup of a previously bound run, without returning history."""
+        _identity(run_id)
+        with self._transaction(temporary) as connection:
+            row = connection.execute("SELECT session_id FROM runs WHERE run_id=?",
+                                     (run_id,)).fetchone()
+            return SessionRef(row[0], temporary) if row else None
 
     def set_provider_thread(self, ref: SessionRef, thread_id: str | None) -> SessionRecord:
         """Bind only the host-supplied thread created for this session; no discovery.

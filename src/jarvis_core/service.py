@@ -21,11 +21,17 @@ from pathlib import Path
 from jarvis_core.bridge import CodexBridge
 from jarvis_core.codex import CodexClient, CodexError
 from jarvis_core.config import ConfigError, ProfileConfig
+from jarvis_core.management import ManagementAPI
 from jarvis_core.mcp_registry import McpRegistry, McpRegistryError, ServerSpec
 from jarvis_core.memory import Citation, MemoryError, MemoryLimits, MemoryScope, MemoryStore
 from jarvis_core.memory_tools import MemoryTools
+from jarvis_core.private_json import PrivateJsonError
+from jarvis_core.processes import ProcessTools
+from jarvis_core.profiles import ProfileError, ProfilesStore
 from jarvis_core.protocol import LocalRpcServer, RpcError, TransportSecurityError
 from jarvis_core.runtime import AgentRuntime, RunContext, RunHandle, ToolResult
+from jarvis_core.scheduler import Scheduler, SchedulerError, SchedulerLimits, ScheduleStore
+from jarvis_core.skills import SkillError, SkillsStore
 from jarvis_core.state import (
     SessionRecord,
     SessionRef,
@@ -52,6 +58,8 @@ def _session(record: SessionRecord) -> dict:
         "temporary": record.ref.temporary,
         "title": record.title,
         "archived": record.archived,
+        "agent_id": record.agent_id,
+        "parent_session_id": record.parent_session_id,
     }
 
 
@@ -71,7 +79,14 @@ class _ProviderAdapter:
         service._active_ref.set(service._refs[context.run_id])
         try:
             return await self.bridge.next_step(context)
-        except (CodexError, ConfigError) as error:
+        except (
+            CodexError,
+            ConfigError,
+            WorkspaceError,
+            ProfileError,
+            SkillError,
+            PrivateJsonError,
+        ) as error:
             service._errors[context.run_id] = str(error)
             raise
 
@@ -97,7 +112,7 @@ class _ApprovalGate:
                 self.service.store.set_run_status(ref, operation.run_id, "running")
 
 
-class JarvisService:
+class JarvisService(ManagementAPI):
     def __init__(self, directory: Path, provider: CodexClient) -> None:
         self.directory = directory
         self.store = StateStore(
@@ -108,13 +123,24 @@ class JarvisService:
         self._refs: dict[str, SessionRef] = {}
         self._errors: dict[str, str] = {}
         self._observers: set[asyncio.Task] = set()
+        self._settlers: dict[str, asyncio.Task] = {}
         self._closing = False
         self._maintenance = False
         self._close_task: asyncio.Task | None = None
+        self._retiring_sessions: set[SessionRef] = set()
+        self._run_fingerprints: dict[str, str] = {}
+        self.process_tools = None
         self._active_ref: ContextVar[SessionRef | None] = ContextVar(
             "jarvis_run_scope", default=None
         )
         self.config = ProfileConfig(directory)
+        self.agent_profiles = ProfilesStore(directory / "profiles")
+        self.skills = SkillsStore(directory / "profiles")
+        self.schedule_store = ScheduleStore(
+            directory / "schedules.sqlite3",
+            limits=SchedulerLimits(max_schedules=32, max_prompt_bytes=8000),
+        )
+        self.scheduler = Scheduler(self.schedule_store, self._dispatch_schedule, close_timeout=10)
         self.authority = ApprovalAuthority()
         self.mcp = McpRegistry(directory / "mcp")
         self.memory = MemoryStore(
@@ -163,6 +189,12 @@ class JarvisService:
         if self.workspace_tools:
             definitions.extend(self.workspace_tools.definitions())
             specs.extend(self.workspace_tools.specs())
+            if self.process_tools is None:
+                self.process_tools = ProcessTools(
+                    self.workspace_tools, lambda: self._active_process_scope()
+                )
+            definitions.extend(self.process_tools.definitions())
+            specs.extend(self.process_tools.specs())
         definitions.extend(self.mcp.definitions())
         specs.extend(self.mcp.specs())
         self._mcp_signature = tuple(spec.name for spec in self.mcp.specs())
@@ -187,7 +219,10 @@ class JarvisService:
 
     def _memory_scope(self, ref: SessionRef) -> MemoryScope:
         scope = MemoryScope(
-            "jarvis", self._workspace_id, ref.session_id if ref.temporary else None, ref.temporary
+            self.store.get_session(ref).agent_id,
+            self._workspace_id,
+            ref.session_id if ref.temporary else None,
+            ref.temporary,
         )
         if ref.temporary:
             self._temporary_memory_scopes.setdefault(ref.session_id, set()).add(scope)
@@ -211,6 +246,13 @@ class JarvisService:
             raise ValueError("memory_run_scope_required")
         return self._memory_scope(ref)
 
+    def _active_process_scope(self) -> str:
+        ref = self._active_ref.get()
+        if ref is None:
+            raise ValueError("process_run_scope_required")
+        self.store.get_session(ref)
+        return ref.session_id
+
     def _event(self, context: RunContext, kind: str, payload: dict) -> None:
         self.store.append_event(self._refs[context.run_id], context.run_id, kind, payload)
 
@@ -232,14 +274,27 @@ class JarvisService:
         ref = self._refs[context.run_id]
         if self.config.workspace != self._configured_workspace:
             raise ConfigError("workspace_configuration_changed_restart")
+        self._assert_workspace_current()
         self.store.set_run_status(ref, context.run_id, "running")
         session = self.store.get_session(ref)
+        profile = self.agent_profiles.get(session.agent_id)
+        skills = self.skills.context(session.agent_id)
+        fingerprint = hashlib.sha256(
+            json.dumps(
+                [
+                    self._catalog_fingerprint,
+                    profile.fingerprint,
+                    skills.fingerprint,
+                ]
+            ).encode()
+        ).hexdigest()
+        self._run_fingerprints[context.run_id] = fingerprint
         matches = (
-            self._volatile_bindings.get(ref.session_id) == self._catalog_fingerprint
+            self._volatile_bindings.get(ref.session_id) == fingerprint
             if ref.temporary
             else self.config.binding_matches(
                 ref.session_id,
-                self._catalog_fingerprint,
+                fingerprint,
             )
         )
         thread_id = session.provider_thread_id if matches else None
@@ -247,7 +302,7 @@ class JarvisService:
         if thread_id is None:
             # Only our own session, with bounded recent context. Never thread/list
             # or external owner history; failed user requests are not replayed.
-            rows = self.store.list_recent_messages(ref, limit=100)
+            rows = self.store.list_recent_messages(ref, limit=99 if skills.text else 100)
             budget = 16000
             for row in reversed(rows):
                 if row.run_id == context.run_id:
@@ -282,15 +337,22 @@ class JarvisService:
             "temporary": ref.temporary,
             "tool_specs": self.catalog.specs(),
             "history": history,
+            "instructions": profile.instructions,
+            "context_data": skills.text,
         }
+
+    def _assert_workspace_current(self) -> None:
+        current = WorkspaceTools(self._workspace_path)
+        if self.workspace_tools is None or current.identity != self.workspace_tools.identity:
+            raise WorkspaceError("workspace_identity_changed")
 
     def _bind_thread(self, context: RunContext, thread_id: str) -> None:
         ref = self._refs[context.run_id]
         self.store.set_provider_thread(ref, thread_id)
         if ref.temporary:
-            self._volatile_bindings[ref.session_id] = self._catalog_fingerprint
+            self._volatile_bindings[ref.session_id] = self._run_fingerprints[context.run_id]
         else:
-            self.config.bind(ref.session_id, self._catalog_fingerprint)
+            self.config.bind(ref.session_id, self._run_fingerprints[context.run_id])
 
     def handlers(self) -> dict[str, Callable[[dict], Awaitable[dict]]]:
         methods = {
@@ -322,6 +384,7 @@ class JarvisService:
             "mcp.disconnect": self.disconnect_mcp,
             "mcp.remove": self.remove_mcp,
         }
+        methods.update(self.management_handlers())
 
         def safe(callback):
             async def invoke(params):
@@ -331,6 +394,8 @@ class JarvisService:
                     raise RpcError(-32010, error.code) from None
                 except CodexError as error:
                     raise RpcError(-32020, str(error)) from None
+                except (ProfileError, SkillError, PrivateJsonError, SchedulerError) as error:
+                    raise RpcError(-32035, str(error)) from None
                 except (ConfigError, WorkspaceError, ToolError, McpRegistryError) as error:
                     message = (
                         "La configuración pudo cambiar, pero no se confirmó su guardado. "
@@ -359,7 +424,7 @@ class JarvisService:
         return ref
 
     def _busy(self, ref: SessionRef) -> bool:
-        return any(value == ref for value in self._refs.values())
+        return ref in self._retiring_sessions or any(value == ref for value in self._refs.values())
 
     async def status(self, params: dict) -> dict:
         _params(params, set())
@@ -377,6 +442,12 @@ class JarvisService:
                 "memory": True,
                 "memory_mode": "local_lexical",
                 "mcp": True,
+                "agents": True,
+                "skills": True,
+                "schedules": True,
+                "processes": self.process_tools.status()
+                if self.process_tools
+                else {"available": False},
                 "baseline_complete": False,
             },
         }
@@ -416,7 +487,13 @@ class JarvisService:
 
     async def set_workspace(self, params: dict) -> dict:
         _params(params, {"path"}, {"path"})
-        if self._handles or self._maintenance or self._closing:
+        if (
+            self._handles
+            or self._maintenance
+            or self._closing
+            or self._retiring_sessions
+            or (self.process_tools and self.process_tools.has_running)
+        ):
             raise RpcError(
                 -32011, "Espera a que terminen las ejecuciones antes de cambiar de carpeta."
             )
@@ -439,10 +516,20 @@ class JarvisService:
             if "uncertain" in str(error):
                 self._closing = True
             raise
-        self._workspace_path = path
-        self._configured_workspace = str(path)
-        self._volatile_bindings.clear()
-        self._configure_tools()
+        self._maintenance = True
+        try:
+            if self.process_tools:
+                await self.process_tools.aclose()
+                self.process_tools = None
+            self._workspace_path = path
+            self._configured_workspace = str(path)
+            self._volatile_bindings.clear()
+            self._configure_tools()
+        except BaseException:
+            self._closing = True
+            raise
+        finally:
+            self._maintenance = False
         return {"workspace": self._workspace_value()}
 
     def _refresh_mcp_catalog(self) -> None:
@@ -666,10 +753,13 @@ class JarvisService:
         return await self.provider.logout()
 
     async def create_session(self, params: dict) -> dict:
-        _params(params, {"title", "temporary"})
+        _params(params, {"title", "temporary", "agent_id"})
         self._title(params.get("title", "Nueva conversación"))
+        profile = self.agent_profiles.get(params.get("agent_id", "jarvis"))
         record = self.store.create_session(
-            params.get("title", "Nueva conversación"), temporary=params.get("temporary", False)
+            params.get("title", "Nueva conversación"),
+            temporary=params.get("temporary", False),
+            agent_id=profile.agent_id,
         )
         return {"session": _session(record)}
 
@@ -722,6 +812,12 @@ class JarvisService:
         if self._busy(ref):
             raise RpcError(-32011, "Cancela y espera al cierre de la ejecución antes de borrar.")
         self.authority.revoke(ref.session_id)
+        self._retiring_sessions.add(ref)
+        try:
+            if self.process_tools:
+                await self.process_tools.close_scope(ref.session_id)
+        finally:
+            self._retiring_sessions.discard(ref)
         if ref.temporary:
             self._memory_scope(ref)
             for scope in self._temporary_memory_scopes.get(ref.session_id, ()):
@@ -801,8 +897,29 @@ class JarvisService:
         self._handles[handle.run_id] = handle
         observer = asyncio.create_task(self._settle(ref, handle))
         self._observers.add(observer)
+        self._settlers[handle.run_id] = observer
         observer.add_done_callback(self._observers.discard)
+        observer.add_done_callback(lambda _task: self._settlers.pop(handle.run_id, None))
         return {"run_id": handle.run_id, "status": record.status}
+
+    async def _await_run_receipt(self, ref: SessionRef, handle: RunHandle) -> dict | None:
+        """Wait for this run's durable settlement, not only the model result.
+
+        Channel and schedule delivery cannot claim success from a volatile
+        RuntimeResult if writing its authoritative receipt failed. Shield the
+        observer so cancelling a delivery never cancels state persistence.
+        """
+        await handle.await_settled()
+        observer = self._settlers.get(handle.run_id)
+        try:
+            if observer is not None:
+                await asyncio.shield(observer)
+            record = self.store.get_run(ref, handle.run_id)
+            if record.status not in _TERMINAL or record.receipt_json is None:
+                return None
+            return self._run_value(ref, handle.run_id)
+        except (StateError, ValueError):
+            return None
 
     async def _settle(self, ref: SessionRef, handle: RunHandle) -> None:
         result = await handle.await_settled()
@@ -830,6 +947,7 @@ class JarvisService:
         finally:
             self._handles.pop(handle.run_id, None)
             self._refs.pop(handle.run_id, None)
+            self._run_fingerprints.pop(handle.run_id, None)
 
     def _run_value(self, ref: SessionRef, run_id: str) -> dict:
         record = self.store.get_run(ref, run_id)
@@ -880,6 +998,16 @@ class JarvisService:
         await self.server.start()
 
     async def aclose(self) -> None:
+        if (
+            self._close_task is not None
+            and self._close_task.done()
+            and not self._close_task.cancelled()
+            and isinstance(self._close_task.exception(), McpRegistryError)
+            and str(self._close_task.exception()) == "mcp_cleanup_incomplete"
+        ):
+            # An explicit new close may finish resources retained after a
+            # denied process-group signal. It never reopens IPC or inference.
+            self._close_task = None
         if self._close_task is None:
             self._close_task = asyncio.create_task(self._close())
         await asyncio.shield(self._close_task)
@@ -891,6 +1019,11 @@ class JarvisService:
             await self.server.aclose()
         except Exception as error:
             transport_error = error
+        scheduler_error = None
+        try:
+            await self.scheduler.aclose()
+        except SchedulerError as error:
+            scheduler_error = error
         for handle in tuple(self._handles.values()):
             handle.cancel()
         await self.authority.close()
@@ -905,7 +1038,14 @@ class JarvisService:
                 if pending:
                     raise TimeoutError("service_cleanup_incomplete")
         await self.provider.aclose()
+        if scheduler_error:
+            await self.scheduler.aclose()
+        if self.process_tools:
+            await self.process_tools.aclose()
+        # A failed external server close must not leave workspace processes
+        # running. Keep durable stores owned until MCP cleanup is confirmed.
         await self.mcp.aclose()
+        self.schedule_store.close()
         self.memory.close()
         self.store.close()
         if transport_error is not None:
@@ -938,7 +1078,17 @@ def main() -> None:
     args = parser.parse_args()
     try:
         asyncio.run(_serve(args))
-    except (StateError, CodexError, OSError, TransportSecurityError):
+    except (
+        StateError,
+        CodexError,
+        OSError,
+        TransportSecurityError,
+        ProfileError,
+        SkillError,
+        PrivateJsonError,
+        SchedulerError,
+        McpRegistryError,
+    ):
         parser.exit(1, "No se pudo iniciar o cerrar el servicio local de Jarvis.\n")
 
 

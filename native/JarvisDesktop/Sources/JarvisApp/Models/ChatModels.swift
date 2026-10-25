@@ -6,13 +6,22 @@ struct ChatSession: Identifiable, Hashable {
     let title: String
     let temporary: Bool
     let archived: Bool
+    let agentID: String
+    let parentSessionID: String?
     var scope: SessionScope { SessionScope(sessionID: id, temporary: temporary) }
 
     init?(_ value: RPCValue) {
         guard let id = value["session_id"].string, let title = value["title"].string,
-              let temporary = value["temporary"].bool else { return nil }
+              let temporary = value["temporary"].bool,
+              ManagementValidation.identifier(id),
+              let agentID = value["agent_id"].string, ManagementValidation.identifier(agentID, agent: true)
+        else { return nil }
+        if value["parent_session_id"] != .null {
+            guard let parent = value["parent_session_id"].string, ManagementValidation.identifier(parent) else { return nil }
+        }
         self.id = id; self.title = title; self.temporary = temporary
         archived = value["archived"].bool ?? false
+        self.agentID = agentID; parentSessionID = value["parent_session_id"].string
     }
 }
 

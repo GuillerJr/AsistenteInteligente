@@ -14,6 +14,7 @@ struct ContentView: View {
                 HStack(spacing: 8) {
                     Circle().fill(store.connected ? .green : .secondary).frame(width: 7, height: 7)
                     Text(store.statusText).font(.callout).foregroundStyle(.secondary)
+                    if store.selected != nil { Text("· \(store.selectedAgentName)").font(.caption).foregroundStyle(.secondary) }
                     if let selected = store.selected, selected.archived {
                         Text("Archivada").font(.caption).foregroundStyle(.secondary)
                         Button("Restaurar") { Task { await store.setArchived(selected, archived: false) } }
@@ -41,6 +42,13 @@ struct ContentView: View {
                         Text(error).textSelection(.enabled)
                         Spacer()
                         Button("Ocultar") { store.access.errorMessage = nil }
+                    }.font(.callout).foregroundStyle(.red).padding(12)
+                }
+                if let error = store.management.errorMessage {
+                    HStack {
+                        Text(error).textSelection(.enabled)
+                        Spacer()
+                        Button("Ocultar") { store.management.errorMessage = nil }
                     }.font(.callout).foregroundStyle(.red).padding(12)
                 }
                 if let error = store.errorMessage {
@@ -72,6 +80,12 @@ struct ContentView: View {
                     Button("Memoria", systemImage: "tray") {
                         inspectorTab = "memory"; showInspector = true
                     }.disabled(!store.ready || store.selected == nil)
+                    Menu("Gestionar", systemImage: "slider.horizontal.3") {
+                        Button("Agentes") { inspectorTab = "agents"; showInspector = true }
+                        Button("Skills") { inspectorTab = "skills"; showInspector = true }
+                        Button("Programador") { inspectorTab = "schedules"; showInspector = true }
+                        Button("Procesos") { inspectorTab = "processes"; showInspector = true }
+                    }.disabled(!store.ready)
                 }
                 ToolbarItem {
                     if store.busy || store.starting { ProgressView().controlSize(.small) }
@@ -84,9 +98,17 @@ struct ContentView: View {
                     Text("Herramientas").tag("tools")
                     Text("Memoria").tag("memory")
                     Text("MCP").tag("mcp")
-                }.pickerStyle(.segmented).padding()
+                    Text("Agentes").tag("agents")
+                    Text("Skills").tag("skills")
+                    Text("Programador").tag("schedules")
+                    Text("Procesos").tag("processes")
+                }.pickerStyle(.menu).padding()
                 if inspectorTab == "mcp" { MCPView(store: store) }
                 else if inspectorTab == "memory" { MemoryView(store: store) }
+                else if inspectorTab == "agents" { AgentsView(store: store) }
+                else if inspectorTab == "skills" { SkillsView(store: store) }
+                else if inspectorTab == "schedules" { SchedulesView(store: store) }
+                else if inspectorTab == "processes" { ProcessesView(store: store) }
                 else { CapabilitiesView(store: store) }
             }
             .inspectorColumnWidth(min: 360, ideal: 420, max: 560)
