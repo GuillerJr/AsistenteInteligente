@@ -4,7 +4,7 @@ import Foundation
 /// gate-busy response into provider disconnection. No process is relaunched here.
 public enum MaintenanceMonitorPolicy {
     public static func pauses(visible: Bool, operation: MaintenanceOperation?, requestInFlight: Bool, unresolvedResponse: Bool) -> Bool {
-        visible || requestInFlight || unresolvedResponse || (operation.map { !$0.settled } ?? false)
+        visible || requestInFlight || unresolvedResponse || operation?.resourcesPending == true
     }
     public static func isTemporaryBusy(_ error: Error) -> Bool {
         guard let failure = error as? RPCFailure,

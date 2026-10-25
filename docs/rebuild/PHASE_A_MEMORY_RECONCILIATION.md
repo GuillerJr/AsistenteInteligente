@@ -100,7 +100,8 @@ esos controles no cubrían; se documenta a continuación.
 
 La copia de dos notas de prueba desde la app quedó completada y asentada con
 aprobación real, sin simularla. Sus originales sintéticos tenían revisiones 2 y 1.
-Los escenarios reales negativos, WAL frío, recuperación de archivos de workspace,
+Los escenarios reales negativos, mutación/reconciliación de memoria sobre WAL frío,
+recuperación de archivos de workspace,
 otros canales y distribución autocontenida continúan pendientes dentro de la fase A.
 
 La investigación estática que orienta estas decisiones es

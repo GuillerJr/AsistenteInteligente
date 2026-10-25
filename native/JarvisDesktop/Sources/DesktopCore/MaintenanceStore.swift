@@ -1,58 +1,75 @@
-import DesktopCore
 import Foundation
 import Observation
 
 @MainActor @Observable
-final class MaintenanceStore {
-    var status: MaintenanceStatus?
-    var review: MaintenanceReview?
-    var operation: MaintenanceOperation?
-    var approval: MaintenanceApproval?
-    var verification: MaintenanceVerification?
-    var verificationPath: String?
+public final class MaintenanceStore {
+    public private(set) var status: MaintenanceStatus?
+    public private(set) var review: MaintenanceReview?
+    public private(set) var operation: MaintenanceOperation?
+    public private(set) var approval: MaintenanceApproval?
+    public private(set) var verification: MaintenanceVerification?
+    public private(set) var verificationPath: String?
     @ObservationIgnored private var requestedVerificationPath: String?
-    var doctor: DoctorSummary?
-    var errorMessage: String?
-    var isRequesting = false
-    var responseUnconfirmed = false
-    var localAcknowledgement: String?
-    var pollingPaused = false
+    public private(set) var doctor: DoctorSummary?
+    public private(set) var errorMessage: String?
+    public private(set) var isRequesting = false
+    public private(set) var isRefreshing = false
+    public private(set) var responseUnconfirmed = false
+    public private(set) var readAwaitingSettlement = false
+    public private(set) var localAcknowledgement: String?
+    public private(set) var pollingPaused = false
     @ObservationIgnored private var client: MaintenanceClient?
-    @ObservationIgnored var waitForSupervisionIdle: (@MainActor () async throws -> Void)?
+    @ObservationIgnored public var waitForSupervisionIdle: (@MainActor () async throws -> Void)?
     @ObservationIgnored private var context = 0
+    @ObservationIgnored private var readSequence = 0
     @ObservationIgnored private var polling: Task<Void, Never>?
+    @ObservationIgnored private let maxPolls: Int
+    @ObservationIgnored private let pause: @Sendable () async throws -> Void
     private var visibleViews: Set<UUID> = []
-    var monitorPaused: Bool { MaintenanceMonitorPolicy.pauses(visible: !visibleViews.isEmpty, operation: operation, requestInFlight: isRequesting, unresolvedResponse: responseUnconfirmed) || (review != nil && operation == nil) }
-    func setVisible(_ id: UUID, visible: Bool) {
+    private var liveResourcesPending: Bool { operation?.resourcesPending == true || status?.operations.contains(where: { $0.resourcesPending }) == true }
+    public var monitorPaused: Bool { MaintenanceMonitorPolicy.pauses(visible: !visibleViews.isEmpty, operation: operation, requestInFlight: isRequesting || isRefreshing, unresolvedResponse: responseUnconfirmed || readAwaitingSettlement) || liveResourcesPending || (review != nil && operation == nil) }
+    public init(maxPolls: Int = 240, pause: @escaping @Sendable () async throws -> Void = { try await Task.sleep(for: .milliseconds(500)) }) {
+        self.maxPolls = max(0, min(maxPolls, 240)); self.pause = pause
+    }
+    public func setVisible(_ id: UUID, visible: Bool) {
         if visible { visibleViews.insert(id) } else { visibleViews.remove(id) }
         discardHiddenPreview()
     }
     private func discardHiddenPreview() {
         // Closing a read-only preview cannot leave the chat frozen. A submitted
         // job or uncertain response keeps its owner and reconciliation metadata.
-        guard visibleViews.isEmpty, !isRequesting, !responseUnconfirmed,
+        guard visibleViews.isEmpty, !isRequesting, !responseUnconfirmed, !readAwaitingSettlement,
               operation == nil else { return }
         review = nil; approval = nil
     }
-    var blocksInteraction: Bool { isRequesting || (review != nil && operation == nil) || responseUnconfirmed || (operation.map { !$0.settled } ?? false) }
-    var mayPrepare: Bool { !isRequesting && !responseUnconfirmed && !(operation.map { !$0.settled } ?? false) }
+    public var blocksInteraction: Bool { isRequesting || isRefreshing || (review != nil && operation == nil) || responseUnconfirmed || readAwaitingSettlement || liveResourcesPending }
+    public var mayPrepare: Bool { !isRequesting && !isRefreshing && !responseUnconfirmed && !readAwaitingSettlement && !liveResourcesPending }
+    public var canCleanup: Bool { !isRequesting && !isRefreshing && operation?.cleanupOwnerPending == true && operation?.workerPending == false }
 
-    func configure(client: LocalRPCClient) {
-        polling?.cancel(); context += 1
-        self.client = MaintenanceClient(transport: client)
-        status = nil; review = nil; operation = nil; approval = nil; verification = nil; verificationPath = nil; requestedVerificationPath = nil; doctor = nil
-        responseUnconfirmed = false; localAcknowledgement = nil; pollingPaused = false
+    public func configure(client: LocalRPCClient) {
+        configure(client: MaintenanceClient(transport: client))
     }
-    func close() async { polling?.cancel(); context += 1; await client?.close() }
-    func discardReview() { guard operation?.settled != false, !responseUnconfirmed else { return }; review = nil; approval = nil }
+    public func configure(client: MaintenanceClient) {
+        guard self.client == nil || !blocksInteraction else {
+            errorMessage = "El mantenimiento aún conserva trabajo o recursos pendientes. No se cambiará su conexión."
+            return
+        }
+        polling?.cancel(); context += 1
+        self.client = client
+        status = nil; review = nil; operation = nil; approval = nil; verification = nil; verificationPath = nil; requestedVerificationPath = nil; doctor = nil
+        responseUnconfirmed = false; readAwaitingSettlement = false; isRequesting = false; isRefreshing = false; readSequence += 1; localAcknowledgement = nil; pollingPaused = false
+    }
+    public func close() async { polling?.cancel(); context += 1; let client = self.client; self.client = nil; await client?.close() }
+    public func discardReview() { guard operation?.resourcesPending != true, !responseUnconfirmed, !readAwaitingSettlement else { return }; review = nil; approval = nil }
 
-    func refresh() async {
-        guard let client, !isRequesting else { return }
-        let version = context
+    public func refresh() async {
+        guard let client, !isRequesting, !isRefreshing else { return }
+        let version = context, sequence = readSequence; isRefreshing = true
+        defer { if version == context { isRefreshing = false } }
         do {
             let snapshot = try await client.status()
             let pending = try await client.pending()
-            guard version == context, !Task.isCancelled else { return }
+            guard version == context, sequence == readSequence, !Task.isCancelled else { return }
             guard snapshot.scope == pending.scope else { throw RPCFailure.invalidResponse }
             let profileChanged = status?.scope.profileID != nil && status?.scope.profileID != snapshot.scope.profileID
             status = snapshot
@@ -65,10 +82,12 @@ final class MaintenanceStore {
                     // A known job cannot silently change its originating scope,
                     // review or kind while retaining an operation ID.
                     guard let previous = operation, row.follows(previous) else { throw RPCFailure.invalidResponse }
-                    operation = row; try acceptResult(row)
-                } else {
+                    operation = row; responseUnconfirmed = false
+                    if ["doctor.report", "backup.verify"].contains(row.kind), !row.resourcesPending { readAwaitingSettlement = false }
+                    try acceptResult(row)
+                } else if operation?.resourcesPending == true {
                     // Eviction/restart is uncertainty, never proof of no effect.
-                    operation = nil; responseUnconfirmed = true
+                    responseUnconfirmed = true
                 }
             }
             if responseUnconfirmed, let review,
@@ -88,29 +107,29 @@ final class MaintenanceStore {
                 approval = matches.first
             }
             errorMessage = nil
-        } catch { if version == context { errorMessage = MaintenancePresentation.error(error) } }
+        } catch { if version == context, sequence == readSequence { errorMessage = MaintenancePresentation.error(error) } }
     }
 
-    func acknowledgeUnconfirmedLocally() {
-        guard responseUnconfirmed, operation == nil, !isRequesting else { return }
+    public func acknowledgeUnconfirmedLocally() {
+        guard responseUnconfirmed, operation == nil, !isRequesting, !readAwaitingSettlement else { return }
         polling?.cancel()
         responseUnconfirmed = false; review = nil; approval = nil; pollingPaused = false
         localAcknowledgement = MaintenanceSubmissionReconciliation.acknowledgement
         errorMessage = nil
     }
 
-    func prepareBackup(parent: String, name: String) async {
+    public func prepareBackup(parent: String, name: String) async {
         await prepare { try await $0.reviewBackup(parent: parent, name: name) }
     }
-    func prepareRestore(parent: String, name: String) async {
+    public func prepareRestore(parent: String, name: String) async {
         guard let verification else { errorMessage = "Verifica primero la copia que quieres restaurar."; return }
         let identity = verification.id
         await prepare { try await $0.reviewRestore(verificationID: identity, parent: parent, name: name) }
     }
     private func prepare(_ request: (MaintenanceClient) async throws -> MaintenanceReview) async {
         guard let client, mayPrepare else { return }
-        isRequesting = true; let version = context
-        defer { isRequesting = false; discardHiddenPreview() }
+        isRequesting = true; readSequence += 1; let version = context
+        defer { if version == context { isRequesting = false; discardHiddenPreview() } }
         do {
             try await waitForSupervisionIdle?()
             guard version == context, !Task.isCancelled else { throw CancellationError() }
@@ -121,10 +140,10 @@ final class MaintenanceStore {
             status = snapshot; review = value; operation = nil; approval = nil; doctor = nil; errorMessage = nil; localAcknowledgement = nil
         } catch { if version == context { errorMessage = MaintenancePresentation.error(error) } }
     }
-    func submitReview() async {
+    public func submitReview() async {
         guard let client, let review, mayPrepare, review.expiresAt > Date(), review.kind != "backup.create" || !review.sources.contains(where: { $0.disposition == "unavailable" }) else { return }
-        isRequesting = true; let version = context
-        defer { isRequesting = false; discardHiddenPreview() }
+        isRequesting = true; readSequence += 1; let version = context
+        defer { if version == context { isRequesting = false; discardHiddenPreview() } }
         do {
             let value = try await client.submit(review)
             guard version == context else { return }
@@ -139,31 +158,42 @@ final class MaintenanceStore {
             }
         }
     }
-    func verify(path: String, expectedHash: String) async {
+    public func verify(path: String, expectedHash: String) async {
         guard mayPrepare else { return }
         verification = nil; verificationPath = nil; requestedVerificationPath = path
         await startRead { try await $0.verify(path: path, expectedHash: expectedHash.isEmpty ? nil : expectedHash) }
     }
-    func runDoctor() async { await startRead { try await $0.doctor() } }
+    public func runDoctor() async { await startRead { try await $0.doctor() } }
     private func startRead(_ request: (MaintenanceClient) async throws -> MaintenanceOperation) async {
         guard let client, mayPrepare else { return }
-        isRequesting = true; let version = context
-        defer { isRequesting = false; discardHiddenPreview() }
+        isRequesting = true; readSequence += 1; let version = context
+        defer { if version == context { isRequesting = false; discardHiddenPreview() } }
         review = nil; approval = nil; doctor = nil
         do {
             try await waitForSupervisionIdle?()
             guard version == context, !Task.isCancelled else { throw CancellationError() }
             let snapshot = try await client.status()
+            guard version == context, !Task.isCancelled else { throw CancellationError() }
+            guard !snapshot.closing, !snapshot.operations.contains(where: { $0.resourcesPending }) else { throw RPCFailure.configuration }
+            status = snapshot; operation = nil; readAwaitingSettlement = true
             let value = try await request(client)
             guard version == context else { return }
-            status = snapshot; operation = value; errorMessage = nil; beginPolling()
-        } catch { if version == context { errorMessage = MaintenancePresentation.error(error) } }
+            guard value.scope.profileID == snapshot.scope.profileID, value.scope.generation >= snapshot.scope.generation else { throw RPCFailure.invalidResponse }
+            operation = value; readAwaitingSettlement = value.resourcesPending; errorMessage = nil; beginPolling()
+        } catch {
+            if version == context {
+                if !MaintenanceResponsePolicy.submissionMayBeUnconfirmed(error) { readAwaitingSettlement = false }
+                errorMessage = readAwaitingSettlement && operation == nil
+                    ? "No se confirmó la lectura. Sus recursos pueden seguir pendientes; no se iniciará otra operación. Consulta el estado o cierra el servicio para asentar sus recursos."
+                    : MaintenancePresentation.error(error)
+            }
+        }
     }
-    func decide(allow: Bool) async {
+    public func decide(allow: Bool) async {
         guard let client, let captured = approval, let review, let operation, !isRequesting,
               status?.scope == captured.scope, status?.scope == review.scope, status?.scope == operation.scope else { return }
-        isRequesting = true; approval = nil; let version = context
-        defer { isRequesting = false; discardHiddenPreview() }
+        isRequesting = true; readSequence += 1; approval = nil; let version = context
+        defer { if version == context { isRequesting = false; discardHiddenPreview() } }
         do {
             let accepted = try await client.decide(captured, review: review, operation: operation, allow: allow)
             guard version == context else { return }
@@ -171,29 +201,43 @@ final class MaintenanceStore {
             beginPolling()
         } catch { if version == context { errorMessage = MaintenancePresentation.error(error) } }
     }
-    func cancel() async {
-        guard let client, let id = operation?.id, !isRequesting, operation?.settled == false else { return }
-        isRequesting = true; approval = nil; let version = context
-        defer { isRequesting = false; discardHiddenPreview() }
+    public func cancel() async {
+        guard let client, let captured = operation, !isRequesting, !captured.settled else { return }
+        isRequesting = true; readSequence += 1; approval = nil; let version = context
+        defer { if version == context { isRequesting = false; discardHiddenPreview() } }
         do {
-            let value = try await client.cancel(id)
+            let value = try await client.cancel(captured.id)
             guard version == context else { return }
+            guard value.follows(captured) else { throw RPCFailure.invalidResponse }
             operation = value; errorMessage = nil; beginPolling()
         } catch { if version == context { errorMessage = MaintenancePresentation.error(error) } }
     }
-    func resumePolling() { guard operation?.settled == false else { return }; beginPolling() }
+    public func cleanup() async {
+        guard let client, let captured = operation, canCleanup else { return }
+        isRequesting = true; readSequence += 1; let version = context
+        defer { if version == context { isRequesting = false; discardHiddenPreview() } }
+        do {
+            let row = try await client.cleanup(captured)
+            guard version == context else { return }
+            operation = row; responseUnconfirmed = false
+            if ["doctor.report", "backup.verify"].contains(row.kind), !row.resourcesPending { readAwaitingSettlement = false }
+            errorMessage = nil; beginPolling()
+        } catch { if version == context { errorMessage = MaintenancePresentation.error(error) } }
+    }
+    public func resumePolling() { guard operation?.resourcesPending == true else { return }; beginPolling() }
     private func beginPolling() {
         polling?.cancel(); pollingPaused = false
-        let version = context
+        let version = context, polls = maxPolls
         polling = Task { [weak self] in
             let deadline = ContinuousClock.now.advanced(by: .seconds(120))
-            for _ in 0..<240 {
+            for _ in 0..<polls {
                 guard !Task.isCancelled, let self, version == self.context else { return }
                 await self.refresh()
                 guard !Task.isCancelled, version == self.context else { return }
-                if self.operation?.settled == true { return }
+                if self.operation?.resourcesPending == false { return }
+                if self.operation?.cleanupOwnerPending == true && self.operation?.workerPending == false { return }
                 if self.errorMessage != nil || ContinuousClock.now >= deadline { self.pollingPaused = true; return }
-                do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+                do { try await self.pause() } catch { return }
             }
             self?.pollingPaused = true
         }

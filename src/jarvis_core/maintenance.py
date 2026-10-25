@@ -18,6 +18,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from jarvis_core.activation_management import ActivationManagement, _Prepared
+from jarvis_core.cold_capture_cut import CapturedProfileCut
 from jarvis_core.doctor import DoctorContext, DoctorInventory, inspect_report
 from jarvis_core.host_profile import freeze_sources
 from jarvis_core.maintenance_journal import MaintenanceJournal, wire
@@ -128,6 +129,7 @@ class _Operation:
     review_digest: str | None = None
     cleanup_owner: object = field(default=None, repr=False)
     memory_cut: object = field(default=None, repr=False)
+    capture_cut: object = field(default=None, repr=False)
 
     def snapshot(self):
         return {"operation_id": self.operation_id, "kind": self.kind,
@@ -257,6 +259,8 @@ class MaintenanceCoordinator(MemoryManagement, ActivationManagement):
             metadata["manifest_sha256"] = verification.manifest_sha256
             metadata["artifact_id"] = verification.artifact_id
             metadata["source_artifact_identity"] = wire(verification.root_identity)
+        if kind == "backup.create" and frozen.sqlite_recovery:
+            metadata["sqlite_recovery"] = wire(frozen.sqlite_recovery)
         encoded = canonical(metadata)
         digest = hashlib.sha256(encoded).hexdigest()
         row = _Review(uuid4().hex, kind, digest, frozen.scope, frozen.fingerprint,
@@ -273,6 +277,9 @@ class MaintenanceCoordinator(MemoryManagement, ActivationManagement):
             frozen = freeze_sources(self.service, cut)
             if any(row["disposition"] == "unavailable" for row in frozen.metadata):
                 raise RecoveryFsError("profile_lazy_source_unavailable")
+            # A review stays metadata-only, but must not offer a physically
+            # oversized family that the native DTO or worker cannot admit.
+            frozen._check_image_budget(RecoveryLimits(), metadata_only=True)
             target = self._target(params, frozen.forbidden_roots)
             return self._make_review("backup.create", frozen, target)
 
@@ -339,6 +346,7 @@ class MaintenanceCoordinator(MemoryManagement, ActivationManagement):
         return operation
 
     async def _effect(self, operation, review):
+        capture = None
         try:
             request = HostApprovalRequest(
                 review.scope, HostPurpose(review.kind), operation.operation_id,
@@ -361,9 +369,14 @@ class MaintenanceCoordinator(MemoryManagement, ActivationManagement):
                     operation.phase = "denied"
                 return
             operation.phase = "quiescing"
-            with self.authority.execution_host(request, grant), self.gate.exclusive(
-                expected_scope=review.scope, expected_fingerprint=review.fingerprint
-            ) as cut:
+            # The ContextVar always exits in this Task. The ordinary cut may
+            # outlive it if a private WAL reader cannot confirm cleanup.
+            with self.authority.execution_host(request, grant):
+                capture = CapturedProfileCut(
+                    self.gate, expected_scope=review.scope,
+                    expected_fingerprint=review.fingerprint)
+                operation.capture_cut = capture
+                cut = capture.cut
                 # Restore validates only its selected artifact. It must not
                 # initialize or require unrelated cold stores of the active host.
                 if review.kind != "backup.create":
@@ -398,17 +411,23 @@ class MaintenanceCoordinator(MemoryManagement, ActivationManagement):
                         try:
                             bundle = review.frozen.bind(cut, context=context)
                         except Exception as error:
-                            # This bounded read has not called create_backup or
-                            # created any staging/output. Preserve that proven
-                            # pre-effect boundary, including deadline cancellation.
+                            # No backup target has been published. Private WAL
+                            # staging is distinct and may still require custody.
                             code = _code(error)
+                            owner = getattr(error, "owner", None)
+                            pending = owner is not None and not owner.closed
                             receipt = RecoveryReceipt(
                                 operation.operation_id, review.kind,
                                 "cancelled" if code in {"recovery_cancelled",
                                                        "recovery_deadline_exceeded"} else "failed",
                                 "no_published_effect", review.target.name, error_code=code,
+                                cleanup_pending=pending,
+                                cleanup_error_code="profile_wal_cleanup_pending"
+                                if pending else None,
                             )
-                            raise RecoveryError(code, receipt) from None
+                            failure = RecoveryError(code, receipt)
+                            failure.owner = owner
+                            raise failure from None
                         return create_backup(bundle, review.target, context)
                     return restore_new(review.backup_path, review.verification,
                                        review.target, context)
@@ -417,6 +436,9 @@ class MaintenanceCoordinator(MemoryManagement, ActivationManagement):
                     cut, callback, operation.cancellation
                 )
                 if outcome.error is not None:
+                    owner = getattr(outcome.error, "owner", None)
+                    if owner is not None:
+                        capture.retain(owner)
                     raise outcome.error
                 operation.receipt = outcome.value
                 operation.phase = _receipt_phase(operation.receipt)
@@ -431,16 +453,78 @@ class MaintenanceCoordinator(MemoryManagement, ActivationManagement):
             else:
                 operation.phase = "failed"
         finally:
-            try:
-                self.journal.record(operation.operation_id, operation.kind, review.digest,
-                                    operation.phase, operation.receipt)
-                operation.receipt_durable = True
-            except Exception:
-                # A published artifact cannot be undone by failure to acknowledge
-                # its separate host journal. Never convert that to success/retry.
-                operation.receipt_durable = False
-                operation.error_code = "maintenance_receipt_unconfirmed"
-                operation.phase = "publication_unknown" if operation.receipt else "failed"
+            self._finish_capture(operation, capture)
+            self._save_effect(operation)
+
+    def _save_effect(self, operation):
+        try:
+            self.journal.record(operation.operation_id, operation.kind, operation.review_digest,
+                                operation.phase, operation.receipt)
+            operation.receipt_durable = True
+        except Exception:
+            operation.receipt_durable = False
+            operation.error_code = "maintenance_receipt_unconfirmed"
+            operation.phase = ("cleanup_pending" if operation.cleanup_owner is not None else
+                               "publication_unknown" if operation.receipt else "failed")
+
+    def _finish_capture(self, operation, capture):
+        if capture is None or capture.released:
+            return
+        if capture.owner is not None and not capture.owner.closed:
+            operation.cleanup_owner = capture
+            operation.phase = "cleanup_pending"
+            return
+        try:
+            capture.release()
+            operation.capture_cut = None
+        except Exception as error:
+            operation.cleanup_owner = capture
+            operation.phase = "cleanup_pending"
+            operation.error_code = _code(error)
+
+    async def cleanup(self, params):
+        _params(params, {"operation_id"}, {"operation_id"})
+        operation = self._operations.get(_id(params["operation_id"]))
+        if operation is None or operation.capture_cut is None:
+            return await super().cleanup(params)
+        self._current()
+        if operation.task is not None and not operation.task.done():
+            return operation.snapshot()
+        if operation.cleanup_owner is not None:
+            operation.task = asyncio.create_task(self._cleanup_capture(operation))
+        return operation.snapshot()
+
+    async def _cleanup_owner(self, operation):
+        # Shutdown routes the same retained reader without acquiring a second
+        # admission, cut, authority ContextVar or one-use operation grant.
+        if operation.capture_cut is not None:
+            return await self._cleanup_capture(operation)
+        return await super()._cleanup_owner(operation)
+
+    async def _cleanup_capture(self, operation):
+        try:
+            capture = operation.capture_cut
+            if capture is None or operation.cleanup_owner is not capture:
+                raise RecoveryFsError("profile_wal_owner_mismatch")
+            operation.stage = "cold_wal_cleanup"
+            outcome = await self.gate.run_worker(capture.cut, capture.cleanup,
+                                                 operation.cancellation)
+            if outcome.error is not None:
+                raise outcome.error
+            capture.release()
+            operation.cleanup_owner = None
+            operation.capture_cut = None
+            # Preserve the original receipt, including its historical cleanup
+            # flag. Retiring a private reader does not retry a backup or read.
+            status = getattr(operation.receipt, "status", None)
+            operation.phase = (status if status in {"failed", "cancelled"} else
+                               "cancelled" if operation.cancellation.is_set() else "failed")
+        except Exception as error:
+            operation.error_code = _code(error)
+            operation.phase = "cleanup_pending"
+        finally:
+            if operation.kind in {"backup.create", "restore.stage"}:
+                self._save_effect(operation)
 
     def _read_operation(self, kind, callback, *, allow_cleanup=False):
         self._capacity(allow_cleanup=allow_cleanup)
@@ -450,34 +534,40 @@ class MaintenanceCoordinator(MemoryManagement, ActivationManagement):
         return operation.snapshot()
 
     async def _read(self, operation, callback):
+        capture = None
         try:
-            with self.gate.exclusive() as cut:
-                operation.scope = cut.scope
-                operation.phase = "working"
-                outcome = await self.gate.run_worker(
-                    cut, lambda: callback(cut, operation), operation.cancellation
-                )
-                if outcome.error is not None:
-                    raise outcome.error
-                result = outcome.value
-                if isinstance(result, _MemoryRead):
-                    if operation.cancellation.is_set():
-                        raise RecoveryFsError("recovery_cancelled")
-                    operation.result = self._publish_memory_result(result)
-                elif isinstance(result, _Prepared):
-                    if operation.cancellation.is_set():
-                        raise RecoveryFsError("recovery_cancelled")
-                    operation.result = {"review": self._publish_activation_review(result)}
-                elif isinstance(result, _Verified):
-                    identity = uuid4().hex
-                    while len(self._verification) >= 8:
-                        self._verification.pop(next(iter(self._verification)))
-                    self._verification[identity] = (result.path, result.verification)
-                    operation.result = {"verification_id": identity,
-                                        "verification": wire(result.verification)}
-                else:
-                    operation.result = result
-                operation.phase = "complete"
+            capture = CapturedProfileCut(self.gate)
+            operation.capture_cut = capture
+            cut = capture.cut
+            operation.scope = cut.scope
+            operation.phase = "working"
+            outcome = await self.gate.run_worker(
+                cut, lambda: callback(cut, operation), operation.cancellation
+            )
+            if outcome.error is not None:
+                owner = getattr(outcome.error, "owner", None)
+                if owner is not None:
+                    capture.retain(owner)
+                raise outcome.error
+            result = outcome.value
+            if isinstance(result, _MemoryRead):
+                if operation.cancellation.is_set():
+                    raise RecoveryFsError("recovery_cancelled")
+                operation.result = self._publish_memory_result(result)
+            elif isinstance(result, _Prepared):
+                if operation.cancellation.is_set():
+                    raise RecoveryFsError("recovery_cancelled")
+                operation.result = {"review": self._publish_activation_review(result)}
+            elif isinstance(result, _Verified):
+                identity = uuid4().hex
+                while len(self._verification) >= 8:
+                    self._verification.pop(next(iter(self._verification)))
+                self._verification[identity] = (result.path, result.verification)
+                operation.result = {"verification_id": identity,
+                                    "verification": wire(result.verification)}
+            else:
+                operation.result = result
+            operation.phase = "complete"
         except asyncio.CancelledError:
             operation.cancellation.set()
             operation.phase = "cancelled"
@@ -487,6 +577,8 @@ class MaintenanceCoordinator(MemoryManagement, ActivationManagement):
                                or operation.error_code in {"recovery_cancelled",
                                                            "recovery_deadline_exceeded"}
                                else "failed")
+        finally:
+            self._finish_capture(operation, capture)
 
     async def verify(self, params):
         _params(params, {"backup_path", "expected_manifest_sha256"}, {"backup_path"})
@@ -510,11 +602,13 @@ class MaintenanceCoordinator(MemoryManagement, ActivationManagement):
 
     async def doctor(self, params):
         _params(params, set())
+        requested = self.clock()
 
         def check(cut, operation):
             frozen = freeze_sources(self.service, cut)
             context = DoctorContext(lambda stage, write=False: frozen.assert_current(cut),
-                                    operation.cancellation)
+                                    operation.cancellation, deadline=requested + 20,
+                                    clock=self.clock)
             images = frozen.doctor_images(cut, context, RecoveryLimits())
             inventory = DoctorInventory(
                 frozen.scope.profile_id, frozen.scope.generation, self.service.directory,

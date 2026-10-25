@@ -20,7 +20,7 @@ struct MaintenanceView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 HStack {
                     Button("Actualizar estado") { Task { await maintenance.refresh() } }
-                    if maintenance.isRequesting { ProgressView().controlSize(.small) }
+                    if maintenance.isRequesting || maintenance.isRefreshing { ProgressView().controlSize(.small) }
                     if let status = maintenance.status, !status.blockers.isEmpty { Text("El perfil tiene trabajo o efectos pendientes; la revisión puede quedar bloqueada.").font(.caption).foregroundStyle(.orange) }
                     if let status = maintenance.status { Text("Generación \(status.scope.generation) · \(status.previousCount) recibos anteriores").font(.caption).foregroundStyle(.secondary) }
                 }
@@ -33,6 +33,12 @@ struct MaintenanceView: View {
                         Text("Si ya no aparece en este servicio, puedes cerrar sólo este aviso local. El resultado anterior seguirá sin confirmar; consulta los recibos anteriores.").font(.caption)
                         Button("No reintentar solicitud anterior") { maintenance.acknowledgeUnconfirmedLocally() }.disabled(maintenance.isRequesting)
                     }
+                }
+            }
+            if maintenance.readAwaitingSettlement && maintenance.operation == nil {
+                Section {
+                    Text("Lectura sin confirmación. El servicio puede conservar recursos privados de recuperación; cerrar este panel no los libera. No se iniciará otra operación ni se repetirá la lectura.")
+                        .foregroundStyle(.orange)
                 }
             }
             if let acknowledgement = maintenance.localAcknowledgement { Section { Text(acknowledgement).font(.caption).foregroundStyle(.secondary) } }
@@ -62,7 +68,7 @@ struct MaintenanceView: View {
                     .disabled(!mayBegin || !maintenance.mayPrepare || maintenance.verification == nil || !MaintenanceValidation.path(restoreParent) || !MaintenanceValidation.name(restoreName))
             }
             Section("Diagnóstico de sólo lectura") {
-                Text("Comprueba permisos, formato, integridad y relaciones del perfil actual. No repara, migra ni recupera datos.").font(.caption).foregroundStyle(.secondary)
+                Text("Comprueba permisos, formato, integridad y relaciones del perfil actual. Si hay un WAL compatible, inspecciona el último estado confirmado en una copia privada. No modifica ni repara el original.").font(.caption).foregroundStyle(.secondary)
                 Button("Revisar perfil actual") { Task { await maintenance.runDoctor() } }.disabled(!mayBegin || !maintenance.mayPrepare)
                 if let doctor = maintenance.doctor {
                     Text(doctor.status == "ok" ? "Comprobaciones acreditadas" : "Hay comprobaciones bloqueadas, parciales o no acreditadas")
@@ -82,6 +88,10 @@ struct MaintenanceView: View {
             Text("Identidad del padre: \(review.destinationIdentity.device):\(review.destinationIdentity.inode)").font(.caption.monospaced()).textSelection(.enabled)
             ForEach(review.sources) { source in
                 HStack { Text(MaintenancePresentation.role(source.role)); Spacer(); Text(source.disposition == "absent" ? "Ausente" : source.disposition == "unavailable" ? "Pendiente de cargar" : source.disposition == "generated_builtin" ? "Base integrada · \(source.bytes) bytes" : "\(source.bytes) bytes").foregroundStyle(.secondary) }
+            }
+            ForEach(review.sqliteRecovery) { recovery in
+                Text("\(MaintenancePresentation.role(recovery.role)): recuperación WAL en una copia privada, sólo de transacciones confirmadas. El original se conserva.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Text("No se sobrescribe un destino existente. Las autorizaciones, fuentes externas de skills, archivos de la carpeta de trabajo y credenciales quedan excluidos.").font(.caption)
             if review.kind == "restore.stage" { Text("Agentes y memoria conservan sus ámbitos; skills, tareas y rutas quedan deshabilitadas. La asociación con otra carpeta de trabajo necesita una revisión posterior.").font(.caption) }
@@ -103,6 +113,11 @@ struct MaintenanceView: View {
             Text(MaintenancePresentation.phase(operation.phase)).font(.headline)
             Text("Operación: \(operation.id)").font(.caption.monospaced()).textSelection(.enabled)
             if operation.workerPending { Text("El servicio mantiene la propiedad del trabajo hasta terminar su limpieza.").font(.caption) }
+            if operation.cleanupOwnerPending {
+                Text("El trabajo terminó, pero el servicio aún conserva recursos de recuperación. La conversación y el cambio de perfil seguirán bloqueados hasta confirmar su limpieza.").font(.caption).foregroundStyle(.orange)
+                Button("Completar limpieza") { Task { await maintenance.cleanup() } }
+                    .disabled(!maintenance.canCleanup)
+            }
             if let approval = maintenance.approval, let review = maintenance.review, approval.matches(review, operation: operation) {
                 Text("Esta decisión corresponde al dueño. Autoriza únicamente el destino, revisión y generación que se muestran arriba.").font(.callout)
                 HStack {
@@ -122,6 +137,11 @@ struct MaintenanceView: View {
                 else if operation.kind == "backup.create" { Text("Copia publicada con bytes y manifiesto verificados; recibo durable confirmado.") }
             } else if operation.settled && ["publication_unknown", "cleanup_pending"].contains(operation.phase) {
                 Text("Resultado sin confirmar; revisa el recibo. El efecto o la limpieza pueden seguir pendientes. No repitas la operación automáticamente.").foregroundStyle(.orange)
+            }
+            if let code = operation.errorCode, let message = MaintenancePresentation.operationError(code) {
+                Text(code == "profile_cold_wal_cleanup_pending" && !operation.resourcesPending
+                     ? "La limpieza quedó confirmada. La operación original falló y no se repitió."
+                     : message).font(.caption).foregroundStyle(.orange)
             }
             if let receipt = operation.receipt, let hash = receipt.manifestHash { Text("Manifiesto: \(hash)").font(.caption.monospaced()).textSelection(.enabled) }
         }

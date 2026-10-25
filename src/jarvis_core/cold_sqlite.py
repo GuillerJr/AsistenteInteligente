@@ -1,4 +1,4 @@
-"""Bounded read-only cold DELETE images, never a database opener or WAL recovery.
+"""Pinned cold families; DELETE reads and explicitly isolated WAL recovery.
 
 Only fixed Jarvis roles and their four-member families are inspected. Physical
 checks include absent sidecars: adding one invalidates the captured review.
@@ -55,6 +55,31 @@ class ColdFamily:
         return (self.members[0] is not None and not any(self.members[1:])
                 and len(self.header) == 100 and self.header.startswith(b"SQLite format 3\0")
                 and self.header[18:20] == b"\x01\x01")
+
+    @property
+    def wal_eligible(self):
+        # Metadata-only candidate classification. Frames, commits and content
+        # are validated in the worker before any native private reader opens.
+        return (self.members[0] is not None and self.members[1] is not None
+                and self.members[1][5] >= 32 and self.members[3] is None
+                and len(self.header) == 100 and self.header.startswith(b"SQLite format 3\0")
+                and self.header[18:20] == b"\x02\x02")
+
+    @property
+    def snapshot_eligible(self):
+        return self.eligible or self.wal_eligible
+
+    @property
+    def physical_bytes(self):
+        return sum(member[5] for member in self.members if member is not None)
+
+    def capture_image(self, context, limits, check_current):
+        if self.eligible:
+            return self.read_image(context, limits, check_current)
+        if self.wal_eligible:
+            from jarvis_core.cold_wal import read_wal_image
+            return read_wal_image(self, context, limits, check_current)
+        raise ColdSqliteError("profile_cold_sqlite_unavailable")
 
     def assert_current(self):
         with Directory(self.root, expected=self.parent_identity) as parent:

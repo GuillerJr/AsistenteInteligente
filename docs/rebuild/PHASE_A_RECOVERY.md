@@ -8,8 +8,9 @@ elegido por el dueño. Reparaciones y distribución continúan abiertas.
 
 La [copia explícita de memoria conservada](PHASE_A_MEMORY_RECONCILIATION.md)
 añade autoridad y transacción propias, compatibilidad v1/v2 y un panel nativo.
-Sus pruebas de copia/denegación usan decisiones sintéticas; la copia real desde
-la app con aprobación del dueño sigue pendiente y no reasigna ámbitos al abrir.
+Sus pruebas automáticas de copia/denegación usan decisiones sintéticas; la copia
+real de dos notas desde la app quedó [verificada](PHASE_A_MEMORY_COPY_LIVE.json).
+Abrir un perfil no reasigna ámbitos automáticamente.
 
 ## Referencia y separación del producto
 
@@ -22,8 +23,9 @@ OC-18 añade cinco módulos sobre adquisición privada de familias SQLite, backu
 nativo y custodia del staging. El total de dieciocho lotes y 76 rutas TS/JS
 mantiene cobertura semántica parcial. La [procedencia](REA_PART18_PROVENANCE.json)
 y el [resultado](REA_PART18_SUMMARY.json) conservan hashes, Evidence IDs e
-incógnitas; el [contrato propio WAL](PHASE_A_COLD_WAL_CONTRACT.md) aún no habilita
-WAL/journals fríos ni cierra ninguna familia.
+incógnitas. El [contrato propio WAL](PHASE_A_COLD_WAL_CONTRACT.md) tiene un
+[incremento implementado](PHASE_A_WAL_RECOVERY.md) para familias compatibles;
+no cierra todas las variantes, journals ni la cualificación real pendiente.
 
 Una observación de esa referencia es especialmente relevante: algunas operaciones
 de listado/resolución también resuelven marcadores pendientes. Jarvis separa el
@@ -56,13 +58,14 @@ entre ellos depende del corte del host y sus comprobaciones, no de copiar archiv
 WAL sueltos ni de usar `immutable=1` sobre una familia viva.
 
 También se admiten fuentes frías de estado, memoria y tareas cuando son imágenes
-SQLite DELETE independientes y no existe ningún WAL, SHM o journal asociado.
+SQLite DELETE independientes o familias WAL compatibles con el nuevo contrato.
 La revisión lee metadatos y como máximo 100 bytes de cabecera por fuente; el
 worker lee mediante descriptores fijados y valida la imagen completa en RAM.
 No abre el original con SQLite ni inicializa, migra o recupera su store. Se
 comprueban los cuatro miembros de la familia, incluidas sus ausencias: crear,
-reemplazar o retirar un sidecar invalida la revisión. Una familia huérfana o una
-cabecera WAL queda bloqueada, incluso si el WAL no está presente.
+reemplazar o retirar un sidecar invalida la revisión. La recuperación WAL ocurre
+sólo en copias privadas y entrega una imagen RAM canónica validada. Una familia
+huérfana, un journal o una cabecera WAL sin WAL válido permanece bloqueada.
 
 Esas fuentes se presentan como disponibles (`present`), sin afirmar que el host
 posea una conexión abierta. Una cancelación o plazo agotado durante la captura,
@@ -188,7 +191,7 @@ atribuye esa demora a SQLite ni se presenta como corregida por esta ampliación.
 
 El recorrido no acredita todavía denegación, revocación, cancelación y pérdida
 de respuesta reales en toda la interfaz. También siguen pendientes las familias
-SQLite frías con WAL o journals, la inclusión de archivos y
+SQLite frías WAL no admitidas y journals, la inclusión de archivos y
 artefactos del workspace, activación/reconciliación de memoria y canales, reparación
 explícita, migraciones y distribución autocontenida. Son trabajo de la fase A;
 no se trasladan a B para declarar una paridad inexistente.

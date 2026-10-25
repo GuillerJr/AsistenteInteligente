@@ -89,7 +89,12 @@ declara completa por los tests sintéticos.
   la app con aprobaciones del dueño, usando únicamente datos sintéticos. Recibos
   de publicación y perfil desarmado observados; faltan los demás escenarios reales.
 - [x] Implementar captura y diagnóstico de SQLite frías DELETE independientes,
-  sin inicializar stores ni modificar las fuentes; WAL y sidecars siguen bloqueados.
+  sin inicializar stores ni modificar las fuentes.
+- [x] Añadir captura WAL compatible en copias privadas para respaldo y diagnóstico:
+  estado, memoria y tareas; último commit, límites y propietario retenido ante
+  limpieza incierta. [Alcance y pruebas](rebuild/PHASE_A_WAL_RECOVERY.md).
+- [ ] Comprobar ese recorrido WAL en la app con aprobación real del dueño,
+  usando únicamente un perfil sintético. Los recorridos IPC no sustituyen ese paso.
 - [x] Observar diagnóstico y revisión nativos con memoria y tarea sintéticas no
   vacías, conservando los tres SQLite. El informe global fue parcial por recursos
   ausentes; no se ejecutó otro roundtrip nativo en ese recorrido de lectura.
@@ -119,11 +124,11 @@ declara completa por los tests sintéticos.
   IPC serial real; [evidencia y límites](rebuild/PHASE_A_OWNER_CLICK_REGRESSION.json).
 - [ ] Investigar la demora inicial observada en el perfil nuevo: se recuperó por
   supervisión lectora, sin reinicio; su causa no quedó establecida.
-- [ ] Completar familias frías con WAL/journals, archivos/artefactos de workspace, activación y
+- [ ] Completar variantes WAL restantes y journals, archivos/artefactos de workspace, activación y
   reconciliación, reparaciones, actualización, rollback y distribución.
   La [investigación OC-18](rebuild/REA_PART18_SUMMARY.json) y el
   [contrato propio WAL](rebuild/PHASE_A_COLD_WAL_CONTRACT.md) fijan adquisición,
-  presupuestos, custodia y pruebas; todavía no habilitan esas familias.
+  presupuestos y custodia; el primer incremento no cierra todas esas familias.
 
 ## Fase B — después de acreditar A
 

@@ -56,6 +56,14 @@ public final class MaintenanceClient: Sendable {
         let row = try await MaintenanceOperation(request("maintenance.cancel", ["operation_id": .string(id)]))
         guard row.id == id else { throw RPCFailure.invalidResponse }; return row
     }
+    /// Retire the captured owner's resources. This never submits a new read,
+    /// backup, review, effect or authorization.
+    public func cleanup(_ operation: MaintenanceOperation) async throws -> MaintenanceOperation {
+        guard ["backup.create", "doctor.report"].contains(operation.kind),
+              operation.cleanupOwnerPending, !operation.workerPending else { throw RPCFailure.configuration }
+        let row = try await MaintenanceOperation(request("maintenance.cleanup", ["operation_id": .string(operation.id)]))
+        guard row.follows(operation) else { throw RPCFailure.invalidResponse }; return row
+    }
     private func target(_ parent: String, _ name: String) throws {
         guard MaintenanceValidation.path(parent), MaintenanceValidation.name(name) else { throw RPCFailure.configuration }
     }

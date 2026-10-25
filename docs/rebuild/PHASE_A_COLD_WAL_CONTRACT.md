@@ -1,6 +1,8 @@
-# Próximo incremento de fase A: captura SQLite fría con WAL
+# Contrato de fase A: captura SQLite fría con WAL
 
-**Estado: contrato de trabajo; capacidad todavía no implementada ni disponible.**
+**Estado: primer incremento implementado y probado con datos sintéticos.**
+El [registro de implementación](PHASE_A_WAL_RECOVERY.md) fija el alcance admitido
+y la cualificación pendiente en la interfaz con una decisión real del dueño.
 No cierra A-69/A-71 ni la fase A. La fase B permanece posterior. Los journals de
 rollback, incluidos los vacíos, siguen bloqueados en este primer incremento;
 su recuperación continúa dentro del alcance pendiente de A.
@@ -65,11 +67,12 @@ por leer esos archivos.
   backup nativo, conforme al contrato actual; no parchear main/WAL originales.
 - Mantener cerrada la carga de extensiones y usar `trusted_schema=OFF`. No
   ejecutar SQL procedente del archivo como instrucciones de la aplicación.
-- La política ante WAL truncado, checksum inválido, reset o cola sin commit debe
-  fijarse y probarse antes de habilitarlo. No ignorar una cola para declarar
-  éxito genérico ni adoptar el helper externo no examinado. SQLite interpreta
-  la familia privada; el recibo debe expresar cualquier alcance de recuperación
-  admitido sin atribuir autenticidad al contenido.
+- La política implementada valida todos los frames, salts y checksums. Admite
+  una cola completa válida sin commit después de un commit y recupera únicamente
+  el último estado confirmado. Rechaza truncación, corrupción, generaciones
+  mezcladas o ausencia de commits, sin omitir una cola ambigua para declarar éxito.
+  SQLite interpreta la familia privada; la revisión muestra explícitamente que
+  sólo incluye transacciones confirmadas. No acredita autenticidad del contenido.
 
 ## Presupuestos, cancelación y custodia
 
@@ -142,5 +145,6 @@ la lease del perfil; no se hace pasar una familia viva por fría.
 - [API online backup](https://www.sqlite.org/c3ref/backup_finish.html): comprobar
   fin y liberación; un cambio de la fuente puede reiniciar el backup.
 
-Este contrato deberá acompañarse de pruebas y evidencia de implementación antes
-de cambiar la disponibilidad de la capacidad en la matriz de fase A.
+El registro de implementación conserva las pruebas, identidades y límites. Este
+primer incremento no acredita todas las familias WAL ni journals de rollback,
+ni cierra los recorridos reales pendientes o la fase A.

@@ -675,7 +675,7 @@ final class ChatStore {
     }
 
     func login() async {
-        guard !handoffPreparing, !memoryRestoration.blocksInteraction, runtime.isActive else { return }
+        guard !handoffPreparing, !maintenance.blocksInteraction, !memoryRestoration.blocksInteraction, runtime.isActive else { return }
         do {
             let result = try await rpc("provider.login")
             guard let raw = result["url"].string, let url = URL(string: raw), url.scheme == "https",
@@ -690,7 +690,7 @@ final class ChatStore {
     }
 
     func logout() async {
-        guard activeRunID == nil, !memoryRestoration.blocksInteraction else { return }
+        guard activeRunID == nil, !maintenance.blocksInteraction, !memoryRestoration.blocksInteraction else { return }
         voice.cancel(); dictationNotice = nil
         do { _ = try await rpc("provider.logout"); try await refreshStatus() }
         catch { report(error) }

@@ -14204,7 +14204,14 @@
           "src/jarvis_core/memory_host_read.py",
           "src/jarvis_core/memory_management.py",
           "native/JarvisDesktop/Sources/DesktopCore/RestoredMemoryStore.swift",
-          "native/JarvisDesktop/Sources/JarvisApp/Views/RestoredMemoryView.swift"
+          "native/JarvisDesktop/Sources/JarvisApp/Views/RestoredMemoryView.swift",
+          "src/jarvis_core/cold_wal.py",
+          "src/jarvis_core/cold_capture_cut.py",
+          "native/JarvisDesktop/Sources/DesktopCore/MaintenanceStore.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/MaintenanceClient.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/MaintenanceModels.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/MaintenanceMonitorPolicy.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Stores/ChatStore.swift"
         ],
         "tests": [
           "tests/test_host_authority.py",
@@ -14237,7 +14244,11 @@
           "native/JarvisDesktop/Tests/DesktopCoreTests/RestoredMemoryTests.swift",
           "native/JarvisDesktop/Tests/DesktopCoreTests/RestoredMemoryIntegrationTests.swift",
           "native/JarvisDesktop/Tests/DesktopCoreTests/IndependentMemoryReadOwnershipTests.swift",
-          "native/JarvisDesktop/Tests/DesktopCoreTests/OwnerClickRaceTests.swift"
+          "native/JarvisDesktop/Tests/DesktopCoreTests/OwnerClickRaceTests.swift",
+          "tests/test_cold_wal.py",
+          "tests/wal_fixture.py",
+          "tests/test_wal_host_boundaries.py",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/WalMaintenanceOwnershipTests.swift"
         ],
         "capability_ids": [
           "A-01",
@@ -14247,10 +14258,11 @@
           "A-70",
           "A-71"
         ],
-        "verified_scope": "Checkpoint b8ce4bc con 1585 Python / 162 Swift y CI aprobados; respaldo, verificación y staging sintéticos desde la app con decisiones reales del dueño. Captura/diagnóstico frío DELETE y rechazo de bootstrap restaurado; los tres SQLite de otro recorrido nativo no vacío conservaron bytes/metadatos. Alcances y demora inicial no atribuida registrados por separado. Ampliación local integrada: 1754 Python/175 Swift, admisión contextual y handoff explícito sin SDK inicial; revisión GUI descartada conservando borrador. Checkpoint 1d378a6 con CI macOS/Linux aprobado y activación/apertura reales del perfil sintético elegidas por el dueño. Estado local sin cuenta, diagnóstico y revisión de copia observados; límites y pruebas independientes en PHASE_A_ACTIVATION.md. Copia explícita de memoria conservada integrada con autoridad/corte, límites de perfil y panel nativo; 85 casos nuevos del host, 154 regresiones anteriores y 23 casos Swift focalizados, incluidas dos conexiones IPC reales con SQLite y decisiones sintéticas. Núcleo/compatibilidad f8e5a67 con CI macOS/Linux aprobada; contrato, fallo de custodia corregido y límites en PHASE_A_MEMORY_RECONCILIATION.md. Una incidencia real posterior acabó caducada sin efecto. Se reprodujo y corrigió el descarte de decisiones durante sondeo; 32 casos focalizados y comparación GUI sintética, más prueba de cola IPC serial real. Detalle en PHASE_A_OWNER_CLICK_REGRESSION.json; la copia corregida quedó completada y asentada en la app (2 notas sintéticas, 175 bytes), con originales intactos, IDs nuevos, revisión 1, un recibo y dos mapas verificados independientemente. Consulta nativa coincidente sin replay; identidad y límites en PHASE_A_MEMORY_COPY_LIVE.json. Producto 985b72a con 1914 Python, 207 Swift, gates y CI aprobados; no cierra la familia. OC-18 estudia adquisición privada SQLite y custodia de staging (cinco TS, sin runtime). El contrato PHASE_A_COLD_WAL_CONTRACT.md fija requisitos; WAL/journals siguen bloqueados, no implementados por esta investigación.",
-        "remaining": "Negativos reales de copia de memoria, WAL/journals fríos, workspace/artefactos, otros escenarios negativos reales de activación, reconciliación de canales, reparación, actualización/rollback y distribución. No cierra familias ni inicia B.",
+        "verified_scope": "Checkpoint b8ce4bc con 1585 Python / 162 Swift y CI aprobados; respaldo, verificación y staging sintéticos desde la app con decisiones reales del dueño. Captura/diagnóstico frío DELETE y rechazo de bootstrap restaurado; los tres SQLite de otro recorrido nativo no vacío conservaron bytes/metadatos. Alcances y demora inicial no atribuida registrados por separado. Ampliación local integrada: 1754 Python/175 Swift, admisión contextual y handoff explícito sin SDK inicial; revisión GUI descartada conservando borrador. Checkpoint 1d378a6 con CI macOS/Linux aprobado y activación/apertura reales del perfil sintético elegidas por el dueño. Estado local sin cuenta, diagnóstico y revisión de copia observados; límites y pruebas independientes en PHASE_A_ACTIVATION.md. Copia explícita de memoria conservada integrada con autoridad/corte, límites de perfil y panel nativo; 85 casos nuevos del host, 154 regresiones anteriores y 23 casos Swift focalizados, incluidas dos conexiones IPC reales con SQLite y decisiones sintéticas. Núcleo/compatibilidad f8e5a67 con CI macOS/Linux aprobada; contrato, fallo de custodia corregido y límites en PHASE_A_MEMORY_RECONCILIATION.md. Una incidencia real posterior acabó caducada sin efecto. Se reprodujo y corrigió el descarte de decisiones durante sondeo; 32 casos focalizados y comparación GUI sintética, más prueba de cola IPC serial real. Detalle en PHASE_A_OWNER_CLICK_REGRESSION.json; la copia corregida quedó completada y asentada en la app (2 notas sintéticas, 175 bytes), con originales intactos, IDs nuevos, revisión 1, un recibo y dos mapas verificados independientemente. Consulta nativa coincidente sin replay; identidad y límites en PHASE_A_MEMORY_COPY_LIVE.json. Producto 985b72a con 1914 Python, 207 Swift, gates y CI aprobados; no cierra la familia. OC-18 estudia adquisición privada SQLite y custodia de staging (cinco TS, sin runtime). El contrato PHASE_A_COLD_WAL_CONTRACT.md fija requisitos; la investigación por sí sola no acredita implementación. Primer incremento WAL implementado en código propio: backup/doctor sobre copias privadas, estado confirmado y fuentes intactas, propietario/mismo corte retenidos ante cleanup incierto; 45 casos núcleo y 21 host nuevos, 14 Swift de custodia y dos IPC WAL nuevos. Suites integradas: 1980 Python y 223 Swift aprobadas. Identidad, política estricta y límites en PHASE_A_WAL_RECOVERY_QUALIFICATION.json. Recorrido GUI con decisión real aún pendiente; no cierra A-71.",
+        "remaining": "Negativos reales de copia de memoria, variantes WAL restantes y journals, workspace/artefactos, otros escenarios negativos reales de activación, reconciliación de canales, reparación, actualización/rollback y distribución. No cierra familias ni inicia B.",
         "detail_file": "PHASE_A_RECOVERY.md",
-        "qualification_file": "PHASE_A_RECOVERY_QUALIFICATION.json"
+        "qualification_file": "PHASE_A_RECOVERY_QUALIFICATION.json",
+        "wal_qualification_file": "PHASE_A_WAL_RECOVERY_QUALIFICATION.json"
       }
     ],
     "detail_file": "PHASE_A_RECOVERY.md",

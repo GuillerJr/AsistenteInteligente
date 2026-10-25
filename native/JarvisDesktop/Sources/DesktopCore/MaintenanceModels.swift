@@ -66,6 +66,18 @@ public struct MaintenanceSource: Identifiable, Sendable {
     }
 }
 
+public struct MaintenanceSqliteRecovery: Identifiable, Sendable {
+    public let role: String
+    public var id: String { role }
+    init(_ value: RPCValue) throws {
+        try MaintenanceValidation.keys(value, ["role", "mode", "semantics"])
+        guard let role = value["role"].string, ["state", "memory", "schedules"].contains(role),
+              value["mode"] == .string("cold_wal"),
+              value["semantics"] == .string("confirmed_transactions_only") else { throw RPCFailure.invalidResponse }
+        self.role = role
+    }
+}
+
 public struct MaintenanceReview: Identifiable, Sendable {
     public let id: String
     public let digest: String
@@ -75,6 +87,7 @@ public struct MaintenanceReview: Identifiable, Sendable {
     public let destinationName: String
     public let destinationIdentity: MaintenanceFileIdentity
     public let sources: [MaintenanceSource]
+    public let sqliteRecovery: [MaintenanceSqliteRecovery]
     public let expiresAt: Date
     public let metadata: RPCValue
     public var params: [String: RPCValue] { ["review_id": .string(id), "review_digest": .string(digest)] }
@@ -89,6 +102,7 @@ public struct MaintenanceReview: Identifiable, Sendable {
         let metadata = value["metadata"]
         var keys: Set<String> = ["kind", "profile_id", "generation", "source", "destination_parent", "destination_name", "destination_identity", "excluded", "disarms", "workspace_files_included", "credentials_included", "activation_included", "authenticity", "content_warning"]
         if kind == "restore.stage" { keys.formUnion(["manifest_sha256", "artifact_id", "source_artifact_identity"]) }
+        if kind == "backup.create", metadata.object?["sqlite_recovery"] != nil { keys.insert("sqlite_recovery") }
         try MaintenanceValidation.keys(metadata, keys)
         guard metadata["workspace_files_included"] == .bool(false), metadata["credentials_included"] == .bool(false),
               metadata["activation_included"] == .bool(false), metadata["authenticity"] == .string("not_established"),
@@ -103,6 +117,10 @@ public struct MaintenanceReview: Identifiable, Sendable {
         }
         let sources = try ManagementValidation.rows(metadata["source"], limit: 7, parse: MaintenanceSource.init)
         guard Set(sources.map(\.role)) == MaintenanceValidation.roles.subtracting(["configuration_portable"]), sources.count == 6 else { throw RPCFailure.invalidResponse }
+        let recovery = try metadata.object?["sqlite_recovery"].map { try ManagementValidation.rows($0, limit: 3, parse: MaintenanceSqliteRecovery.init) } ?? []
+        guard Set(recovery.map(\.role)).count == recovery.count,
+              recovery.allSatisfy({ row in sources.contains { $0.role == row.role && $0.disposition == "present" } }) else { throw RPCFailure.invalidResponse }
+        sqliteRecovery = recovery
         let lifetime = try MaintenanceValidation.integer(value["expires_in_seconds"], max: 120)
         guard lifetime > 0 else { throw RPCFailure.invalidResponse }
         self.id = id; self.digest = digest; self.kind = kind; self.metadata = metadata
@@ -206,7 +224,11 @@ public struct MaintenanceOperation: Identifiable, Sendable {
         return scope == previous.scope
     }
     public var settled: Bool { Self.terminal.contains(phase) && !workerPending }
+    /// Worker completion and native resource retirement are separate facts.
+    /// Historical receipt cleanup flags do not represent current RAM custody.
+    public var resourcesPending: Bool { !settled || cleanupOwnerPending || phase == "cleanup_pending" }
     public var success: Bool {
+        guard !cleanupOwnerPending else { return false }
         if kind == RestoredMemoryValidation.effect { return settled && phase == "complete" && receiptDurable && !cleanupOwnerPending && memoryCopyReceipt?.status == "completed" }
         if RestoredMemoryValidation.reads.contains(kind) { return settled && phase == "complete" }
         if kind == "profile.restore.activate" { return settled && phase == "activated_not_opened" && receiptDurable && !cleanupOwnerPending && activationReceipt?.status == "completed" }
@@ -261,10 +283,11 @@ public struct MaintenanceOperation: Identifiable, Sendable {
         }
         if phase == "complete", kind == "backup.verify" { _ = try MaintenanceVerification(result) }
         if phase == "complete", kind == "doctor.report" { _ = try DoctorSummary(result) }
+        if ["complete", "staged_disarmed", "activated_not_opened"].contains(phase), cleanupOwnerPending { throw RPCFailure.invalidResponse }
         if phase == "staged_disarmed", kind != "restore.stage" { throw RPCFailure.invalidResponse }
         if phase == "activated_not_opened" { guard kind == "profile.restore.activate", durable, activationReceipt?.status == "completed", !cleanupOwnerPending else { throw RPCFailure.invalidResponse } }
         if ["complete", "staged_disarmed"].contains(phase), ["backup.create", "restore.stage"].contains(kind) {
-            guard durable, receipt?.status == "completed" else { throw RPCFailure.invalidResponse }
+            guard durable, receipt?.status == "completed", !cleanupOwnerPending else { throw RPCFailure.invalidResponse }
         }
     }
 }
@@ -327,8 +350,26 @@ public struct MaintenanceVerification: Sendable {
 }
 
 public enum MaintenancePresentation {
+    public static func operationError(_ code: String) -> String? {
+        switch code {
+        case "profile_cold_wal_cleanup_pending":
+            return "La limpieza de la copia privada WAL sigue sin confirmar. Completa sólo esa limpieza antes de continuar."
+        case "profile_cold_wal_invalid", "profile_cold_wal_no_commit":
+            return "No se pudo acreditar una familia WAL válida con transacciones confirmadas. No se publicará una copia incompleta."
+        case "profile_cold_wal_changed", "profile_sqlite_family_changed":
+            return "La familia SQLite cambió durante la revisión o la lectura. Prepara una revisión nueva cuando termine su actividad."
+        case "profile_cold_wal_size_limit", "profile_cold_wal_work_limit", "profile_sqlite_image_limit":
+            return "La recuperación WAL supera los límites de tamaño o trabajo admitidos. No se truncarán los datos para crear la copia."
+        case "profile_cold_wal_unavailable", "profile_cold_wal_sqlite_unavailable":
+            return "Esta familia SQLite no admite la recuperación WAL disponible. El original no se abrirá para intentar repararlo."
+        case "recovery_cancelled", "recovery_deadline_exceeded":
+            return "La operación se detuvo. Su limpieza debe quedar confirmada antes de iniciar otra."
+        default: return nil
+        }
+    }
     public static func error(_ error: Error) -> String {
         if let failure = error as? RPCFailure, case .remote(_, let code) = failure {
+            if let message = operationError(code) { return message }
             if code == "profile_lazy_source_unavailable" { return "Hay un almacén aún no abierto; no se modificó para preparar el respaldo. Consulta ese almacén desde Jarvis y vuelve a revisar." }
             return "La revisión no está vigente o el mantenimiento está bloqueado. Actualiza el estado y revisa de nuevo; no se repetirá ninguna operación."
         }

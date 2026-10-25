@@ -8,7 +8,7 @@ import XCTest
 /// filesystem. Only the provider and owner decisions are synthetic fixtures.
 final class MaintenanceIntegrationTests: XCTestCase {
     @MainActor
-    private func withFixture(coldState: Bool = false, _ operation: (MaintenanceClient, LocalRPCClient, String) async throws -> Void) async throws {
+    private func withFixture(coldState: Bool = false, coldWal: Bool = false, _ operation: (MaintenanceClient, LocalRPCClient, String) async throws -> Void) async throws {
         let environment = ProcessInfo.processInfo.environment
         guard let python = environment["JARVIS_DESKTOP_PYTHON"], let source = environment["JARVIS_DESKTOP_SOURCE"] else {
             throw XCTSkip("Usa el entorno explícito de script/test_desktop.sh para mantenimiento con núcleo propio.")
@@ -20,7 +20,7 @@ final class MaintenanceIntegrationTests: XCTestCase {
         let child = Process()
         child.executableURL = URL(fileURLWithPath: python)
         child.arguments = ["-c", """
-        import asyncio, hashlib, json, os, signal, sys
+        import asyncio, hashlib, json, os, signal, sqlite3, sys
         from pathlib import Path
         from jarvis_core.service import JarvisService
         from jarvis_core.state import StateStore
@@ -38,18 +38,24 @@ final class MaintenanceIntegrationTests: XCTestCase {
         async def main():
           parent=Path(sys.argv[1]); root=parent/'profile'; root.mkdir(mode=0o700)
           cold_state=sys.argv[2]=='cold'
-          if cold_state:
+          cold_wal=sys.argv[2]=='wal'
+          wal_markers={}
+          if cold_wal:
+            from wal_fixture import make_wal
+            wal_markers=make_wal(root)
+          elif cold_state:
             with StateStore(root/'jarvis.sqlite3') as database:
               database.create_session('Conversación fría no vacía', agent_id='fixture')
           peer=Peer(); service=JarvisService(root, peer)
           service.agent_profiles.create('Agente sintético de mantenimiento', agent_id='fixture')
-          if not cold_state:
+          if not cold_state and not cold_wal:
             service.store.create_session('Conversación sintética durable', agent_id='fixture')
             service.store.create_session('Conversación temporal excluida', temporary=True, agent_id='fixture')
-          service.memory.upsert(MemoryScope('fixture', 'fixture_workspace'), 'marker',
-            'MARCADOR SINTÉTICO MEMORIA SIN CUENTA', source_uri='jarvis://fixture-maintenance')
-          service.schedule_store.create('Tarea sintética deshabilitada', 'Sin despacho', 'fixture',
-            'fixture_workspace', ScheduleSpec('interval', interval_seconds=3600), enabled=False)
+          if not cold_wal:
+            service.memory.upsert(MemoryScope('fixture', 'fixture_workspace'), 'marker',
+              'MARCADOR SINTÉTICO MEMORIA SIN CUENTA', source_uri='jarvis://fixture-maintenance')
+            service.schedule_store.create('Tarea sintética deshabilitada', 'Sin despacho', 'fixture',
+              'fixture_workspace', ScheduleSpec('interval', interval_seconds=3600), enabled=False)
           # Explicit initial fixture files: a no-op document.update correctly
           # avoids persistence in production, so it cannot seed these files.
           for document in (service.skills.document, service._telegram_journal.document):
@@ -59,29 +65,63 @@ final class MaintenanceIntegrationTests: XCTestCase {
             with os.fdopen(descriptor,'w',encoding='utf-8') as output:
               output.write(data)
           (service._workspace_path/'EXCLUDED_FIXTURE.txt').write_text('WORKSPACE NO INCLUIDO')
-          names=('jarvis.sqlite3','memory.sqlite3','schedules.sqlite3','profiles/agents.json',
+          names=tuple(name+suffix for name in ('jarvis.sqlite3','memory.sqlite3','schedules.sqlite3')
+                      for suffix in ('','-wal','-shm','-journal'))+('profiles/agents.json',
                  'profiles/skills.json','telegram/telegram.json')
           def fingerprint():
             value=[]
             for name in names:
-              file=root/name; info=file.stat()
+              file=root/name
+              if not file.exists():
+                value.append([name,None]); continue
+              info=file.stat()
               value.append([name,info.st_dev,info.st_ino,info.st_mode&0o777,info.st_size,
-                            hashlib.sha256(file.read_bytes()).hexdigest()])
+                            info.st_mtime_ns,info.st_ctime_ns,hashlib.sha256(file.read_bytes()).hexdigest()])
             return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+          control={'allow_cleanup':True}
+          if cold_wal:
+            from jarvis_core.cold_wal import WalCaptureOwner
+            native_cleanup=WalCaptureOwner.cleanup
+            def cleanup(owner):
+              if not control['allow_cleanup']:
+                raise OSError('synthetic WAL cleanup held by native IPC fixture')
+              return native_cleanup(owner)
+            WalCaptureOwner.cleanup=cleanup
           async def trace(params):
             return {'provider_calls':peer.calls, 'sources_sha256':fingerprint(),
-                    'runner_running':service.scheduler.running,'state_cold':service.store._disk is None}
+                    'runner_running':service.scheduler.running,'state_cold':service.store._disk is None,
+                    'memory_cold':service.memory._disk is None,
+                    'schedules_cold':service.schedule_store._connection is None}
+          async def allow_cleanup(params):
+            assert set(params)=={'allow'} and type(params['allow']) is bool
+            control['allow_cleanup']=params['allow']; return {'ok':True}
+          async def wal_result(params):
+            assert not params and cold_wal
+            result={}
+            for role,table in (('state','sessions'),('memory','documents'),('schedules','schedules')):
+              data=(parent/'wal-native-backup'/'data'/(role+'.sqlite3')).read_bytes()
+              assert data[18:20]==b'\\1\\1'
+              with sqlite3.connect(':memory:') as db:
+                db.deserialize(data); db.execute('PRAGMA query_only=ON')
+                rows=db.execute('SELECT title FROM '+table).fetchall()
+                assert rows==[(wal_markers[role]['committed'],)]
+              result[role]=rows[0][0]
+            return result
           async def mutate(params):
             service.store.create_session('Cambio sintético posterior a revisión', agent_id='fixture')
             return {'ok':True}
-          service.server._handlers.update({'fixture.maintenance.trace':trace,'fixture.maintenance.mutate':mutate})
+          service.server._handlers.update({'fixture.maintenance.trace':trace,'fixture.maintenance.mutate':mutate,
+            'fixture.maintenance.cleanup_allow':allow_cleanup,'fixture.maintenance.wal_result':wal_result})
           done=asyncio.Event(); asyncio.get_running_loop().add_signal_handler(signal.SIGTERM,done.set)
           try:
             await service.start(); await done.wait()
-          finally: await service.aclose()
+          finally:
+            control['allow_cleanup']=True
+            await service.aclose()
         asyncio.run(main())
-        """, directory, coldState ? "cold" : "warm"]
-        child.environment = ["PATH": "/usr/bin:/bin", "PYTHONPATH": source,
+        """, directory, coldWal ? "wal" : coldState ? "cold" : "warm"]
+        let testSource = URL(fileURLWithPath: source).deletingLastPathComponent().appendingPathComponent("tests").path
+        child.environment = ["PATH": "/usr/bin:/bin", "PYTHONPATH": source + ":" + testSource,
                              "PYTHONNOUSERSITE": "1", "PYTHONDONTWRITEBYTECODE": "1"]
         let diagnosticPath = directory + "/fixture.stderr.log"
         let diagnosticFD = Darwin.open(diagnosticPath, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o600)
@@ -189,6 +229,90 @@ final class MaintenanceIntegrationTests: XCTestCase {
             let finalTrace = try await transport.call("fixture.maintenance.trace")
             XCTAssertEqual(finalTrace["provider_calls"].integer, 0)
             XCTAssertEqual(finalTrace["runner_running"].bool, false)
+        }
+    }
+
+    @MainActor
+    func testColdWalServiceDoctorBackupVerifyRestoreKeepAllSourceFamiliesIntact() async throws {
+        try await withFixture(coldWal: true) { client, transport, directory in
+            let before = try await transport.call("fixture.maintenance.trace")
+            XCTAssertEqual(before["state_cold"], .bool(true))
+            XCTAssertEqual(before["memory_cold"], .bool(true))
+            XCTAssertEqual(before["schedules_cold"], .bool(true))
+            let diagnostic = try await self.settled(client, client.doctor())
+            XCTAssertTrue(diagnostic.success)
+            let report = try DoctorSummary(diagnostic.result)
+            for role in ["state", "memory", "schedules"] {
+                XCTAssertTrue(report.checks.contains { $0.role == role && $0.integrity == "ok" && $0.source == "host_ram_snapshot" })
+            }
+            let review = try await client.reviewBackup(parent: directory, name: "wal-native-backup")
+            XCTAssertEqual(Set(review.sqliteRecovery.map(\.role)), Set(["state", "memory", "schedules"]))
+            let submitted = try await client.submit(review)
+            try await self.syntheticOwner(client, review: review, operation: submitted, allow: true)
+            let copied = try await self.settled(client, submitted)
+            XCTAssertTrue(copied.success); XCTAssertTrue(copied.receiptDurable)
+            XCTAssertFalse(copied.resourcesPending)
+            let recovered = try await transport.call("fixture.maintenance.wal_result")
+            for role in ["state", "memory", "schedules"] {
+                XCTAssertEqual(recovered[role], .string("JARVIS WAL COMMIT TRES " + role))
+            }
+            let verifiedJob = try await self.settled(client, client.verify(path: directory + "/wal-native-backup", expectedHash: copied.receipt?.manifestHash))
+            XCTAssertTrue(verifiedJob.success)
+            let verification = try MaintenanceVerification(verifiedJob.result)
+            let restore = try await client.reviewRestore(verificationID: verification.id, parent: directory, name: "wal-native-restored")
+            XCTAssertTrue(restore.sqliteRecovery.isEmpty)
+            let restoring = try await client.submit(restore)
+            try await self.syntheticOwner(client, review: restore, operation: restoring, allow: true)
+            let restored = try await self.settled(client, restoring)
+            XCTAssertTrue(restored.success)
+            XCTAssertEqual(restored.phase, "staged_disarmed")
+            let final = try await transport.call("fixture.maintenance.trace")
+            XCTAssertEqual(final["sources_sha256"], before["sources_sha256"])
+            XCTAssertEqual(final["provider_calls"], .number(0))
+            XCTAssertEqual(final["state_cold"], .bool(true))
+            XCTAssertEqual(final["memory_cold"], .bool(true))
+            XCTAssertEqual(final["schedules_cold"], .bool(true))
+        }
+    }
+
+    @MainActor
+    func testNativeStoreKeepsActualWalCleanupOwnerUntilExplicitCleanupWithoutRecapture() async throws {
+        try await withFixture(coldWal: true) { client, transport, _ in
+            let before = try await transport.call("fixture.maintenance.trace")
+            _ = try await transport.call("fixture.maintenance.cleanup_allow", params: ["allow": .bool(false)])
+            let store = MaintenanceStore(maxPolls: 0)
+            store.configure(client: client)
+            let panel = UUID(); store.setVisible(panel, visible: true)
+            await store.runDoctor()
+            for _ in 0..<250 {
+                await store.refresh()
+                if store.operation?.cleanupOwnerPending == true && store.operation?.workerPending == false { break }
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            guard let pending = store.operation else { XCTFail("No se conservó la operación WAL."); return }
+            XCTAssertTrue(pending.cleanupOwnerPending)
+            XCTAssertEqual(pending.phase, "cleanup_pending")
+            XCTAssertNil(pending.receipt); XCTAssertFalse(pending.receiptDurable)
+            store.setVisible(panel, visible: false)
+            XCTAssertTrue(store.blocksInteraction); XCTAssertTrue(store.monitorPaused)
+            XCTAssertFalse(store.mayPrepare); XCTAssertTrue(store.canCleanup)
+            _ = try await transport.call("fixture.maintenance.cleanup_allow", params: ["allow": .bool(true)])
+            await store.cleanup()
+            for _ in 0..<250 {
+                await store.refresh()
+                if store.operation?.resourcesPending == false { break }
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            XCTAssertEqual(store.operation?.id, pending.id)
+            XCTAssertEqual(store.operation?.phase, "failed")
+            XCTAssertFalse(store.operation?.cleanupOwnerPending == true)
+            XCTAssertFalse(store.operation?.success == true)
+            XCTAssertNil(store.doctor)
+            XCTAssertFalse(store.readAwaitingSettlement); XCTAssertFalse(store.blocksInteraction)
+            let after = try await transport.call("fixture.maintenance.trace")
+            XCTAssertEqual(after["sources_sha256"], before["sources_sha256"])
+            XCTAssertEqual(after["provider_calls"], .number(0))
+            await store.close()
         }
     }
 
