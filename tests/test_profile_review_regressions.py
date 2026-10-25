@@ -1,8 +1,13 @@
+import time
+from uuid import uuid4
+
 import pytest
 
 from jarvis_core.host_profile import HostProfileError, ProfileLease, freeze_sources
 from jarvis_core.memory import MemoryScope, MemoryStore
+from jarvis_core.recovery import RecoveryContext
 from jarvis_core.service import JarvisService
+from jarvis_core.tools import HostCancellation
 
 
 class OwnedPeer:
@@ -72,7 +77,7 @@ async def test_captured_store_callback_rechecks_root_before_lazy_write(tmp_path)
 
 
 @pytest.mark.asyncio
-async def test_existing_cold_memory_is_blocked_not_omitted_or_recovered(tmp_path):
+async def test_existing_cold_memory_is_captured_not_omitted_or_recovered(tmp_path):
     root = tmp_path / "profile"
     root.mkdir(mode=0o700)
     own = MemoryStore(root / "memory.sqlite3")
@@ -89,9 +94,15 @@ async def test_existing_cold_memory_is_blocked_not_omitted_or_recovered(tmp_path
         with service.profile_gate.exclusive() as cut:
             frozen = freeze_sources(service, cut)
             metadata = {item["role"]: item for item in frozen.metadata}
-            assert metadata["memory"]["disposition"] == "unavailable"
-            with pytest.raises(HostProfileError, match="profile_lazy_source_unavailable"):
-                frozen.bind(cut)
+            assert metadata["memory"]["disposition"] == "present"
+            context = RecoveryContext(
+                uuid4().hex, cut.scope.profile_id, cut.scope.generation,
+                lambda *_: frozen.assert_current(cut), HostCancellation(), time.monotonic() + 20,
+            )
+            outcome = await service.profile_gate.run_worker(
+                cut, lambda: frozen.bind(cut, context=context), HostCancellation(),
+            )
+            assert outcome.error is None and outcome.value.sqlite[0].data == before
         assert service.memory._disk is None
         assert (root / "memory.sqlite3").read_bytes() == before
     finally:

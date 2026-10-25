@@ -8,7 +8,7 @@ import XCTest
 /// filesystem. Only the provider and owner decisions are synthetic fixtures.
 final class MaintenanceIntegrationTests: XCTestCase {
     @MainActor
-    private func withFixture(_ operation: (MaintenanceClient, LocalRPCClient, String) async throws -> Void) async throws {
+    private func withFixture(coldState: Bool = false, _ operation: (MaintenanceClient, LocalRPCClient, String) async throws -> Void) async throws {
         let environment = ProcessInfo.processInfo.environment
         guard let python = environment["JARVIS_DESKTOP_PYTHON"], let source = environment["JARVIS_DESKTOP_SOURCE"] else {
             throw XCTSkip("Usa el entorno explícito de script/test_desktop.sh para mantenimiento con núcleo propio.")
@@ -23,6 +23,7 @@ final class MaintenanceIntegrationTests: XCTestCase {
         import asyncio, hashlib, json, os, signal, sys
         from pathlib import Path
         from jarvis_core.service import JarvisService
+        from jarvis_core.state import StateStore
         from jarvis_core.memory import MemoryScope
         from jarvis_core.scheduler import ScheduleSpec
         class Peer:
@@ -36,10 +37,15 @@ final class MaintenanceIntegrationTests: XCTestCase {
           async def aclose(self): pass
         async def main():
           parent=Path(sys.argv[1]); root=parent/'profile'; root.mkdir(mode=0o700)
+          cold_state=sys.argv[2]=='cold'
+          if cold_state:
+            with StateStore(root/'jarvis.sqlite3') as database:
+              database.create_session('Conversación fría no vacía', agent_id='fixture')
           peer=Peer(); service=JarvisService(root, peer)
           service.agent_profiles.create('Agente sintético de mantenimiento', agent_id='fixture')
-          service.store.create_session('Conversación sintética durable', agent_id='fixture')
-          service.store.create_session('Conversación temporal excluida', temporary=True, agent_id='fixture')
+          if not cold_state:
+            service.store.create_session('Conversación sintética durable', agent_id='fixture')
+            service.store.create_session('Conversación temporal excluida', temporary=True, agent_id='fixture')
           service.memory.upsert(MemoryScope('fixture', 'fixture_workspace'), 'marker',
             'MARCADOR SINTÉTICO MEMORIA SIN CUENTA', source_uri='jarvis://fixture-maintenance')
           service.schedule_store.create('Tarea sintética deshabilitada', 'Sin despacho', 'fixture',
@@ -64,7 +70,7 @@ final class MaintenanceIntegrationTests: XCTestCase {
             return hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':')).encode()).hexdigest()
           async def trace(params):
             return {'provider_calls':peer.calls, 'sources_sha256':fingerprint(),
-                    'runner_running':service.scheduler.running}
+                    'runner_running':service.scheduler.running,'state_cold':service.store._disk is None}
           async def mutate(params):
             service.store.create_session('Cambio sintético posterior a revisión', agent_id='fixture')
             return {'ok':True}
@@ -74,7 +80,7 @@ final class MaintenanceIntegrationTests: XCTestCase {
             await service.start(); await done.wait()
           finally: await service.aclose()
         asyncio.run(main())
-        """, directory]
+        """, directory, coldState ? "cold" : "warm"]
         child.environment = ["PATH": "/usr/bin:/bin", "PYTHONPATH": source,
                              "PYTHONNOUSERSITE": "1", "PYTHONDONTWRITEBYTECODE": "1"]
         let diagnosticPath = directory + "/fixture.stderr.log"
@@ -207,4 +213,39 @@ final class MaintenanceIntegrationTests: XCTestCase {
             XCTAssertEqual(trace["provider_calls"].integer, 0)
         }
     }
+    @MainActor
+    func testColdNonemptyDeleteStateIsEligibleWithoutOpeningStoreThroughActualRPC() async throws {
+        try await withFixture(coldState: true) { client, transport, directory in
+            let before = try await transport.call("fixture.maintenance.trace")
+            XCTAssertEqual(before["state_cold"].bool, true)
+            let diagnosticStart = try await client.doctor()
+            let diagnostic = try await self.settled(client, diagnosticStart)
+            XCTAssertTrue(diagnostic.success)
+            let report = try DoctorSummary(diagnostic.result)
+            XCTAssertEqual(report.status, "ok")
+            let review = try await client.reviewBackup(parent: directory, name: "backup-cold-state")
+            let state = try XCTUnwrap(review.sources.first(where: { $0.role == "state" }))
+            XCTAssertEqual(state.disposition, "present")
+            XCTAssertGreaterThan(state.bytes, 100)
+            // The existing native client rejects unavailable sources; this is
+            // an actual eligible cold image, not a fabricated owned connection.
+            let operation = try await client.submit(review)
+            try await self.syntheticOwner(client, review: review, operation: operation, allow: true)
+            let created = try await self.settled(client, operation)
+            XCTAssertTrue(created.success)
+            XCTAssertEqual(created.receipt?.effect, "published_verified_bytes")
+            let backup = directory + "/backup-cold-state"
+            let manifest = try Data(contentsOf: URL(fileURLWithPath: backup + "/manifest.json"))
+            let hash = SHA256.hash(data: manifest).map { String(format: "%02x", $0) }.joined()
+            XCTAssertEqual(created.receipt?.manifestHash, hash)
+            let verificationStart = try await client.verify(path: backup, expectedHash: hash)
+            let verification = try await self.settled(client, verificationStart)
+            XCTAssertTrue(verification.success)
+            let after = try await transport.call("fixture.maintenance.trace")
+            XCTAssertEqual(after["state_cold"].bool, true)
+            XCTAssertEqual(after["sources_sha256"], before["sources_sha256"])
+            XCTAssertEqual(after["provider_calls"].integer, 0)
+        }
+    }
+
 }

@@ -26,7 +26,9 @@ from jarvis_core.recovery import (
     EXCLUSIONS,
     NewTarget,
     RecoveryContext,
+    RecoveryError,
     RecoveryLimits,
+    RecoveryReceipt,
     canonical,
     create_backup,
     restore_new,
@@ -344,11 +346,8 @@ class MaintenanceCoordinator:
             ) as cut:
                 # Restore validates only its selected artifact. It must not
                 # initialize or require unrelated cold stores of the active host.
-                if review.kind == "backup.create":
-                    bundle = review.frozen.bind(cut)
-                else:
+                if review.kind != "backup.create":
                     review.frozen.assert_current(cut, full=True)
-                    bundle = None
                 committed = False
 
                 def guard(stage, write=False):
@@ -374,6 +373,22 @@ class MaintenanceCoordinator:
                                     operation.phase)
                 def callback():
                     if review.kind == "backup.create":
+                        # Cold images are read/validated by the owned worker,
+                        # never loaded in full on the RPC event loop.
+                        try:
+                            bundle = review.frozen.bind(cut, context=context)
+                        except Exception as error:
+                            # This bounded read has not called create_backup or
+                            # created any staging/output. Preserve that proven
+                            # pre-effect boundary, including deadline cancellation.
+                            code = _code(error)
+                            receipt = RecoveryReceipt(
+                                operation.operation_id, review.kind,
+                                "cancelled" if code in {"recovery_cancelled",
+                                                       "recovery_deadline_exceeded"} else "failed",
+                                "no_published_effect", review.target.name, error_code=code,
+                            )
+                            raise RecoveryError(code, receipt) from None
                         return create_backup(bundle, review.target, context)
                     return restore_new(review.backup_path, review.verification,
                                        review.target, context)

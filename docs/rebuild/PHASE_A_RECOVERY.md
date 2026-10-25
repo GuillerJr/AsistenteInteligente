@@ -44,6 +44,23 @@ No existe una transacción SQLite que abarque todos los almacenes: la coherencia
 entre ellos depende del corte del host y sus comprobaciones, no de copiar archivos
 WAL sueltos ni de usar `immutable=1` sobre una familia viva.
 
+También se admiten fuentes frías de estado, memoria y tareas cuando son imágenes
+SQLite DELETE independientes y no existe ningún WAL, SHM o journal asociado.
+La revisión lee metadatos y como máximo 100 bytes de cabecera por fuente; el
+worker lee mediante descriptores fijados y valida la imagen completa en RAM.
+No abre el original con SQLite ni inicializa, migra o recupera su store. Se
+comprueban los cuatro miembros de la familia, incluidas sus ausencias: crear,
+reemplazar o retirar un sidecar invalida la revisión. Una familia huérfana o una
+cabecera WAL queda bloqueada, incluso si el WAL no está presente.
+
+Esas fuentes se presentan como disponibles (`present`), sin afirmar que el host
+posea una conexión abierta. Una cancelación o plazo agotado durante la captura,
+antes de invocar la creación de la copia, conserva un recibo durable de cancelación
+sin publicación; esa clasificación no se extiende a errores posteriores inciertos.
+El límite de bytes del preflight no garantiza un plazo físico para una llamada
+del sistema de archivos, y el corte exige escritores cooperantes: no es una
+sandbox frente a procesos externos del mismo usuario.
+
 Los recursos portátiles son estado persistente, memoria, tareas, perfiles,
 manifiestos de skills y registro de Telegram. La configuración se genera desde
 cero, sin bindings ni comandos MCP. Se excluyen credenciales, estado del proveedor,
@@ -64,11 +81,19 @@ no conserva permisos ni transporte y deja tareas, canales y skills deshabilitado
 Los recibos anteriores siguen siendo históricos; no acreditan efectos actuales.
 `restore_record.json` enumera exclusiones y pasos todavía necesarios. No se abre
 sesión, inicia un programa MCP, envía mensajes ni activa el perfil resultante.
+La presencia de ese marcador impide arrancar el perfil, antes de crear el lock
+del host, construir stores o iniciar proveedor/IPC. También se comprueba una
+lease entregada por otro llamador antes de inicializar el servicio. No se lee
+su cuerpo ni se interpreta JSON como autorización. La activación explícita sigue
+pendiente; no se habilita borrando o reparando el marcador desde Jarvis.
+Este control de arranque se mantiene separado de las comprobaciones de identidad
+durante la vida del servicio, para conservar el cierre y la limpieza de un host
+que ya estaba abierto si un proceso externo añade ese nombre.
 
 El diagnóstico devuelve códigos, versiones, permisos, cantidades e integridad,
 sin texto de chats, memoria, SQL, credenciales o argumentos de programas. Sobre un
 perfil activo consume imágenes RAM del mismo corte; no abre un store para
-fabricar disponibilidad. Una fuente existente que aún no se posee puede quedar
+fabricar disponibilidad. Una fuente fría incompatible o con sidecars queda
 bloqueada. Ningún informe aplica reparaciones o resuelve `.pending`.
 
 ## Superficie y recibos
@@ -99,6 +124,11 @@ workers coordinados. Cubren roundtrip, esquema/FTS, corrupción, cambios físico
 denegación, plazos originales, cancelación, publicación incierta, limpieza,
 precisión de identidades y fallo del journal. Las aprobaciones de fixtures no
 sustituyen una decisión real del dueño en la app.
+La ampliación para fuentes frías añade captura de los tres roles no vacíos,
+oráculos de archivos sin cambios, rechazo de sidecars/links, límites y carreras
+durante lectura. Una regresión Swift → RPC con estado frío no vacío verifica
+diagnóstico, revisión disponible, copia y hash manteniendo el store sin abrir y
+sin llamar al proveedor; su decisión de autorización es un fixture sintético.
 
 Los controles locales de Python, Swift, lint, bytecode y paquetes están aprobados.
 El recorrido Swift → RPC → servicio → SQLite acredita diagnóstico, respaldo,
@@ -122,14 +152,30 @@ La verificación independiente del respaldo confirmó seis roles presentes, skil
 ausente explícitamente, hashes/formato coincidentes, directorios 0700, archivos
 0600 y ausencia de `.pending`. Esto acredita el artefacto y su recibo, no la
 autenticidad de un firmante ni los efectos de herramientas externas.
+La comparación independiente del perfil restaurado confirmó integridad y
+referencias de los tres SQLite, conservación lógica con los cambios previstos,
+cinco vínculos de proveedor eliminados y la ruta de Telegram deshabilitada.
+En este recorrido la memoria tenía cero documentos, las tareas cero definiciones
+y skills estaba ausente; no se atribuye a esta prueba real una restauración no
+vacía de esos almacenes.
 Los identificadores de operación y el alcance de la evidencia están en el
 [registro de cualificación](PHASE_A_RECOVERY_QUALIFICATION.json). Al cerrar y
 reabrir Ajustes se conservó el recibo; después el chat quedó disponible con el
 mismo borrador sin enviar.
 
+En la ampliación posterior se comprobó otro perfil sintético con una nota de
+memoria y una tarea deshabilitada. La app completó el diagnóstico de los tres
+SQLite y admitió su revisión de copia, que se descartó sin pedir aprobación ni
+crear el destino. Tras cerrar app y daemon, los tres archivos conservaron bytes,
+identidad, modo, mtime y ctime, sin sidecars nuevos. El informe global fue parcial:
+agentes, skills y Telegram estaban ausentes y las relaciones no se acreditaron.
+La primera conexión se presentó como no confirmada y después quedó conectada por
+la supervisión lectora existente; su latencia no tiene causa establecida. No se
+atribuye esa demora a SQLite ni se presenta como corregida por esta ampliación.
+
 El recorrido no acredita todavía denegación, revocación, cancelación y pérdida
-de respuesta reales en toda la interfaz. También siguen pendientes la exportación del host de fuentes frías,
-incluidas WAL, la inclusión de archivos y
+de respuesta reales en toda la interfaz. También siguen pendientes las familias
+SQLite frías con WAL o journals, la inclusión de archivos y
 artefactos del workspace, activación/reconciliación de memoria y canales, reparación
 explícita, migraciones y distribución autocontenida. Son trabajo de la fase A;
 no se trasladan a B para declarar una paridad inexistente.

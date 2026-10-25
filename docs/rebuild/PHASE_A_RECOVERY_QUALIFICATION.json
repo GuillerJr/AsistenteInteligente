@@ -39,15 +39,35 @@
       "files_mode": "0600",
       "pending_markers": 0,
       "present_roles": [
-        "state", "memory", "schedules", "agents", "telegram", "configuration_portable"
+        "state",
+        "memory",
+        "schedules",
+        "agents",
+        "telegram",
+        "configuration_portable"
       ],
-      "absent_roles": ["skills"]
+      "absent_roles": [
+        "skills"
+      ]
     },
     "restore": {
       "operation_id": "827782ca02d04678bd8f2d84a128a04f",
       "native_result": "profile_prepared_disarmed",
       "active_profile_replaced": false,
-      "activated": false
+      "activated": false,
+      "independent_readonly_verification": "passed",
+      "sqlite_integrity_foreign_keys_and_logical_comparison": "passed",
+      "provider_threads_cleared": 5,
+      "enabled_telegram_routes": 0,
+      "provider_bindings": 0,
+      "mcp_programs": 0,
+      "workspace_selected": false,
+      "case_limits": {
+        "memory_documents": 0,
+        "schedule_definitions": 0,
+        "skills": "absent"
+      },
+      "independent_metadata_sha256": "80d1c8f40fc0448e69afe7296861ab8b74a39414a021e56c09f1575c7ae923bd"
     },
     "window_lifecycle": {
       "close_reopen_discards_unsubmitted_readonly_review": true,
@@ -61,6 +81,55 @@
     "One native successful backup, verification and staged restore do not qualify all denial, revocation, cancellation or lost-response scenarios.",
     "No restoration activation, workspace files, external skill resources, provider credentials, live grants or transport are qualified by this case.",
     "Hashes and schema checks do not establish signer authenticity or verify historical external effects.",
-    "Cold SQLite host export, reconciliation, repair, updates, rollback and standalone distribution remain phase A work."
-  ]
+    "This live checkpoint predates the cold DELETE followup; cold WAL, reconciliation, repair, updates, rollback and standalone distribution remain phase A work."
+  ],
+  "cold_delete_followup": {
+    "source_parent": "e7cbf3769f8d71a97103be55d1568fa844a152e1",
+    "product_source_sha256": {
+      "src/jarvis_core/cold_sqlite.py": "c93a4a9f7a3e694c58e849fcfe5cef68245ebc301ed2dc67f7336ef2f9cd0ba3",
+      "src/jarvis_core/host_profile.py": "5f58e1900e8c770d9dcc05b371960cd6fefd8fbfb920f6732d844ed39ea94420",
+      "src/jarvis_core/maintenance.py": "345d81b48c5eb56ad362238b97da4284dbf2787c5892e995f006d4e927499886",
+      "src/jarvis_core/service.py": "e694858c33b24c6de2bef3969f80ab128a285a49a06cfaf7c56eda620f9271e5"
+    },
+    "root_focused_python_passed": 253,
+    "private_native_actual_rpc_passed": 3,
+    "native_executable_sha256": "350b07f54f5478d8452dc065aee006148a7bd1c3afe200a864cf629e88657b58",
+    "native_executable_bytes": 7656400,
+    "synthetic_seed": {
+      "memory_documents": 1,
+      "disabled_schedules": 1
+    },
+    "native_doctor": {
+      "operation_id": "e28ab9682036437ab0451b87d21b1565",
+      "phase": "completed",
+      "sqlite_checks": "correct",
+      "overall": "partial",
+      "agents_skills_telegram": "absent",
+      "cross_references": "not_accredited"
+    },
+    "native_readonly_review": {
+      "digest": "9e6780f052d1ef00057498a7c7eb1e14ad0af24b3491bfe247852b50a1d969ef",
+      "eligible": true,
+      "discarded": true,
+      "write_approval_requested": false,
+      "backup_created": false
+    },
+    "source_three_sqlite_bytes_identities_modes_mtime_ctime_unchanged": true,
+    "source_sqlite_sidecars_absent_after_shutdown": true,
+    "own_app_and_daemon_exit_observed": true,
+    "startup_observation": "initially_unconfirmed_later_connected_by_existing_readonly_supervision_cause_not_established",
+    "restore_bootstrap_guard": {
+      "synthetic_cases_passed": 15,
+      "guard_before_lock_and_constructors": true,
+      "existing_host_cleanup_preserved": true,
+      "activation_implemented": false
+    },
+    "full_automated_gates": "required_by_commit_push_hooks",
+    "limits": [
+      "Cold DELETE only; cold WAL and any sidecar remain blocked.",
+      "Read-only native diagnosis and review do not qualify a new nonempty native backup/restore roundtrip.",
+      "No new provider inference or real tool approval requested for this read-only flow."
+    ],
+    "recorded_on": "2026-10-25"
+  }
 }

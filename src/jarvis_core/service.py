@@ -139,6 +139,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
         if self.profile_lease.root != directory:
             raise HostProfileError("profile_directory_mismatch")
         try:
+            self.profile_lease.check_bootstrap_ready()
             self._initialize(directory, provider)
         except BaseException:
             for name in ("schedule_store", "memory", "store"):

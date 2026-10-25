@@ -22,7 +22,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
-from jarvis_core.recovery import JsonSource, SourceBundle, SqliteSource
+from jarvis_core.cold_sqlite import ColdFamily, inspect_cold_family
+from jarvis_core.recovery import (
+    JsonSource,
+    RecoveryLimits,
+    SourceBundle,
+    SqliteImageSource,
+    SqliteSource,
+)
 from jarvis_core.recovery_fs import Directory, FileIdentity
 from jarvis_core.state import ensure_private_directory
 from jarvis_core.tools import HostScope
@@ -46,6 +53,22 @@ def _regular(info, *, limit=None):
         raise HostProfileError("profile_file_unsafe")
 
 
+def _reject_restore_marker(directory: Directory) -> None:
+    """Admission only: any marker entry requires explicit future activation.
+
+    Never open its body, follow a link, create a lock or treat JSON as authority.
+    This is separate from lifetime identity checks so an existing host can close.
+    """
+    directory.check()
+    try:
+        os.stat("restore_record.json", dir_fd=directory.fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    except OSError:
+        raise HostProfileError("profile_bootstrap_unavailable") from None
+    raise HostProfileError("profile_activation_required")
+
+
 class ProfileLease:
     """One explicitly selected physical profile; a fresh host identity per service."""
 
@@ -60,6 +83,7 @@ class ProfileLease:
                 ensure_private_directory(self.root)
             self._directory = Directory(self.root)
             self.identity = self._directory.identity
+            _reject_restore_marker(self._directory)
             flags = os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
             if create:
                 flags |= os.O_CREAT
@@ -103,6 +127,12 @@ class ProfileLease:
                     raise HostProfileError("profile_generation_stale")
             except OSError:
                 raise HostProfileError("profile_identity_changed") from None
+
+    def check_bootstrap_ready(self) -> None:
+        """Reject restored staging before constructors, preserving cleanup rights."""
+        with self._lock:
+            self.assert_current()
+            _reject_restore_marker(self._directory)
 
     def advance_generation(self) -> HostScope:
         with self._lock:
@@ -292,6 +322,7 @@ class _SqliteState:
     store: object
     connection: sqlite3.Connection | None
     fingerprint: tuple
+    cold: ColdFamily | None = None
 
 
 @dataclass(frozen=True)
@@ -305,15 +336,18 @@ class _JsonState:
 def _sqlite_state(role, store):
     connection = store._connection if role == "schedules" else store._disk
     path = store.path
+    if connection is None:
+        family = inspect_cold_family(path, role)
+        if family.members[0] is None:
+            return _SqliteState(role, store, None, ("absent", family.members), family)
+        kind = "cold_delete" if family.eligible else "unavailable"
+        return _SqliteState(role, store, None,
+                            (kind, *family.members[0], family.members, family.header), family)
     try:
         info = path.lstat()
     except FileNotFoundError:
-        if connection is not None:
-            raise HostProfileError("profile_sqlite_missing") from None
-        return _SqliteState(role, store, None, ("absent",))
+        raise HostProfileError("profile_sqlite_missing") from None
     _regular(info)
-    if connection is None:
-        return _SqliteState(role, store, None, ("unavailable", *_file_info(info)))
     with store._mutex:
         checker = (store._check if role == "schedules" else store._check_disk
                    if role == "memory" else store._assert_disk_identity)
@@ -473,9 +507,16 @@ class FrozenSources:
                 raise HostProfileError("profile_sources_changed")
         else:
             for row in self._sql:
-                current = _sqlite_state(row.role, row.store)
-                if current.fingerprint != row.fingerprint:
-                    raise HostProfileError("profile_sources_changed")
+                if row.cold is not None:
+                    row.cold.assert_current()
+                    current = (row.store._connection if row.role == "schedules"
+                               else row.store._disk)
+                    if current is not None:
+                        raise HostProfileError("profile_sources_changed")
+                else:
+                    current = _sqlite_state(row.role, row.store)
+                    if current.fingerprint != row.fingerprint:
+                        raise HostProfileError("profile_sources_changed")
             for row in self._json:
                 directory = row.document.directory.lstat()
                 parent_id = row.fingerprint[1]
@@ -509,19 +550,42 @@ class FrozenSources:
             raise HostProfileError("profile_sources_changed")
         cut.assert_current()
 
-    def bind(self, cut: ProfileCut) -> SourceBundle:
+    def _check_image_budget(self, limits):
+        sizes = [row.fingerprint[6] for row in self._sql
+                 if row.fingerprint[0] in {"owned", "cold_delete"}]
+        if (any(size > limits.max_sqlite_bytes for size in sizes)
+                or sum(sizes) + sum(len(row.data or b"") for row in self._json)
+                > limits.max_total_bytes):
+            raise HostProfileError("profile_sqlite_image_limit")
+
+    def bind(self, cut: ProfileCut, context=None, limits=None) -> SourceBundle:
+        if context is not None:
+            context.checkpoint("source_bind")
         self._revalidate(cut)
         if any(row.fingerprint[0] == "unavailable" for row in self._sql):
             raise HostProfileError("profile_lazy_source_unavailable")
 
+        limits = limits or RecoveryLimits()
+        self._check_image_budget(limits)
+        if any(row.cold and row.cold.eligible for row in self._sql) and context is None:
+            raise HostProfileError("profile_cold_capture_context_required")
+
         def check():
             self.assert_current(cut)
 
+        sources = []
+        for row in self._sql:
+            if row.connection is not None:
+                sources.append(SqliteSource(row.role, row.connection, check))
+            elif row.cold and row.cold.eligible:
+                data, digest = row.cold.read_image(context, limits, check)
+                sources.append(SqliteImageSource(row.role, data,
+                                                FileIdentity(*row.fingerprint[1:3]), digest, check))
+        self.assert_current(cut, full=True)
         return SourceBundle(
             self.scope.profile_id, self.scope.generation, self.service.directory,
             self.root_identity,
-            tuple(SqliteSource(row.role, row.connection, check) for row in self._sql
-                  if row.connection is not None),
+            tuple(sources),
             tuple(JsonSource(row.role, row.data, check) for row in self._json
                   if row.data is not None),
             tuple([row.role for row in self._sql if row.fingerprint[0] == "absent"]
@@ -532,10 +596,19 @@ class FrozenSources:
         from jarvis_core.doctor import DoctorSqliteImage, DoctorSqliteImages
         from jarvis_core.recovery import capture_sqlite_snapshot
 
+        context.checkpoint("doctor_source_images")
         self._revalidate(cut)
+        self._check_image_budget(limits)
         images = []
         for row in self._sql:
             self.assert_current(cut)
+            if row.cold and row.cold.eligible:
+                data, digest = row.cold.read_image(
+                    context, limits, lambda: self.assert_current(cut),
+                )
+                images.append(DoctorSqliteImage(row.role, "image", row.fingerprint[1:3],
+                                               data, digest))
+                continue
             if row.connection is None:
                 disposition = row.fingerprint[0]
                 identity = None if disposition == "absent" else row.fingerprint[1:3]
@@ -563,8 +636,10 @@ def freeze_sources(service, cut: ProfileCut) -> FrozenSources:
     cut.assert_current()
     metadata = tuple((row.role,
                       "generated_builtin" if row.role == "agents"
-                      and row.fingerprint[0] == "absent" else row.fingerprint[0],
-                      row.fingerprint[6] if row.fingerprint[0] in {"owned", "unavailable"}
+                      and row.fingerprint[0] == "absent" else "present"
+                      if row.fingerprint[0] == "cold_delete" else row.fingerprint[0],
+                      row.fingerprint[6] if row.fingerprint[0]
+                      in {"owned", "unavailable", "cold_delete"}
                       else (len(row.data) if isinstance(row, _JsonState) and row.data else 0))
                      for row in (*sql, *docs))
     return FrozenSources(service, cut.scope, cut.cut_id, fingerprint, metadata,

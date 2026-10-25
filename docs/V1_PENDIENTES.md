@@ -87,7 +87,16 @@ declara completa por los tests sintéticos.
 - [x] Observar una copia, su verificación y la preparación de otro perfil desde
   la app con aprobaciones del dueño, usando únicamente datos sintéticos. Recibos
   de publicación y perfil desarmado observados; faltan los demás escenarios reales.
-- [ ] Completar fuentes frías, archivos/artefactos de workspace, activación y
+- [x] Implementar captura y diagnóstico de SQLite frías DELETE independientes,
+  sin inicializar stores ni modificar las fuentes; WAL y sidecars siguen bloqueados.
+- [x] Observar diagnóstico y revisión nativos con memoria y tarea sintéticas no
+  vacías, conservando los tres SQLite. El informe global fue parcial por recursos
+  ausentes; no se ejecutó otro roundtrip nativo en ese recorrido de lectura.
+- [x] Impedir arranque accidental del perfil restaurado antes de crear locks,
+  stores o conexiones, sin impedir el cierre de un host que ya estaba abierto.
+- [ ] Investigar la demora inicial observada en el perfil nuevo: se recuperó por
+  supervisión lectora, sin reinicio; su causa no quedó establecida.
+- [ ] Completar familias frías con WAL/journals, archivos/artefactos de workspace, activación y
   reconciliación, reparaciones, actualización, rollback y distribución.
 
 ## Fase B — después de acreditar A

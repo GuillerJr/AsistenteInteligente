@@ -279,7 +279,7 @@ async def test_maintenance_journal_is_explicitly_excluded_from_source_fingerprin
         assert all(row.role != "maintenance" for row in bundle.json)
 
 
-async def test_cold_existing_sqlite_is_reported_unavailable_without_lazy_recovery(tmp_path):
+async def test_cold_existing_sqlite_is_captured_without_lazy_recovery(tmp_path):
     root = tmp_path / "cold"
     with StateStore(root / "jarvis.sqlite3") as store:
         store.create_session("Sintética")
@@ -291,9 +291,15 @@ async def test_cold_existing_sqlite_is_reported_unavailable_without_lazy_recover
         with value.profile_gate.exclusive() as cut:
             frozen = freeze_sources(value, cut)
             metadata = next(row for row in frozen.metadata if row["role"] == "state")
-            assert metadata["disposition"] == "unavailable" and metadata["bytes"] > 0
-            with pytest.raises(HostProfileError, match=r"^profile_lazy_source_unavailable$"):
-                frozen.bind(cut)
+            assert metadata["disposition"] == "present" and metadata["bytes"] > 0
+            context = RecoveryContext(
+                uuid4().hex, cut.scope.profile_id, cut.scope.generation,
+                lambda *_: frozen.assert_current(cut), HostCancellation(), time.monotonic() + 20,
+            )
+            outcome = await value.profile_gate.run_worker(
+                cut, lambda: frozen.bind(cut, context=context), HostCancellation(),
+            )
+            assert outcome.error is None and outcome.value.sqlite[0].data == original[0]
         assert value.store._disk is None
         assert (path.read_bytes(), path.stat().st_mtime_ns) == original
     finally:
