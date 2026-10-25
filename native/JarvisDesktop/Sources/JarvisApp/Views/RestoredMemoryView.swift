@@ -19,7 +19,7 @@ struct RestoredMemoryView: View {
                         .disabled(!mayBegin || !restoration.mayPrepare || !agents.contains(where: { $0.id == restoration.agentID }))
                     Button("Actualizar estado") { Task { await restoration.refresh() } }.disabled(restoration.isRequesting)
                 }
-                if restoration.isRequesting { ProgressView().controlSize(.small) }
+                if restoration.isRequesting || restoration.isRefreshing { ProgressView().controlSize(.small) }
             }
             if restoration.readAwaitingSettlement { Section { Text("La consulta local todavía no tiene cierre confirmado. Actualiza el estado; no se repetirá la solicitud.").foregroundStyle(.orange) } }
             if let error = restoration.errorMessage { Section { Text(error).foregroundStyle(.red) } }
@@ -77,10 +77,11 @@ struct RestoredMemoryView: View {
                     if let review = restoration.effectReview, let approval = restoration.approval, review.matches(approval, operation: operation) {
                         Text("Autoriza sólo esta copia revisada. Se conserva el origen y el destino debe seguir vacío.")
                         HStack {
-                            Button("Autorizar esta copia") { Task { await restoration.decide(allow: true) } }.buttonStyle(.borderedProminent)
-                            Button("No autorizar") { Task { await restoration.decide(allow: false) } }
-                        }.disabled(restoration.isRequesting)
+                            Button("Autorizar esta copia") { Task { await restoration.decide(allow: true, ticket: approval) } }.buttonStyle(.borderedProminent)
+                            Button("No autorizar") { Task { await restoration.decide(allow: false, ticket: approval) } }
+                        }.disabled(!restoration.canDecide)
                     }
+                    if let notice = restoration.operationNotice, notice != restoration.errorMessage { Text(notice).foregroundStyle(.orange) }
                     if let receipt = operation.memoryCopyReceipt {
                         if operation.success { Text("Copia confirmada: \(receipt.documents) notas, \(receipt.bytes) bytes.") }
                         else if receipt.status == "unknown" { Text("El recibo no confirma si la transacción quedó aplicada. No se repetirá automáticamente.").foregroundStyle(.orange) }

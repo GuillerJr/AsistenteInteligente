@@ -18,6 +18,7 @@ public final class RestoredMemoryStore {
     public private(set) var approval: MaintenanceApproval?
     public private(set) var errorMessage: String?
     public private(set) var isRequesting = false
+    public private(set) var isRefreshing = false
     public private(set) var responseUnconfirmed = false
     public private(set) var readAwaitingSettlement = false
     public private(set) var pollingPaused = false
@@ -25,6 +26,7 @@ public final class RestoredMemoryStore {
     @ObservationIgnored private var client: RestoredMemoryClient?
     @ObservationIgnored private let runtime: ProfileRuntimeGuard
     @ObservationIgnored private var epoch = 0
+    @ObservationIgnored private var readSequence = 0
     @ObservationIgnored private var polling: Task<Void, Never>?
     @ObservationIgnored private let pause: @Sendable () async throws -> Void
     @ObservationIgnored private let maxPolls: Int
@@ -32,13 +34,25 @@ public final class RestoredMemoryStore {
     private var currentScope: MaintenanceScope?
     private var inventoryDeadline: Date?
     private var cursors = Set<String>()
-    public var blocksInteraction: Bool { isRequesting || responseUnconfirmed || readAwaitingSettlement || readOperation?.settled == false || operation?.settled == false || operation?.cleanupOwnerPending == true || preview != nil }
+    public var blocksInteraction: Bool { isRequesting || isRefreshing || responseUnconfirmed || readAwaitingSettlement || readOperation?.settled == false || operation?.settled == false || operation?.cleanupOwnerPending == true || preview != nil }
     public var monitorPaused: Bool { !visibleViews.isEmpty || blocksInteraction }
-    public var mayPrepare: Bool { runtime.isActive && !isRequesting && !responseUnconfirmed && !readAwaitingSettlement && readOperation?.settled != false && operation?.settled != false && operation?.cleanupOwnerPending != true }
+    public var mayPrepare: Bool { runtime.isActive && !isRequesting && !isRefreshing && !responseUnconfirmed && !readAwaitingSettlement && readOperation?.settled != false && operation?.settled != false && operation?.cleanupOwnerPending != true }
+    public var canDecide: Bool {
+        guard runtime.isActive, !isRequesting, !responseUnconfirmed, !readAwaitingSettlement, readOperation?.settled != false,
+              let review = effectReview, let operation, let approval, operation.scope == currentScope else { return false }
+        return review.matches(approval, operation: operation)
+    }
+    public var operationNotice: String? {
+        if let code = operation?.errorCode, let message = RestoredMemoryPresentation.operationError(code) { return message }
+        if let review = effectReview, review.expiresAt <= Date(), operation?.phase == "awaiting_owner" {
+            return RestoredMemoryPresentation.operationError("memory_restore_review_expired")
+        }
+        return nil
+    }
     public var selectedSource: RestoredMemorySource? { sources.first { $0.id == selectedSourceID } }
     public var inventoryIsCurrent: Bool { inventoryDeadline.map { $0 > Date() } == true && inventory?.scope.profileID == currentScope?.profileID }
     public var maySubmit: Bool { mayPrepare && preview.map { $0.expiresAt > Date() && $0.scope == currentScope } == true }
-    public var hasObservationTarget: Bool { runtime.isActive && !readAwaitingSettlement && readOperation?.settled != false && effectReview != nil && operation?.settled == true && operation?.cleanupOwnerPending == false && !isRequesting && !responseUnconfirmed }
+    public var hasObservationTarget: Bool { !isRefreshing && runtime.isActive && !readAwaitingSettlement && readOperation?.settled != false && effectReview != nil && operation?.settled == true && operation?.cleanupOwnerPending == false && !isRequesting && !responseUnconfirmed }
     public init(runtime: ProfileRuntimeGuard, maxPolls: Int = 240, pause: @escaping @Sendable () async throws -> Void = { try await Task.sleep(for: .milliseconds(500)) }) {
         self.runtime = runtime; self.maxPolls = min(240, max(1, maxPolls)); self.pause = pause
     }
@@ -47,7 +61,7 @@ public final class RestoredMemoryStore {
         epoch += 1; polling?.cancel(); self.client = client
         inventory = nil; sources = []; selectedSourceID = nil; preview = nil; effectReview = nil
         operation = nil; readOperation = nil; previousOperation = nil; approval = nil; observation = nil; observationWasQueried = false
-        currentScope = nil; inventoryDeadline = nil; cursors = []; responseUnconfirmed = false; readAwaitingSettlement = false; isRequesting = false; pollingPaused = false; errorMessage = nil
+        currentScope = nil; inventoryDeadline = nil; cursors = []; responseUnconfirmed = false; readAwaitingSettlement = false; isRequesting = false; isRefreshing = false; readSequence += 1; pollingPaused = false; errorMessage = nil
     }
     public func close() async { epoch += 1; polling?.cancel(); approval = nil; preview = nil; inventory = nil; sources = []; selectedSourceID = nil; await client?.close() }
     public func setVisible(_ id: UUID, visible: Bool) {
@@ -151,15 +165,25 @@ public final class RestoredMemoryStore {
             }
         }
     }
+    private func sameApproval(_ left: MaintenanceApproval?, _ right: MaintenanceApproval?) -> Bool {
+        if left == nil && right == nil { return true }
+        guard let left, let right else { return false }
+        return left.params == right.params && left.reviewID == right.reviewID && left.reviewDigest == right.reviewDigest && left.reviewMetadata == right.reviewMetadata && left.expiresAt == right.expiresAt
+    }
+    private func checkRefresh(_ version: Int, sequence: Int) throws {
+        try check(version)
+        guard sequence == readSequence, !isRequesting else { throw CancellationError() }
+    }
     public func refresh() async {
-        guard let client, !isRequesting else { return }
-        let version = epoch; isRequesting = true
-        defer { if version == epoch { isRequesting = false; discardHiddenPreview() } }
+        guard let client, !isRequesting, !isRefreshing else { return }
+        let version = epoch, sequence = readSequence; isRefreshing = true
+        defer { if version == epoch { isRefreshing = false; discardHiddenPreview() } }
         do {
-            let snapshot = try await client.status(); try check(version)
-            let pending = try await client.pending(); try check(version)
+            let snapshot = try await client.status(); try checkRefresh(version, sequence: sequence)
+            let pending = try await client.pending(); try checkRefresh(version, sequence: sequence)
             guard snapshot.scope == pending.scope else { throw RPCFailure.invalidResponse }
-            currentScope = snapshot.scope; approval = nil
+            currentScope = snapshot.scope
+            var nextApproval: MaintenanceApproval?
             if let readOperation, !readOperation.settled {
                 if let row = snapshot.operations.first(where: { $0.id == readOperation.id }) {
                     guard row.follows(readOperation) else { throw RPCFailure.invalidResponse }
@@ -179,27 +203,56 @@ public final class RestoredMemoryStore {
                 } else if operation?.settled == false { responseUnconfirmed = true }
                 if let operation, operation.scope == snapshot.scope, review.matches(operation) {
                     let tickets = pending.approvals.filter { review.matches($0, operation: operation) }
-                    guard tickets.count <= 1 else { throw RPCFailure.invalidResponse }; approval = tickets.first
+                    guard tickets.count <= 1 else { throw RPCFailure.invalidResponse }; nextApproval = tickets.first
                 }
             }
+            // An unchanged read must not withdraw/recreate a live owner card.
+            if !sameApproval(approval, nextApproval) { approval = nextApproval }
             if preview?.scope != nil, preview?.scope != snapshot.scope { preview = nil }
             if let inventory, inventory.scope != snapshot.scope { clearPreview() }
-            errorMessage = nil
-        } catch { if version == epoch { approval = nil; errorMessage = RestoredMemoryPresentation.error(error) } }
+            errorMessage = operationNotice
+        } catch {
+            if version == epoch, sequence == readSequence, !isRequesting, !Task.isCancelled {
+                approval = nil; errorMessage = RestoredMemoryPresentation.error(error)
+            }
+        }
     }
-    public func decide(allow: Bool) async {
-        guard let client, let review = effectReview, let operation, let approval, !isRequesting, operation.scope == currentScope, review.matches(approval, operation: operation) else { return }
-        let version = epoch; isRequesting = true; self.approval = nil
+    /// A click is bound to the displayed ticket. A concurrent status read is
+    /// harmless; an older reply cannot restore that ticket after this decision.
+    public func decide(allow: Bool, ticket: MaintenanceApproval? = nil, now: Date = Date()) async {
+        guard runtime.isActive else { errorMessage = "Este perfil ya no está abierto. La decisión no se envió."; return }
+        guard !isRequesting else { errorMessage = "Ya hay una solicitud en curso. Espera su resultado antes de decidir otra vez."; return }
+        guard let client, let review = effectReview, let operation, let selected = ticket ?? approval else {
+            errorMessage = "Esta autorización ya no está disponible. Actualiza el estado para revisar el resultado."; return
+        }
+        guard review.expiresAt > now, selected.expiresAt > now else {
+            approval = nil; errorMessage = RestoredMemoryPresentation.operationError("memory_restore_review_expired"); return
+        }
+        guard !responseUnconfirmed, !readAwaitingSettlement, readOperation?.settled != false,
+              operation.scope == currentScope, sameApproval(approval, selected), review.matches(selected, operation: operation, now: now) else {
+            errorMessage = "La autorización cambió. Actualiza el estado; no se envió otra decisión."; return
+        }
+        let version = epoch; readSequence += 1; isRequesting = true; approval = nil
         defer { if version == epoch { isRequesting = false } }
-        do { let accepted = try await client.decide(approval, review: review, operation: operation, allow: allow); try check(version); errorMessage = accepted ? nil : "La decisión no fue aceptada; consulta su estado."; beginPolling() }
-        catch { if version == epoch { errorMessage = RestoredMemoryPresentation.error(error) } }
+        do {
+            let accepted = try await client.decide(selected, review: review, operation: operation, allow: allow); try check(version)
+            errorMessage = accepted ? nil : "La autorización cambió o caducó y la decisión no fue aceptada. Consulta su estado."
+            beginPolling()
+        } catch {
+            if version == epoch {
+                errorMessage = MaintenanceResponsePolicy.submissionMayBeUnconfirmed(error)
+                    ? "No se confirmó la recepción de tu decisión. No se reenviará; consulta el estado."
+                    : RestoredMemoryPresentation.error(error)
+                beginPolling()
+            }
+        }
     }
     public func cancel() async { await updateOperation(cleanup: false) }
     public func cleanup() async { await updateOperation(cleanup: true) }
     private func updateOperation(cleanup: Bool) async {
         guard let client, let operation, !isRequesting, operation.scope.profileID == currentScope?.profileID,
               cleanup ? operation.cleanupOwnerPending : !operation.settled else { return }
-        let version = epoch; isRequesting = true; approval = nil
+        let version = epoch; readSequence += 1; isRequesting = true; approval = nil
         defer { if version == epoch { isRequesting = false } }
         do {
             let row = try await (cleanup ? client.cleanup(operation.id) : client.cancel(operation.id)); try check(version)
@@ -219,7 +272,7 @@ public final class RestoredMemoryStore {
     }
     public func acknowledgeUnconfirmedLocally() {
         guard responseUnconfirmed, !isRequesting, operation == nil || operation?.settled == true else { return }
-        responseUnconfirmed = false; preview = nil; approval = nil
+        readSequence += 1; responseUnconfirmed = false; preview = nil; approval = nil
         errorMessage = "Se cerró sólo el aviso local. El resultado anterior sigue sin confirmar; no se reintentó ni se declaró ausente la copia."
     }
     public func resumePolling() { beginPolling() }
@@ -240,9 +293,15 @@ public final class RestoredMemoryStore {
 }
 
 public enum RestoredMemoryPresentation {
+    public static func operationError(_ code: String) -> String? {
+        if code == "memory_restore_review_expired" { return "La revisión caducó. Prepara una revisión nueva para volver a solicitar la copia." }
+        if code == "memory_restore_inventory_stale" { return "La lista de ámbitos cambió o caducó. Vuelve a buscarla antes de preparar otra revisión." }
+        return nil
+    }
     public static func error(_ error: Error) -> String {
         if error is CancellationError { return "La consulta se interrumpió; no se repetirá ninguna copia." }
         if let failure = error as? RPCFailure, case .remote(_, let code) = failure {
+            if let message = operationError(code) { return message }
             if code == "memory_copy_receipt_historical" { return "Ese registro es historia importada; no acredita una copia local ni permite repetirla." }
             if code == "profile_lazy_source_unavailable" { return "El almacén no está disponible para una lectura segura. No se abrió ni se migró automáticamente." }
             return "La revisión cambió, caducó o está bloqueada. Consulta el estado y prepara una revisión nueva explícitamente."

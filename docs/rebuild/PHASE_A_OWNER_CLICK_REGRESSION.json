@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "record_kind": "jarvis_phase_a_owner_click_regression",
+  "phase_a_complete": false,
+  "phase_b_started": false,
+  "checkpoint_before": "0e383c7ab6d2012f2c6b2c8fd9fcddaf55456658",
+  "incident": {
+    "scope": "owner_selected_synthetic_restored_profile_only",
+    "operation_id": "de17993c8f4e485e8d921ca6f67ce4cf",
+    "owner_report": "Pulsó Autorizar esta copia y no observó efecto.",
+    "observed_before_expiry": "awaiting_owner, un ticket pendiente y ningún recibo de copia",
+    "settled_phase": "failed",
+    "settled_error": "memory_restore_review_expired",
+    "receipt": null,
+    "worker_pending": false,
+    "cleanup_owner_pending": false,
+    "sqlite_fixture_hash_unchanged": true,
+    "sqlite_version": 1,
+    "documents": 2,
+    "bytes": 175,
+    "live_click_causal_trace_available": false,
+    "readonly_diagnostic_sha256": "4e6eeedbedb6199042029f004e3f9529869a4a4fd5a4a30e33fcffd0bfd8b26e"
+  },
+  "confirmed_defect": {
+    "component": "RestoredMemoryStore and RestoredMemoryView",
+    "trigger": "Una decisión explícita con ticket vigente coincide con una consulta automática de estado.",
+    "before": "El sondeo marcaba isRequesting, deshabilitaba el botón y podía descartar decide sin RPC ni error.",
+    "deterministic_before_test": "OwnerClickRaceTests.testValidOwnerClickDuringExistingReadonlyRefreshIsNotSilentlyLost",
+    "before_failed_cases": 1,
+    "before_failed_assertions": 1,
+    "before_decision_rpc_count": 0,
+    "qualification_limit": "La reproducción acredita el defecto, no una traza causal de la pulsación original del dueño."
+  },
+  "fix": {
+    "readonly_refresh_separate_from_effect_requests": true,
+    "exact_displayed_ticket_captured": true,
+    "older_read_responses_invalidated_on_decision": true,
+    "unchanged_ticket_not_removed_and_recreated": true,
+    "double_click_sends_one_decision": true,
+    "lost_acknowledgement_does_not_resend": true,
+    "expiry_and_rejection_explained": true,
+    "other_reads_and_profile_handoff_still_blocked_until_settlement": true,
+    "backend_authority_or_grant_policy_changed": false
+  },
+  "focused_validation": {
+    "headless_cases": 29,
+    "new_headless_regressions": 8,
+    "real_native_rpc_sqlite_cases": 3,
+    "total_distinct_cases": 32,
+    "serial_transport_case_seconds": 1.209,
+    "real_serial_transport": {
+      "state_read_held_on_main_connection": true,
+      "separate_control_connection_releases_fixture": true,
+      "decision_calls_while_read_held": 0,
+      "accepted_decisions_after_release": 1,
+      "copy_records_after_release": 1,
+      "source_unchanged_and_payload_equal": true,
+      "provider_calls": 0,
+      "authority_decisions": "synthetic_fixture_only"
+    }
+  },
+  "native_gesture_fixture": {
+    "view_and_store": "production_sources_with_in_memory_fake_transport",
+    "gesture": "CUA physical coordinate click, same held-read scenario",
+    "before_decision_calls": 0,
+    "after_decision_calls": 1,
+    "after_fake_allow_calls": 1,
+    "copy_submissions": 1,
+    "older_read_did_not_restore_ticket": true,
+    "real_profile_socket_sdk_sqlite_or_grant": false,
+    "report_sha256": "8f3a5cbfa4f3acad5185182439f158ac454f6e23b15c256d0b9bddfdd2d0f693",
+    "before_store_sha256": "81582e1a6290403f38e6da388f8787ac8670fdcdaab6b111c5f1d3fa619cc776",
+    "after_gesture_store_sha256": "24348306928bf9273861c7efa063c3ba092b80acbf8636e03ec4f5f7f56d0e9b",
+    "integrated_store_sha256": "1056806eacc8ebca4cda9021df68ef2b2038cf10c0ae0f7a4249af4051a962e6",
+    "post_gesture_delta": "Sólo la traducción del código real memory_restore_inventory_stale; sin cambios en decisiones o sondeo.",
+    "after_view_sha256": "7ac791f9e3039b6abbbe746c8325b8d29db7c547e5ec9514d13c1d061c3f7910",
+    "button_style_mirror_report_sha256": "703ea986a145fac708b18c540b70c969263c008932ccc9a2b1109ce1a99561ba",
+    "button_style_mirror_scope": "Cada centro de botón generó una sola acción y el espacio libre ninguna. No se confirmó un defecto de estilos; no se cambiaron."
+  },
+  "source_freeze": {
+    "manifest_sha256": "e2a83a411b984771313a7a3c25d88ed52b42b166c8b1874e08779c0420af6a5b",
+    "patch_sha256": "5ed7946539798d0ee892a33b7c6772b165e44feece07549d7ab6f0ad6d89c346",
+    "swift_files": 4,
+    "python_sources_changed": false
+  },
+  "integrated_validation": {
+    "native_cases": 207,
+    "native_failures": 0,
+    "native_seconds": 26.179,
+    "python_sources": "unchanged_from_0e383c7",
+    "publication_gates": "required_pre_commit_pre_push_and_CI_pending"
+  },
+  "remaining": [
+    "Verificar una decisión real del dueño y la copia de las dos notas sintéticas en la app corregida.",
+    "Completar los demás recorridos y familias de la fase A según la matriz; este arreglo no declara paridad completa."
+  ]
+}

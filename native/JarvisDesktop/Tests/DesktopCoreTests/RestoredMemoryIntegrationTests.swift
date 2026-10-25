@@ -70,14 +70,42 @@ final class RestoredMemoryIntegrationTests: XCTestCase {
             'destination_documents':len(dest),'ids_disjoint':not(set(x[0] for x in source)&set(x[0] for x in dest)),
             'destination_revision_one':all(x[2]==1 for x in dest),'copy_records':copies,
             'file_sha256':hashlib.sha256(data).hexdigest(),'provider_calls':peer.calls,'memory_was_opened':service.memory._disk is not None}
-      async def trace(params): return trace_snapshot()
-      service.server._handlers['fixture.memory.trace']=trace
+      # These handlers instrument ONLY this owned fixture. The real authority,
+      # SQLite effect and authenticated main transport remain unchanged.
+      gate_armed=False; status_entered=asyncio.Event(); status_release=asyncio.Event()
+      decide_calls=0; accepted_decisions=0
+      original_status=service.server._handlers['maintenance.status']
+      original_decide=service.server._handlers['maintenance.decide']
+      async def status(params):
+        nonlocal gate_armed
+        result=await original_status(params)
+        if gate_armed and not params:
+          gate_armed=False; status_entered.set(); await status_release.wait()
+        return result
+      async def decide(params):
+        nonlocal decide_calls,accepted_decisions
+        decide_calls+=1
+        result=await original_decide(params)
+        accepted_decisions+=int(result.get('accepted') is True)
+        return result
+      async def gate_next(params):
+        nonlocal gate_armed
+        status_entered.clear(); status_release.clear(); gate_armed=True
+        return {'armed':True}
+      async def release(params): status_release.set(); return {'released':True}
+      async def trace(params):
+        return dict(trace_snapshot(),decide_calls=decide_calls,
+          accepted_decisions=accepted_decisions,status_gate_entered=status_entered.is_set(),
+          status_gate_released=status_release.is_set())
+      service.server._handlers.update({'fixture.memory.trace':trace,
+        'maintenance.status':status,'maintenance.decide':decide,
+        'fixture.memory.gate_next_status':gate_next,'fixture.memory.release_status':release})
       done=asyncio.Event(); asyncio.get_running_loop().add_signal_handler(signal.SIGTERM,done.set)
       try: await service.start(); await done.wait()
       finally: await service.aclose()
     asyncio.run(main())
     """
-    @MainActor private func fixture(_ operation: (RestoredMemoryClient,LocalRPCClient) async throws -> Void) async throws {
+    @MainActor private func fixture(_ operation: (RestoredMemoryClient,LocalRPCClient,LocalRPCClient,ProfileRuntimeGuard) async throws -> Void) async throws {
         let env = ProcessInfo.processInfo.environment
         guard let python = env["JARVIS_DESKTOP_PYTHON"], let source = env["JARVIS_DESKTOP_SOURCE"] else { throw XCTSkip("Usa las rutas explícitas del entorno de pruebas de escritorio.") }
         let directory = "/private/tmp/jvs-memory-" + UUID().uuidString.prefix(8)
@@ -89,9 +117,10 @@ final class RestoredMemoryIntegrationTests: XCTestCase {
         let log = FileHandle(fileDescriptor:descriptor,closeOnDealloc:true); child.standardError = log; child.standardOutput = FileHandle.nullDevice
         addTeardownBlock { try? log.close() }; try startFixtureProcess(child,directory:directory)
         let runtime = ProfileRuntimeGuard(), transport = LocalRPCClient(stateDirectory:directory+"/profile",runtime:runtime), client = RestoredMemoryClient(transport:transport,runtime:runtime)
+        let control = LocalRPCClient(stateDirectory:directory+"/profile",runtime:runtime)
         do {
             try await ServiceBootstrap.waitForHealth(stateDirectory:directory+"/profile",timeout:5) { child.isRunning }
-            try await operation(client,transport); await client.close()
+            try await operation(client,transport,control,runtime); await client.close(); await control.close()
         } catch {
             if let data = try? Data(contentsOf:URL(fileURLWithPath:path)), !data.isEmpty {
                 let destination = "/private/tmp/jvs-memory-diagnostic-" + UUID().uuidString + ".log"
@@ -99,7 +128,7 @@ final class RestoredMemoryIntegrationTests: XCTestCase {
                 try? FileManager.default.setAttributes([.posixPermissions:0o600],ofItemAtPath:destination)
                 print("Diagnóstico del fixture propio: \(destination)")
             }
-            await client.close(); throw error
+            await client.close(); await control.close(); throw error
         }
     }
     private func settle(_ client: RestoredMemoryClient, _ initial: MaintenanceOperation) async throws -> MaintenanceOperation {
@@ -132,7 +161,7 @@ final class RestoredMemoryIntegrationTests: XCTestCase {
         return result
     }
     @MainActor func testActualCopyUpgradesAtomicallyAndReturnsIndependentLocalObservationWithoutSDK() async throws {
-        try await fixture { client, transport in
+        try await fixture { client, transport, _, _ in
             let before = try await transport.call("fixture.memory.trace")
             let reviewed = try await self.review(client)
             let afterReview = try await transport.call("fixture.memory.trace")
@@ -157,7 +186,7 @@ final class RestoredMemoryIntegrationTests: XCTestCase {
         }
     }
     @MainActor func testActualDenialLeavesV1BytesUntouchedAndDoesNotCreateCopyRecord() async throws {
-        try await fixture { client, transport in
+        try await fixture { client, transport, _, _ in
             let before = try await transport.call("fixture.memory.trace"), reviewed = try await self.review(client)
             let submitted = try await client.submit(reviewed); try await self.authorize(client,reviewed,submitted,allow:false)
             let denied = try await self.settle(client,submitted); XCTAssertEqual(denied.phase,"denied"); XCTAssertFalse(denied.success)
@@ -165,5 +194,80 @@ final class RestoredMemoryIntegrationTests: XCTestCase {
             XCTAssertEqual(trace["file_sha256"],before["file_sha256"]); XCTAssertEqual(trace["schema"],.number(1))
             XCTAssertEqual(trace["destination_documents"],.number(0)); XCTAssertEqual(trace["copy_records"],.number(0)); XCTAssertEqual(trace["provider_calls"],.number(0))
         }
+    }
+    @MainActor func testActualSerialTransportQueuesOneOwnerDecisionBehindReadAndDropsStaleStatus() async throws {
+        try await fixture { _, transport, control, runtime in
+            let pauses = StorePollingPause()
+            let store = RestoredMemoryStore(runtime:runtime,pause:{ try await pauses.pause() })
+            store.configure(transport); store.setVisible(UUID(),visible:true); store.selectAgent("jarvis")
+            let before = try await control.call("fixture.memory.trace")
+            await store.loadInventory(); store.selectSource(try XCTUnwrap(store.sources.first?.id)); await store.prepareReview(); await store.submit()
+            let readyDeadline = ContinuousClock.now.advanced(by:.seconds(10))
+            while store.approval == nil, ContinuousClock.now < readyDeadline {
+                await store.refresh(); if store.approval == nil { try await Task.sleep(for:.milliseconds(20)) }
+            }
+            let ticket = try XCTUnwrap(store.approval), review = try XCTUnwrap(store.effectReview)
+            XCTAssertTrue(store.canDecide)
+            // Let any previous watch iteration finish, then hold only its next
+            // pause. This makes the explicit refresh below own the gated read.
+            await pauses.blockWatch()
+            let pausedDeadline = ContinuousClock.now.advanced(by:.seconds(5))
+            while !(await pauses.isWaiting()), ContinuousClock.now < pausedDeadline { await Task.yield() }
+            let watchWaiting = await pauses.isWaiting(); XCTAssertTrue(watchWaiting)
+            XCTAssertFalse(store.isRefreshing)
+            _ = try await control.call("fixture.memory.gate_next_status")
+            let oldRead = Task { await store.refresh() }
+            do {
+                let enteredDeadline = ContinuousClock.now.advanced(by:.seconds(5))
+                var entered = false
+                while ContinuousClock.now < enteredDeadline {
+                    let value = try await control.call("fixture.memory.trace")
+                    if value["status_gate_entered"] == .bool(true) { entered = true; break }
+                    await Task.yield()
+                }
+                XCTAssertTrue(entered); XCTAssertTrue(store.isRefreshing); XCTAssertTrue(store.canDecide)
+                let decision = Task { await store.decide(allow:true,ticket:ticket) }
+                let queuedDeadline = ContinuousClock.now.advanced(by:.seconds(5))
+                while !store.isRequesting, ContinuousClock.now < queuedDeadline { await Task.yield() }
+                XCTAssertTrue(store.isRequesting)
+                let held = try await control.call("fixture.memory.trace")
+                XCTAssertEqual(held["decide_calls"],.number(0),"The serial main connection is still waiting for its status reply")
+                XCTAssertEqual(held["accepted_decisions"],.number(0))
+                XCTAssertEqual(held["status_gate_released"],.bool(false))
+                XCTAssertEqual(held["schema"],.number(1)); XCTAssertEqual(held["file_sha256"],before["file_sha256"])
+                _ = try await control.call("fixture.memory.release_status")
+                await oldRead.value; await decision.value
+                XCTAssertNil(store.approval,"The old read must not restore the clicked ticket")
+                let settledDeadline = ContinuousClock.now.advanced(by:.seconds(10))
+                while store.operation?.settled != true, ContinuousClock.now < settledDeadline {
+                    await store.refresh(); if store.operation?.settled != true { try await Task.sleep(for:.milliseconds(20)) }
+                }
+                let completed = try XCTUnwrap(store.operation)
+                XCTAssertTrue(completed.success,store.errorMessage ?? completed.errorCode ?? "No completed receipt")
+                XCTAssertTrue(completed.receiptDurable); XCTAssertTrue(review.matches(completed))
+                let final = try await control.call("fixture.memory.trace")
+                XCTAssertEqual(final["decide_calls"],.number(1)); XCTAssertEqual(final["accepted_decisions"],.number(1))
+                XCTAssertEqual(final["provider_calls"],.number(0)); XCTAssertEqual(final["copy_records"],.number(1))
+                XCTAssertEqual(final["source_hash"],before["source_hash"])
+                XCTAssertEqual(final["source_payload_sha256"],final["destination_payload_sha256"])
+                await store.close()
+            } catch {
+                _ = try? await control.call("fixture.memory.release_status")
+                await oldRead.value; await store.close(); throw error
+            }
+        }
+    }
+
+}
+
+
+private actor StorePollingPause {
+    private var blocked = false
+    private var waiting = false
+    func blockWatch() { blocked = true }
+    func isWaiting() -> Bool { waiting }
+    func pause() async throws {
+        if blocked { waiting = true; try await Task.sleep(for:.seconds(60)) }
+        else { try await Task.sleep(for:.milliseconds(20)) }
     }
 }

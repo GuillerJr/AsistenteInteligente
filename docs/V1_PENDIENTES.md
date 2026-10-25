@@ -112,6 +112,9 @@ declara completa por los tests sintéticos.
   fixtures propios, incluida la custodia tras perder una respuesta.
 - [ ] Comprobar la decisión real del dueño y el resultado de la copia de dos notas
   sintéticas desde la app; los fixtures no sustituyen ese recorrido.
+- [x] Reproducir y corregir el descarte de una pulsación durante el sondeo de
+  estado, con pruebas del Store, gesto en vista real con transporte falso y cola
+  IPC serial real; [evidencia y límites](rebuild/PHASE_A_OWNER_CLICK_REGRESSION.json).
 - [ ] Investigar la demora inicial observada en el perfil nuevo: se recuperó por
   supervisión lectora, sin reinicio; su causa no quedó establecida.
 - [ ] Completar familias frías con WAL/journals, archivos/artefactos de workspace, activación y

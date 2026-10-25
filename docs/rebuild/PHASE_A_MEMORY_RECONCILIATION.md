@@ -92,9 +92,11 @@ La misma regresión falló tres aserciones antes y pasó después de impedir lec
 superpuestas. Cerrar Ajustes conserva el efecto, su revisión y cualquier limpieza
 pendiente; una consulta SQL nunca reescribe el recibo histórico ni autoriza replay.
 
-El árbol integrado pasó 1914 pruebas Python en 121,14 s y 198 Swift en 24,45 s,
-además de Ruff, bytecode, base limpia y comprobación de hooks. El empaquetado,
-pre-push y CI de este bloque se comprobarán al publicarlo.
+El checkpoint `0e383c7` pasó 1914 pruebas Python en 121,14 s y 198 Swift en 24,45 s,
+además de Ruff, bytecode, base limpia, paquetes y pre-push. Su
+[CI macOS/Linux](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40171847442)
+también pasó. La prueba real posterior encontró un defecto de interacción que
+esos controles no cubrían; se documenta a continuación.
 
 Falta la copia de dos notas de prueba desde la app con aprobación del dueño.
 Las dos notas se prepararon como
@@ -135,3 +137,31 @@ propietario pendiente. Sus recibos sobreviven al avance de generación; los
 previews antiguos se invalidan. Los tests del Store ejercen estas condiciones;
 las conexiones concretas de ChatStore fueron revisadas en código, sin presentar
 un XCTest del Store como prueba de toda la app.
+
+## Pulsación durante una consulta de estado
+
+El dueño informó que pulsar «Autorizar esta copia» no produjo efecto. La lectura
+independiente observó la operación pendiente y después su caducidad, sin recibo
+de copia, limpieza pendiente ni cambio del archivo SQLite sintético. No existe
+una traza que atribuya causalmente esa pulsación concreta a un punto de código.
+
+Sí se reprodujo un defecto nativo suficiente para descartar una decisión válida:
+el sondeo usaba `isRequesting`, deshabilitaba la tarjeta y hacía salir de `decide`
+sin enviar un RPC ni explicar el rechazo. Se separó `isRefreshing`, se captura el
+ticket mostrado al pulsar y se invalidan las respuestas lectoras anteriores a la
+decisión. Los demás controles y la apertura de otro perfil conservan sus barreras.
+La caducidad y los rechazos muestran una explicación; no se reenvían decisiones.
+
+Las ocho regresiones nuevas incluyen el clic concurrente, doble clic, respuesta
+perdida, ticket obsoleto, caducidad y cierre. Una prueba adicional usa la conexión
+serial real: retiene un status, encola la decisión, libera la lectura desde otra
+conexión de fixture y comprueba exactamente una aceptación y copia, con contenido
+igual y cero llamadas al SDK. Se mantienen las dos pruebas IPC previas.
+
+También se probó la vista de producción con clic físico y transporte falso: el
+mismo escenario pasó de cero a una decisión y la respuesta tardía no restauró la
+tarjeta. Esa prueba no ejecutó una aprobación ni una copia reales. Un espejo de
+botones aisló estilos y zonas de clic sin hallar otro defecto confirmado. Fuentes,
+hashes y límites están en [el registro de la regresión](PHASE_A_OWNER_CLICK_REGRESSION.json).
+El árbol integrado pasó 207 pruebas Swift en 26,18 s. El backend Python no cambió;
+los hooks y CI vuelven a comprobar el conjunto antes de publicar este arreglo.
