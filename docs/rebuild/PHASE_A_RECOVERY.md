@@ -36,6 +36,9 @@ si se cancela repetidamente la tarea que lo espera.
 Las conexiones ya poseídas se copian a RAM mediante la API online backup de
 SQLite; la fuente no recibe checkpoint, VACUUM ni migración para preparar una
 copia. La validación exige esquemas propios, integridad, referencias y hashes.
+La carga de extensiones SQL se deniega también cuando CPython fue compilado sin
+el método opcional `enable_load_extension`; no se carga ninguna biblioteca para
+comprobar disponibilidad y no se ignoran fallos de los controles presentes.
 No existe una transacción SQLite que abarque todos los almacenes: la coherencia
 entre ellos depende del corte del host y sus comprobaciones, no de copiar archivos
 WAL sueltos ni de usar `immutable=1` sobre una familia viva.

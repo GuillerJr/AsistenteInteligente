@@ -24,6 +24,28 @@ class SnapshotError(ValueError):
         self.code = code
 
 
+def deny_extension_loading(connection):
+    """Keep both CPython build variants closed to dynamically loaded code.
+
+    CPython may omit enable_load_extension altogether. A fresh connection still
+    must not execute SQL load_extension: the authorizer denies that function even
+    on a build where the Python toggle is unavailable. No probe loads a library.
+    """
+    disable = getattr(connection, "enable_load_extension", None)
+    if disable is not None:
+        disable(False)
+
+    def authorize(action, first, second, _database, _source):
+        if action == sqlite3.SQLITE_FUNCTION and any(
+            isinstance(name, str) and name.lower() == "load_extension"
+            for name in (first, second)
+        ):
+            return sqlite3.SQLITE_DENY
+        return sqlite3.SQLITE_OK
+
+    connection.set_authorizer(authorize)
+
+
 @dataclass(frozen=True)
 class SnapshotLimits:
     max_bytes: int = 64 * 1024 * 1024
@@ -224,7 +246,7 @@ def inspect_sqlite_snapshot(
     try:
         if not hasattr(connection, "deserialize"):
             raise SnapshotError("snapshot_sqlite_capability_unavailable")
-        connection.enable_load_extension(False)
+        deny_extension_loading(connection)
         connection.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, limits.max_bytes)
         connection.setlimit(sqlite3.SQLITE_LIMIT_SQL_LENGTH, 65_536)
         connection.deserialize(data)

@@ -4,7 +4,12 @@ import sqlite3
 import pytest
 
 from jarvis_core import memory, scheduler, state
-from jarvis_core.recovery_sqlite import SnapshotError, SnapshotLimits, inspect_sqlite_snapshot
+from jarvis_core.recovery_sqlite import (
+    SnapshotError,
+    SnapshotLimits,
+    deny_extension_loading,
+    inspect_sqlite_snapshot,
+)
 
 
 def image(role="state", *, fts=False, change=None):
@@ -29,6 +34,44 @@ def image(role="state", *, fts=False, change=None):
     data = c.serialize()
     c.close()
     return data
+
+
+class _WithoutExtensionToggle(sqlite3.Connection):
+    def __getattribute__(self, name):
+        if name == "enable_load_extension":
+            raise AttributeError("CPython fixture without the optional extension API")
+        return super().__getattribute__(name)
+
+
+@pytest.mark.parametrize("role", ["state", "memory", "schedules"])
+def test_snapshot_on_cpython_without_optional_extension_toggle(role, monkeypatch):
+    data = image(role, fts=role == "memory")
+    original_connect = sqlite3.connect
+
+    def connect(*args, **kwargs):
+        return original_connect(*args, factory=_WithoutExtensionToggle, **kwargs)
+
+    monkeypatch.setattr(sqlite3, "connect", connect)
+    result = inspect_sqlite_snapshot(role, data, check_current=lambda: None)
+    assert result.role == role and result.integrity == "ok"
+
+
+def test_sql_extension_loading_stays_denied_without_python_toggle():
+    connection = sqlite3.connect(":memory:", factory=_WithoutExtensionToggle)
+    try:
+        # When exposed by this runtime, enable the underlying engine before
+        # hiding the Python toggle. The SQL authorizer still must deny loading.
+        toggle = getattr(sqlite3.Connection, "enable_load_extension", None)
+        if toggle is not None:
+            toggle(connection, True)
+        deny_extension_loading(connection)
+        with pytest.raises(sqlite3.Error) as raised:
+            connection.execute("SELECT load_extension('jarvis-fixture-never-load')")
+        message = str(raised.value).lower()
+        assert "not authorized" in message or "no such function" in message
+        assert connection.execute("SELECT 2+2").fetchone() == (4,)
+    finally:
+        connection.close()
 
 
 @pytest.mark.parametrize("role", ["state", "memory", "schedules"])

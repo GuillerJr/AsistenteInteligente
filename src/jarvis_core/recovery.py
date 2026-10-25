@@ -34,7 +34,11 @@ from jarvis_core.recovery_fs import (
     directory_entries,
     no_replace,
 )
-from jarvis_core.recovery_sqlite import SnapshotLimits, inspect_sqlite_snapshot
+from jarvis_core.recovery_sqlite import (
+    SnapshotLimits,
+    deny_extension_loading,
+    inspect_sqlite_snapshot,
+)
 from jarvis_core.tools import ToolError
 
 FORMAT = "jarvis-backup/1"
@@ -452,7 +456,7 @@ def _transform_sqlite(role, data, context, limits, *, restoring):
         return 0
 
     try:
-        c.enable_load_extension(False)
+        deny_extension_loading(c)
         c.deserialize(data)
         c.execute("PRAGMA trusted_schema=OFF")
         c.execute("PRAGMA secure_delete=ON")

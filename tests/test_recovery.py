@@ -40,6 +40,27 @@ from jarvis_core.tools import (
 )
 
 
+def test_backup_verify_restore_without_optional_extension_api(tmp_path, bundle, monkeypatch):
+    original_connect = sqlite3.connect
+
+    class WithoutExtensionToggle(sqlite3.Connection):
+        def __getattribute__(self, name):
+            if name == "enable_load_extension":
+                raise AttributeError("CPython fixture without optional extension API")
+            return super().__getattribute__(name)
+
+    def connect(*args, **kwargs):
+        return original_connect(*args, factory=WithoutExtensionToggle, **kwargs)
+
+    monkeypatch.setattr(sqlite3, "connect", connect)
+    receipt = create_backup(bundle, target(tmp_path), ctx())
+    assert receipt.status == "completed"
+    verified = verify_backup(tmp_path / "backup", ctx())
+    restored = restore_new(tmp_path / "backup", verified, target(tmp_path, "restored"), ctx())
+    assert restored.status == "completed" and restored.effect_status == "new_disarmed_profile"
+    assert (tmp_path / "restored" / "restore_record.json").is_file()
+
+
 def ctx(*, guard=None, generation=1, cancel=None, clock=time.monotonic, deadline=None):
     return RecoveryContext(
         uuid4().hex,
