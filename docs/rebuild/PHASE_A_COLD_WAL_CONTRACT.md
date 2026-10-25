@@ -2,7 +2,8 @@
 
 **Estado: primer incremento implementado y probado con datos sintéticos.**
 El [registro de implementación](PHASE_A_WAL_RECOVERY.md) fija el alcance admitido
-y la cualificación pendiente en la interfaz con una decisión real del dueño.
+y la [comprobación nativa acotada](PHASE_A_WAL_RECOVERY_LIVE.json) de diagnóstico,
+respaldo y verificación con datos sintéticos y una decisión real del dueño.
 No cierra A-69/A-71 ni la fase A. La fase B permanece posterior. Los journals de
 rollback, incluidos los vacíos, siguen bloqueados en este primer incremento;
 su recuperación continúa dentro del alcance pendiente de A.

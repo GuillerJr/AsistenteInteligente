@@ -79,7 +79,154 @@
     "backup_created": false,
     "all_five_original_members_unchanged_after_graceful_close": true
   },
-  "native_backup": "pending_owner_decision_after_notice_fix",
+  "native_backup": {
+    "product_commit": "8c7e7bce5d4e2ea00b878c1f325b74b5b1f40bcc",
+    "scope": "one_synthetic_profile_with_memory_WAL_and_state_schedules_DELETE",
+    "owner_report": "listo",
+    "approval_source": "owner_pressed_native_Autorizar_crear_esta_copia; user_report_and_native_operation_state",
+    "owner_approval_simulated": false,
+    "operation_id": "4667347623394b28b3330df4f1d79f09",
+    "review_digest": "de0a247767c7f42d254f17db865569e79b7fc3b3cdc47a1d48cec82eb3b4bd6f",
+    "scope_identity": {
+      "generation": 2,
+      "profile_id": "7b32bd35550d4d11b1035d82dcfc4460"
+    },
+    "phase": "complete",
+    "receipt": {
+      "artifact_id": "104c302b9ade4cfd853d8bad24a19df7",
+      "cleanup_error_code": null,
+      "cleanup_pending": false,
+      "effect_status": "published_verified_bytes",
+      "error_code": null,
+      "manifest_sha256": "bacdcc564c9c0662cdaa2fd862a9848138efe26505c35cf85b4de995d5a8df87",
+      "new_profile_id": null,
+      "operation_id": "4667347623394b28b3330df4f1d79f09",
+      "purpose": "backup.create",
+      "status": "completed",
+      "target_identity": {
+        "device": "16777230",
+        "inode": "68960473"
+      },
+      "target_name": "respaldo-wal"
+    },
+    "receipt_durable": true,
+    "worker_pending": false,
+    "cleanup_owner_pending": false,
+    "evidence_sha256": {
+      "status.json": "ce80c9cab6e1f06eae5c17ba2d7071357a052b0a76dc8d24ca2cfef7553a6bf6",
+      "independent-verification.json": "1f35dc5b676e19944cd5086225f78e1fb6da66ad716ac6109b0d847a60afbe69",
+      "native-verification-status.json": "76d3294464875534d8e8b9718262a8ab8081cb3a48b248def31a3cd8e5ad152e"
+    },
+    "independent_verification": {
+      "verification": "passed",
+      "scope": "one_own_synthetic_wal_profile_and_backup",
+      "operation_id": "4667347623394b28b3330df4f1d79f09",
+      "review_digest": "de0a247767c7f42d254f17db865569e79b7fc3b3cdc47a1d48cec82eb3b4bd6f",
+      "artifact_id": "104c302b9ade4cfd853d8bad24a19df7",
+      "manifest_sha256": "bacdcc564c9c0662cdaa2fd862a9848138efe26505c35cf85b4de995d5a8df87",
+      "status_file_sha256": "ce80c9cab6e1f06eae5c17ba2d7071357a052b0a76dc8d24ca2cfef7553a6bf6",
+      "before_oracle_sha256": "8318e5113ded41b372a9e4e56b3cf531deb64adff539ba9c6a5b4e46751ba515",
+      "source_members_checked": 5,
+      "source_members_unchanged": true,
+      "source_sqlite_paths_opened": 0,
+      "artifact_resource_hashes": {
+        "state": "9ee7ca0a2aed7b73aecccb1b6a6fef6621e70ac0599ef8278c52ab451256ac31",
+        "memory": "7881e57f76582b33642611a25c612369ccfc837d38e6604026b1eccdc8458ef2",
+        "schedules": "9c6c169e25498439ee444aab4989ce785a14f073b637bfb9d032fe9157d5c9aa",
+        "agents": "7429314e4c04be4a8cdd291c7c67289ebbe21ee0414c1cfb34ef7912a773b9f2",
+        "configuration_portable": "609aa90b07e84ec0901b4f6742de70499c3f0367a3c9243bcbc639c602fd26bd"
+      },
+      "artifact_total_bytes": 159943,
+      "memory": {
+        "notes": 1,
+        "committed_marker_matches": true,
+        "payload_sha256": "d5bf8755f58d912f7c59af7181f9ef9dfa6a296460ddf8ea5f0435da1d3d1d40",
+        "schema_version": 1,
+        "sqlite_integrity": "ok",
+        "snapshot_mode": "standalone_delete"
+      },
+      "receipt_completed_and_durable": true,
+      "workers_or_cleanup_pending": false,
+      "approval_sent_by_verifier": false,
+      "provider_called_by_verifier": false,
+      "historical_human_gesture_independently_authenticated": false,
+      "approval_evidence_source": "operator_handoff_and_native_status_outside_verifier",
+      "read_only_profile_and_backup": true
+    },
+    "confirmed_memory_title": "JARVIS WAL COMMIT TRES memory",
+    "native_verification": {
+      "operation_id": "ddf4fbe1240b40fabcb6218e0822aa5a",
+      "kind": "backup.verify",
+      "phase": "complete",
+      "worker_pending": false,
+      "cleanup_owner_pending": false,
+      "receipt": null,
+      "receipt_durable": false,
+      "result": {
+        "verification": {
+          "artifact_id": "104c302b9ade4cfd853d8bad24a19df7",
+          "authenticity": "not_established",
+          "excluded": [
+            "provider_credentials_and_state",
+            "transport_tokens_sockets_and_locks",
+            "mcp_programs_arguments_and_runtime_homes",
+            "external_and_internal_workspace_files",
+            "external_skill_resources",
+            "temporary_sessions_and_memory",
+            "live_approvals_and_grants",
+            "running_processes_audio_and_network_clients",
+            "host_maintenance_journal"
+          ],
+          "generation": 2,
+          "manifest_sha256": "bacdcc564c9c0662cdaa2fd862a9848138efe26505c35cf85b4de995d5a8df87",
+          "profile_id": "7b32bd35550d4d11b1035d82dcfc4460",
+          "resource_hashes": [
+            [
+              "state",
+              "9ee7ca0a2aed7b73aecccb1b6a6fef6621e70ac0599ef8278c52ab451256ac31"
+            ],
+            [
+              "memory",
+              "7881e57f76582b33642611a25c612369ccfc837d38e6604026b1eccdc8458ef2"
+            ],
+            [
+              "schedules",
+              "9c6c169e25498439ee444aab4989ce785a14f073b637bfb9d032fe9157d5c9aa"
+            ],
+            [
+              "agents",
+              "7429314e4c04be4a8cdd291c7c67289ebbe21ee0414c1cfb34ef7912a773b9f2"
+            ],
+            [
+              "configuration_portable",
+              "609aa90b07e84ec0901b4f6742de70499c3f0367a3c9243bcbc639c602fd26bd"
+            ]
+          ],
+          "root_identity": {
+            "device": "16777230",
+            "inode": "68960473"
+          }
+        },
+        "verification_id": "ef5b6716ec2e4c868a3d1d1f474ebcdf"
+      },
+      "actual_GUI_result_observed": true
+    },
+    "previous_expired_operation": {
+      "operation_id": "00ff92885fcb410495472d100c6a68e6",
+      "phase": "failed",
+      "error_code": "maintenance_review_expired",
+      "receipt": null,
+      "worker_pending": false,
+      "cleanup_owner_pending": false,
+      "target_absent_when_inspected": true,
+      "replacement_started_only_after_no_effect_and_settlement_confirmed": true
+    },
+    "model_inference_requested_for_this_live_test": false,
+    "installed_owner_app_or_old_owner_profile_touched": false,
+    "native_restore_performed_in_this_live_test": false,
+    "independent_verifier_rechecked_after_native_verification": true,
+    "post_native_verification_result_unchanged": true
+  },
   "remaining": "This bounded observation does not qualify every WAL variant, journal, recovery family or the whole Phase A.",
   "native_review_fix": {
     "base_commit": "eb4bdf4b653032c9bcb1fdb69b631b2512529398",
@@ -104,7 +251,19 @@
     "checked_review_digest": "de0a247767c7f42d254f17db865569e79b7fc3b3cdc47a1d48cec82eb3b4bd6f",
     "review_discarded_before_approval_request": true,
     "all_five_original_members_still_unchanged": true,
-    "rendered_AX_XCTest": "not_retained; harness_returned_empty_tree_and_is_not_visual_reproduction_evidence"
+    "rendered_AX_XCTest": "not_retained; harness_returned_empty_tree_and_is_not_visual_reproduction_evidence",
+    "publication_commit": "8c7e7bce5d4e2ea00b878c1f325b74b5b1f40bcc",
+    "publication_gates": {
+      "python_passed": 1982,
+      "swift_passed": 225,
+      "sdist_wheel_smoke_and_development_bundle": "passed",
+      "ci_run": 40218268389,
+      "ci_conclusion": "success",
+      "ci_jobs": {
+        "macos_26": 121244034889,
+        "ubuntu_24": 121244035160
+      }
+    }
   },
   "packaging_publication": {
     "commit": "eb4bdf4b653032c9bcb1fdb69b631b2512529398",

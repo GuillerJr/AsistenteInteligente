@@ -87,7 +87,6 @@
     "owner_death": "Abrupt process death may leave private staging; no automatic reclamation is claimed."
   },
   "remaining": [
-    "Bounded native GUI WAL backup/verification with the real owner decision.",
     "Rollback journals, empty/missing WAL, recovery of corrupt/truncated/older-generation prefixes.",
     "Workspace artifacts, repair, update/rollback, standalone distribution and the remaining Phase A matrix."
   ],
@@ -130,7 +129,17 @@
       "macos_26": "success",
       "ubuntu_24": "success"
     },
-    "owner_backup_approval_pending": true
+    "owner_backup_approval_pending_at_that_publication": true
   },
-  "native_readonly_observation": "PHASE_A_WAL_RECOVERY_LIVE.json"
+  "native_readonly_observation": "PHASE_A_WAL_RECOVERY_LIVE.json",
+  "native_gui_backup_verification": {
+    "status": "observed_with_real_owner_decision_and_synthetic_data",
+    "detail_file": "PHASE_A_WAL_RECOVERY_LIVE.json",
+    "product_commit": "8c7e7bce5d4e2ea00b878c1f325b74b5b1f40bcc",
+    "memory_WAL_only_in_this_GUI_profile": true,
+    "source_members_unchanged": 5,
+    "independent_last_committed_marker_and_artifact_hashes": "passed",
+    "native_backup_and_verify": "complete",
+    "phase_a_complete": false
+  }
 }

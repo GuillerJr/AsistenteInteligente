@@ -93,8 +93,10 @@ declara completa por los tests sintéticos.
 - [x] Añadir captura WAL compatible en copias privadas para respaldo y diagnóstico:
   estado, memoria y tareas; último commit, límites y propietario retenido ante
   limpieza incierta. [Alcance y pruebas](rebuild/PHASE_A_WAL_RECOVERY.md).
-- [ ] Comprobar ese recorrido WAL en la app con aprobación real del dueño,
-  usando únicamente un perfil sintético. Los recorridos IPC no sustituyen ese paso.
+- [x] Comprobar diagnóstico, respaldo y verificación WAL en la app con aprobación
+  real del dueño y un perfil sintético: memoria WAL, estado/tareas DELETE; último
+  commit, hashes y cinco originales intactos verificados independientemente.
+  [Evidencia y límites](rebuild/PHASE_A_WAL_RECOVERY_LIVE.json). No acredita todas las variantes ni restauración GUI WAL.
 - [x] Comprobar diagnóstico y revisión WAL de sólo lectura en la app de prueba,
   con originales intactos; corregir la colisión que ocultaba el aviso de último
   commit y comprobarlo visualmente. [Evidencia y límites](rebuild/PHASE_A_WAL_RECOVERY_LIVE.json).

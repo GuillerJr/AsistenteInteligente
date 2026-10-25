@@ -2,9 +2,9 @@
 
 Primer incremento propio conectado a respaldo y diagnóstico. Su cualificación
 automática usa únicamente datos y autorizaciones sintéticos. Se comprobaron el
-diagnóstico y la revisión en la app; la copia con una decisión real del dueño
-sigue pendiente. No se sustituye la app
-anterior ni se declara completa la fase A. La fase B no ha comenzado.
+diagnóstico, respaldo y verificación en la app con un perfil sintético y aprobación
+real del dueño. No se sustituye la app anterior ni se declara completa la fase A.
+La fase B no ha comenzado.
 
 ## Alcance implementado
 
@@ -119,8 +119,24 @@ su aviso WAL que no cubrían los contratos. Se separaron esas identidades y se
 añadieron dos regresiones estables, incluidas en 225 pruebas Swift aprobadas.
 La app corregida muestra ambas filas y el aviso completo; se comprobó mediante
 accesibilidad y captura visual. El intento de XCTest con AX devolvía una vista
-vacía y se retiró: no se usa como evidencia visual. Las revisiones se descartaron
-antes de pedir aprobación y el respaldo nativo continúa pendiente del dueño.
+vacía y se retiró: no se usa como evidencia visual. Esas revisiones visuales se
+descartaron antes de pedir aprobación.
+
+Después de publicar `8c7e7bc`, con 1982 pruebas Python, 225 Swift, paquetes, bundle
+y CI macOS/Linux aprobados, el dueño autorizó el respaldo desde la app. Una
+solicitud anterior había caducado sin recibo ni destino; se confirmó su cierre
+antes de preparar otra revisión. La operación autorizada terminó con publicación,
+recibo durable y sin recursos pendientes. La verificación nativa posterior también
+terminó correctamente, sin restaurar ni activar otro perfil.
+
+Un verificador independiente comprobó el manifiesto y los hashes de los cinco
+recursos publicados. Deserializó únicamente los bytes del respaldo en SQLite RAM:
+la nota conserva el título del tercer y último commit, su cuerpo y procedencia
+sintéticos, con integridad y relaciones correctas. Los cinco miembros originales
+conservan bytes, identidad, permisos, tamaño, mtime y ctime. El perfil de esta
+comprobación tenía sólo memoria WAL; estado y tareas eran DELETE. El recorrido
+acotado no acredita todas las variantes WAL, una restauración GUI WAL ni
+autenticidad del contenido.
 
 Siguen pendientes los journals de rollback, WAL vacío o sin WAL asociado,
 recuperación de prefijos ante corrupción/reset antiguo, reparaciones, archivos
