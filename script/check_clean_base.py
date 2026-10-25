@@ -84,6 +84,28 @@ def _native_files(root: Path) -> dict[str, bytes]:
     return result
 
 
+def _test_files(root: Path) -> dict[str, bytes]:
+    """All ordinary Python test sources, including non-test-named helpers."""
+    folder = root / "tests"
+    if folder.is_symlink():
+        raise CleanBaseError("las fuentes de pruebas no admiten enlaces")
+    if not folder.exists():
+        return {}
+    if not folder.is_dir():
+        raise CleanBaseError("la raíz de pruebas debe ser un directorio ordinario")
+    result = {}
+    for parent, directories, files in os.walk(folder, followlinks=False):
+        directories[:] = [name for name in directories if name != "__pycache__"]
+        for name in [*directories, *files]:
+            if (Path(parent) / name).is_symlink():
+                raise CleanBaseError("fuente de pruebas enlazada fuera del árbol")
+        for name in files:
+            path = Path(parent) / name
+            if path.suffix == ".py" and " 2." not in name:
+                result[path.relative_to(root).as_posix()] = path.read_bytes()
+    return result
+
+
 class CleanBaseError(ValueError):
     """An active dependency, source or archive violates the base contract."""
 
@@ -159,6 +181,7 @@ def check_tree(root: Path) -> dict:
     if not files:
         raise CleanBaseError("no hay fuentes propias")
     _native_files(root)
+    _test_files(root)
     return {"name": project["name"], "version": project["version"], "source_files": files}
 
 
@@ -226,6 +249,7 @@ def check_sdist(path: Path, root: Path | None = None) -> dict:
     manifest = None
     sources = {}
     native_sources = {}
+    test_sources = {}
     included = set()
     count = 0
     with tarfile.open(path, "r:gz") as archive:
@@ -274,6 +298,8 @@ def check_sdist(path: Path, root: Path | None = None) -> dict:
                     raise CleanBaseError(f"fuente ajena en sdist: {relative}")
                 _check_imports(content, relative.as_posix())
                 sources[relative.as_posix()] = content
+            elif relative.parts[0] == "tests" and relative.suffix == ".py":
+                test_sources[relative.as_posix()] = content
             count += 1
     if len(metadata) != 1:
         raise CleanBaseError("falta metadata única del sdist")
@@ -293,6 +319,8 @@ def check_sdist(path: Path, root: Path | None = None) -> dict:
             raise CleanBaseError("el sdist no corresponde al árbol cualificado")
         if native_sources != _native_files(root):
             raise CleanBaseError("el sdist no corresponde a las fuentes nativas propias")
+        if test_sources != _test_files(root):
+            raise CleanBaseError("el sdist no corresponde a las fuentes Python de pruebas")
     return {"sdist": path.name, "files": count}
 
 

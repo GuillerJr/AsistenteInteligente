@@ -90,5 +90,38 @@
     "Bounded native GUI WAL backup/verification with the real owner decision.",
     "Rollback journals, empty/missing WAL, recovery of corrupt/truncated/older-generation prefixes.",
     "Workspace artifacts, repair, update/rollback, standalone distribution and the remaining Phase A matrix."
-  ]
+  ],
+  "packaging_followup": {
+    "problem_reproduced": "The source archive included WAL tests but omitted their wal_fixture.py helper.",
+    "fix": "Include every ordinary Python test source and compare its exact archive path and bytes with the qualified tree.",
+    "regression_cases": 2,
+    "focused_guard_tests_passed": 36,
+    "extracted_archive_wal_tests_passed": 66,
+    "extracted_archive_wal_test_seconds": 8.79,
+    "extracted_imports_verified_inside_archive_tree": true,
+    "artifact_sha256": "ae254f16ae18e31a52813355a2ae9140d96d755d30df17a7de054bb3a978cf20",
+    "artifact_python_test_sources": 65,
+    "artifact_log_sha256": "72af1794e5da4be299a81093dae1654e1826688df526d85a8f8741b9776c0e93",
+    "source_sha256": {
+      "MANIFEST.in": "3996a4e72e71ef399f7d81a5a215b5980eb9c045bdaa0a5e3f0013688319cad1",
+      "script/check_clean_base.py": "48c7d4f78f2dfc7ec5b90c49e3261fb559471c0e916383d2c32335c1eb9423ea",
+      "tests/test_clean_base.py": "c645f80c8cde91e3792d458e2792792de5be75f71682c2b2d213fa8dcf33f354"
+    },
+    "runtime_or_native_sources_changed": false,
+    "complete_gates": "required_at_publication_of_this_followup_not_recorded_as_passed_here"
+  },
+  "implementation_publication": {
+    "commit": "8bd1641c41cd2b07b1299216a07d2e0686b9daa3",
+    "pre_commit_python_passed": 1980,
+    "pre_push_python_passed": 1980,
+    "pre_push_swift_passed": 223,
+    "pre_push_sdist_wheel_smoke_and_native_bundle": "passed",
+    "ci_run": 40215435198,
+    "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40215435198",
+    "ci_jobs": {
+      "macos_26": "success",
+      "ubuntu_24": "success"
+    },
+    "owner_backup_approval_pending": true
+  }
 }

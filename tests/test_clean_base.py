@@ -21,10 +21,16 @@ SPEC.loader.exec_module(guard)
 
 def fixture_tree(root):
     (root / "src/jarvis_core").mkdir(parents=True)
+    (root / "tests/support").mkdir(parents=True)
     (root / "pyproject.toml").write_text(
         '[project]\nname="jarvis-core"\nversion="1.0.0"\ndependencies=[]\n',
     )
     (root / "src/jarvis_core/__init__.py").write_text("import asyncio\n")
+    (root / "tests/support/fixture_values.py").write_text("MARKER = 'qualified fixture'\n")
+    (root / "tests/test_fixture.py").write_text(
+        "from support.fixture_values import MARKER\n\n"
+        "def test_marker():\n    assert MARKER == 'qualified fixture'\n",
+    )
     return root
 
 
@@ -155,6 +161,8 @@ def native_sdist(path, root, *, omit=None, overrides=None):
     entries["pyproject.toml"] = (root / "pyproject.toml").read_bytes()
     entries.update({p.relative_to(root).as_posix(): p.read_bytes()
                     for p in root.rglob("*.swift")})
+    entries.update({p.relative_to(root).as_posix(): p.read_bytes()
+                    for p in (root / "tests").rglob("*.py")})
     entries["src/jarvis_core/__init__.py"] = (root / "src/jarvis_core/__init__.py").read_bytes()
     entries.update(overrides or {})
     if omit:
@@ -165,6 +173,24 @@ def native_sdist(path, root, *, omit=None, overrides=None):
             item.size = len(content)
             archive.addfile(item, io.BytesIO(content))
     return path
+
+
+def test_sdist_rejects_missing_python_helper_required_by_packaged_tests(tmp_path):
+    root = fixture_tree(tmp_path / "project")
+    helper = "tests/support/fixture_values.py"
+    assert guard.check_sdist(native_sdist(tmp_path / "complete.tar.gz", root), root)["files"]
+    incomplete = native_sdist(tmp_path / "missing-helper.tar.gz", root, omit=helper)
+    with pytest.raises(guard.CleanBaseError, match="pruebas"):
+        guard.check_sdist(incomplete, root)
+
+
+def test_sdist_rejects_stale_python_test_helper_instead_of_qualifying_other_bytes(tmp_path):
+    root = fixture_tree(tmp_path / "project")
+    helper = "tests/support/fixture_values.py"
+    stale = native_sdist(tmp_path / "stale-helper.tar.gz", root,
+                         overrides={helper: b"MARKER = 'previous fixture'\n"})
+    with pytest.raises(guard.CleanBaseError, match="pruebas"):
+        guard.check_sdist(stale, root)
 
 
 def test_sdist_carries_exact_own_native_source_and_still_rejects_retired_swift(tmp_path):

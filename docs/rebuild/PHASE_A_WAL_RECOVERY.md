@@ -98,6 +98,15 @@ recorrido ejercita el Store real con limpieza incierta. No llaman al proveedor
 ni inicializan stores de las fuentes para recuperarlas. Las aprobaciones de esos
 recorridos son de fixture, nunca decisiones del dueño.
 
+La publicación `8bd1641` aprobó pre-commit, pre-push, paquetes, bundle nativo y CI
+en macOS y Linux. Un control posterior detectó que el sdist incluía los tests WAL
+pero omitía su helper. El manifiesto ahora incorpora todas las fuentes Python de
+pruebas y el guard compara sus rutas y bytes exactos con el árbol cualificado.
+Dos regresiones reproducen la omisión y un helper obsoleto: antes fallaban y
+después pasaron junto a los otros 34 casos del guard. Las 66 pruebas WAL también
+pasaron desde el sdist extraído, verificando que módulo y helper procedían de
+ese árbol; no cambiaron las fuentes del runtime ni las nativas.
+
 Siguen pendientes los journals de rollback, WAL vacío o sin WAL asociado,
 recuperación de prefijos ante corrupción/reset antiguo, reparaciones, archivos
 del workspace, reclamación tras muerte abrupta y la matriz real completa. Esas
