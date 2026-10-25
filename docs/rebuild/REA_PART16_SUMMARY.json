@@ -1,0 +1,278 @@
+{
+  "schema_version": 1,
+  "batch": "OC-16",
+  "topic": "Gateway shutdown joins, budgets and CLI child-parent custody",
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "parent_evidence_id": "ev_d08d131d4eb07139f1928bd47a2da1d05578ccdffcc9abca8a585a80033aa697",
+  "summary_evidence_id": "ev_2931ab60c7c215da010ffc0125826f4decc72b6e15b0630319c2b40b622fba29",
+  "partition_sha256": "f7f9bb10e9aee5a0dec2a530849c7923bda749acc61b6305a0908280a01fe1c9",
+  "statistics": {
+    "relevant_files": 5,
+    "nested_asar_containers": 0,
+    "text_bytes_read": 189904,
+    "invalid_utf8_files": 0,
+    "parsed_javascript_files": 4,
+    "skipped_javascript_files": 0,
+    "visited_ast_nodes": 3967,
+    "findings": 110,
+    "modules": 0,
+    "parse_failures": 0
+  },
+  "source_selection": {
+    "requested_paths": [
+      "package.json",
+      "cli-parent-lifetime.mjs",
+      "gateway-shutdown-budget.mjs",
+      "src/gateway/server-close.ts",
+      "src/gateway/server-shutdown.ts"
+    ],
+    "unselected_files": 0
+  },
+  "coverage": {
+    "application": {
+      "status": "partial",
+      "truncated": false,
+      "omitted_count": null,
+      "limits": []
+    },
+    "semantic": {
+      "status": "unknown",
+      "truncated": false,
+      "omitted_nodes": 0,
+      "omitted_relations": 0,
+      "limits": [],
+      "families": [
+        {
+          "family": "boundary",
+          "status": "partial",
+          "retained_relations": 5,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "call-flow",
+          "status": "partial",
+          "retained_relations": 56,
+          "omitted_relations": 0,
+          "unknown_count": 255
+        },
+        {
+          "family": "child-process",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "closure",
+          "status": "partial",
+          "retained_relations": 248,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "configuration",
+          "status": "partial",
+          "retained_relations": 2,
+          "omitted_relations": 0,
+          "unknown_count": 2
+        },
+        {
+          "family": "data-flow",
+          "status": "partial",
+          "retained_relations": 1670,
+          "omitted_relations": 0,
+          "unknown_count": 210
+        },
+        {
+          "family": "event",
+          "status": "partial",
+          "retained_relations": 2,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "object-flow",
+          "status": "partial",
+          "retained_relations": 181,
+          "omitted_relations": 0,
+          "unknown_count": 242
+        },
+        {
+          "family": "promise-ownership",
+          "status": "partial",
+          "retained_relations": 107,
+          "omitted_relations": 0,
+          "unknown_count": 84
+        },
+        {
+          "family": "request",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "resource-lifecycle",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "timer",
+          "status": "partial",
+          "retained_relations": 1,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        }
+      ]
+    },
+    "application_unknowns": 0,
+    "semantic_unknowns": 793
+  },
+  "runtime_executed": false,
+  "input_kind": "inert_source_partition_not_observed_runtime",
+  "selected_static_observations": [
+    {
+      "name": "requestCliParentTermination",
+      "module": "cli-parent-lifetime.mjs",
+      "node_id": "jag_node_28f6c6339fd2833464d023436dd59a633d2c60c94d289d6f07ae45adeb4da11e",
+      "observation_id": "jag_observation_0f795baacb0d27919d4d7e1a164dd44a556102dcdac9220f26b778afaa2974b2",
+      "source_range": {
+        "kind": "source-range",
+        "source": "cli-parent-lifetime.mjs",
+        "start": {
+          "line": 25,
+          "column": 7
+        },
+        "end": {
+          "line": 39,
+          "column": 1
+        }
+      },
+      "view_evidence_id": "ev_92c91d111faa042f65cbe230dd8a2e703c4e08dd315e4713e027706ef8283386"
+    },
+    {
+      "name": "prepareGatewayClose",
+      "module": "src/gateway/server-close.ts",
+      "node_id": "jag_node_55b5b7aaf1a1694fd07739f95defeb98a01f676fdb883daf8aa8c9fdf60072f0",
+      "observation_id": "jag_observation_5b228f3f129dad3220f2703127cc9218c6a20bd619e394dde8a55b8f421bfee8",
+      "source_range": {
+        "kind": "source-range",
+        "source": "src/gateway/server-close.ts",
+        "start": {
+          "line": 216,
+          "column": 7
+        },
+        "end": {
+          "line": 308,
+          "column": 1
+        }
+      },
+      "view_evidence_id": "ev_92c91d111faa042f65cbe230dd8a2e703c4e08dd315e4713e027706ef8283386"
+    },
+    {
+      "name": "runGatewayCloseSteps",
+      "module": "src/gateway/server-shutdown.ts",
+      "node_id": "jag_node_62533b64d7fa3d529b66f568b657b16f3dfbd1c33c521ac0c33d78360b57648d",
+      "observation_id": "jag_observation_77513c281321b346475c0ede28e91eafc8171f0f81c9d1ab180c21d4c79e37c5",
+      "source_range": {
+        "kind": "source-range",
+        "source": "src/gateway/server-shutdown.ts",
+        "start": {
+          "line": 30,
+          "column": 7
+        },
+        "end": {
+          "line": 87,
+          "column": 1
+        }
+      },
+      "view_evidence_id": "ev_92c91d111faa042f65cbe230dd8a2e703c4e08dd315e4713e027706ef8283386"
+    },
+    {
+      "name": "watchCliRespawnParent",
+      "module": "cli-parent-lifetime.mjs",
+      "node_id": "jag_node_7264e8be91c6ca1cbd551184a4de4c7137e26923df802a54a18ab81926d0fe34",
+      "observation_id": "jag_observation_c6c07bd3c9970e11579d9c83864d49685810c4ef01001f1a71084b6f1503b40c",
+      "source_range": {
+        "kind": "source-range",
+        "source": "cli-parent-lifetime.mjs",
+        "start": {
+          "line": 41,
+          "column": 7
+        },
+        "end": {
+          "line": 52,
+          "column": 1
+        }
+      },
+      "view_evidence_id": "ev_92c91d111faa042f65cbe230dd8a2e703c4e08dd315e4713e027706ef8283386"
+    },
+    {
+      "name": "completeGatewayClose",
+      "module": "src/gateway/server-close.ts",
+      "node_id": "jag_node_837da1b6d0f063e10f7f1bda468ddc3e65284496300d7314f6ebc0e5e326b552",
+      "observation_id": "jag_observation_39d56f49592ac4b71212d19fbdc9202ab6a77ecb900381af2013df1813a6b5a0",
+      "source_range": {
+        "kind": "source-range",
+        "source": "src/gateway/server-close.ts",
+        "start": {
+          "line": 310,
+          "column": 7
+        },
+        "end": {
+          "line": 322,
+          "column": 1
+        }
+      },
+      "view_evidence_id": "ev_2ffd005c44b6aa07e46e838bc3953a623de9dfd00be19fead2dfea80597c680d"
+    },
+    {
+      "name": "resolveShutdownReserveMs",
+      "module": "gateway-shutdown-budget.mjs",
+      "node_id": "jag_node_ba9f709563ca6d9b126b0022ae17e3ac033100ec9d3a3c628895975287864b10",
+      "observation_id": "jag_observation_9fbbd84302b2dc4180d0d8951e326d03263ae4c69418d65b5ca5f66dee5d2651",
+      "source_range": {
+        "kind": "source-range",
+        "source": "gateway-shutdown-budget.mjs",
+        "start": {
+          "line": 31,
+          "column": 7
+        },
+        "end": {
+          "line": 38,
+          "column": 2
+        }
+      },
+      "view_evidence_id": "ev_2ffd005c44b6aa07e46e838bc3953a623de9dfd00be19fead2dfea80597c680d"
+    }
+  ],
+  "limitations": [
+    "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+    "Caller-selected source analysis leaves 0 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+    "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+    "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+    "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+    "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+    "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+    "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+    "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+    "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+    "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+    "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+    "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+    "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+    "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+    "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+    "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+    "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+  ],
+  "export": {
+    "bytes": 5005278,
+    "sha256": "1b5f1761f5516f02a02cbf6dcef3c35ea12c30db07b2c869b406350d2f4f635f",
+    "gzip_bytes": 762687,
+    "gzip_sha256": "4f74e998bbbafec19ddf5cf690e2e3a535c74e953a4d88aca51f8c6816c04888"
+  }
+}

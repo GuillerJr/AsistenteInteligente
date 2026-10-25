@@ -1,0 +1,82 @@
+{
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "reference_tree": "197c70097790e30087bbef323b0f2cc5148ab9b7",
+  "partition_sha256": "f7f9bb10e9aee5a0dec2a530849c7923bda749acc61b6305a0908280a01fe1c9",
+  "source_root_role": "private_inert_reference_only_not_product_source",
+  "input_artifact_kind": "source_copy_partition_not_observed_shipped_runtime",
+  "source_copy_root": "/private/tmp/jarvis-openclaw-reference-20261024/part16/analysis-input",
+  "agent_modified_original_clone": false,
+  "original_clone_content_read": false,
+  "reference_executed": false,
+  "files": [
+    {
+      "path": "cli-parent-lifetime.mjs",
+      "bytes": 1926,
+      "sha256": "ea3e4018367731671600be70437f44ccac3a767c6d6db6310951cb0c70ab3825",
+      "git_blob": "c6764bb78193a43fa3b60bfe46d2532060a60152",
+      "selected_for_analysis": true,
+      "source_url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/cli-parent-lifetime.mjs"
+    },
+    {
+      "path": "gateway-shutdown-budget.mjs",
+      "bytes": 3314,
+      "sha256": "02757141fd71a0e03ee885d952edbcd664395a420b26c6b7ba596529336baa3a",
+      "git_blob": "d32df227cd225f4d6e75afbeddc9b14a0a4a5cbd",
+      "selected_for_analysis": true,
+      "source_url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/gateway-shutdown-budget.mjs"
+    },
+    {
+      "path": "src/gateway/server-close.ts",
+      "bytes": 27573,
+      "sha256": "1e1cbde31e0e6c95fcdddf423c7535bd5dc64db76059c9b037e912db76550625",
+      "git_blob": "7d579c6f40580d2d1f90d3910bea7d969fffac60",
+      "selected_for_analysis": true,
+      "source_url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/gateway/server-close.ts"
+    },
+    {
+      "path": "src/gateway/server-shutdown.ts",
+      "bytes": 4066,
+      "sha256": "5c8f360dc28660a6c4f0984adb3712690e69ce5510079b29ac485351bc29028f",
+      "git_blob": "5f1aeb1a90d4f83b3e533c9fe024042082232020",
+      "selected_for_analysis": true,
+      "source_url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/gateway/server-shutdown.ts"
+    },
+    {
+      "path": "package.json",
+      "bytes": 153025,
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d",
+      "selected_for_analysis": true,
+      "reused_context_from": "part15_verified_source"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1076,
+      "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+      "git_blob": "ed064819ab537575d0cad902f7e5af4a3488b1d0",
+      "selected_for_analysis": false,
+      "reused_context_from": "part15_verified_source"
+    }
+  ],
+  "acquisition_metadata_sha256": "03c1c15fdb02c66a5d7d9c2bc710a98b7848dc2b10a93759ae566802ba98d2e9",
+  "acquisition_method": "Official GitHub blob GET by SHA, trees canonically recomputed; verified inert context reused. No original clone read or execution.",
+  "git_tree_chain_verified": true,
+  "canonical_tree_hashes_recomputed": true,
+  "source_git_blob_hashes_recomputed": true,
+  "verified_tree_chain": [
+    {
+      "role": "Root",
+      "git_tree_sha1": "197c70097790e30087bbef323b0f2cc5148ab9b7"
+    },
+    {
+      "role": "Src",
+      "git_tree_sha1": "2016fce75d48ab2afbf221cf2c00b8b3b70018b7"
+    },
+    {
+      "role": "Gateway",
+      "git_tree_sha1": "d9cd47f49652a6b07a24c053fb0aea3c547f08fa"
+    }
+  ],
+  "additional_metadata_only_tree": "Daemon subtree was fetched and hash-verified for selection, without selecting or reading any daemon source body.",
+  "raw_export_copied_into_repository": false
+}

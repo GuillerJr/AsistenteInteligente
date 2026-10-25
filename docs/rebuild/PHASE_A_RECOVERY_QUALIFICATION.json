@@ -124,12 +124,21 @@
       "existing_host_cleanup_preserved": true,
       "activation_implemented": false
     },
-    "full_automated_gates": "required_by_commit_push_hooks",
+    "full_automated_gates": "passed_for_b8ce4bc",
     "limits": [
       "Cold DELETE only; cold WAL and any sidecar remain blocked.",
       "Read-only native diagnosis and review do not qualify a new nonempty native backup/restore roundtrip.",
       "No new provider inference or real tool approval requested for this read-only flow."
     ],
-    "recorded_on": "2026-10-25"
+    "recorded_on": "2026-10-25",
+    "product_checkpoint": "b8ce4bc12383578e322c532e54d1f0cd30447136",
+    "final_automated": {
+      "python_passed": 1585,
+      "native_passed": 162,
+      "lint_bytecode_packages": "passed",
+      "ci_run": 40164224381,
+      "ubuntu_24_04": "success",
+      "macos_26": "success"
+    }
   }
 }

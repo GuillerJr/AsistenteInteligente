@@ -13786,8 +13786,8 @@
     ]
   },
   "progress_snapshot": {
-    "date": "2026-10-24",
-    "revision_scope": "Continuación de canales, voz local, web y cierre de recursos. Snapshot anterior: 1230 pruebas Python y 91 Swift; transporte Telegram 2 + 2 → 4 observado sin herramientas. Ajustes posteriores nativos y cierre web exigen nueva cualificación. No se inicia B ni se cierra ninguna familia.",
+    "date": "2026-10-25",
+    "revision_scope": "Checkpoint b8ce4bc: 1585 pruebas Python y 162 nativas, paquetes y CI Ubuntu/macOS aprobados. Respaldo/verificación/staging reales autorizados sobre perfil sintético, SQLite fría DELETE y guard de arranque restaurado acreditados de forma acotada. REA 16 amplía cierre/custodia. Ninguna familia completa ni fase B iniciada.",
     "complete_capability_count": 0,
     "complete_reference_parity": false,
     "authenticated_inference_verified": true,
@@ -14192,7 +14192,8 @@
           "src/jarvis_core/recovery_fs.py",
           "src/jarvis_core/recovery_sqlite.py",
           "src/jarvis_core/doctor.py",
-          "native/JarvisDesktop/Sources/JarvisApp/Views/MaintenanceView.swift"
+          "native/JarvisDesktop/Sources/JarvisApp/Views/MaintenanceView.swift",
+          "src/jarvis_core/cold_sqlite.py"
         ],
         "tests": [
           "tests/test_host_authority.py",
@@ -14204,7 +14205,10 @@
           "tests/test_host_profile.py",
           "tests/test_maintenance_integration.py",
           "tests/test_maintenance_journal.py",
-          "native/JarvisDesktop/Tests/DesktopCoreTests/MaintenanceTests.swift"
+          "native/JarvisDesktop/Tests/DesktopCoreTests/MaintenanceTests.swift",
+          "tests/test_cold_sqlite.py",
+          "tests/test_restored_profile_bootstrap.py",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/MaintenanceIntegrationTests.swift"
         ],
         "capability_ids": [
           "A-01",
@@ -14214,16 +14218,17 @@
           "A-70",
           "A-71"
         ],
-        "verified_scope": "Contratos propios y pruebas sintéticas de SQLite real, autoridad central y workers: snapshot bajo barrera, verificación por identidad/hash, staging nuevo desarmado, diagnóstico de solo lectura y recibos inciertos sin replay. Integración final y recorrido nativo pendientes de registrar.",
-        "remaining": "Exportación del host de fuentes frías, archivos/artefactos del workspace, activación y asociación de memoria/canales, reparación explícita, actualización/rollback, distribución y cualificación real. No cierra ninguna familia ni inicia B.",
-        "detail_file": "PHASE_A_RECOVERY.md"
+        "verified_scope": "Checkpoint b8ce4bc con 1585 Python / 162 Swift y CI aprobados; respaldo, verificación y staging sintéticos desde la app con decisiones reales del dueño. Captura/diagnóstico frío DELETE y rechazo de bootstrap restaurado; los tres SQLite de otro recorrido nativo no vacío conservaron bytes/metadatos. Alcances y demora inicial no atribuida registrados por separado.",
+        "remaining": "WAL/journals fríos, archivos/artefactos de workspace, activación explícita y asociación de memoria/canales, reparación, actualización/rollback, distribución y cualificación completa. No cierra familias ni inicia B.",
+        "detail_file": "PHASE_A_RECOVERY.md",
+        "qualification_file": "PHASE_A_RECOVERY_QUALIFICATION.json"
       }
     ],
-    "detail_file": "PHASE_A_CHANNELS_VOICE_WEB.md",
+    "detail_file": "PHASE_A_RECOVERY.md",
     "rea": {
       "source_file": "REA_COVERAGE.json",
-      "static_batches": 15,
-      "unique_typescript_paths_in_completed_batches": 60,
+      "static_batches": 16,
+      "unique_typescript_paths_in_completed_batches": 62,
       "global_status": "partial",
       "runtime_executed": false,
       "semantic_unknowns_remain": true,
@@ -14242,13 +14247,16 @@
         "OC-12",
         "OC-13",
         "OC-14",
-        "OC-15"
+        "OC-15",
+        "OC-16"
       ],
-      "limits": "Contar rutas examinadas no significa comprensión semántica ni revisión global. IDs y evidencias completos en REA_COVERAGE.json/provenance."
+      "limits": "Contar rutas examinadas no significa comprensión semántica ni revisión global. IDs y evidencias completos en REA_COVERAGE.json/provenance.",
+      "unique_ts_js_paths_in_completed_batches": 64,
+      "source_count_note": "El contador TypeScript conserva su sentido estricto; el total TS/JS incluye también MJS/CJS."
     },
-    "previous_detail_file": "PHASE_A_MANAGEMENT.md",
-    "qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json",
-    "latest_qualification_status": "129native_1234python_bounded_live_cases_passed_ci_pending_phase_a_open"
+    "previous_detail_file": "PHASE_A_CHANNELS_VOICE_WEB.md",
+    "qualification_file": "PHASE_A_RECOVERY_QUALIFICATION.json",
+    "latest_qualification_status": "162native_1585python_ci_macos_linux_passed_bounded_recovery_live_phase_a_open"
   },
   "target_decisions": {
     "date": "2026-10-24",

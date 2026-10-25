@@ -28,6 +28,8 @@ La conexión elegida es Codex con ChatGPT por cliente/acceso oficiales. NVIDIA e
 
 El [recorrido inicial](BASELINE_VERTICAL_SLICE.md) acreditó conversación autenticada con Codex, cancelación y reinicio. El [avance conectado posterior](PHASE_A_TOOLS_MEMORY_MCP.md) añadió archivos, autoridad por operación, memoria léxica y MCP stdio. La [continuación de gestión](PHASE_A_MANAGEMENT.md) añade procesos aislados, agentes, skills, programador y ramas. La [continuación de canales, voz y web](PHASE_A_CHANNELS_VOICE_WEB.md) añade Telegram privado, vinculación explícita, voz local y lectura HTTPS; su cualificación posterior a los últimos ajustes sigue pendiente. **Ninguna de las 80 familias completas se declara cerrada.** La app anterior instalada no se reemplazó.
 
+El [bloque de recuperación](PHASE_A_RECOVERY.md) registra el checkpoint `b8ce4bc`: 1585 pruebas Python, 162 nativas y CI en Ubuntu/macOS aprobados. Sus recorridos reales usan datos sintéticos y aprobaciones del dueño. REA 16 amplía la investigación de cierre y custodia; no cierra ninguna familia ni inicia la fase B.
+
 | Componente | Evidencia propia y límites |
 | --- | --- |
 | Estado SQLite y recuperación propios | Persistencia SQLite real con datos sintéticos: sesiones/mensajes/runs/eventos, transacciones, temporales RAM, límites y recuperación interrupted/unknown sin repetir efectos. Pendiente: No memoria semántica, PostgreSQL, cifrado integral certificado, sharing/múltiples usuarios, ramas/rewind completos ni migración de datos del dueño. |

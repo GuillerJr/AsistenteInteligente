@@ -64,8 +64,8 @@ Estos recorridos acotados no cierran todas las capacidades del canal, voz o web.
   HTTP 200; contenido externo no verificado, sin JavaScript ni enlaces adicionales.
 - [ ] Registrar controles finales de cierre Codex/MCP/Telegram/scheduler/RPC,
   reteniendo Stores y propietarios ante incertidumbre y sin reconexión/replay.
-- [ ] Completar la investigación semántica pendiente: REA 13–15 amplían respaldo,
-  snapshots y actualización; quince lotes y 60 rutas TS/JS no cierran la matriz ni toda la referencia.
+- [ ] Completar la investigación semántica pendiente: REA 13–16 amplían respaldo,
+  snapshots, actualización y cierre; dieciséis lotes y 64 rutas TS/JS no cierran la matriz ni toda la referencia.
 - [ ] Repetir Python/Swift/paquete/CI tras los últimos ajustes y registrar identidades
   finales. No sustituir la instalación anterior por un bundle de desarrollo.
 

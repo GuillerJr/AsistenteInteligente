@@ -451,3 +451,46 @@ El export completo permanece en la ruta temporal registrada, fuera del repositor
 Con OC-15 se alcanzan quince lotes y **60 rutas TS/JS únicas**. La investigación
 sigue parcial; este lote no cierra distribución, actualización, rollback ni otra
 familia de la fase A.
+
+## OC-16 — cierre del gateway y custodia del proceso hijo
+
+Se analizaron cuatro fuentes nuevas del mismo pin, como texto inerte, con
+`package.json` como contexto. Las identidades y observaciones seleccionadas están
+en [provenance](REA_PART16_PROVENANCE.json) y [summary](REA_PART16_SUMMARY.json).
+No se ejecutó OpenClaw ni se modificó su clon. El lote registra 3967 nodos AST,
+110 hallazgos, cero errores de parseo y **793 incógnitas semánticas**. Agotar las
+dos páginas de observaciones estáticas no elimina esas incógnitas ni prueba comportamiento vivo.
+
+El [presupuesto de cierre](https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/gateway-shutdown-budget.mjs)
+separa tiempo de drenaje, reserva de limpieza y margen del supervisor. La
+[custodia CLI](https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/cli-parent-lifetime.mjs#L41)
+requiere una relación de lanzamiento explícita; consume sus marcadores antes de
+que los hereden trabajadores desligados y atiende la desconexión del canal.
+La terminación forzada prevista por esa fuente no demuestra limpieza satisfactoria.
+Jarvis conserva sus propios límites y pruebas de identidad, sin copiar constantes
+ni código de la referencia.
+
+La [secuencia de cierre](https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/gateway/server-shutdown.ts#L30)
+distingue uniones obligatorias de errores que pueden agregarse: un fallo requerido
+detiene el avance hacia dependencias posteriores. El mismo archivo conserva por
+separado error de arranque y error de limpieza. Eso es una estructura observada;
+no acredita por sí sola todos los propietarios de las funciones importadas.
+
+La [preparación](https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/gateway/server-close.ts#L216)
+invoca una barrera de escrituras de sesión antes de su primera espera y registra trabajo de
+limpieza bajo un propietario propio. El retiro posterior sigue esperando trabajo
+seguido aunque haya consumido su gracia inicial, y distingue advertencias de
+fallos de recursos. La coordinación completa con registros, memoria y otros
+gateways depende de helpers fuera del lote; no se da por verificada.
+
+Contrato propio derivado para el cambio de perfil: terminar un proceso o agotar
+una gracia no prueba cierre correcto. La app debe conservar el propietario ante
+incertidumbre y no iniciar otro perfil hasta acreditar el cierre previsto. El
+nuevo perfil necesita objetos de sesión, clientes y contexto independientes;
+una respuesta tardía no puede aplicarse sólo porque coincida un ID de chat.
+Son criterios de implementación y pruebas, no una declaración de handoff ya listo.
+
+Con OC-16 el registro alcanza **16 lotes y 64 rutas TS/JS únicas**, incluidas dos
+MJS. La cobertura global y semántica sigue parcial. El export completo de cinco
+registros permanece fuera del repositorio; no se distribuyen los cuerpos de la
+referencia dentro de Jarvis.
