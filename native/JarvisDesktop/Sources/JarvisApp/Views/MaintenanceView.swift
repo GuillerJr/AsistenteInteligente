@@ -4,7 +4,6 @@ import SwiftUI
 struct MaintenanceView: View {
     @Bindable var maintenance: MaintenanceStore
     let mayBegin: Bool
-    @State private var viewID = UUID()
     @State private var backupParent = ""
     @State private var backupName = "jarvis-copia"
     @State private var backupPath = ""
@@ -75,8 +74,6 @@ struct MaintenanceView: View {
         }
         .formStyle(.grouped)
         .task { await maintenance.refresh() }
-        .onAppear { maintenance.setVisible(viewID, visible: true) }
-        .onDisappear { maintenance.setVisible(viewID, visible: false) }
     }
 
     @ViewBuilder private func reviewSection(_ review: MaintenanceReview) -> some View {

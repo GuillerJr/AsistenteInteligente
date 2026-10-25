@@ -1,12 +1,17 @@
+import DesktopCore
 import SwiftUI
 
-struct SettingsView: View {
+@MainActor struct SettingsView: View {
     let store: ChatStore
     let delegate: AppDelegate
     @AppStorage("jarvis.openShortcut") private var shortcut = "commandShiftJ"
+    @State private var selectedTab = "general"
+    @State private var windowVisible = false
+    @State private var maintenanceViewID = UUID()
+    @State private var visibilityDelivery = WindowVisibilityDelivery()
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
         Form {
             Section("Escritorio") {
                 Picker("Abrir Jarvis", selection: $shortcut) {
@@ -32,8 +37,22 @@ struct SettingsView: View {
                 Text("Las capacidades disponibles se consultan en «Herramientas» y «Memoria». La paridad completa de la base permanece en construcción.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-        }.formStyle(.grouped).tabItem { Label("General", systemImage: "gearshape") }
-            MaintenanceView(maintenance: store.maintenance, mayBegin: store.ready && !store.busy && store.activeRunID == nil && !store.voice.canStopDictation).tabItem { Label("Mantenimiento", systemImage: "externaldrive.badge.timemachine") }
+        }.formStyle(.grouped).tabItem { Label("General", systemImage: "gearshape") }.tag("general")
+            MaintenanceView(maintenance: store.maintenance, mayBegin: store.ready && !store.busy && store.activeRunID == nil && !store.voice.canStopDictation).tabItem { Label("Mantenimiento", systemImage: "externaldrive.badge.timemachine") }.tag("maintenance")
         }.frame(width: 760, height: 680)
+            .background(SettingsWindowVisibilityBridge(delivery: visibilityDelivery) { visible in
+                windowVisible = visible
+                // Use the delivered value directly: teardown can outlive the
+                // SwiftUI storage while still needing to retire this owner.
+                store.maintenance.setVisible(maintenanceViewID, visible: visible && selectedTab == "maintenance")
+            })
+            .onChange(of: selectedTab) { _, _ in updateMaintenanceVisibility() }
+            .onDisappear {
+                windowVisible = false
+                store.maintenance.setVisible(maintenanceViewID, visible: false)
+            }
+    }
+    private func updateMaintenanceVisibility() {
+        store.maintenance.setVisible(maintenanceViewID, visible: windowVisible && selectedTab == "maintenance")
     }
 }

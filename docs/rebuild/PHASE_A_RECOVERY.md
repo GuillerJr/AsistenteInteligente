@@ -102,6 +102,11 @@ sustituyen una decisión real del dueño en la app.
 Los controles locales de Python, Swift, lint, bytecode y paquetes están aprobados.
 El recorrido Swift → RPC → servicio → SQLite acredita diagnóstico, respaldo,
 verificación y staging restaurado con decisiones sintéticas; no usa proveedor.
+En la app se observó el diagnóstico del perfil sintético: almacenes y referencias
+correctos, con skills ausentes. Se reprodujo y corrigió la retención de una revisión
+al cerrar Ajustes: el ciclo real cerrar/reabrir libera el chat, conserva su borrador
+sin enviarlo y descarta la revisión local anterior. Los eventos se ligan a la ventana
+concreta; el cierre conserva los trabajos o respuestas que siguen sin confirmar.
 Quedan los recorridos desde la app con decisiones reales del dueño. También siguen pendientes la exportación del host de fuentes frías,
 incluidas WAL, la inclusión de archivos y
 artefactos del workspace, activación/reconciliación de memoria y canales, reparación
