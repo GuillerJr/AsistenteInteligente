@@ -125,8 +125,15 @@ vacías; este recorrido no acredita una reconciliación no vacía.
 
 El checkpoint de producto `1d378a6358b8a339777ad72062f5ff6524a398f3` pasó pre-commit,
 pre-push y [CI en Ubuntu/macOS](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40167465783).
-Faltan reinicio real posterior sin cuenta y los casos reales de denegación,
-cancelación y resultado incierto. Los fixtures cubren estos estados, con límites
+Después se cerraron la app y su servicio y se abrió el mismo destino sintético
+con las cinco restricciones exactas, sin override de proveedor. Volvió a mostrar
+«Perfil local abierto», con borrador vacío y envío deshabilitado. En esa segunda
+observación no había hijos del servicio, directorio de proveedor ni elección
+local; los hashes de los controles seguían iguales y el workspace estaba vacío.
+No se leyeron credenciales ni se abrió el original SQLite desde el auditor.
+El registro de evidencia `b037b23` pasó también CI en macOS y Linux.
+
+Faltan los casos reales de denegación, cancelación y resultado incierto. Los fixtures cubren estos estados, con límites
 separados de este recorrido nativo del dueño.
 Los borradores duraderos anteriores se retienen sólo en RAM durante esta sesión;
 no hay selector para recuperarlos. Chats y borradores temporales no se trasladan.

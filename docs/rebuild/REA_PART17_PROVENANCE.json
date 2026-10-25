@@ -1,0 +1,103 @@
+{
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "reference_tree": "197c70097790e30087bbef323b0f2cc5148ab9b7",
+  "source_provider": "official GitHub Git-tree/blob GET, independently hashed",
+  "files": [
+    {
+      "path": "packages/memory-host-sdk/src/host/memory-schema.ts",
+      "git_blob": "ac17f408d0f41ecfee2015b536aa68a3b2460829",
+      "size": 19565,
+      "sha256": "e43c03b5171d34685e222aaad1d375833447437d492bb2ab612ca51b6df15c62"
+    },
+    {
+      "path": "packages/memory-host-sdk/src/host/memory-schema-storage-migration.ts",
+      "git_blob": "c043ce3893767c884de06f902ec7e2757cce2081",
+      "size": 17556,
+      "sha256": "bfef42719853492f18ca2f979d9ff1c552e0ba4dce455131471747669085a5c9"
+    },
+    {
+      "path": "packages/memory-host-sdk/src/host/memory-schema-provenance.ts",
+      "git_blob": "261da956713362ede57da2c8fbad1f9daad86118",
+      "size": 3776,
+      "sha256": "d6e92f258d5fa0218352e5b4d8f84c5221e02088d3a0be49bfa35c78019348da"
+    },
+    {
+      "path": "packages/memory-host-sdk/src/host/memory-schema-base.ts",
+      "git_blob": "748959364c78a2dc8a2c952d9a720462e979db81",
+      "size": 5897,
+      "sha256": "e2c65928f24d5cb65ed65d89c45683b1737c56cb96e0e9205be415e81bfc3b01"
+    },
+    {
+      "path": "packages/memory-host-sdk/src/memory-entry-origins.ts",
+      "git_blob": "3e9d986e0a14aafed9d803a3480eb15be06418d8",
+      "size": 3695,
+      "sha256": "ca7408298a0f0bde8c29fdfbfb5085bb50b185148aa1168064dd91f8e575240e"
+    },
+    {
+      "path": "src/plugin-sdk/memory-core-host-engine-schema.ts",
+      "git_blob": "242aa47ad6833c9fa90479a1a24809771b314ed0",
+      "size": 1063,
+      "sha256": "e8bf6f7d8cd3e40d52795db46e2024c46ae6874f9a816359e9d728a7660135e1"
+    },
+    {
+      "path": "src/plugin-sdk/memory-core-host-engine-storage.ts",
+      "git_blob": "56843a6e674914dbd82c0cf466dffd18b7604c8f",
+      "size": 3674,
+      "sha256": "3fcef4d0cc15c400a4750025e31ac7bea0a6a36b896a6ebce895e0d773afa4df"
+    },
+    {
+      "path": "package.json",
+      "size": 153025,
+      "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d",
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "reuse_context_from_part": 15
+    },
+    {
+      "path": "LICENSE",
+      "size": 1076,
+      "git_blob": "ed064819ab537575d0cad902f7e5af4a3488b1d0",
+      "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+      "reuse_context_from_part": 15
+    }
+  ],
+  "validated_tree_chain": [
+    {
+      "key": "rea17_root_tree",
+      "sha": "197c70097790e30087bbef323b0f2cc5148ab9b7",
+      "entries": 93
+    },
+    {
+      "key": "rea17_src_tree",
+      "sha": "2016fce75d48ab2afbf221cf2c00b8b3b70018b7",
+      "entries": 120
+    },
+    {
+      "key": "rea17_sdk_tree",
+      "sha": "8ebd11779ae863ba9d9d2a42cc12ef9d24163f86",
+      "entries": 693
+    },
+    {
+      "key": "rea17_packages_tree",
+      "sha": "5c67a86a76411a55571334f969628c51c7320ecd",
+      "entries": 25
+    },
+    {
+      "key": "rea17_memory_sdk_tree",
+      "sha": "77a7f13c5f44c4f72f6e1fd7e123c014cf021cf8",
+      "entries": 2
+    },
+    {
+      "key": "rea17_memory_sdk_src_tree",
+      "sha": "93cdeeddc3c93df8cd415f683276d4e07c414e4e",
+      "entries": 12
+    },
+    {
+      "key": "rea17_memory_host_tree",
+      "sha": "0faf1dc0f6a3aab8e2d4178a0be0c58b6eb856ef",
+      "entries": 126
+    }
+  ],
+  "validated_parent_child_links": 6,
+  "reference_checkout_modified": false,
+  "source_or_runtime_executed": false
+}

@@ -14240,8 +14240,8 @@
     "detail_file": "PHASE_A_RECOVERY.md",
     "rea": {
       "source_file": "REA_COVERAGE.json",
-      "static_batches": 16,
-      "unique_typescript_paths_in_completed_batches": 62,
+      "static_batches": 17,
+      "unique_typescript_paths_in_completed_batches": 69,
       "global_status": "partial",
       "runtime_executed": false,
       "semantic_unknowns_remain": true,
@@ -14261,10 +14261,11 @@
         "OC-13",
         "OC-14",
         "OC-15",
-        "OC-16"
+        "OC-16",
+        "OC-17"
       ],
       "limits": "Contar rutas examinadas no significa comprensión semántica ni revisión global. IDs y evidencias completos en REA_COVERAGE.json/provenance.",
-      "unique_ts_js_paths_in_completed_batches": 64,
+      "unique_ts_js_paths_in_completed_batches": 71,
       "source_count_note": "El contador TypeScript conserva su sentido estricto; el total TS/JS incluye también MJS/CJS."
     },
     "previous_detail_file": "PHASE_A_CHANNELS_VOICE_WEB.md",

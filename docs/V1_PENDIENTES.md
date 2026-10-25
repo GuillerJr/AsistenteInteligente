@@ -64,8 +64,8 @@ Estos recorridos acotados no cierran todas las capacidades del canal, voz o web.
   HTTP 200; contenido externo no verificado, sin JavaScript ni enlaces adicionales.
 - [ ] Registrar controles finales de cierre Codex/MCP/Telegram/scheduler/RPC,
   reteniendo Stores y propietarios ante incertidumbre y sin reconexión/replay.
-- [ ] Completar la investigación semántica pendiente: REA 13–16 amplían respaldo,
-  snapshots, actualización y cierre; dieciséis lotes y 64 rutas TS/JS no cierran la matriz ni toda la referencia.
+- [ ] Completar la investigación semántica pendiente: REA 13–17 amplían respaldo,
+  snapshots, actualización, cierre y migración de memoria; diecisiete lotes y 71 rutas TS/JS no cierran la matriz ni toda la referencia.
 - [ ] Repetir Python/Swift/paquete/CI tras los últimos ajustes y registrar identidades
   finales. No sustituir la instalación anterior por un bundle de desarrollo.
 
@@ -100,8 +100,10 @@ declara completa por los tests sintéticos.
 - [x] Observar activación y apertura del perfil sintético con ambas decisiones
   del dueño, servicio nuevo, cuenta desconectada y consulta local de memoria,
   diagnóstico y revisión de respaldo; límites en el registro de activación.
-- [ ] Cualificar reinicio posterior y escenarios reales negativos de activación;
-  completar reconciliación de memoria y canales sin importar permisos.
+- [x] Observar otro arranque del mismo perfil sintético admitido, con restricciones
+  exactas, sin cuenta ni procesos hijos del proveedor y con controles intactos.
+- [ ] Cualificar escenarios reales negativos de activación y completar
+  reconciliación de memoria y canales sin importar permisos.
 - [ ] Investigar la demora inicial observada en el perfil nuevo: se recuperó por
   supervisión lectora, sin reinicio; su causa no quedó establecida.
 - [ ] Completar familias frías con WAL/journals, archivos/artefactos de workspace, activación y

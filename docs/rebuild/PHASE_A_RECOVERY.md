@@ -13,7 +13,7 @@ verificación, bloqueo de mantenimiento e internals de snapshots del pin
 `1e3ff306abaff29f03e7668d53b01c07f10294ac` de OpenClaw. Sus fuentes, hashes,
 Evidence IDs y límites están en [REA_COVERAGE.json](REA_COVERAGE.json).
 Se derivan contratos de comportamiento; no se importa ni ejecuta su implementación.
-El total de dieciséis lotes y 64 rutas TS/JS mantiene cobertura semántica parcial.
+El total de diecisiete lotes y 71 rutas TS/JS mantiene cobertura semántica parcial.
 
 Una observación de esa referencia es especialmente relevante: algunas operaciones
 de listado/resolución también resuelven marcadores pendientes. Jarvis separa el

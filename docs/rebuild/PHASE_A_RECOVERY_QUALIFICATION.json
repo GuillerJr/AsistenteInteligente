@@ -221,10 +221,22 @@
       "schedule_definitions": 0,
       "independent_predecessor_exit_code_obtained": false,
       "continuous_process_trace": false,
-      "real_reopen_before_login_qualified": false,
+      "real_reopen_before_login_qualified": true,
       "independent_admission_metadata_sha256": "14a03f8c31f4c8f3e00a1794c192dd44c050bcffae27eca1c07ed683a43e9910",
       "independent_opened_metadata_sha256": "417f480ea60c44b812dfdd3248fd12c91aca01f0c46b2c7d7a3d56f7442ef46f",
-      "native_open_proof_sha256": "78f0352656797636cb559045e94bceae2823978333182278423eb61bb38190ea"
+      "native_open_proof_sha256": "78f0352656797636cb559045e94bceae2823978333182278423eb61bb38190ea",
+      "reopen_same_approved_target": {
+        "native_disconnected_observed": true,
+        "previous_app_and_service_stopped": true,
+        "five_constraints_supplied_again": true,
+        "provider_override_present": false,
+        "service_children_observed": 0,
+        "provider_and_choice_paths_absent": true,
+        "control_hashes_unchanged": true,
+        "workspace_empty": true,
+        "sqlite_original_opened_by_auditor": false,
+        "proof_sha256": "c5490995e24db6f602393e5995c9be2b4997dde3eb54db904128be7eda9c51a9"
+      }
     },
     "contracts": {
       "same_approval_authority": true,
@@ -249,11 +261,17 @@
       "native-activation.patch": "d9b70bb0e6f65fe24eee8a97d46332b7fc94d17fb5202c21b1474b499eb6b280"
     },
     "limits": [
-      "Integrated local tests, product commit CI and a bounded native owner activation/open walkthrough passed. Production signing, a later real reopen, negative live cases and complete phase A qualification remain pending.",
+      "Integrated local tests, product commit CI, bounded native owner activation/open and another local disconnected start of the same selected synthetic target passed. Production signing, negative live cases and complete phase A qualification remain pending.",
       "Local admission and current readback do not prove signer authenticity or a historical operation's fsync, ACK or cleanup.",
       "Memory scopes remain unchanged; no reassociation to the new private empty workspace is qualified.",
       "Cold WAL/journals, workspace artifacts, repair, migration, channel reconciliation and standalone distribution remain phase A work."
     ],
-    "date": "2026-10-25"
+    "date": "2026-10-25",
+    "evidence_documentation_checkpoint": {
+      "commit": "b037b230229f5b94f4c396894353137867f16a83",
+      "ci_run": 40168532125,
+      "ubuntu_24_04": "success",
+      "macos_26": "success"
+    }
   }
 }

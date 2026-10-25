@@ -494,3 +494,43 @@ Con OC-16 el registro alcanza **16 lotes y 64 rutas TS/JS únicas**, incluidas d
 MJS. La cobertura global y semántica sigue parcial. El export completo de cinco
 registros permanece fuera del repositorio; no se distribuyen los cuerpos de la
 referencia dentro de Jarvis.
+
+## OC-17 — admisión, migración y procedencia de memoria
+
+Se examinaron siete fuentes TS del mismo pin, adquiridas por blob Git y enlazadas
+al árbol raíz por hashes canónicos. Dos son fachadas del SDK y cinco contienen
+esquemas, conversión de almacenamiento y procedencia. El análisis REA fue estático:
+5.302 nodos AST, cero fallos de parseo y 985 incógnitas semánticas. La cobertura
+completa que informa el inventario sólo abarca esa partición; no los helpers
+importados ni el motor entero. Ver [procedencia](REA_PART17_PROVENANCE.json) y
+[resumen](REA_PART17_SUMMARY.json).
+
+La [conversión de almacenamiento](https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/packages/memory-host-sdk/src/host/memory-schema-storage-migration.ts#L375)
+clasifica representaciones admitidas antes de sustituirlas y rechaza dependientes
+desconocidos. Contiene comprobaciones de esquema, índices, foreign keys y políticas
+distintas para texto canónico y cachés reconstruibles. Las llamadas a helpers de
+transacción no prueban por sí mismas sus garantías: su implementación queda fuera
+de este lote y no se ejecutó ninguna migración.
+
+El [registro de orígenes](https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/packages/memory-host-sdk/src/memory-entry-origins.ts#L76)
+comprueba el agente y delega la propiedad de la transacción al llamador. La
+[procedencia de chunks](https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/packages/memory-host-sdk/src/host/memory-schema-provenance.ts#L62)
+puede completar procedencia importada conservando una clasificación de confianza
+limitada; no convierte ese origen en una autorización para acciones. También se
+distinguen índices derivados de datos con propietario durable. Son observaciones
+de estas fuentes, sin acreditar todo el recorrido de importación o su seguridad.
+
+Una [preparación de esquema ya admitido](https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/packages/memory-host-sdk/src/host/memory-schema.ts#L412)
+todavía puede escribir procedencia, reconciliar índices o retirar triggers ante
+errores. Por eso Jarvis no debe llamar un método de preparación para implementar
+su inventario de sólo lectura. Sus criterios propios son: admitir formatos exactos,
+no eliminar objetos desconocidos, conservar origen e historial sin restaurar grants
+y efectuar la copia elegida, su mapa y recibo en una única transacción autorizada.
+La consulta posterior puede observar el registro actual; no demostrar un ACK que
+se perdió ni autorizar otra copia. La implementación propia de esa reconciliación
+todavía necesita integración y cualificación; estas notas no la dan por terminada.
+
+OC-17 eleva el registro a **17 lotes y 71 rutas TS/JS únicas**, de ellas 69 TS y
+dos MJS. El export privado contiene trece registros de referencia pública de los
+lotes 16 y 17, incluidos los ocho de esta partición. No contiene datos del dueño
+ni se incorpora al producto. La cobertura global sigue parcial y la fase A abierta.
