@@ -83,9 +83,13 @@ class CodexClient:
         self._start_lock = asyncio.Lock()
         self._write_lock = asyncio.Lock()
         self._closed = False
+        self._cleanup_pending = False
+        self._shutdown_timeout = 2.0
 
     async def start(self) -> None:
         async with self._start_lock:
+            if self._cleanup_pending:
+                raise CodexError("codex_cleanup_incomplete")
             if self._closed:
                 raise CodexError("codex_closed")
             if self._process is not None:
@@ -149,6 +153,8 @@ class CodexClient:
         if len(data) > 1024 * 1024:
             raise CodexError("codex_frame_too_large")
         async with self._write_lock:
+            if self._cleanup_pending:
+                raise CodexError("codex_cleanup_incomplete")
             process = self._process
             if process is None or process.stdin is None or process.returncode is not None:
                 raise CodexError("codex_disconnected")
@@ -557,35 +563,82 @@ class CodexClient:
         except (CodexError, OSError, TimeoutError, asyncio.CancelledError):
             return False
 
-    async def _stop_process(self) -> None:
+    async def _stop_process(self, *, retry: bool = False) -> None:
         async with self._start_lock:
-            await self._stop_process_locked()
+            await self._stop_process_locked(retry=retry)
 
-    async def _stop_process_locked(self) -> None:
+    @staticmethod
+    def _signal_group(process, sig) -> None:
+        try:
+            os.killpg(process.pid, sig)
+        except ProcessLookupError:
+            pass
+        except OSError:
+            raise CodexError("codex_cleanup_incomplete") from None
+
+    @staticmethod
+    def _group_absent(process) -> bool:
+        try:
+            os.killpg(process.pid, 0)
+        except ProcessLookupError:
+            return True
+        except OSError:
+            raise CodexError("codex_cleanup_incomplete") from None
+        return False
+
+    async def _settle_group(self, process) -> None:
+        # Reaping the leader cannot attest the original group's absence. This
+        # checks that group only; it does not claim confinement of escaped children.
+        if self._group_absent(process):
+            return
+        for sig in (signal.SIGTERM, signal.SIGKILL):
+            self._signal_group(process, sig)
+            deadline = asyncio.get_running_loop().time() + self._shutdown_timeout
+            while not self._group_absent(process):
+                remaining = deadline - asyncio.get_running_loop().time()
+                if remaining <= 0:
+                    break
+                await asyncio.sleep(min(0.01, remaining))
+            else:
+                return
+        raise CodexError("codex_cleanup_incomplete")
+
+    async def _stop_process_locked(self, *, retry: bool = False) -> None:
+        if self._cleanup_pending and not retry:
+            # Internal failure paths never silently retry a previous uncertain
+            # cleanup. A subsequent explicit aclose may finish retained resources.
+            raise CodexError("codex_cleanup_incomplete")
+        self._cleanup_pending = True
         process = self._process
-        if process is not None and process.returncode is None:
-            try:
-                os.killpg(process.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
-            try:
-                await asyncio.wait_for(process.wait(), 2)
-            except TimeoutError:
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                await process.wait()
-        for task in (self._reader, self._stderr):
-            if task is not None:
-                task.cancel()
-        await asyncio.gather(
-            *(t for t in (self._reader, self._stderr) if t), return_exceptions=True
-        )
+        if process is not None:
+            if process.returncode is None:
+                for sig in (signal.SIGTERM, signal.SIGKILL):
+                    self._signal_group(process, sig)
+                    try:
+                        await asyncio.wait_for(process.wait(), self._shutdown_timeout)
+                        break
+                    except TimeoutError:
+                        continue
+                    except OSError:
+                        raise CodexError("codex_cleanup_incomplete") from None
+                else:
+                    raise CodexError("codex_cleanup_incomplete")
+            await self._settle_group(process)
+        readers = tuple(task for task in (self._reader, self._stderr) if task is not None)
+        for task in readers:
+            task.cancel()
+        if readers:
+            done, pending = await asyncio.wait(readers, timeout=self._shutdown_timeout)
+            await asyncio.gather(*done, return_exceptions=True)
+            if pending:
+                raise CodexError("codex_cleanup_incomplete")
+        # No ownership is released on a failed signal, wait, group probe or reader
+        # cleanup. start/_write remain blocked until an explicit close succeeds.
         self._process = None
         self._reader = self._stderr = None
         self._threads.clear()
+        self._cleanup_pending = False
 
     async def aclose(self) -> None:
         self._closed = True
-        await self._stop_process()
+        await self._stop_process(retry=True)

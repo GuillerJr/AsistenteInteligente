@@ -66,6 +66,29 @@ def _regex_name(name: str) -> str:
     )
 
 
+def _framework_runtime_root(executable: Path) -> Path | None:
+    # python.org and macOS CI install the host interpreter outside Homebrew.
+    # Admit only that exact resolved interpreter and its matching version, never
+    # a neighbouring executable or a broad /Library/Frameworks read grant.
+    if sys.platform != "darwin" or executable != Path(sys.executable).resolve():
+        return None
+    major, minor = sys.version_info[:2]
+    version = f"{major}.{minor}"
+    root = Path("/Library/Frameworks/Python.framework/Versions") / version
+    try:
+        relative = executable.relative_to(root)
+    except ValueError:
+        return None
+    if relative.parts not in {
+        ("bin", "python"),
+        ("bin", f"python{major}"),
+        ("bin", f"python{version}"),
+        ("Resources", "Python.app", "Contents", "MacOS", "Python"),
+    }:
+        return None
+    return root
+
+
 def _runtime_roots(executable: Path) -> tuple[Path, ...]:
     roots = set()
     for candidate in (executable, Path(sys.executable).resolve()):
@@ -74,6 +97,9 @@ def _runtime_roots(executable: Path) -> tuple[Path, ...]:
             roots.add(Path(*parts[:6]))
         elif len(parts) > 5 and parts[:4] == ("/", "usr", "local", "Cellar"):
             roots.add(Path(*parts[:6]))
+    framework = _framework_runtime_root(executable)
+    if framework is not None:
+        roots.add(framework)
     return tuple(sorted(roots))
 
 
@@ -423,6 +449,8 @@ class ProcessTools:
                 "/usr/local/Cellar",
             )
         )
+        if self._backend == "macos_seatbelt" and _framework_runtime_root(executable) is not None:
+            trusted = True
         if not trusted and not executable.is_relative_to(self.workspace.root):
             raise ProcessError("process_executable_outside_scope")
         actual = (str(executable), *argv[1:])

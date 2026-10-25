@@ -4,6 +4,23 @@ import XCTest
 @testable import DesktopCore
 
 final class SocketIntegrationTests: XCTestCase {
+    func testMissingStateDirectoryIsUnavailableWhileMalformedExistingAncestorsStayUnsafe() async throws {
+        let directory = "/private/tmp/jarvis-starting-" + UUID().uuidString.prefix(8)
+        try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: false,
+                                                attributes: [.posixPermissions: 0o700])
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        let missing = LocalRPCClient(stateDirectory: directory + "/not-created-yet", timeout: 0.1)
+        do { _ = try await missing.call("health"); XCTFail("El estado aún no existe.") }
+        catch { XCTAssertEqual(error as? RPCFailure, .unavailable) }
+        await missing.close()
+        let regular = directory + "/regular"
+        try Data("fixture".utf8).write(to: URL(fileURLWithPath: regular))
+        let malformed = LocalRPCClient(stateDirectory: regular + "/state", timeout: 0.1)
+        do { _ = try await malformed.call("health"); XCTFail("Un archivo no puede ser un ancestro del estado.") }
+        catch { XCTAssertEqual(error as? RPCFailure, .insecurePath) }
+        await malformed.close()
+    }
+
     func testIdleConnectionRenewsBeforeSingleMutationAndRevalidatesPermissions() async throws {
         let (directory, child) = try await startIdleFixture(timeout: 0.1)
         defer {

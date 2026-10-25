@@ -42,7 +42,7 @@ public enum RPCValue: Codable, Equatable, Sendable {
 }
 
 public enum RPCFailure: Error, LocalizedError, Equatable, Sendable {
-    case configuration, insecurePath, unavailable, disconnected, invalidResponse, oversized, serviceExited
+    case configuration, insecurePath, unavailable, disconnected, invalidResponse, oversized, serviceExited, startupUnconfirmed
     case remote(Int, String)
 
     public var errorDescription: String? {
@@ -51,6 +51,7 @@ public enum RPCFailure: Error, LocalizedError, Equatable, Sendable {
         case .insecurePath: return "El transporte local no cumple los permisos de seguridad."
         case .unavailable: return "El servicio local no está disponible."
         case .serviceExited: return "El servicio terminó durante el inicio. Comprueba si otra instancia usa este perfil."
+        case .startupUnconfirmed: return "El arranque del servicio local aún no está confirmado. Jarvis seguirá consultando su estado."
         case .disconnected: return "La conexión se interrumpió. La operación no se repetirá automáticamente."
         case .invalidResponse: return "El servicio devolvió una respuesta no válida."
         case .oversized: return "El mensaje supera el límite permitido."

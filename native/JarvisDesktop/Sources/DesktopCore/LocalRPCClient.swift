@@ -70,7 +70,11 @@ public final class LocalRPCClient: @unchecked Sendable {
         var component = directory
         while component != "/" {
             var info = stat()
-            guard lstat(component, &info) == 0, (info.st_mode & S_IFMT) == S_IFDIR else {
+            guard lstat(component, &info) == 0 else {
+                if errno == ENOENT { throw RPCFailure.unavailable }
+                throw RPCFailure.insecurePath
+            }
+            guard (info.st_mode & S_IFMT) == S_IFDIR else {
                 throw RPCFailure.insecurePath
             }
             guard let separator = component.lastIndex(of: "/") else { throw RPCFailure.insecurePath }

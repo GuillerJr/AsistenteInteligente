@@ -1,0 +1,302 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-24",
+  "phase": "A",
+  "complete_reference_variant": false,
+  "phase_b_started": false,
+  "git_parent": "083729885258c355f855963f09d4d59cdacf2dc4",
+  "scope_document": "PHASE_A_CHANNELS_VOICE_WEB.md",
+  "qualification_status": "local_automated_checks_and_development_bundle_passed_live_partial",
+  "automated": {
+    "previous_integrated_snapshot": {
+      "python": {
+        "passed": 1230,
+        "seconds": 69.02
+      },
+      "native": {
+        "passed": 91,
+        "seconds": 17.555
+      },
+      "scope_note": "Resultados comunicados por root del snapshot anterior; no califican los cambios posteriores de bootstrap nativo o cierre web."
+    },
+    "final_integrated_snapshot": {
+      "status": "automated_and_development_bundle_passed_live_partial",
+      "python": {
+        "passed": 1234,
+        "exit_code": 0,
+        "environment": "host_outside_agent_sandbox",
+        "log_sha256": "fcfe55c9ae3ed28a6862a64b513adf39e6009c1d83a4bc95c16b06d4a5577149"
+      },
+      "native": {
+        "passed": 97,
+        "exit_code": 0,
+        "seconds": 18.015,
+        "environment": "host_outside_agent_sandbox",
+        "log_sha256": "60469e65b17e12a52a7a598b3480f52e12021f1690a2f61effeaa26926e52763"
+      },
+      "ruff": "passed",
+      "compileall": "passed",
+      "clean_base": "passed_runtime_dependencies_0",
+      "regressions": [
+        "read_only_supervision_after_unconfirmed_late_startup",
+        "missing_state_directory_classified_unavailable_without_weakening_existing_path_checks",
+        "selected_external_chat_messages_and_pending_approvals_refresh_without_mutations",
+        "stable_message_identity_and_unchanged_arrays_preserve_draft_and_voice",
+        "late_results_and_errors_discarded_after_scope_change",
+        "web_close_and_direct_task_cancellation_latched_before_late_dns_tls_http_dispatch"
+      ]
+    },
+    "private_telegram_snapshot": {
+      "passed": 128,
+      "seconds": 13.95,
+      "scope": "RPC/HTTP locales, tokens/cuentas/modelo sintéticos; no destino o mensaje reales."
+    },
+    "mcp_cleanup_regressions": {
+      "published_commit": "083729885258c355f855963f09d4d59cdacf2dc4",
+      "cases": 7,
+      "scope": "Procesos propios sin fork y denegación de señales/probe; no prueba árboles arbitrarios ni Linux por extrapolación."
+    },
+    "service_cleanup_review": {
+      "scheduler_explicit_retry": "passed_in_full_1234_suite",
+      "rpc_owner_retains_stores": "passed_in_full_1234_suite",
+      "independent_owner_closure": "passed_in_full_1234_suite; unconfirmed owners and stores retained; explicit cleanup retry only"
+    },
+    "ci": {
+      "previous_commit_linux": "passed",
+      "previous_commit_macos": {
+        "status": "failed",
+        "framework_related_failures": 7
+      },
+      "framework_fix_regressions_integrated": 12,
+      "new_ci": "pending"
+    },
+    "web_post_close_fix": {
+      "passed": 156,
+      "seconds": 1.37,
+      "scope": "Web and authority continuations 156; included in the subsequent full1234 passing suite.",
+      "ruff": "passed",
+      "compileall": "passed",
+      "source_sha256": "fc47dc4fe6c3af90ba638ac3c60a044cc2087893e6c3db7bf03a479c8359a5ae",
+      "test_sha256": "aabd15e8770b89a9c4c0f835891c22f261aab5510875b8818a82bdf05bd4fecb",
+      "additional_regression_count": 4,
+      "cancellation_scope": "Cierre y cancelación directa de Task antes de un nuevo despacho DNS/TLS/HTTP, con latch local por operación."
+    },
+    "test_environment_note": "An initial sandbox-only attempt was blocked by local socket bind EPERM and process isolation restrictions; it is not a passing qualification. Host rerun passed without relaxing product isolation."
+  },
+  "native_bundle": {
+    "previous_snapshot": {
+      "executable_relative_path": "Contents/MacOS/Jarvis",
+      "executable_sha256": "8479ad560ce48f8bb15efa855ef7b361ae6c459fb336cf3f5fb5c13830302175",
+      "executable_bytes": 6282048,
+      "build_seconds": 48.37,
+      "signing": "ad_hoc",
+      "standalone": false,
+      "external_dependencies": [
+        "Python runtime",
+        "official Codex client"
+      ]
+    },
+    "final_snapshot": {
+      "executable_relative_path": "Contents/MacOS/Jarvis",
+      "executable_bytes": 6414608,
+      "executable_sha256": "d588d680927cfe4d53b9235dc8b323a25fddf38858c7449a6d5f211981cf4857",
+      "build_seconds": 32.65,
+      "signing": "ad_hoc_verified_strict",
+      "standalone": false,
+      "external_dependencies": [
+        "Python runtime",
+        "official Codex client"
+      ],
+      "microphone_usage_key_present": true,
+      "speech_usage_key_present": true
+    },
+    "previous_app_replaced": false,
+    "distribution_qualified": false
+  },
+  "live": {
+    "app_after_reconnect": {
+      "connection_status_visible": "Codex con ChatGPT conectado · Jarvis",
+      "synthetic_conversations_restored": 2,
+      "tools_and_telegram_panel_visible": true,
+      "startup_delay_cause": "not_established"
+    },
+    "telegram_checkpoint": {
+      "bot_connection_visible": true,
+      "channel_running": true,
+      "route_count": 1,
+      "owner_first_update_review": "approved_with_both_acknowledgements",
+      "owner_opened_official_telegram_start": "completed",
+      "owner_second_route_confirmation": "completed",
+      "owner_channel_start_review": "approved",
+      "dedicated_jarvis_conversation_at_checkpoint": "synthetic_arithmetic_request_and_correct_answer_observed",
+      "control_metadata": {
+        "journal_mode": "0600",
+        "event_count": 1,
+        "status": "ignored",
+        "error_code": "telegram_pairing_control",
+        "run_id": null,
+        "recursive_secret_or_body_fields_found": false
+      },
+      "control_reached_jarvis_model_or_history": false,
+      "delivery_qualified": true,
+      "next_owner_step": "not_required_for_recorded_arithmetic_transport_case",
+      "real_bot_identity_recorded": false,
+      "real_chat_identity_recorded": false,
+      "delivery_scope": "Un mensaje sintético de 2 + 2 recibió 4 en el chat dedicado; journal completed y salida confirmada. Sin herramientas. No cualifica grupos, medios ni denegación/revocación completa.",
+      "state_note": "Canal activo en el checkpoint de la suma; después el dueño desconectó y el servicio anterior cerró antes del reemplazo."
+    },
+    "voice_qualified": false,
+    "web_qualified": false,
+    "new_authenticated_inference_for_this_block": "Conexión oficial elegida observada devolviendo 4 a la consulta sintética 2 + 2; sin efectos de herramientas.",
+    "native_external_message_refresh": {
+      "status": "implemented_97_native_tests_passed_live_pending",
+      "observed": "La conversación seleccionada no actualizó el mensaje externo hasta cambiar selección.",
+      "fix_scope": "Refresh de sólo lectura con regresiones; no reenviar solicitud ni repetir respuesta.",
+      "qualification": "pending_after_fix"
+    },
+    "desidentified_evidence": {
+      "scope": "own_synthetic_phase_a_profile",
+      "route_count": 1,
+      "journal_mode": "0o600",
+      "events": [
+        {
+          "status": "ignored",
+          "error_code": "telegram_pairing_control",
+          "has_run_id": false
+        },
+        {
+          "status": "completed",
+          "error_code": null,
+          "has_run_id": true
+        }
+      ],
+      "secret_or_body_fields": [],
+      "journal_sha256": "0ab2f428e39818e812193c8423702912ad885e518912052116034e71cd295a43",
+      "observations": [
+        "native_owner_connected_bot",
+        "native_owner_reviewed_pairing",
+        "native_owner_confirmed_new_route",
+        "native_owner_started_channel",
+        "dedicated_native_chat_contains_test_question_and_2_plus_2_is_4",
+        "journal_confirms_one_completed_reply",
+        "pairing_start_excluded_from_model_chat",
+        "native_owner_disconnected",
+        "old_owned_service_exited_before_replacement"
+      ],
+      "limitations": [
+        "pre_fix_native_bundle",
+        "selected_chat_live_refresh_required_manual_reselect",
+        "does_not_qualify_other_chats_groups_attachments_or_tool_approvals"
+      ],
+      "source_file_sha256": "d3c809694097626b8f3f8c4392ed8e9738570b0cf79afda251ce240f40690d1e",
+      "scope_note": "Metadatos desidentificados del perfil sintético propio, observados con el ejecutable anterior a los ajustes nativos. No lectura del cliente Telegram ni cualificación de aprobaciones de herramientas."
+    },
+    "final_app_startup": {
+      "connected_without_manual_reconnect": true,
+      "synthetic_conversations_restored": 3,
+      "telegram_route_restored": true,
+      "telegram_reconnected_automatically": false,
+      "snapshot": "final_development_bundle"
+    }
+  },
+  "platform_scope": {
+    "initial": "macOS Apple Silicon",
+    "first_external_channel": "Telegram private chats",
+    "iphone": "deferred_by_explicit_owner_decision"
+  },
+  "rea": {
+    "coverage_file": "REA_COVERAGE.json",
+    "static_batches": 13,
+    "unique_selected_typescript_javascript_paths": 52,
+    "global_status": "partial",
+    "reference_executed": false,
+    "new_parts": [
+      "OC-10",
+      "OC-11",
+      "OC-12",
+      "OC-13"
+    ],
+    "raw_reference_code_imported": false,
+    "part13_scope": "Backup/doctor static research only; no backup or doctor implementation qualified by this block."
+  },
+  "tool_budget": {
+    "base_with_workspace": 13,
+    "mcp_configured_maximum": 48,
+    "configured_total": 61,
+    "codex_dynamic_tool_limit": 64,
+    "all_effects_qualified": false
+  },
+  "privacy": {
+    "real_tokens_nonces_chat_ids_in_document": false,
+    "personal_history_read_for_this_record": false,
+    "owner_controls_passwords_tcc_real_approvals": true
+  },
+  "final_source_hashes": {
+    "scope": "changed_product_test_scripts_plus_native_package_manifest_relative_to_git_parent",
+    "files": {
+      "native/JarvisDesktop/Package.swift": "2c86109c862a56e63f79aa5baa7e404968d724c0bf0b9115912f752b7931c35c",
+      "native/JarvisDesktop/Sources/DesktopCore/CapabilityPresentation.swift": "5c4dfe39c7e889ece37f428800585d0a70db090537d8e6430644f6ca6c551a5e",
+      "native/JarvisDesktop/Sources/DesktopCore/ConversationReader.swift": "5c4f21aae1264e710ad53ccd6538b0283ab3035998547dff68381a6f91b1b793",
+      "native/JarvisDesktop/Sources/DesktopCore/LocalRPCClient.swift": "97cf2ba4128912b08654f5cb5dc34cba9ca92003487ecf056df006987d352fb9",
+      "native/JarvisDesktop/Sources/DesktopCore/LocalVoiceController.swift": "fe209485581f44bf2626044fe276ebc37b2348f92ddd19772b01e9548004ea26",
+      "native/JarvisDesktop/Sources/DesktopCore/LocalVoiceDraftBridge.swift": "e07d302e8b51ed9218360ffbc2656a557b838dab7c342f04ade7d65321163ce4",
+      "native/JarvisDesktop/Sources/DesktopCore/MCPPresentation.swift": "f10592e4eb3e1b4761b1320c8ebe72b48443ffebcb1f5e0fdd721c94200feb20",
+      "native/JarvisDesktop/Sources/DesktopCore/RPCValue.swift": "1bd6e16433a535136b84fba52dec025a4373ba96081206c58450692d0763059e",
+      "native/JarvisDesktop/Sources/DesktopCore/RunPresentation.swift": "4caec9315d9810d5d8ad5fb757a6dc71ab78f6bdb2e0fb3ce59ea129f1cb2c24",
+      "native/JarvisDesktop/Sources/DesktopCore/ServiceBootstrap.swift": "5dda661fda351e3c2cd077b38ca2682a350c952fa001af69632baa3178e48eab",
+      "native/JarvisDesktop/Sources/DesktopCore/TelegramClient.swift": "50149a095b0a9417114fdcc2e77b4b70d8f5b1c8e7727aaf438295d112d897ef",
+      "native/JarvisDesktop/Sources/DesktopCore/TelegramModels.swift": "18834ab5deacf3a3c9ab8201fd5d7ccc7a505fcf77fbc2830fa165f1b5e23c40",
+      "native/JarvisDesktop/Sources/DesktopCore/TelegramPairingClient.swift": "419360e880da823142b4883f3e43b8e6f74cb310f0a73c4134437424652ca3a0",
+      "native/JarvisDesktop/Sources/DesktopCore/TelegramPairingModels.swift": "14128c19cd1f5e6426a307ef2c20a9e8e594925fe1caf1124b83ad1e61c9ce59",
+      "native/JarvisDesktop/Sources/DesktopCore/TelegramPresentation.swift": "698f63d333c5c10a45980e46f39662320b8e76c9b592e42d1f72d52198b9221b",
+      "native/JarvisDesktop/Sources/JarvisApp/Audio/MacLocalVoiceDriver.swift": "d386252c4192c6f0767d5bd976cede55df83c056af800c521f8ec5211b604cd8",
+      "native/JarvisDesktop/Sources/JarvisApp/Models/ChatModels.swift": "e438eb92c1f7cb31a2bf19baa595fe9ff6a07e6ee73842caa7e2e32dc55e72d2",
+      "native/JarvisDesktop/Sources/JarvisApp/Stores/ChatStore.swift": "835463b1fea4ca07f10753c8b64c345c966a7ac3874b2cac4aeb40eb0ff3b04e",
+      "native/JarvisDesktop/Sources/JarvisApp/Stores/TelegramNativeOpener.swift": "9ccb366c2bad354dcd53d315b5fa0154d868ea6aa204dc359389b34c7ffb2189",
+      "native/JarvisDesktop/Sources/JarvisApp/Stores/TelegramStore.swift": "9ece6c1ca8d277faf2cea6384ead355e4ceab915d8f381eb16f5a71235bf9a60",
+      "native/JarvisDesktop/Sources/JarvisApp/Views/ComposerView.swift": "094003a6cd404f6a4467cd636d6aa4713603e667ce508e0fd97f73be7cb980e9",
+      "native/JarvisDesktop/Sources/JarvisApp/Views/ContentView.swift": "d5a1af9836860d844c2c292411ff532b5d74f6446f1d051bc82846dd83ff000d",
+      "native/JarvisDesktop/Sources/JarvisApp/Views/MessageListView.swift": "5506db9b5a97f4d5386b41c9f8e0d440790fb038f956dcc71f6614d0e0c4f986",
+      "native/JarvisDesktop/Sources/JarvisApp/Views/TelegramPairingView.swift": "e23984d1d90054d842406ccc88ceaec3d9edeac8b862b68e6783641552e24776",
+      "native/JarvisDesktop/Sources/JarvisApp/Views/TelegramView.swift": "6d3f74832b37c4d1d59e1248f8a85432f5765abeb6c9de184082d3c4d1cdc710",
+      "native/JarvisDesktop/Tests/DesktopCoreTests/ConversationRefreshTests.swift": "4688fa310bd33d1cbddf0f50f1ae30d3c4481a0b429d35dc857a6908c82c4cc2",
+      "native/JarvisDesktop/Tests/DesktopCoreTests/LocalVoiceControllerTests.swift": "7ca1587a5bf512ca772693864c7de5ba5896d30e0f7028d8714cd180a2207115",
+      "native/JarvisDesktop/Tests/DesktopCoreTests/LocalVoiceDraftBridgeTests.swift": "6c34ba7fac517608dae57a9d62c1bc0a5cfd730d9023cc13ed16cd26b47cd862",
+      "native/JarvisDesktop/Tests/DesktopCoreTests/MCPModelsTests.swift": "110e5d836626e29f178e7100db71af6c2c3eb2d94b497f4bef83164b3f0e018a",
+      "native/JarvisDesktop/Tests/DesktopCoreTests/ProcessBootstrapTests.swift": "f95606bc66f0070f463204edb0bd945b846e9cc0f7b14cfcd57b1617a4047eea",
+      "native/JarvisDesktop/Tests/DesktopCoreTests/RPCFrameTests.swift": "d71b3fb5ec8f97f08006fab4c995f5b884502d2a814e93a8097e282c8d70e2fc",
+      "native/JarvisDesktop/Tests/DesktopCoreTests/SocketIntegrationTests.swift": "1db5dc3182650ceebeef314c93bb636a249573eada23ac9aeabb23096166a7be",
+      "native/JarvisDesktop/Tests/DesktopCoreTests/TelegramIntegrationTests.swift": "dd05d51c906af456ccfe830af852da941fe01ad41371efe784dcd833f4100e91",
+      "native/JarvisDesktop/Tests/DesktopCoreTests/TelegramModelsTests.swift": "b257956ab91d16f9e7b995471ceec58a00acc244fb5ed2300bb73b661e577c36",
+      "native/JarvisDesktop/Tests/DesktopCoreTests/TelegramPairingIntegrationTests.swift": "a254f5298f8eb38bc7eb991fc414d5cc277de71edc5fb8fc51469c2f139652ee",
+      "native/JarvisDesktop/Tests/DesktopCoreTests/TelegramPairingModelsTests.swift": "d6a407b7cd47e493c1c8613a1831f28b9b321318195304b0c69f9b6624558a7b",
+      "script/build_desktop.sh": "49e36b8cd925c8114cc53970c22ee5a7c5b335c1bfe991c89bf5fded1e653633",
+      "src/jarvis_core/codex.py": "afa22bc67d88170656ab145a471b157a99688ac2ea5e11eb2a94d6b9875443d4",
+      "src/jarvis_core/management.py": "39f6a910059db6bd426b65446c39babd476a20582cac40f5ec6c063025502bf2",
+      "src/jarvis_core/processes.py": "28627a33708b40d69fe80941bea7c03e07a75eaeefd3c5a8d28ddb5549d7a3ac",
+      "src/jarvis_core/service.py": "e5cf899575878335c99f9b3887a9c7ce623b3a3f559b6adcde0aa6eb0625a835",
+      "src/jarvis_core/telegram.py": "597b4f917818d0cbdbfb54abfda9c9fd02dc4590272026d8ebeedc9b9e80bb69",
+      "src/jarvis_core/telegram_management.py": "15007958f8b295b7ffd819c5337dc4bf495ebe9818ef11af756867d73c4adf7b",
+      "src/jarvis_core/telegram_pairing.py": "a0081981cc22ed943098f6411a282b243b7305b4c868791e7ed29761df2e6576",
+      "src/jarvis_core/tools.py": "cc32dd000f8cd88c7500747afca6181b6b56f3da51a0718c7f8697232e744867",
+      "src/jarvis_core/web.py": "fc47dc4fe6c3af90ba638ac3c60a044cc2087893e6c3db7bf03a479c8359a5ae",
+      "tests/test_codex_cleanup.py": "7b20d499d3575799bc3c4b858a14d1227a2b2280c841c46549b76a564ff8dc0a",
+      "tests/test_processes.py": "aba371c4359b831e9f5da72fd74242a141822a710416152f0bed25cb61f60932",
+      "tests/test_service_management.py": "a1e762293a8f4df19c0300b122ace723fb5d0be9f0fbfa1d56a3fcc5b9067168",
+      "tests/test_service_mcp.py": "2b1971e612c078f7742818505fdd27273ffcd2914ac1b60701c8d9ceaa718eb8",
+      "tests/test_service_telegram.py": "893f5921aba861d8eed2acf1aea3ae9070f4243128c694aa3a3d548480f6262b",
+      "tests/test_telegram.py": "e4786901baec5425f8b1ec888987c0a0a8dae83190430db58142ea386cb03e67",
+      "tests/test_telegram_pairing.py": "3ab43099babb4588ee93ce386f4ca4b248a49cb827c47a4f717a3f86873ff4eb",
+      "tests/test_telegram_timing.py": "38299165f4fcf37419b0eeb4261864fa30b31db6d2802f12f973a3092fe1ddda",
+      "tests/test_tool_continuations.py": "c999bf7064eed2d354b789f54b2dff235cdad677faf9db8ec1215e627dca3aec",
+      "tests/test_web.py": "aabd15e8770b89a9c4c0f835891c22f261aab5510875b8818a82bdf05bd4fecb"
+    },
+    "manifest_sha256": "6047d368a303cedb410b3a7ed32ade6f26841444049b1289352ae0d434bcc926"
+  },
+  "limits": [
+    "No full reference parity or completed functional family claimed.",
+    "1234 Python and97 native tests passed on host; real post-fix Telegram, voice and web scenarios remain to qualify.",
+    "Development bundle only; no previous installation replaced and no notarized standalone distribution claimed.",
+    "Pairing consumes reviewed pending updates but never sends an external message itself."
+  ]
+}

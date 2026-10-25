@@ -3,6 +3,14 @@ import XCTest
 @testable import DesktopCore
 
 final class RPCFrameTests: XCTestCase {
+    func testUnconfirmedOfficialClientCleanupBlocksNewMessagesAndKeepsTheRequestIdentity() {
+        let error = RPCFailure.remote(-32020, "codex_cleanup_incomplete")
+        let message = "El cliente oficial no confirmó su cierre. No se enviarán mensajes nuevos hasta que termine la limpieza."
+        XCTAssertEqual(RunPresentation.errorMessage("codex_cleanup_incomplete"), message)
+        XCTAssertEqual(CapabilityPresentation.errorMessage(error), message)
+        XCTAssertFalse(RunPresentation.startWasRejected(error))
+    }
+
     func testStreamingPreservesDeltasAndEnforcesUTF8Budget() throws {
         XCTAssertEqual(try RunPresentation.appendDelta(" mundo", to: "Hola"), "Hola mundo")
         XCTAssertThrowsError(try RunPresentation.appendDelta("á", to: String(repeating: "a", count: 31_999)))

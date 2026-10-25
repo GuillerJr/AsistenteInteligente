@@ -717,3 +717,39 @@ async def test_fork_copies_completed_text_and_agent_but_never_action_receipts(
     assert peer.calls[-1][1]["thread_id"] is None and len(peer.calls) == 2
     assert "efecto original" in json.dumps(peer.calls[-1][1]["history"], ensure_ascii=False)
     assert (service._workspace_path / "once.txt").read_text() == "una" and len(peer.replies) == 1
+
+
+@pytest.mark.parametrize("owner", ["codex", "telegram", "scheduler", "rpc"])
+async def test_incomplete_owner_retains_stores_closes_independent_resources_and_retries(
+    management, monkeypatch, owner
+):
+    from jarvis_core.codex import CodexError
+    from jarvis_core.scheduler import SchedulerError
+    from jarvis_core.telegram import TelegramError
+
+    service, client, peer, _root = management
+    targets = {
+        "codex": (service.provider, "aclose", CodexError, "codex_cleanup_incomplete"),
+        "telegram": (service, "close_telegram", TelegramError, "telegram_cleanup_incomplete"),
+        "scheduler": (service.scheduler, "aclose", SchedulerError, "scheduler_cleanup_incomplete"),
+        "rpc": (service.server, "aclose", TimeoutError, "service_cleanup_incomplete"),
+    }
+    target, method, error_type, code = targets[owner]
+    original = getattr(target, method)
+    attempts = []
+
+    async def incomplete():
+        attempts.append(True)
+        raise error_type(code)
+
+    await client.aclose()
+    monkeypatch.setattr(target, method, incomplete)
+    with pytest.raises(error_type, match=code):
+        await service.aclose()
+    assert len(attempts) == (2 if owner == "scheduler" else 1)
+    assert not service.store._closed and service._closing
+    assert service.web_tools._closed and service.process_tools._closed
+    assert service.mcp._closed and not service._handles and not peer.calls
+    monkeypatch.setattr(target, method, original)
+    await service.aclose()
+    assert service.store._closed and not peer.calls

@@ -5,6 +5,8 @@ public enum CapabilityPresentation {
         guard let failure = error as? RPCFailure else { return "No se pudo completar la operación." }
         guard case .remote(_, let message) = failure else { return failure.localizedDescription }
         switch message {
+        case "codex_cleanup_incomplete":
+            return RunPresentation.errorMessage(message)
         case "stale_citation":
             return "La fuente cambió o se eliminó. Busca de nuevo para obtener una cita vigente."
         case "workspace_required", "workspace_not_selected", "no_workspace_selected":

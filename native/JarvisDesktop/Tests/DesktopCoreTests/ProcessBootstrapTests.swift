@@ -4,6 +4,44 @@ import XCTest
 
 final class ProcessBootstrapTests: XCTestCase {
     @MainActor
+    func testTimedOutLiveStartupCanRecoverByReadsWithoutRelaunchOrSessionMutation() async throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let python = env["JARVIS_DESKTOP_PYTHON"], let source = env["JARVIS_DESKTOP_SOURCE"] else {
+            throw XCTSkip("Ejecuta script/test_desktop.sh para probar la CLI real.")
+        }
+        let directory = "/private/tmp/jarvis-late-" + UUID().uuidString.prefix(8)
+        try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: false,
+                                                attributes: [.posixPermissions: 0o700])
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        let launcher = directory + "/delayed-python"
+        let quotedPython = "'" + python.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'") + "'"
+        let script = "#!" + python + "\nimport os,pathlib,sys,time\n" +
+            "p=pathlib.Path(__file__).with_name('launches');p.write_text(str(int(p.read_text())+1) if p.exists() else '1')\n" +
+            "time.sleep(0.35)\nos.execv(" + quotedPython + ", [" + quotedPython + ", *sys.argv[1:]])\n"
+        try Data(script.utf8).write(to: URL(fileURLWithPath: launcher))
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: launcher)
+        let options = try LaunchOptions.parse(["--python", launcher, "--source", source, "--state", directory + "/state", "--codex", "/usr/bin/false"])
+        let service = ServiceProcess()
+        try service.start(options)
+        do {
+            do {
+                try await ServiceBootstrap.waitForHealth(stateDirectory: options.state, timeout: 0.05) { service.isRunning }
+                XCTFail("El hijo todavía está en su retraso de arranque.")
+            } catch { XCTAssertEqual(error as? RPCFailure, .startupUnconfirmed) }
+            XCTAssertTrue(service.isRunning)
+            // Same child and same finite readiness API, only read-side probes.
+            try await ServiceBootstrap.waitForHealth(stateDirectory: options.state, timeout: 5) { service.isRunning }
+            let client = LocalRPCClient(stateDirectory: options.state)
+            let sessions = try await client.call("sessions.list")
+            XCTAssertEqual(sessions["sessions"].array, [])
+            XCTAssertEqual(try String(contentsOfFile: directory + "/launches", encoding: .utf8), "1")
+            await client.close()
+            let graceful = await service.stop()
+            XCTAssertTrue(graceful)
+        } catch { _ = await service.stop(); throw error }
+    }
+
+    @MainActor
     func testRealCLIReadinessSurvivesFirstImportLongerThanFiveSeconds() async throws {
         let env = ProcessInfo.processInfo.environment
         guard let python = env["JARVIS_DESKTOP_PYTHON"], let source = env["JARVIS_DESKTOP_SOURCE"] else {

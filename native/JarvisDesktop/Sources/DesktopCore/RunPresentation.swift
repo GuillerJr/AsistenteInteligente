@@ -19,6 +19,8 @@ public enum RunPresentation {
             return "La respuesta superó el límite permitido. No se guardó como una respuesta completada."
         case "codex_disconnected", "codex_closed":
             return "Se interrumpió la conexión con Codex. La consulta no se repetirá automáticamente."
+        case "codex_cleanup_incomplete":
+            return "El cliente oficial no confirmó su cierre. No se enviarán mensajes nuevos hasta que termine la limpieza."
         case "codex_turn_failed", "turn_failed": return "Codex no pudo completar esta consulta."
         default: return "La ejecución no pudo completarse. Consulta su estado antes de volver a enviar."
         }

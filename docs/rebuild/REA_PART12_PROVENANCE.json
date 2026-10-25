@@ -1,0 +1,57 @@
+{
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "partition_sha256": "855c5875fbd8641c2a00dca50ee9f452d06cd2b372996ea48dce7a754776f1d2",
+  "source_root_role": "private_inert_reference_only_not_product_source",
+  "source_copy_root": "/private/tmp/jarvis-openclaw-reference-20261024/part12/analysis-input",
+  "original_clone_modified": false,
+  "reference_executed": false,
+  "tree_link_verification": "provided_part12_git_tree_chain_and_rechecked_blob_bytes",
+  "files": [
+    {
+      "path": "package.json",
+      "bytes": 153025,
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d",
+      "selected_for_analysis": true
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1076,
+      "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+      "git_blob": "ed064819ab537575d0cad902f7e5af4a3488b1d0",
+      "selected_for_analysis": false
+    },
+    {
+      "path": "src/web-fetch/runtime.ts",
+      "bytes": 5396,
+      "sha256": "108cc09f515dd74f190f6b6ed09f7b3d1006cf499c322f130321b187d0255c68",
+      "git_blob": "4bba0efa85d457b71f05137e4338c39fadbb2a4d",
+      "selected_for_analysis": true
+    },
+    {
+      "path": "src/web-fetch/content-extractors.runtime.ts",
+      "bytes": 1431,
+      "sha256": "92e8bf2d34a7528b29804c14153bf8b7cd0ac88742feb077545b6488ec6a50cb",
+      "git_blob": "d05e210a5c8cc2e92f5b41936c4b7841090ad89e",
+      "selected_for_analysis": true
+    },
+    {
+      "path": "src/infra/net/ssrf.ts",
+      "bytes": 23858,
+      "sha256": "55672237725d4294850fd6ddd720c74258d2aa733b7775d5d1469cbda2f56aea",
+      "git_blob": "664540bba2ec156f9ef5ef57bfd1fb7bd7f93d0d",
+      "selected_for_analysis": true
+    },
+    {
+      "path": "src/infra/net/ssrf.pinning.test.ts",
+      "bytes": 5782,
+      "sha256": "25d038a74a2bcfa46181099187e2895252ce74fee1bb61cc6a1e76a96845a3a0",
+      "git_blob": "0eee491dea9ed2085a58ef5ad8ab08c1efc089ea",
+      "selected_for_analysis": true
+    }
+  ],
+  "acquisition_metadata_sha256": "df28f80ff31adf7d9e418418e064b00576c590271ea3528c74e1fe87795843bc",
+  "reference_tree": "197c70097790e30087bbef323b0f2cc5148ab9b7",
+  "git_tree_chain_verified_in_acquisition": true,
+  "original_clone_read_during_acquisition": false
+}

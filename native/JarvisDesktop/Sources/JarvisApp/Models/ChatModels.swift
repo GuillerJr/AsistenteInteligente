@@ -25,8 +25,8 @@ struct ChatSession: Identifiable, Hashable {
     }
 }
 
-struct ChatMessage: Identifiable {
-    let id = UUID()
+struct ChatMessage: Identifiable, Equatable {
+    let id: String
     let role: String
     let text: String
 }

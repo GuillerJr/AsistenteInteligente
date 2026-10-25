@@ -40,7 +40,10 @@ from jarvis_core.state import (
     StateStore,
     ensure_private_directory,
 )
+from jarvis_core.telegram import TelegramError
+from jarvis_core.telegram_management import TelegramManagementAPI
 from jarvis_core.tools import ApprovalAuthority, ToolCatalog, ToolError
+from jarvis_core.web import WebFetchTools
 from jarvis_core.workspace import WorkspaceError, WorkspaceTools
 
 _BASE = {"session_id", "temporary"}
@@ -112,7 +115,7 @@ class _ApprovalGate:
                 self.service.store.set_run_status(ref, operation.run_id, "running")
 
 
-class JarvisService(ManagementAPI):
+class JarvisService(TelegramManagementAPI, ManagementAPI):
     def __init__(self, directory: Path, provider: CodexClient) -> None:
         self.directory = directory
         self.store = StateStore(
@@ -146,6 +149,7 @@ class JarvisService(ManagementAPI):
         self.memory = MemoryStore(
             directory / "memory.sqlite3", limits=MemoryLimits(max_document_bytes=16000)
         )
+        self.web_tools = WebFetchTools()
         self._volatile_bindings: dict[str, str] = {}
         self._temporary_memory_scopes: dict[str, set[MemoryScope]] = {}
         self._configured_workspace = self.config.workspace
@@ -155,6 +159,7 @@ class JarvisService(ManagementAPI):
             else (ensure_private_directory(directory / "workspace"))
         )
         self._configure_tools()
+        self.initialize_telegram()
         self.server = LocalRpcServer(directory, self.handlers(), max_frame_bytes=1024 * 1024)
 
     def _configure_tools(self) -> None:
@@ -186,6 +191,8 @@ class JarvisService(ManagementAPI):
         memory_tools = MemoryTools(self.memory, self._active_memory_scope)
         definitions = list(memory_tools.definitions())
         specs = list(memory_tools.specs())
+        definitions.extend(self.web_tools.definitions())
+        specs.extend(self.web_tools.specs())
         if self.workspace_tools:
             definitions.extend(self.workspace_tools.definitions())
             specs.extend(self.workspace_tools.specs())
@@ -385,6 +392,7 @@ class JarvisService(ManagementAPI):
             "mcp.remove": self.remove_mcp,
         }
         methods.update(self.management_handlers())
+        methods.update(self.telegram_handlers())
 
         def safe(callback):
             async def invoke(params):
@@ -394,6 +402,8 @@ class JarvisService(ManagementAPI):
                     raise RpcError(-32010, error.code) from None
                 except CodexError as error:
                     raise RpcError(-32020, str(error)) from None
+                except TelegramError as error:
+                    raise RpcError(-32036, error.code) from None
                 except (ProfileError, SkillError, PrivateJsonError, SchedulerError) as error:
                     raise RpcError(-32035, str(error)) from None
                 except (ConfigError, WorkspaceError, ToolError, McpRegistryError) as error:
@@ -445,6 +455,8 @@ class JarvisService(ManagementAPI):
                 "agents": True,
                 "skills": True,
                 "schedules": True,
+                "telegram": True,
+                "web_fetch": True,
                 "processes": self.process_tools.status()
                 if self.process_tools
                 else {"available": False},
@@ -493,6 +505,7 @@ class JarvisService(ManagementAPI):
             or self._closing
             or self._retiring_sessions
             or (self.process_tools and self.process_tools.has_running)
+            or self.telegram_blocks_workspace_change()
         ):
             raise RpcError(
                 -32011, "Espera a que terminen las ejecuciones antes de cambiar de carpeta."
@@ -811,6 +824,8 @@ class JarvisService(ManagementAPI):
         ref = self._ref(params)
         if self._busy(ref):
             raise RpcError(-32011, "Cancela y espera al cierre de la ejecución antes de borrar.")
+        if self.telegram_uses_session(ref):
+            raise RpcError(-32036, "Quita la ruta de Telegram antes de borrar esta conversación.")
         self.authority.revoke(ref.session_id)
         self._retiring_sessions.add(ref)
         try:
@@ -1002,11 +1017,18 @@ class JarvisService(ManagementAPI):
             self._close_task is not None
             and self._close_task.done()
             and not self._close_task.cancelled()
-            and isinstance(self._close_task.exception(), McpRegistryError)
-            and str(self._close_task.exception()) == "mcp_cleanup_incomplete"
+            and isinstance(
+                self._close_task.exception(),
+                (McpRegistryError, CodexError, TelegramError, SchedulerError, TimeoutError),
+            )
+            and str(self._close_task.exception()) in {
+                "mcp_cleanup_incomplete", "codex_cleanup_incomplete",
+                "telegram_cleanup_incomplete", "service_cleanup_incomplete",
+                "scheduler_cleanup_incomplete",
+            }
         ):
             # An explicit new close may finish resources retained after a
-            # denied process-group signal. It never reopens IPC or inference.
+            # incomplete child/channel shutdown. It never reopens IPC or inference.
             self._close_task = None
         if self._close_task is None:
             self._close_task = asyncio.create_task(self._close())
@@ -1014,11 +1036,17 @@ class JarvisService(ManagementAPI):
 
     async def _close(self) -> None:
         self._closing = True
-        transport_error = None
+        resource_errors = []
         try:
             await self.server.aclose()
+        except Exception:
+            # A pending authenticated handler may still own the stores. Keep
+            # them live until an explicit close can confirm transport cleanup.
+            resource_errors.append(TimeoutError("service_cleanup_incomplete"))
+        try:
+            await self.close_telegram()
         except Exception as error:
-            transport_error = error
+            resource_errors.append(error)
         scheduler_error = None
         try:
             await self.scheduler.aclose()
@@ -1027,29 +1055,44 @@ class JarvisService(ManagementAPI):
         for handle in tuple(self._handles.values()):
             handle.cancel()
         await self.authority.close()
+        provider_close_attempted = False
         observers = tuple(self._observers)
         if observers:
             _, pending = await asyncio.wait(observers, timeout=25)
             if pending:
                 # Stop the owned provider to release its pending turn, but never
                 # close SQLite under a callback that has not actually settled.
-                await self.provider.aclose()
+                try:
+                    provider_close_attempted = True
+                    await self.provider.aclose()
+                except Exception as error:
+                    resource_errors.append(error)
                 _, pending = await asyncio.wait(pending, timeout=3)
                 if pending:
-                    raise TimeoutError("service_cleanup_incomplete")
-        await self.provider.aclose()
+                    resource_errors.append(TimeoutError("service_cleanup_incomplete"))
         if scheduler_error:
-            await self.scheduler.aclose()
-        if self.process_tools:
-            await self.process_tools.aclose()
-        # A failed external server close must not leave workspace processes
-        # running. Keep durable stores owned until MCP cleanup is confirmed.
-        await self.mcp.aclose()
+            try:
+                await self.scheduler.aclose()
+            except Exception as error:
+                resource_errors.append(error)
+        # Close every independent owner even when one provider cannot settle.
+        # Retain the stores while any child, channel or callback is unconfirmed.
+        for closer in (
+            self.process_tools.aclose if self.process_tools else None,
+            self.web_tools.aclose,
+            self.provider.aclose if not provider_close_attempted else None,
+            self.mcp.aclose,
+        ):
+            if closer is not None:
+                try:
+                    await closer()
+                except Exception as error:
+                    resource_errors.append(error)
+        if resource_errors:
+            raise resource_errors[0]
         self.schedule_store.close()
         self.memory.close()
         self.store.close()
-        if transport_error is not None:
-            raise transport_error
 
 
 async def _serve(args: argparse.Namespace) -> None:
@@ -1088,6 +1131,7 @@ def main() -> None:
         PrivateJsonError,
         SchedulerError,
         McpRegistryError,
+        TelegramError,
     ):
         parser.exit(1, "No se pudo iniciar o cerrar el servicio local de Jarvis.\n")
 

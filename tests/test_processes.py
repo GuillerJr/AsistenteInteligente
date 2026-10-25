@@ -9,13 +9,21 @@ import hashlib
 import json
 import os
 import socket
+import stat
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
 
-from jarvis_core.processes import ProcessError, ProcessTools
+from jarvis_core.processes import (
+    ProcessError,
+    ProcessTools,
+    _framework_runtime_root,
+    _mac_profile,
+    _runtime_roots,
+)
 from jarvis_core.tools import ApprovalAuthority, ToolCancelled, ToolCatalog, ToolError
 from jarvis_core.workspace import WorkspaceTools
 
@@ -77,6 +85,106 @@ async def run_python(bundle, source, **options):
         "process_run",
         {"argv": [str(Path(sys.executable).resolve()), "-c", source], "wait_ms": 1000, **options},
     )
+
+
+def framework_host(monkeypatch, host):
+    # Pure layout evidence must not depend on framework symlinks installed on
+    # this test host. Production still resolves the physical sys.executable.
+    real_resolve = Path.resolve
+
+    def resolve(path, strict=False):
+        return path if path == host else real_resolve(path, strict=strict)
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(sys, "version_info", (3, 11))
+    monkeypatch.setattr(sys, "executable", str(host))
+    monkeypatch.setattr(Path, "resolve", resolve)
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        "bin/python",
+        "bin/python3",
+        "bin/python3.11",
+        "Resources/Python.app/Contents/MacOS/Python",
+    ],
+)
+def test_macos_host_framework_runtime_is_one_exact_version(monkeypatch, relative):
+    root = Path("/Library/Frameworks/Python.framework/Versions/3.11")
+    host = root / relative
+    framework_host(monkeypatch, host)
+    assert _framework_runtime_root(host) == root
+    assert _runtime_roots(host) == (root,)
+    profile = _mac_profile(Path("/private/tmp/synthetic-workspace"), host)
+    assert f'(subpath "{root}")' in profile
+    assert '(subpath "/Library/Frameworks")' not in profile
+    assert '(subpath "/Library/Frameworks/Python.framework")' not in profile
+    assert '(deny default)' in profile and '(deny process-fork)' in profile
+    assert '(allow network' not in profile
+    assert '(deny file-read* file-write* (regex ' in profile
+
+
+@pytest.mark.parametrize(
+    "executable",
+    [
+        "/Library/Frameworks/Python.framework/Versions/3.11/bin/pip3",
+        "/Library/Frameworks/Python.framework/Versions/3.11/bin/unrelated",
+        "/Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12",
+        "/Library/Frameworks/Python.framework/Versions/Current/bin/python3",
+        "/Library/Frameworks/Unrelated.framework/Versions/3.11/bin/python3.11",
+        "/Library/Frameworks/Python.framework/Versions/3.11/site-packages/python3.11",
+    ],
+)
+def test_foreign_framework_executable_is_rejected_even_if_it_looks_like_python(
+    monkeypatch, executable,
+):
+    framework_host(
+        monkeypatch, Path("/Library/Frameworks/Python.framework/Versions/3.11/bin/python3.11")
+    )
+    assert _framework_runtime_root(Path(executable)) is None
+    assert _runtime_roots(Path(executable)) == ()
+
+
+def test_framework_named_non_python_host_does_not_grant_runtime_reading(monkeypatch):
+    host = Path("/Library/Frameworks/Python.framework/Versions/3.11/bin/unrelated")
+    framework_host(monkeypatch, host)
+    assert _framework_runtime_root(host) is None and _runtime_roots(host) == ()
+    monkeypatch.setattr(sys, "platform", "linux")
+    host = Path("/Library/Frameworks/Python.framework/Versions/3.11/bin/python3.11")
+    monkeypatch.setattr(sys, "executable", str(host))
+    assert _framework_runtime_root(host) is None
+
+
+def test_command_admits_only_host_framework_interpreter_without_spawning(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(sys, "version_info", (3, 11))
+    host = Path("/Library/Frameworks/Python.framework/Versions/3.11/bin/python3.11")
+    foreign = host.with_name("unrelated")
+    monkeypatch.setattr(sys, "executable", str(host))
+    real_resolve, real_stat, real_access = Path.resolve, Path.stat, os.access
+
+    def resolve(path, strict=False):
+        return path if path in {host, foreign} else real_resolve(path, strict=strict)
+
+    def status(path, *args, **kwargs):
+        if path in {host, foreign}:
+            return SimpleNamespace(st_mode=stat.S_IFREG | 0o755)
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", resolve)
+    monkeypatch.setattr(Path, "stat", status)
+    def executable_access(path, mode):
+        return True if path in {host, foreign} else real_access(path, mode)
+
+    monkeypatch.setattr(os, "access", executable_access)
+    manager = ProcessTools.__new__(ProcessTools)
+    manager.workspace = SimpleNamespace(root=Path("/private/tmp/synthetic-workspace"))
+    manager._backend, manager._helper = "macos_seatbelt", "/usr/bin/sandbox-exec"
+    command = manager._command((str(host), "-c", "print('synthetic')"))
+    assert command[-3:] == (str(host), "-c", "print('synthetic')")
+    with pytest.raises(ProcessError, match="process_executable_outside_scope"):
+        manager._command((str(foreign),))
 
 
 def test_catalog_preserves_single_authority_and_explicit_sandbox(bundle):

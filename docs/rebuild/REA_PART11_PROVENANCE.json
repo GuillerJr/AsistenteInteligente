@@ -1,0 +1,53 @@
+{
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "partition_sha256": "862966469e675e1efe071d8d3094e9268bbab09fe0ea2b8d7481dd9f0a8a96e1",
+  "source_root_role": "private_inert_reference_only_not_product_source",
+  "source_copy_root": "/private/tmp/jarvis-openclaw-reference-20261024/part11",
+  "original_clone_modified": false,
+  "reference_executed": false,
+  "tree_link_verification": "canonical_blob_ids_computed_from_private_bytes; tree_membership_not_reverified_by_this_document_update",
+  "files": [
+    {
+      "path": "package.json",
+      "bytes": 153025,
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d",
+      "selected_for_analysis": false
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1076,
+      "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+      "git_blob": "ed064819ab537575d0cad902f7e5af4a3488b1d0",
+      "selected_for_analysis": false
+    },
+    {
+      "path": "extensions/telegram/src/update-offset-store.ts",
+      "bytes": 6870,
+      "sha256": "bbdf6b17eac9b253930e485e1f4497cf591637912176670084047b4b140b6c01",
+      "git_blob": "984ced735a4356b94924471cdd95ed0b7788e41e",
+      "selected_for_analysis": true
+    },
+    {
+      "path": "extensions/telegram/src/session-conversation.ts",
+      "bytes": 1092,
+      "sha256": "cc5fde998e5569fa91e2fbb3dc8944c5d64c9da86df42978ff321f2497301fa7",
+      "git_blob": "4b842de7c93b24573f7b46a517128bd01e707009",
+      "selected_for_analysis": true
+    },
+    {
+      "path": "extensions/telegram/src/bot-handlers.inbound-authorization.ts",
+      "bytes": 17540,
+      "sha256": "8f9a10c67e7320e37fea3bb98c1e6701af522bdf6077f6bea6ea1a00afeca597",
+      "git_blob": "7e5d8d75d0b6f0e1e1fe48dde0239cc77f49795d",
+      "selected_for_analysis": true
+    },
+    {
+      "path": "extensions/telegram/src/bot-handlers.inbound-pipeline.ts",
+      "bytes": 20022,
+      "sha256": "614e9c7b89fbf47e93e5892a6bc03b1c9951f0f9a4b3ffea6a37dd5c8cfcf632",
+      "git_blob": "d760d172b338de1b590e3ad656d2e1a09adbe069",
+      "selected_for_analysis": true
+    }
+  ]
+}

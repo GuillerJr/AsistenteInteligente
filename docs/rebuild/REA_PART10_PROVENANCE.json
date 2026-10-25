@@ -1,0 +1,53 @@
+{
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "partition_sha256": "3da9d74df3520f320e8b7c0d3d7de4695272fd40bc9ace7133ae4d5305e66ca6",
+  "source_root_role": "private_inert_reference_only_not_product_source",
+  "source_copy_root": "/private/tmp/jarvis-openclaw-reference-20261024/part10",
+  "original_clone_modified": false,
+  "reference_executed": false,
+  "tree_link_verification": "canonical_blob_ids_computed_from_private_bytes; tree_membership_not_reverified_by_this_document_update",
+  "files": [
+    {
+      "path": "package.json",
+      "bytes": 153025,
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d",
+      "selected_for_analysis": false
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1076,
+      "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+      "git_blob": "ed064819ab537575d0cad902f7e5af4a3488b1d0",
+      "selected_for_analysis": false
+    },
+    {
+      "path": "extensions/telegram/src/api-fetch.ts",
+      "bytes": 3258,
+      "sha256": "62de785045f04108fadef07d79ab875832e2bef94d044d3bce9cb8260807adbb",
+      "git_blob": "37c1fe90555ec293cff69b21dd2c116b69813bb3",
+      "selected_for_analysis": true
+    },
+    {
+      "path": "extensions/telegram/src/bot-handlers.runtime.ts",
+      "bytes": 1698,
+      "sha256": "d3c1860567abb72cd92f3acac2349291a12cc9354225f00edc12dd81d0f92bac",
+      "git_blob": "e9e3fabf61e9fcad0a3c21f6f68b89b1a9c5571c",
+      "selected_for_analysis": true
+    },
+    {
+      "path": "extensions/telegram/update-offset-runtime-api.ts",
+      "bytes": 75,
+      "sha256": "a49bf64e199d1c840250eae3216af08395be809f76efc1d23069fa1069e65605",
+      "git_blob": "e141ea222c63691f39d0b142e44119a17180bdc4",
+      "selected_for_analysis": true
+    },
+    {
+      "path": "extensions/telegram/session-key-api.ts",
+      "bytes": 114,
+      "sha256": "30a72d3973da121c81c3cbdd7bd6ca36e9f246bfa7077b26b495f6e580f938a0",
+      "git_blob": "b37e63e294e6072fa1288f5c9fc8983349b7bf16",
+      "selected_for_analysis": true
+    }
+  ]
+}

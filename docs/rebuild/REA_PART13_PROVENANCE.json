@@ -1,0 +1,73 @@
+{
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "partition_sha256": "eca264e4a924e1b66ffe66aa7ed549b48ae3e965bf03151908a81a34834d7334",
+  "source_root_role": "private_inert_reference_only_not_product_source",
+  "source_copy_root": "/private/tmp/jarvis-openclaw-reference-20261024/part13/analysis-input",
+  "original_clone_modified": false,
+  "reference_executed": false,
+  "tree_link_verification": "recomputed_canonical_git_tree_hashes_and_blob_bytes_for_fixed_root_src_commands_chain",
+  "files": [
+    {
+      "path": "src/commands/backup-sqlite.ts",
+      "bytes": 7490,
+      "sha256": "a1d0d11694da369db189e0adf97f2908f232782de45277ec104a704baa83382c",
+      "selected_for_analysis": true,
+      "git_blob": "acb1e056976e105155abd16df5e7daa458bc78a4"
+    },
+    {
+      "path": "src/commands/backup-verify.ts",
+      "bytes": 26766,
+      "sha256": "491200421a07f99e51202e20e4d33bf4b3cc49f988eee05083c56ade04312e34",
+      "selected_for_analysis": true,
+      "git_blob": "a512111cfa4c539b0bd53f79436143235291a9e7"
+    },
+    {
+      "path": "src/commands/backup-restore.ts",
+      "bytes": 14182,
+      "sha256": "5b01956cd7878d90d9ebd29bcc2f97157e46521a3e0559eec456cfc0a3ab301a",
+      "selected_for_analysis": true,
+      "git_blob": "9383fafc7a6b3ee29271564c23febc792c25e880"
+    },
+    {
+      "path": "src/commands/doctor-sqlite-maintenance-lock.ts",
+      "bytes": 7493,
+      "sha256": "c9b72fd2a6ed4e7de74eb65121cbcd90659a24111a92a83eab3774cffb3004b5",
+      "selected_for_analysis": true,
+      "git_blob": "c0989cb420f4f13916b274f1c737ee87949ac7b0"
+    },
+    {
+      "path": "package.json",
+      "bytes": 153025,
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "selected_for_analysis": true,
+      "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1076,
+      "sha256": "9efd316ecf1c4c60f6fd5d26433142fff2b6794d7d328e9bc6179b29bf9c82a4",
+      "selected_for_analysis": false,
+      "git_blob": "ed064819ab537575d0cad902f7e5af4a3488b1d0"
+    }
+  ],
+  "acquisition_metadata_sha256": "5429d937b5df6867e1cd80d3375ddea600c9ed6722e201b09af5c6cbfde0428c",
+  "reference_tree": "197c70097790e30087bbef323b0f2cc5148ab9b7",
+  "git_tree_chain_verified_in_acquisition": true,
+  "canonical_tree_hashes_recomputed": true,
+  "original_clone_read_during_acquisition": false,
+  "acquisition_method": "Official GitHub connector fetch_blob by SHA. Root/Src tree responses and package/LICENSE reused from verified part12 acquisition; Commands tree fetched from GitHub and all tree/blob hashes recomputed.",
+  "verified_tree_chain": [
+    {
+      "role": "Root",
+      "git_tree_sha1": "197c70097790e30087bbef323b0f2cc5148ab9b7"
+    },
+    {
+      "role": "Src",
+      "git_tree_sha1": "2016fce75d48ab2afbf221cf2c00b8b3b70018b7"
+    },
+    {
+      "role": "Commands",
+      "git_tree_sha1": "39f0fa38d623403f2d263f74344157188b7912b7"
+    }
+  ]
+}

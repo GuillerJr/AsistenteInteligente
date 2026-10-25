@@ -1235,6 +1235,603 @@
       "limitations": [
         "Only this inert selected partition was analyzed; imported implementations and runtime behavior remain unknown."
       ]
+    },
+    {
+      "topic": "Telegram API transport, session keys and offset entry points",
+      "parent_evidence_id": "ev_6a84149c50d958617c7b3dececdb7f0faeb36eea076b196af2f7f4b08f7ed449",
+      "summary_evidence_id": "ev_a93f82aeb97e8f41075c8464a1712b6e0f3a1b2f5d111e69cf07dc603a94339d",
+      "partition_sha256": "3da9d74df3520f320e8b7c0d3d7de4695272fd40bc9ace7133ae4d5305e66ca6",
+      "statistics": {
+        "findings": 34,
+        "invalid_utf8_files": 0,
+        "modules": 0,
+        "nested_asar_containers": 0,
+        "parse_failures": 0,
+        "parsed_javascript_files": 4,
+        "relevant_files": 5,
+        "skipped_javascript_files": 0,
+        "text_bytes_read": 5145,
+        "visited_ast_nodes": 625
+      },
+      "coverage": {
+        "application": {
+          "limits": [],
+          "omitted_count": null,
+          "status": "partial",
+          "truncated": false
+        },
+        "application_unknowns": 1,
+        "semantic": {
+          "families": [
+            {
+              "family": "boundary",
+              "omitted_relations": 0,
+              "retained_relations": 2,
+              "status": "partial",
+              "unknown_count": 0
+            },
+            {
+              "family": "call-flow",
+              "omitted_relations": 0,
+              "retained_relations": 6,
+              "status": "partial",
+              "unknown_count": 35
+            },
+            {
+              "family": "child-process",
+              "omitted_relations": 0,
+              "retained_relations": 0,
+              "status": "partial",
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "omitted_relations": 0,
+              "retained_relations": 28,
+              "status": "partial",
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "omitted_relations": 0,
+              "retained_relations": 0,
+              "status": "partial",
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "omitted_relations": 0,
+              "retained_relations": 214,
+              "status": "partial",
+              "unknown_count": 47
+            },
+            {
+              "family": "event",
+              "omitted_relations": 0,
+              "retained_relations": 1,
+              "status": "partial",
+              "unknown_count": 1
+            },
+            {
+              "family": "object-flow",
+              "omitted_relations": 0,
+              "retained_relations": 33,
+              "status": "partial",
+              "unknown_count": 35
+            },
+            {
+              "family": "promise-ownership",
+              "omitted_relations": 0,
+              "retained_relations": 6,
+              "status": "partial",
+              "unknown_count": 6
+            },
+            {
+              "family": "request",
+              "omitted_relations": 0,
+              "retained_relations": 0,
+              "status": "partial",
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "omitted_relations": 0,
+              "retained_relations": 0,
+              "status": "partial",
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "omitted_relations": 0,
+              "retained_relations": 0,
+              "status": "partial",
+              "unknown_count": 0
+            }
+          ],
+          "limits": [],
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "status": "unknown",
+          "truncated": false
+        },
+        "semantic_unknowns": 124
+      },
+      "runtime_executed": false,
+      "full_evidence_path": "/private/tmp/jarvis-openclaw-rea-phase-a-parts10-11-20261024.json",
+      "id": "OC-10",
+      "source_paths": [
+        "extensions/telegram/src/api-fetch.ts",
+        "extensions/telegram/src/bot-handlers.runtime.ts",
+        "extensions/telegram/update-offset-runtime-api.ts",
+        "extensions/telegram/session-key-api.ts"
+      ],
+      "source_selection": {
+        "requested_paths": [
+          "extensions/telegram/src/api-fetch.ts",
+          "extensions/telegram/src/bot-handlers.runtime.ts",
+          "extensions/telegram/update-offset-runtime-api.ts",
+          "extensions/telegram/session-key-api.ts"
+        ],
+        "unselected_files": 1
+      },
+      "semantic_unknowns": 124,
+      "provenance": "REA_PART10_PROVENANCE.json",
+      "summary": "REA_PART10_SUMMARY.json",
+      "export_sha256": "1231c70b6432bd4e1c2e903439be6600187c1f81354cf543ac550cb976d94c0e",
+      "export_bytes": 6314996,
+      "limitations": [
+        "Only this inert selected partition was analyzed; imported implementations and runtime behavior remain unknown.",
+        "Application coverage partial; semantic coverage unknown."
+      ]
+    },
+    {
+      "topic": "Telegram inbound authorization/pipeline, conversation binding and offset persistence",
+      "parent_evidence_id": "ev_e7f610e97cf5bb4c92d1777503db2e2a26e0c6dd38107f7d1c23b39909ceaca4",
+      "summary_evidence_id": "ev_6bf11b5980ba7dd2f4577d665bdd0c620eb5095c1bacc378b982abcf34e42624",
+      "partition_sha256": "862966469e675e1efe071d8d3094e9268bbab09fe0ea2b8d7481dd9f0a8a96e1",
+      "statistics": {
+        "findings": 128,
+        "invalid_utf8_files": 0,
+        "modules": 0,
+        "nested_asar_containers": 0,
+        "parse_failures": 0,
+        "parsed_javascript_files": 4,
+        "relevant_files": 5,
+        "skipped_javascript_files": 0,
+        "text_bytes_read": 45524,
+        "visited_ast_nodes": 5113
+      },
+      "coverage": {
+        "application": {
+          "limits": [],
+          "omitted_count": null,
+          "status": "partial",
+          "truncated": false
+        },
+        "application_unknowns": 1,
+        "semantic": {
+          "families": [
+            {
+              "family": "boundary",
+              "omitted_relations": 0,
+              "retained_relations": 11,
+              "status": "partial",
+              "unknown_count": 0
+            },
+            {
+              "family": "call-flow",
+              "omitted_relations": 0,
+              "retained_relations": 155,
+              "status": "partial",
+              "unknown_count": 142
+            },
+            {
+              "family": "child-process",
+              "omitted_relations": 0,
+              "retained_relations": 0,
+              "status": "partial",
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "omitted_relations": 0,
+              "retained_relations": 239,
+              "status": "partial",
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "omitted_relations": 0,
+              "retained_relations": 0,
+              "status": "partial",
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "omitted_relations": 0,
+              "retained_relations": 1781,
+              "status": "partial",
+              "unknown_count": 326
+            },
+            {
+              "family": "event",
+              "omitted_relations": 0,
+              "retained_relations": 1,
+              "status": "partial",
+              "unknown_count": 1
+            },
+            {
+              "family": "object-flow",
+              "omitted_relations": 0,
+              "retained_relations": 313,
+              "status": "partial",
+              "unknown_count": 325
+            },
+            {
+              "family": "promise-ownership",
+              "omitted_relations": 0,
+              "retained_relations": 44,
+              "status": "partial",
+              "unknown_count": 42
+            },
+            {
+              "family": "request",
+              "omitted_relations": 0,
+              "retained_relations": 0,
+              "status": "partial",
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "omitted_relations": 0,
+              "retained_relations": 0,
+              "status": "partial",
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "omitted_relations": 0,
+              "retained_relations": 1,
+              "status": "partial",
+              "unknown_count": 1
+            }
+          ],
+          "limits": [],
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "status": "unknown",
+          "truncated": false
+        },
+        "semantic_unknowns": 837
+      },
+      "runtime_executed": false,
+      "full_evidence_path": "/private/tmp/jarvis-openclaw-rea-phase-a-parts10-11-20261024.json",
+      "id": "OC-11",
+      "source_paths": [
+        "extensions/telegram/src/update-offset-store.ts",
+        "extensions/telegram/src/session-conversation.ts",
+        "extensions/telegram/src/bot-handlers.inbound-authorization.ts",
+        "extensions/telegram/src/bot-handlers.inbound-pipeline.ts"
+      ],
+      "source_selection": {
+        "requested_paths": [
+          "extensions/telegram/src/update-offset-store.ts",
+          "extensions/telegram/src/session-conversation.ts",
+          "extensions/telegram/src/bot-handlers.inbound-authorization.ts",
+          "extensions/telegram/src/bot-handlers.inbound-pipeline.ts"
+        ],
+        "unselected_files": 1
+      },
+      "semantic_unknowns": 837,
+      "provenance": "REA_PART11_PROVENANCE.json",
+      "summary": "REA_PART11_SUMMARY.json",
+      "export_sha256": "1231c70b6432bd4e1c2e903439be6600187c1f81354cf543ac550cb976d94c0e",
+      "export_bytes": 6314996,
+      "limitations": [
+        "Only this inert selected partition was analyzed; imported implementations and runtime behavior remain unknown.",
+        "Application coverage partial; semantic coverage unknown."
+      ]
+    },
+    {
+      "topic": "Public web fetch selection, content extraction and SSRF/DNS pinning boundaries",
+      "parent_evidence_id": "ev_fb243fa619291280abc90a15b505371284b7a9d4646eb4b8a4ee97dcb097a085",
+      "summary_evidence_id": "ev_db49aef0853c28feb67b237d5867b9c24dd44ffa8a2fe6db25b186b8f4d48a1c",
+      "partition_sha256": "855c5875fbd8641c2a00dca50ee9f452d06cd2b372996ea48dce7a754776f1d2",
+      "statistics": {
+        "relevant_files": 5,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 189492,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 4,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 4290,
+        "findings": 106,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "complete",
+          "truncated": false,
+          "omitted_count": 0,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 1,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 254,
+              "omitted_relations": 0,
+              "unknown_count": 219
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 258,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 1987,
+              "omitted_relations": 0,
+              "unknown_count": 305
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 188,
+              "omitted_relations": 0,
+              "unknown_count": 246
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 27,
+              "omitted_relations": 0,
+              "unknown_count": 21
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 0,
+        "semantic_unknowns": 791
+      },
+      "runtime_executed": false,
+      "full_evidence_path": "/private/tmp/jarvis-openclaw-reference-20261024/part12/evidence.json",
+      "id": "OC-12",
+      "source_paths": [
+        "package.json",
+        "src/web-fetch/runtime.ts",
+        "src/web-fetch/content-extractors.runtime.ts",
+        "src/infra/net/ssrf.ts",
+        "src/infra/net/ssrf.pinning.test.ts"
+      ],
+      "source_selection": {
+        "requested_paths": [
+          "package.json",
+          "src/web-fetch/runtime.ts",
+          "src/web-fetch/content-extractors.runtime.ts",
+          "src/infra/net/ssrf.ts",
+          "src/infra/net/ssrf.pinning.test.ts"
+        ],
+        "unselected_files": 0
+      },
+      "semantic_unknowns": 791,
+      "provenance": "REA_PART12_PROVENANCE.json",
+      "summary": "REA_PART12_SUMMARY.json",
+      "export_sha256": "4dda95f3d587373e7a52dcf599371d207216e812a5c220e4ac89870bba3db788",
+      "export_bytes": 5466957,
+      "limitations": [
+        "Only this inert selected partition was analyzed; imported implementations and runtime behavior remain unknown.",
+        "Application coverage complete; semantic coverage unknown."
+      ]
+    },
+    {
+      "id": "OC-13",
+      "topic": "SQLite backup command boundaries, archive verification/staging restore and exclusive doctor maintenance ownership",
+      "parent_evidence_id": "ev_462c7e2961af437958c8c84887336bac655f311035012c1064d6c8a4403c69cc",
+      "summary_evidence_id": "ev_a73ed8a2c72e3f9d4ea4a7c729f46c2ae21561d2551b1ad80bb7e64c61e063e3",
+      "partition_sha256": "eca264e4a924e1b66ffe66aa7ed549b48ae3e965bf03151908a81a34834d7334",
+      "statistics": {
+        "relevant_files": 5,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 208956,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 4,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 6498,
+        "findings": 162,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "partial",
+          "truncated": false,
+          "omitted_count": null,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 1,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 180,
+              "omitted_relations": 0,
+              "unknown_count": 398
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 320,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 2835,
+              "omitted_relations": 0,
+              "unknown_count": 483
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 419,
+              "omitted_relations": 0,
+              "unknown_count": 474
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 77,
+              "omitted_relations": 0,
+              "unknown_count": 74
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 0,
+        "semantic_unknowns": 1429
+      },
+      "runtime_executed": false,
+      "full_evidence_path": "/private/tmp/jarvis-openclaw-reference-20261024/part13/evidence-with-views.json",
+      "source_paths": [
+        "package.json",
+        "src/commands/backup-sqlite.ts",
+        "src/commands/backup-verify.ts",
+        "src/commands/backup-restore.ts",
+        "src/commands/doctor-sqlite-maintenance-lock.ts"
+      ],
+      "source_selection": {
+        "requested_paths": [
+          "package.json",
+          "src/commands/backup-sqlite.ts",
+          "src/commands/backup-verify.ts",
+          "src/commands/backup-restore.ts",
+          "src/commands/doctor-sqlite-maintenance-lock.ts"
+        ],
+        "unselected_files": 0
+      },
+      "semantic_unknowns": 1429,
+      "provenance": "REA_PART13_PROVENANCE.json",
+      "summary": "REA_PART13_SUMMARY.json",
+      "export_sha256": "240b2e9936ac0cf44dec9ec8e105c49602f7882047ad049c4cc143c133d92369",
+      "export_bytes": 8201682,
+      "limitations": [
+        "Four inert selected TypeScript modules plus package metadata only. Imported snapshot/manifest/lock/credential implementations and runtime behavior remain unknown.",
+        "Application partial, semantic unknown1429; zero unselected files is not full semantic or repository coverage.",
+        "No backup/restore/doctor product implementation or phase A closure is credited by this research."
+      ]
     }
   ],
   "remaining_parts": [
@@ -1305,6 +1902,61 @@
       "original_plan_id": "OC-11"
     }
   ],
-  "rea_parsed_unique_source_files": 36,
-  "remaining_parts_id_note": "Los scopes restantes usan SCOPE para no confundir etiquetas del plan inicial con lotes OC completados. Un lote estático no cierra un scope."
+  "rea_parsed_unique_source_files": 52,
+  "remaining_parts_id_note": "Los scopes restantes usan SCOPE para no confundir etiquetas del plan inicial con lotes OC completados. Un lote estático no cierra un scope.",
+  "rea_parsed_unique_source_paths": [
+    "extensions/codex/src/app-server/connection-health.ts",
+    "extensions/codex/src/app-server/dynamic-tool-response-state.ts",
+    "extensions/codex/src/app-server/dynamic-tool-result-projection.ts",
+    "extensions/codex/src/app-server/thread-ownership.ts",
+    "extensions/memory-core/src/memory/manager-chunk-writer.ts",
+    "extensions/memory-core/src/memory/manager-search-schema.ts",
+    "extensions/memory-core/src/memory/manager-search-scorer.ts",
+    "extensions/memory-core/src/memory/manager-search.ts",
+    "extensions/memory-core/src/memory/manager.ts",
+    "extensions/telegram/session-key-api.ts",
+    "extensions/telegram/src/api-fetch.ts",
+    "extensions/telegram/src/bot-handlers.inbound-authorization.ts",
+    "extensions/telegram/src/bot-handlers.inbound-pipeline.ts",
+    "extensions/telegram/src/bot-handlers.runtime.ts",
+    "extensions/telegram/src/session-conversation.ts",
+    "extensions/telegram/src/update-offset-store.ts",
+    "extensions/telegram/update-offset-runtime-api.ts",
+    "src/agents/agent-bundle-mcp-manager-lifecycle.ts",
+    "src/agents/agent-bundle-mcp-manager.ts",
+    "src/agents/agent-scope.ts",
+    "src/agents/agent-tools.before-tool-call.policy.ts",
+    "src/agents/agent-tools.before-tool-call.wrapper.ts",
+    "src/agents/embedded-agent-runner/run-orchestrator.ts",
+    "src/agents/mcp-client-elicitation.ts",
+    "src/agents/mcp-client-lifecycle.ts",
+    "src/agents/native-mcp-runtime-client.ts",
+    "src/agents/tool-fs-policy.types.ts",
+    "src/agents/tool-policy-pipeline.ts",
+    "src/commands/backup-restore.ts",
+    "src/commands/backup-sqlite.ts",
+    "src/commands/backup-verify.ts",
+    "src/commands/doctor-sqlite-maintenance-lock.ts",
+    "src/cron/schedule.ts",
+    "src/cron/scheduled-tool-policy.ts",
+    "src/cron/service/jobs-scheduling.ts",
+    "src/cron/service/startup-run-repair.ts",
+    "src/gateway/server-methods/chat.ts",
+    "src/gateway/server-methods/health.ts",
+    "src/gateway/server.ts",
+    "src/gateway/session-observer.ts",
+    "src/infra/net/ssrf.pinning.test.ts",
+    "src/infra/net/ssrf.ts",
+    "src/mcp/tools-stdio-server.ts",
+    "src/process/supervisor/adapters/env.ts",
+    "src/process/supervisor/cancellation-policy.ts",
+    "src/process/supervisor/service-child-cleanup-deadline.ts",
+    "src/process/supervisor/supervisor.ts",
+    "src/skills/library/authoring.ts",
+    "src/skills/library/import.kernel.ts",
+    "src/skills/library/selection-read.kernel.ts",
+    "src/web-fetch/content-extractors.runtime.ts",
+    "src/web-fetch/runtime.ts"
+  ],
+  "unique_source_count_method": "Union of exact TS/JS paths selected in completed static batches; excludes package/license metadata, deduplicates across batches, includes selected test sources. This count is not semantic or runtime coverage."
 }

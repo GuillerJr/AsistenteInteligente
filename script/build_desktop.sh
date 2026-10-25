@@ -58,6 +58,8 @@ cat > "$JARVIS_APP_PATH/Contents/Info.plist" <<'PLIST'
 <key>NSPrincipalClass</key><string>NSApplication</string>
 <key>LSUIElement</key><false/>
 <key>NSHighResolutionCapable</key><true/>
+<key>NSMicrophoneUsageDescription</key><string>Jarvis usa el micrófono solo cuando inicias el dictado. El audio permanece en memoria y se exige reconocimiento en este Mac.</string>
+<key>NSSpeechRecognitionUsageDescription</key><string>Jarvis convierte tu voz a texto únicamente al iniciar el dictado y si el reconocimiento local está disponible.</string>
 </dict></plist>
 PLIST
 /usr/bin/plutil -lint "$JARVIS_APP_PATH/Contents/Info.plist"

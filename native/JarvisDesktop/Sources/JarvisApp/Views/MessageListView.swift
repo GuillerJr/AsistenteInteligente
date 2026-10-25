@@ -4,6 +4,8 @@ struct MessageListView: View {
     let messages: [ChatMessage]
     let temporary: Bool
     let streamingText: String
+    let canRead: Bool
+    let onRead: (ChatMessage) -> Void
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -24,6 +26,10 @@ struct MessageListView: View {
                                   systemImage: message.role == "user" ? "person.crop.circle" : "sparkle")
                                 .font(.callout.weight(.semibold)).foregroundStyle(.secondary)
                             Text(message.text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                            if message.role == "assistant" {
+                                Button("Leer en voz alta", systemImage: "speaker.wave.2") { onRead(message) }
+                                    .font(.caption).disabled(!canRead || message.text.utf8.count > 16000 || message.text.isEmpty)
+                            }
                         }.id(message.id)
                     }
                     if !streamingText.isEmpty {

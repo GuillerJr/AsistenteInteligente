@@ -28,6 +28,9 @@ final class ChatStore {
     let access = AccessStore()
     let mcp = MCPStore()
     let management = ManagementStore()
+    let telegram = TelegramStore()
+    let voice: LocalVoiceController
+    var dictationNotice: String?
     var newAgentID = "jarvis"
     var lostTemporaryRun = false
 
@@ -40,13 +43,48 @@ final class ChatStore {
     @ObservationIgnored private var pendingSubmission: PendingSubmission?
     @ObservationIgnored private var activeSession: ChatSession?
     @ObservationIgnored private var stopping = false
+    @ObservationIgnored private var awaitingStartupReadiness = false
+    @ObservationIgnored private var startupErrorMessage: String?
+    @ObservationIgnored private var conversationRefresh: ConversationRefresh?
+    @ObservationIgnored private var observedConversationRunID: String?
 
     var selected: ChatSession? { sessions.first { $0.id == selectedID } }
-    var canSend: Bool { ready && connected && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && activeRunID == nil && selected != nil
+    var canSend: Bool { ready && connected && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !telegram.isChanging && !voice.canStopDictation && activeRunID == nil && selected != nil
                        && selected?.archived == false
                        && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    var canChangeSession: Bool { ready && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && activeRunID == nil }
+    var canChangeSession: Bool { ready && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !telegram.isChanging && !voice.canStopDictation && activeRunID == nil }
     var selectedAgentName: String { management.agents.first(where: { $0.id == selected?.agentID })?.name ?? selected?.agentID ?? "Jarvis" }
+    var canUseVoice: Bool { canChangeSession && connected && selected?.archived == false && selected != nil }
+
+    init(voice: LocalVoiceController? = nil) {
+        self.voice = voice ?? LocalVoiceController(driver: MacLocalVoiceDriver())
+        self.voice.onTranscript = { [weak self] transcript in self?.acceptDictation(transcript) }
+    }
+
+    func startDictation() {
+        guard canUseVoice, let selected else { return }
+        dictationNotice = nil
+        voice.startDictation(contextID: LocalVoiceDraftBridge.contextID(selected.scope))
+    }
+
+    func readMessage(_ message: ChatMessage) {
+        guard canUseVoice, message.role == "assistant", messages.contains(where: { $0.id == message.id }), let selected else { return }
+        voice.play(text: message.text, contextID: LocalVoiceDraftBridge.contextID(selected.scope))
+    }
+
+    func stopVoice() { voice.cancel() }
+
+    private func acceptDictation(_ transcript: LocalVoiceTranscript) {
+        let mayAcceptDraft = ready && connected && !stopping && selected?.archived == false && selected != nil
+        guard let value = LocalVoiceDraftBridge.append(transcript, scope: selected?.scope, existing: draft, eligible: mayAcceptDraft) else {
+            dictationNotice = "El dictado no se añadió: la conversación cambió o se alcanzó el límite del borrador."
+            return
+        }
+        draft = value
+        dictationNotice = transcript.completion == .partialAtStop
+            ? "Se añadió un dictado parcial al borrador. Revísalo antes de enviarlo."
+            : "Dictado local añadido al borrador. Revísalo antes de enviarlo."
+    }
 
     func start() async {
         guard !started else { return }
@@ -58,9 +96,11 @@ final class ChatStore {
             self.options = options
             let connection = LocalRPCClient(stateDirectory: options.state)
             client = connection
+            conversationRefresh = ConversationRefresh(reader: ConversationReader(transport: connection))
             access.configure(client: LocalRPCClient(stateDirectory: options.state))
             mcp.configure(client: LocalRPCClient(stateDirectory: options.state))
             management.configure(client: LocalRPCClient(stateDirectory: options.state))
+            telegram.configure(client: LocalRPCClient(stateDirectory: options.state))
             try service.start(options)
             try await ServiceBootstrap.waitForHealth(stateDirectory: options.state) { service.isRunning }
             try await refreshStatus()
@@ -72,8 +112,8 @@ final class ChatStore {
             try await mcp.refresh()
             startMonitor()
         } catch {
-            statusText = "Jarvis necesita configuración"
-            report(error)
+            if recordStartupFailure(error) { startMonitor() }
+            else { statusText = "Jarvis necesita configuración" }
         }
     }
 
@@ -87,18 +127,33 @@ final class ChatStore {
                 if self.starting { continue }
                 do {
                     guard self.service.isRunning else { throw RPCFailure.disconnected }
+                    if self.awaitingStartupReadiness, let options = self.options {
+                        try await ServiceBootstrap.waitForHealth(stateDirectory: options.state, timeout: 1) { self.service.isRunning }
+                    }
                     try await self.refreshStatus()
                     try await self.access.refreshCatalog()
                     try await self.mcp.refresh()
                     try await self.management.refresh()
                     if self.canChangeSession { try await self.refreshSessions() }
+                    try await self.refreshSelectedConversation()
                     if self.activeRunID == nil { try await self.access.refreshApprovals(runID: nil) }
                     if self.runPhase == "disconnected", self.activeRunID != nil { self.resumeStatus() }
+                    // Recovery performs only reads. It never selects/creates a
+                    // conversation, relaunches a child, or resends an operation.
+                    self.finishStartupRecovery()
                 } catch {
                     if Task.isCancelled || self.stopping { return }
                     self.ready = false; self.connected = false
-                    self.statusText = "Servicio desconectado"
-                    self.report(error)
+                    self.voice.cancel()
+                    if self.awaitingStartupReadiness, self.service.isRunning,
+                       let failure = error as? RPCFailure,
+                       [.startupUnconfirmed, .unavailable, .disconnected].contains(failure) {
+                        self.reportPendingStartup()
+                    } else {
+                        self.awaitingStartupReadiness = false
+                        self.statusText = "Servicio desconectado"
+                        self.report(error)
+                    }
                     // Only read-side supervision retries. Mutations keep their identities.
                 }
             }
@@ -120,6 +175,7 @@ final class ChatStore {
         }
         ready = serverReady
         connected = accountConnected
+        if !serverReady || !accountConnected { voice.cancel() }
         capabilities = result["capabilities"]
         access.refreshCapabilities(capabilities)
         statusText = accountConnected ? "Codex con ChatGPT conectado" : "Inicia sesión con ChatGPT"
@@ -149,11 +205,13 @@ final class ChatStore {
 
     func createSession(temporary: Bool) async {
         guard canChangeSession else { return }
+        voice.cancel(); dictationNotice = nil
         guard management.agents.contains(where: { $0.id == newAgentID }) else {
             errorMessage = "Selecciona un agente disponible para la conversación nueva."; return
         }
+        conversationRefresh?.setScope(nil)
         busy = true
-        defer { busy = false }
+        defer { busy = false; conversationRefresh?.setScope(selected?.scope) }
         do {
             let result = try await rpc("sessions.create", ["title": .string(temporary ? "Chat temporal" : "Nueva conversación"),
                                                             "temporary": .bool(temporary), "agent_id": .string(newAgentID)])
@@ -164,19 +222,22 @@ final class ChatStore {
             management.setContext(session.scope)
             messages = []; activities = []; draft = ""; streamingText = ""; errorMessage = nil
             receipts = []
+            observedConversationRunID = nil
         } catch { report(error) }
     }
 
     func selectSession(_ id: String) async {
         guard canChangeSession, let session = sessions.first(where: { $0.id == id }) else { return }
+        conversationRefresh?.setScope(nil)
+        voice.cancel(); dictationNotice = nil
         busy = true
-        defer { busy = false }
+        defer { busy = false; conversationRefresh?.setScope(selected?.scope) }
         do {
             let rows = try await fetchMessages(session)
             selectedID = id
             access.setContext(session.scope)
             management.setContext(session.scope)
-            messages = try decodeMessages(rows)
+            messages = try decodeMessages(rows, scope: session.scope)
             activities = []; streamingText = ""; errorMessage = nil
             receipts = []
             try await access.refreshApprovals(runID: nil)
@@ -188,18 +249,46 @@ final class ChatStore {
         ["session_id": .string(session.id), "temporary": .bool(session.temporary)]
     }
 
-    private func decodeMessages(_ rows: [RPCValue]) throws -> [ChatMessage] {
+    private func decodeMessages(_ rows: [RPCValue], scope: SessionScope) throws -> [ChatMessage] {
         try rows.map { row in
-            guard let role = row["role"].string, let text = row["text"].string else {
-                throw RPCFailure.invalidResponse
-            }
-            return ChatMessage(role: role, text: text)
+            let message = try ConversationMessage(row, scope: scope)
+            return chatMessage(message, scope: scope)
         }
+    }
+
+    private func chatMessage(_ message: ConversationMessage, scope: SessionScope) -> ChatMessage {
+        ChatMessage(id: "\(scope.temporary):\(scope.sessionID):\(message.id)", role: message.role, text: message.text)
     }
 
     private func refreshMessages(_ session: ChatSession) async throws {
         let rows = try await fetchMessages(session)
-        if selectedID == session.id { messages = try decodeMessages(rows) }
+        if selected?.scope == session.scope {
+            let decoded = try decodeMessages(rows, scope: session.scope)
+            if messages != decoded { messages = decoded }
+        }
+    }
+
+    private func refreshSelectedConversation() async throws {
+        guard !busy, !starting, activeRunID == nil, let session = selected,
+              let snapshot = try await conversationRefresh?.refresh() else { return }
+        guard !stopping, !Task.isCancelled, !busy, activeRunID == nil, selected?.scope == snapshot.scope else { return }
+        let decoded = snapshot.messages.map { chatMessage($0, scope: snapshot.scope) }
+        if messages != decoded { messages = decoded }
+        guard let run = snapshot.latestRun else { return }
+        if receipts != run.receipts { receipts = run.receipts }
+        let newRun = observedConversationRunID != run.id
+        observedConversationRunID = run.id
+        if run.active {
+            // An external channel owns the turn; this window only follows its
+            // existing run and approval cards. Draft and voice stay untouched.
+            activeRunID = run.id; activeSession = session; runPhase = run.status
+            activities = []; streamingText = ""
+            watchRun(run.id, session: session)
+        } else if newRun {
+            runPhase = run.status
+            if let error = run.errorCode, !error.isEmpty { errorMessage = RunPresentation.errorMessage(error) }
+            else if run.outcome == "unknown" { errorMessage = "El resultado de una ejecución anterior quedó sin confirmar. No se repetirá automáticamente." }
+        }
     }
 
     private func fetchMessages(_ session: ChatSession) async throws -> [RPCValue] {
@@ -222,6 +311,7 @@ final class ChatStore {
 
     func send() async {
         guard canSend, let session = selected else { return }
+        voice.cancel(); dictationNotice = nil
         busy = true
         defer { busy = false }
         var params = scope(session)
@@ -237,6 +327,7 @@ final class ChatStore {
             let result = try await rpc("runs.start", params)
             guard let runID = result["run_id"].string else { throw RPCFailure.invalidResponse }
             activeRunID = runID
+            observedConversationRunID = runID
             runPhase = result["status"].string ?? "queued"
             if draft == submission.text { draft = "" }
             activities = []
@@ -343,6 +434,7 @@ final class ChatStore {
               let phase = latest["status"].string else { return }
         var parameters = scope(session); parameters["run_id"] = .string(runID)
         let result = try await rpc("runs.get", parameters)
+        observedConversationRunID = runID
         try applyReceipts(result["run"])
         runPhase = phase
         if ["queued", "running", "waiting_approval", "cancelling", "cleaning"].contains(phase) {
@@ -358,11 +450,13 @@ final class ChatStore {
         guard let values = run["action_receipts"].array else { throw RPCFailure.invalidResponse }
         let parsed = try values.map(ActionReceipt.init)
         guard Set(parsed.map(\.id)).count == parsed.count else { throw RPCFailure.invalidResponse }
-        receipts = parsed
+        if receipts != parsed { receipts = parsed }
     }
 
     func reconnect() async {
         guard !starting, let options else { return }
+        conversationRefresh?.setScope(nil)
+        voice.cancel(); dictationNotice = nil
         starting = true
         defer { starting = false; startMonitor() }
         polling?.cancel()
@@ -370,6 +464,7 @@ final class ChatStore {
         await access.close()
         await mcp.close()
         await management.close()
+        await telegram.close()
         do {
             let restarted = !service.isRunning
             if restarted {
@@ -386,6 +481,7 @@ final class ChatStore {
             try await access.refreshCatalog()
             try await mcp.refresh()
             try await management.refresh()
+            finishStartupRecovery()
             if restarted, activeSession?.temporary == true {
                 lostTemporaryRun = true
                 runPhase = "disconnected"
@@ -393,13 +489,14 @@ final class ChatStore {
             } else if activeRunID != nil {
                 access.setContext((activeSession ?? selected)?.scope)
                 management.setContext((activeSession ?? selected)?.scope)
+                conversationRefresh?.setScope((activeSession ?? selected)?.scope)
                 runPhase = "disconnected"
                 resumeStatus()
             }
             else if let id = selectedID, sessions.contains(where: { $0.id == id }) { await selectSession(id) }
             else if let first = sessions.first { await selectSession(first.id) }
             else { await createSession(temporary: false) }
-        } catch { report(error) }
+        } catch { _ = recordStartupFailure(error) }
     }
 
     func acknowledgeLostTemporaryRun() {
@@ -418,6 +515,7 @@ final class ChatStore {
     }
 
     func forkSession(_ session: ChatSession) async {
+        voice.cancel(); dictationNotice = nil
         guard canChangeSession,
               OwnerManagementReview.confirm(title: "Ramificar conversación", action: "Crear rama",
                 detail: "Se copiará únicamente el contexto completado de «\(session.title)» a una conversación nueva del mismo agente. No se ejecutan ni copian acciones, runs o autorizaciones.") else { return }
@@ -447,6 +545,7 @@ final class ChatStore {
 
     func setArchived(_ session: ChatSession, archived: Bool) async {
         guard canChangeSession else { return }
+        if selectedID == session.id { voice.cancel(); dictationNotice = nil }
         var parameters = scope(session); parameters["archived"] = .bool(archived)
         _ = await updateSession(parameters)
     }
@@ -467,6 +566,8 @@ final class ChatStore {
 
     func deleteSession(_ session: ChatSession) async {
         guard canChangeSession else { return }
+        if selectedID == session.id { conversationRefresh?.setScope(nil) }
+        if selectedID == session.id { voice.cancel(); dictationNotice = nil }
         busy = true
         do {
             let result = try await rpc("sessions.delete", scope(session))
@@ -480,6 +581,7 @@ final class ChatStore {
             }
         } catch { report(error) }
         busy = false
+        conversationRefresh?.setScope(selected?.scope)
         if selectedID == nil, let first = sessions.first { await selectSession(first.id) }
     }
 
@@ -497,11 +599,14 @@ final class ChatStore {
 
     func logout() async {
         guard activeRunID == nil else { return }
+        voice.cancel(); dictationNotice = nil
         do { _ = try await rpc("provider.logout"); try await refreshStatus() }
         catch { report(error) }
     }
 
     func shutdown() async -> Bool {
+        conversationRefresh?.setScope(nil)
+        voice.cancel(); dictationNotice = nil
         stopping = true
         ready = false
         statusText = "Cerrando el servicio y asentando las ejecuciones…"
@@ -515,10 +620,36 @@ final class ChatStore {
         await access.close()
         await mcp.close()
         await management.close()
+        await telegram.close()
         return graceful
     }
 
     private func report(_ error: Error) {
+        startupErrorMessage = nil
         errorMessage = CapabilityPresentation.errorMessage(error)
+    }
+
+    private func reportPendingStartup() {
+        awaitingStartupReadiness = true
+        statusText = "Arranque no confirmado"
+        if errorMessage == nil || (startupErrorMessage != nil && errorMessage == startupErrorMessage) {
+            let message = RPCFailure.startupUnconfirmed.localizedDescription
+            errorMessage = message; startupErrorMessage = message
+        }
+    }
+
+    @discardableResult
+    private func recordStartupFailure(_ error: Error) -> Bool {
+        if error as? RPCFailure == .startupUnconfirmed { reportPendingStartup(); return true }
+        awaitingStartupReadiness = false
+        report(error)
+        return false
+    }
+
+    private func finishStartupRecovery() {
+        guard awaitingStartupReadiness else { return }
+        awaitingStartupReadiness = false
+        if startupErrorMessage != nil, errorMessage == startupErrorMessage { errorMessage = nil }
+        startupErrorMessage = nil
     }
 }

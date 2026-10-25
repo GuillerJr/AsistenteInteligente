@@ -25,6 +25,10 @@ public enum ServiceBootstrap {
                 }
                 try await Task.sleep(for: .milliseconds(100))
             }
+            if let failure = lastError as? RPCFailure, failure == .unavailable || failure == .disconnected {
+                guard isRunning() else { throw RPCFailure.serviceExited }
+                throw RPCFailure.startupUnconfirmed
+            }
             throw lastError
         } catch {
             await client.close()

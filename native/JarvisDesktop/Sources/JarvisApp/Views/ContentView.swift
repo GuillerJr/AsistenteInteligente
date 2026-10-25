@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct ContentView: View {
@@ -30,7 +31,8 @@ struct ContentView: View {
                 }.padding(.horizontal, 24).padding(.vertical, 12)
                 Divider()
                 MessageListView(messages: store.messages, temporary: store.selected?.temporary ?? false,
-                                streamingText: store.streamingText)
+                                streamingText: store.streamingText, canRead: store.canUseVoice && !store.voice.canStopDictation,
+                                onRead: store.readMessage)
                 ApprovalListView(access: store.access)
                 if !store.receipts.isEmpty {
                     ReceiptListView(receipts: store.receipts)
@@ -85,6 +87,7 @@ struct ContentView: View {
                         Button("Skills") { inspectorTab = "skills"; showInspector = true }
                         Button("Programador") { inspectorTab = "schedules"; showInspector = true }
                         Button("Procesos") { inspectorTab = "processes"; showInspector = true }
+                        Button("Telegram") { inspectorTab = "telegram"; showInspector = true }
                     }.disabled(!store.ready)
                 }
                 ToolbarItem {
@@ -102,6 +105,7 @@ struct ContentView: View {
                     Text("Skills").tag("skills")
                     Text("Programador").tag("schedules")
                     Text("Procesos").tag("processes")
+                    Text("Telegram").tag("telegram")
                 }.pickerStyle(.menu).padding()
                 if inspectorTab == "mcp" { MCPView(store: store) }
                 else if inspectorTab == "memory" { MemoryView(store: store) }
@@ -109,10 +113,18 @@ struct ContentView: View {
                 else if inspectorTab == "skills" { SkillsView(store: store) }
                 else if inspectorTab == "schedules" { SchedulesView(store: store) }
                 else if inspectorTab == "processes" { ProcessesView(store: store) }
+                else if inspectorTab == "telegram" { TelegramView(store: store) }
                 else { CapabilitiesView(store: store) }
             }
             .inspectorColumnWidth(min: 360, ideal: 420, max: 560)
         }
         .frame(minWidth: 720, minHeight: 520)
+        .onDisappear { store.stopVoice() }
+        .onChange(of: store.selected?.scope) { _, _ in store.stopVoice() }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
+            if (notification.object as? NSWindow)?.identifier?.rawValue == "jarvis.main" {
+                store.stopVoice(); store.telegram.clearSecretInput()
+            }
+        }
     }
 }

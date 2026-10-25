@@ -3,6 +3,11 @@ import XCTest
 @testable import DesktopCore
 
 final class MCPModelsTests: XCTestCase {
+    func testIncompleteCleanupDoesNotClaimClosedProcessesOrAutomaticReconnection() {
+        XCTAssertEqual(MCPPresentation.serverError("mcp_cleanup_incomplete"),
+                       "El cierre del programa y su grupo de procesos sigue sin confirmar. No se reconectó automáticamente. Vuelve a solicitar su cierre de forma explícita.")
+    }
+
     private func snapshot(_ changes: [String: RPCValue] = [:]) -> RPCValue {
         .object([
             "server_id": .string("fixture"), "protocol_version": .string("2026-07-28"),

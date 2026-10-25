@@ -33,6 +33,9 @@ el dueño completa el acceso oficial en su navegador.
 El arranque admite hasta 30 segundos para la primera importación del servicio y
 consulta su disponibilidad con llamadas breves de solo lectura. Si falla, conserva
 el error específico; no lanza otro proceso ni adopta el servicio de otra instancia.
+Si el hijo sigue vivo al agotar la espera, indica «Arranque no confirmado» y
+continúa sólo con consultas de disponibilidad. Esa recuperación no crea chats ni
+repite operaciones; elimina únicamente su propio aviso al recuperar el servicio.
 Las llamadas normales tienen un plazo total de hasta 30 segundos, compatible con
 el plazo de 20 segundos del cliente oficial. El I/O usa un reloj monotónico y no
 renueva el plazo cada vez que llega un fragmento.
@@ -77,6 +80,13 @@ mutación. Al recuperar un run activo se retoma su supervisión. Si un temporal 
 pierde al reiniciar, la interfaz conserva el aviso de resultado sin confirmar hasta
 que el dueño lo reconoce; no lo transforma en éxito.
 
+La conversación seleccionada también se actualiza por lecturas acotadas cuando
+un canal externo añade mensajes o una ejecución. Los IDs persistentes evitan
+reconstruir mensajes iguales; tampoco se reasignan recibos idénticos. Se descartan
+respuestas y errores que lleguen después de cambiar de scope, sin solapar lecturas.
+Un run externo pendiente se sigue para mostrar su tarjeta de aprobación. No se
+reenvían mensajes, y el refresco conserva el borrador y la voz en curso.
+
 Las pruebas incluyen DTOs de scope/digest/caducidad, un entero JSON mayor que 2^53
 conservado sin reserializar, citas/offsets/hash y recibos. Los intercambios de
 aprobación/cancelación y citas obsoletas usan un socket Python real con un peer de
@@ -109,7 +119,7 @@ de proveedor predeterminado del perfil seleccionado.
 
 ## Gestión de la base A
 
-El menú «Gestionar» abre agentes, skills, programador y procesos. El agente se
+El menú «Gestionar» abre agentes, skills, programador, procesos y Telegram. El agente se
 elige para conversaciones nuevas; una conversación existente conserva su agente.
 «Ramificar conversación» copia sólo contexto completado a un chat nuevo, sin
 runs, recibos, credenciales ni aprobaciones. Las tareas pueden abrir su propio
@@ -143,3 +153,73 @@ Las pruebas nuevas ejercitan el servicio Python/SQLite/sockets reales con
 proveedor, prompts y decisiones sintéticos. Cubren ausencia de despacho implícito,
 versiones/hash obsoletos, activación explícita de una tarea, enlace a su sesión,
 ramificación, aislamiento de DTO y resultados de procesos sin falsa verificación.
+
+## Telegram y enlace privado
+
+El panel «Telegram» sólo conecta un bot cuando lo decide el dueño. El token se
+introduce en un SecureField, se borra del campo al conectar o cerrar el panel y
+sólo se transmite como argumento transitorio al servicio. No se guarda en
+preferencias, revisiones JSON, logs propios ni mensajes del modelo. El servicio
+lo conserva en RAM hasta desconectar o cerrar; debe introducirse de nuevo tras
+reiniciar. No se conecta ni activa un canal al abrir Jarvis o consultar su estado.
+
+Cada ruta autoriza un chat privado numérico positivo y crea una conversación
+persistente propia con el agente elegido. Se revisan bot, rutas, sesiones, carpeta
+e identidad de configuración antes de activar el canal por separado. Los grupos y
+adjuntos no entran en esta ruta de texto. Los mensajes de Telegram nunca resuelven
+las tarjetas de autorización nativas de herramientas. Los registros del canal
+presentan sólo metadatos y conservan los resultados sin confirmar sin reenvíos.
+
+«Enlazar tu chat desde Telegram» evita introducir el identificador manualmente.
+El dueño elige agente y revisa su versión, bot y carpeta, con dos confirmaciones
+expresas: leer/avanzar las actualizaciones del bot, incluidas las ignoradas, y usar
+un bot sin otro consumidor. El bloqueo del servicio sólo excluye lectores locales.
+El intento caduca en un máximo de 180 segundos y no ejecuta modelos ni envía una
+respuesta. El dueño pulsa un botón fijo para abrir el bot en la app Telegram y,
+si hace falta, pulsa «Iniciar» allí. Jarvis no inspecciona sus chats.
+
+La URI privada se obtiene una sola vez y pasa directamente al adaptador nativo.
+Se valida exactamente el [formato oficial de enlaces de bot](https://core.telegram.org/api/links#bot-links).
+No se muestra ni copia, no entra en la accesibilidad de la vista ni en su texto,
+ayuda, historial, preferencias o logs propios. Sólo se abre en una aplicación
+Telegram reconocida por sus metadatos de bundle, mediante una URL `tg:`; esos
+metadatos no acreditan firma. Se desactivan Recientes y la sustitución de otra
+instalación, sin usar navegador ni un handler arbitrario. La apertura tiene un
+plazo de 30 segundos y descarta diagnósticos que podrían incluir la URI. Si falla,
+se cancela el lector; si ese cierre no se confirma, se conserva la incertidumbre
+y se pide una nueva cancelación explícita, sin reintentar el enlace.
+
+La coincidencia únicamente propone un chat. Una segunda revisión nativa del
+dueño, ligada a claim, agente y revisión exactos, crea su ruta y conversación.
+El canal continúa detenido hasta activarlo por separado. Cancelar, caducar o
+desconectar descarta el intento. Telegram conserva el mensaje `/start`; la garantía
+de no incorporar su código a mensajes/modelo/journal corresponde a Jarvis, y no
+promete borrar registros externos de Telegram o del sistema.
+
+## Voz local
+
+«Dictar» solicita los permisos de micrófono y reconocimiento sólo tras la decisión
+del dueño. Exige reconocimiento en este Mac y no ofrece un respaldo remoto. Si el
+idioma o su modelo local no están disponibles, muestra un error controlado. No
+guarda archivos de audio ni transporta PCM al servicio Python, Codex u otro
+proveedor. El controlador no consulta permisos, hardware o voces al construirse.
+
+La captura se limita a 30 segundos, la espera de permisos a 30 y la finalización a
+3. El texto final o parcial sólo se añade al borrador de la conversación y modo
+temporal/persistente originales, conserva lo escrito y señala que debe revisarse.
+No envía un mensaje automáticamente. Se bloquea el envío durante el dictado y se
+cancela la voz al cambiar de contexto, desconectar, cerrar la ventana o terminar.
+
+«Leer en voz alta» en una respuesta usa una voz Apple instalada del idioma elegido,
+con texto y duración limitados. No descarga voces ni usa Personal Voice; tampoco
+cambia a otro proveedor cuando falla. El dueño puede detener la lectura. La app incluye
+las dos descripciones de privacidad necesarias; no concede permisos TCC por él.
+Las pruebas con driver sintético y reloj controlado acreditan el ciclo de vida y
+los límites, no la exactitud del dictado ni que un altavoz haya sido escuchado.
+
+La suite nativa incluye 97 pruebas de framing, gestión, voz y contratos Telegram,
+incluido pairing con servicio/journal propios y Bot API/opener sintéticos. La
+validación privada previa utiliza una identidad de fuentes declarada y debe
+repetirse sobre el árbol integrado antes de publicar. No abre cuentas, Telegram,
+micrófono ni permisos reales. Las comprobaciones físicas con el idioma, bot,
+dispositivos y autorizaciones del dueño son recorridos separados.

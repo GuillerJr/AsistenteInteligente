@@ -1,0 +1,295 @@
+{
+  "schema_version": 1,
+  "batch": "OC-13",
+  "topic": "SQLite backup command boundaries, archive verification/staging restore and exclusive doctor maintenance ownership",
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "parent_evidence_id": "ev_462c7e2961af437958c8c84887336bac655f311035012c1064d6c8a4403c69cc",
+  "summary_evidence_id": "ev_a73ed8a2c72e3f9d4ea4a7c729f46c2ae21561d2551b1ad80bb7e64c61e063e3",
+  "partition_sha256": "eca264e4a924e1b66ffe66aa7ed549b48ae3e965bf03151908a81a34834d7334",
+  "statistics": {
+    "relevant_files": 5,
+    "nested_asar_containers": 0,
+    "text_bytes_read": 208956,
+    "invalid_utf8_files": 0,
+    "parsed_javascript_files": 4,
+    "skipped_javascript_files": 0,
+    "visited_ast_nodes": 6498,
+    "findings": 162,
+    "modules": 0,
+    "parse_failures": 0
+  },
+  "source_selection": {
+    "requested_paths": [
+      "package.json",
+      "src/commands/backup-sqlite.ts",
+      "src/commands/backup-verify.ts",
+      "src/commands/backup-restore.ts",
+      "src/commands/doctor-sqlite-maintenance-lock.ts"
+    ],
+    "unselected_files": 0
+  },
+  "coverage": {
+    "application": {
+      "status": "partial",
+      "truncated": false,
+      "omitted_count": null,
+      "limits": []
+    },
+    "semantic": {
+      "status": "unknown",
+      "truncated": false,
+      "omitted_nodes": 0,
+      "omitted_relations": 0,
+      "limits": [],
+      "families": [
+        {
+          "family": "boundary",
+          "status": "partial",
+          "retained_relations": 1,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "call-flow",
+          "status": "partial",
+          "retained_relations": 180,
+          "omitted_relations": 0,
+          "unknown_count": 398
+        },
+        {
+          "family": "child-process",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "closure",
+          "status": "partial",
+          "retained_relations": 320,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "configuration",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "data-flow",
+          "status": "partial",
+          "retained_relations": 2835,
+          "omitted_relations": 0,
+          "unknown_count": 483
+        },
+        {
+          "family": "event",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "object-flow",
+          "status": "partial",
+          "retained_relations": 419,
+          "omitted_relations": 0,
+          "unknown_count": 474
+        },
+        {
+          "family": "promise-ownership",
+          "status": "partial",
+          "retained_relations": 77,
+          "omitted_relations": 0,
+          "unknown_count": 74
+        },
+        {
+          "family": "request",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "resource-lifecycle",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "timer",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        }
+      ]
+    },
+    "application_unknowns": 0,
+    "semantic_unknowns": 1429
+  },
+  "view_coverage": {
+    "status": "complete-within-view",
+    "examined": 131,
+    "total": 135,
+    "next_offset": null,
+    "exhausted": true
+  },
+  "limitations": [
+    "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+    "Caller-selected source analysis leaves 0 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+    "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+    "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+    "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+    "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+    "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+    "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+    "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+    "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+    "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+    "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+    "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+    "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+    "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+    "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+    "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+    "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+  ],
+  "unknowns": [
+    "1429 semantic graph unknowns remain in the parent Evidence; no target code or tests were executed.",
+    "Zero unselected inventoried files does not mean complete application coverage: REA records application partial and semantic unknown.",
+    "Snapshot provider, archive manifest/path policy, gateway-lock implementation, credential restore, remote/Git/PostgreSQL engines and other doctor modules are outside this partition.",
+    "The residual unknown ledger has zero registered entries; this does not resolve the parent semantic unknowns or analyst questions.",
+    "This research adds no backup/restore/doctor implementation to Jarvis and closes no phase A capability."
+  ],
+  "runtime_executed": false,
+  "full_evidence_path": "/private/tmp/jarvis-openclaw-reference-20261024/part13/evidence-with-views.json",
+  "export_sha256": "240b2e9936ac0cf44dec9ec8e105c49602f7882047ad049c4cc143c133d92369",
+  "export_bytes": 8201682,
+  "export_record_count": 8,
+  "provenance": "REA_PART13_PROVENANCE.json",
+  "fine_grained_views": [
+    {
+      "evidence_id": "ev_15fbd81c9b16cf4bb0602f3aa8bc9907a20854fe02e5e6be1d14e848723fe26b",
+      "view": {
+        "collection": "modules",
+        "kind": "item",
+        "selector": {
+          "node_id": "jag_node_9f3fad1332329ffb2ce9353c26ccc8b2e9827b5d466a333ca30d1b64516cf5c6"
+        }
+      }
+    },
+    {
+      "evidence_id": "ev_71cc85ded490c3742e0d0856549f742a04cbe1070e3bb575a03549d6d6daa47c",
+      "view": {
+        "collection": "modules",
+        "kind": "item",
+        "selector": {
+          "node_id": "jag_node_1a425a6a591d6dc0990a0b774d44021c6e24725adcfaa8029dd0238d3598f9b1"
+        }
+      }
+    },
+    {
+      "evidence_id": "ev_d2716e8af8d154975b3c35f46f693962b25cc2ef78a9ca68e833987ebcb02db3",
+      "view": {
+        "collection": "modules",
+        "kind": "item",
+        "selector": {
+          "node_id": "jag_node_3527b63681e6fdc81b36dd2de2657eb4dfdfec9358c04254baf2abd7085ccf0a"
+        }
+      }
+    },
+    {
+      "evidence_id": "ev_de3feb59164c14651be93ab41ae447ef8961f6c8ba7f5a96b08fa7665760edd4",
+      "view": {
+        "collection": "modules",
+        "kind": "item",
+        "selector": {
+          "node_id": "jag_node_31f95989940f1de0de3626f2fd8add4b3b6842a0d2be82ccc02066fff123a146"
+        }
+      }
+    }
+  ],
+  "analyst_questions": [
+    {
+      "id": "OC13-U1",
+      "question": "¿Cómo crea/publica el proveedor SQLite una imagen consistente con WAL, corrupción, fsync y proceso interrumpido?",
+      "status": "unresolved",
+      "reason": "backup-sqlite.ts delega en ../snapshot/local-repository.js y sus proveedores no seleccionados. La llamada create observada no prueba consistencia.",
+      "source": "src/commands/backup-sqlite.ts:58"
+    },
+    {
+      "id": "OC13-U2",
+      "question": "¿Qué límites completos aplica el parser de manifiesto y la política de archivo antes de recibir entries?",
+      "status": "unresolved",
+      "reason": "backup-verify-manifest.js y backup-archive-path-policy.js están fuera de la partición. Se observan invocaciones/controles locales, no sus implementaciones.",
+      "source": "src/commands/backup-verify.ts:13"
+    },
+    {
+      "id": "OC13-U3",
+      "question": "¿Qué recursos, archivos y secretos incluye realmente backup create y cómo conserva la coherencia entre bases/configuración?",
+      "status": "unresolved",
+      "reason": "Creación del archivo completo, backup-resource-inventory y backup-shared no seleccionados. No se examinó contenido del dueño.",
+      "source": "src/commands/backup-verify.ts:27"
+    },
+    {
+      "id": "OC13-U4",
+      "question": "¿Cómo se activan los árboles restaurados, renuevan credenciales y reconcilian delivery/dedupe y permisos antiguos?",
+      "status": "unresolved",
+      "reason": "El wrapper sólo prepara staging, advierte rollback y exige activación separada; helper client-credential-restore y arranque no seleccionados. No ejecutar sus instrucciones.",
+      "source": "src/commands/backup-restore.ts:272"
+    },
+    {
+      "id": "OC13-U5",
+      "question": "¿Qué estado/identidad prueba el lock real frente a proceso muerto, reinicio, PID reutilizado o filesystem adversarial?",
+      "status": "unresolved",
+      "reason": "Se observan adquisición/assertCurrent/release y validaciones locales, no implementación ../infra/gateway-lock.js.",
+      "source": "src/commands/doctor-sqlite-maintenance-lock.ts:8"
+    },
+    {
+      "id": "OC13-U6",
+      "question": "¿Qué diagnósticos de sólo lectura, arreglos, migraciones y comprobaciones doctor existen fuera de la exclusión SQLite?",
+      "status": "unresolved",
+      "reason": "Sólo se seleccionó el módulo de propiedad/exclusión de mantenimiento; no es inventario ni revisión de todo doctor.",
+      "source": "src/commands/doctor-sqlite-maintenance-lock.ts:1"
+    },
+    {
+      "id": "OC13-U7",
+      "question": "¿Funcionan respaldo/restauración/mantenimiento en ejecución, cancelación y plataformas de referencia?",
+      "status": "unresolved",
+      "reason": "Análisis estático inerte. No se instaló ni ejecutó OpenClaw, no se corrieron sus tests ni se restauró ningún perfil.",
+      "source": "all_four_selected_modules"
+    },
+    {
+      "id": "OC13-U8",
+      "question": "¿Cómo operan snapshots PostgreSQL, backup remoto/Git, retención, schedule y restauración remota?",
+      "status": "out_of_current_partition",
+      "reason": "Los helpers/campos se ven como dependencias; sus implementaciones y rutas no se adquirieron. No se trasladan silenciosamente a la fase B.",
+      "source": "src/commands/backup-restore.ts:144"
+    }
+  ],
+  "semantic_unknown_details": {
+    "path": "/private/tmp/jarvis-openclaw-reference-20261024/part13/semantic-unknowns.json",
+    "count": 1429,
+    "sha256": "2a277cf3ffb9bad9baa87704e7cbdbb91e6b6e70409b08f28b65957d335f110d"
+  },
+  "analysis_lifecycle": {
+    "analysis_route": "target_free_static_javascript",
+    "native_target_opened": false,
+    "reference_executed": false,
+    "credentials_or_owner_data_read": false,
+    "repo_modified": false,
+    "reference_clone_read": false,
+    "reference_clone_modified": false,
+    "rea_or_provider_repair_attempted": false,
+    "evidence_exported_before_close": true,
+    "close_binary_result": null,
+    "close_binary_call_completed": true,
+    "snapshot_requested": false,
+    "retained_references_after_close": "not_used"
+  },
+  "implementation_status": "not_implemented_by_this_research"
+}

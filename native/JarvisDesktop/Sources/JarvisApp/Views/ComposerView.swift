@@ -44,6 +44,17 @@ struct ComposerView: View {
                     Text(store.selected?.temporary == true ? "Chat temporal" : "Codex · ChatGPT")
                         .font(.caption).foregroundStyle(.secondary)
                     Spacer()
+                    if store.voice.canStopDictation {
+                        Button(store.voice.phase == .listening ? "Terminar dictado" : "Cancelar dictado", systemImage: "stop.circle") {
+                            store.voice.stopDictation()
+                        }
+                        Button("Descartar", role: .cancel) { store.stopVoice() }
+                    } else if store.voice.phase == .speaking {
+                        Button("Detener lectura", systemImage: "speaker.slash") { store.stopVoice() }
+                    } else {
+                        Button("Dictar", systemImage: "mic") { store.startDictation() }
+                            .disabled(!store.canUseVoice)
+                    }
                     if store.activeRunID != nil {
                         Button("Cancelar", systemImage: "stop.fill") { Task { await store.cancel() } }
                             .disabled(["cancelling", "cleaning"].contains(store.runPhase))
@@ -58,6 +69,13 @@ struct ComposerView: View {
             Text(store.access.toolsEnabled ? "Herramientas disponibles · Las operaciones que cambian datos requieren tu aprobación"
                  : "Herramientas de la base pendientes de construcción")
                 .font(.caption2).foregroundStyle(.secondary)
+            if store.voice.phase != .idle || store.voice.issue != nil {
+                Text(store.voice.statusText).font(.caption).foregroundStyle(store.voice.issue == nil ? Color.secondary : Color.red)
+                if !store.voice.partialText.isEmpty {
+                    Text(store.voice.partialText).font(.caption).foregroundStyle(.secondary).privacySensitive()
+                }
+            }
+            if let notice = store.dictationNotice { Text(notice).font(.caption).foregroundStyle(.secondary) }
         }
         .onAppear { focused = true }
     }

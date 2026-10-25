@@ -77,6 +77,10 @@ class ManagementAPI:
         params(value, {"agent_id", "expected_revision"}, {"agent_id", "expected_revision"})
         self._management_idle()
         agent = self.agent_profiles.get(value["agent_id"])
+        if self.telegram_uses_agent(agent.agent_id):
+            raise RpcError(
+                -32032, "Quita su ruta o vinculación de Telegram antes de borrar el agente."
+            )
         # Prevent orphaning existing contexts and private memory in other roots.
         for temporary in (False, True):
             for offset in range(0, self.store.limits.max_sessions, 100):

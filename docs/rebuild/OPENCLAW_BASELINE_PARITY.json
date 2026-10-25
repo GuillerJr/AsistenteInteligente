@@ -45,7 +45,7 @@
       "Contratos declarados y rutas UI no acreditan disponibilidad ni funcionamiento real.",
       "No se ejecutó OpenClaw ni se leyó configuración/cuenta del dueño."
     ],
-    "current_jarvis_state": "Desarrollo propio con Codex oficial, herramientas/archivos, memoria léxica, MCP, procesos aislados, agentes, snapshots de skills, programador y ramas. Mac seleccionado; iPhone aplazado; Telegram es próximo canal. Pruebas y límites en PHASE_A_MANAGEMENT.md; ninguna familia completa de referencia se declara cerrada."
+    "current_jarvis_state": "Desarrollo propio con Codex oficial, herramientas/archivos, memoria léxica, MCP, procesos aislados, agentes, skills y programador. Telegram es el primer canal externo implementado parcialmente; voz local y lectura HTTPS por URL añadidas. Mac inicial; iPhone aplazado. Ver PHASE_A_CHANNELS_VOICE_WEB.md: vinculación y suma reales de Telegram observadas, con cualificación integrada y demás recorridos reales pendientes; ninguna familia completa se declara cerrada."
   },
   "status_vocabulary": {
     "no_implementado": "Sin evidencia productiva propia de cierre.",
@@ -85,6 +85,10 @@
         {
           "progress_id": "P-IPC",
           "scope": "Ver avance parcial; no cierra la capacidad."
+        },
+        {
+          "progress_id": "P-CLEANUP-OWNERS",
+          "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
         }
       ],
       "acceptance": {
@@ -137,6 +141,10 @@
         {
           "progress_id": "P-IPC",
           "scope": "Ver avance parcial; no cierra la capacidad."
+        },
+        {
+          "progress_id": "P-TELEGRAM",
+          "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
         }
       ],
       "acceptance": {
@@ -291,6 +299,10 @@
         {
           "progress_id": "P-SCHEDULER",
           "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-CLEANUP-OWNERS",
+          "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
         }
       ],
       "acceptance": {
@@ -324,6 +336,10 @@
         {
           "progress_id": "P-SCHEDULER",
           "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-CLEANUP-OWNERS",
+          "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
         }
       ],
       "acceptance": {
@@ -361,6 +377,14 @@
         {
           "progress_id": "P-SCHEDULER",
           "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-WEB-FETCH",
+          "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
+        },
+        {
+          "progress_id": "P-CLEANUP-OWNERS",
+          "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
         }
       ],
       "acceptance": {
@@ -391,6 +415,10 @@
         {
           "progress_id": "P-TOOLS",
           "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
+        },
+        {
+          "progress_id": "P-WEB-FETCH",
+          "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
         }
       ],
       "acceptance": {
@@ -466,6 +494,10 @@
         {
           "progress_id": "P-SCHEDULER",
           "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-CLEANUP-OWNERS",
+          "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
         }
       ],
       "acceptance": {
@@ -665,6 +697,10 @@
         {
           "progress_id": "P-CODEX",
           "scope": "Ver avance parcial; no cierra la capacidad."
+        },
+        {
+          "progress_id": "P-CLEANUP-OWNERS",
+          "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
         }
       ],
       "acceptance": {
@@ -972,8 +1008,13 @@
       "family": "web",
       "name": "Búsqueda web, extracción y referencias",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-WEB-FETCH",
+          "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
+        }
+      ],
       "acceptance": {
         "observable_success": "Con proveedor elegido buscar/extraer página pública de prueba y devolver referencias que abren el recurso consultado.",
         "observable_failure_or_revocation": "Redirect privado/SSRF, URL inválida y payload grande se bloquean; texto externo no se vuelve instrucción.",
@@ -983,7 +1024,8 @@
       "reference_evidence": [
         "E046",
         "E047",
-        "E048"
+        "E048",
+        "ev_fb243fa619291280abc90a15b505371284b7a9d4646eb4b8a4ee97dcb097a085"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -1276,6 +1318,10 @@
         {
           "progress_id": "P-SCHEDULER",
           "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-CLEANUP-OWNERS",
+          "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
         }
       ],
       "acceptance": {
@@ -1318,8 +1364,17 @@
       "family": "channels",
       "name": "Entrada/salida, routing y entrega multicanal",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-TELEGRAM",
+          "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
+        },
+        {
+          "progress_id": "P-CLEANUP-OWNERS",
+          "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
+        }
+      ],
       "acceptance": {
         "observable_success": "Cuenta elegida recibe mensaje/adjunto y responde una vez al agente/sesión/hilo/destino exactos con recibo.",
         "observable_failure_or_revocation": "Duplicado, reconexión y reintento no duplican envío; destino ambiguo se rechaza.",
@@ -1329,7 +1384,9 @@
       "reference_evidence": [
         "E075",
         "E005",
-        "E076"
+        "E076",
+        "ev_6a84149c50d958617c7b3dececdb7f0faeb36eea076b196af2f7f4b08f7ed449",
+        "ev_e7f610e97cf5bb4c92d1777503db2e2a26e0c6dd38107f7d1c23b39909ceaca4"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -1338,8 +1395,13 @@
       "family": "channels",
       "name": "DM, grupos, menciones, pairing y acciones",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-TELEGRAM",
+          "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
+        }
+      ],
       "acceptance": {
         "observable_success": "Emparejar identidad, probar activación por mención y acciones que el canal anuncia como admitidas.",
         "observable_failure_or_revocation": "Usuario no emparejado, grupo no permitido y bucle entre bots quedan bloqueados; acción ausente no se ofrece.",
@@ -1349,7 +1411,9 @@
       "reference_evidence": [
         "E075",
         "E005",
-        "E076"
+        "E076",
+        "ev_6a84149c50d958617c7b3dececdb7f0faeb36eea076b196af2f7f4b08f7ed449",
+        "ev_e7f610e97cf5bb4c92d1777503db2e2a26e0c6dd38107f7d1c23b39909ceaca4"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -1441,8 +1505,13 @@
       "family": "audio",
       "name": "Micrófono, PTT y activación por voz",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-VOICE-LOCAL",
+          "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
+        }
+      ],
       "acceptance": {
         "observable_success": "Con permiso del dueño iniciar PTT y wake habilitado explícitamente y enviar sólo transcripción del turno de prueba.",
         "observable_failure_or_revocation": "Silenciar/desactivar/interrumpir deja de capturar; no descargar ni usar servicio no elegido.",
@@ -1463,8 +1532,13 @@
       "family": "audio",
       "name": "STT, TTS, Talk y voz en tiempo real",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-VOICE-LOCAL",
+          "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
+        }
+      ],
       "acceptance": {
         "observable_success": "Con proveedores elegidos transcribir, responder por voz, interrumpir salida y continuar sin mezclar turnos.",
         "observable_failure_or_revocation": "Revocación/cancelación detienen captura/salida; caída no cambia a NVIDIA ni a servicio no elegido.",
@@ -1597,6 +1671,14 @@
         {
           "progress_id": "P-SCHEDULER",
           "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-TELEGRAM",
+          "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
+        },
+        {
+          "progress_id": "P-VOICE-LOCAL",
+          "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
         }
       ],
       "acceptance": {
@@ -1874,6 +1956,10 @@
         {
           "progress_id": "P-NATIVE",
           "scope": "Ver avance parcial; no cierra la capacidad."
+        },
+        {
+          "progress_id": "P-TELEGRAM",
+          "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
         }
       ],
       "acceptance": {
@@ -10408,10 +10494,16 @@
           "name": "Telegram",
           "reference_doc": "/channels/telegram",
           "distribution": "bundled plugin",
-          "status": "no_implementado",
+          "status": "implementacion_parcial_contratos_probados",
           "observable_acceptance": "En Telegram, con cuenta/destino de prueba elegidos, recibir/responder una vez conservando agente/hilo/destino y bloquear después de revocar; comprobar sólo acciones/medios declarados.",
           "requires": "Cuenta elegida y autorización expresa de mensajes reales; canal externo necesita otra fuente fijada.",
-          "source_evidence": "E005"
+          "source_evidence": "E005",
+          "implementation_evidence": [
+            {
+              "progress_id": "P-TELEGRAM",
+              "scope": "Sólo chats privados y texto; integración real con cuenta/destino elegidos pendiente."
+            }
+          ]
         },
         {
           "name": "Tlon",
@@ -13669,7 +13761,7 @@
   },
   "progress_snapshot": {
     "date": "2026-10-24",
-    "revision_scope": "Continuación del bloque de gestión; ver PHASE_A_MANAGEMENT_QUALIFICATION.json para snapshots y recorridos. No se alteran hashes de la referencia ni se inicia B.",
+    "revision_scope": "Continuación de canales, voz local, web y cierre de recursos. Snapshot anterior: 1230 pruebas Python y 91 Swift; transporte Telegram 2 + 2 → 4 observado sin herramientas. Ajustes posteriores nativos y cierre web exigen nueva cualificación. No se inicia B ni se cierra ninguna familia.",
     "complete_capability_count": 0,
     "complete_reference_parity": false,
     "authenticated_inference_verified": true,
@@ -13948,13 +14040,118 @@
         ],
         "verified_scope": "SQLite real, claims de dos stores, runner único, once/interval/daily IANA/DST, coalesce, CAS, recuperación incierta sin replay, start revisado por hash32jobs. Despacho por Runtime común; herramientas programadas esperan aprobación.",
         "remaining": "Cron universal, heartbeat/hook/webhook/wake y reanudación automática de sistema. Bot/canal nunca aprueba herramientas."
+      },
+      {
+        "id": "P-TELEGRAM",
+        "component": "Telegram privado y vinculación explícita",
+        "status": "contract_tested_partial",
+        "code": [
+          "src/jarvis_core/telegram.py",
+          "src/jarvis_core/telegram_pairing.py",
+          "src/jarvis_core/telegram_management.py",
+          "src/jarvis_core/service.py",
+          "native/JarvisDesktop/Sources/DesktopCore/TelegramPairingClient.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Stores/TelegramNativeOpener.swift"
+        ],
+        "tests": [
+          "tests/test_telegram.py",
+          "tests/test_service_telegram.py",
+          "tests/test_telegram_pairing.py",
+          "tests/test_telegram_timing.py",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/TelegramIntegrationTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/TelegramPairingIntegrationTests.swift"
+        ],
+        "capability_ids": [
+          "A-03",
+          "A-48",
+          "A-49",
+          "A-60",
+          "A-72"
+        ],
+        "verified_scope": "Código propio y pruebas RPC/HTTP con cuentas/modelo sintéticos. Dos revisiones, token/nonce RAM, chat/agente/sesión exactos, recibo durable, tombstone físico, límites, cancelación y no replay. Recorrido real limitado de vinculación y suma con salida confirmada; cualificación final integrada PENDIENTE.",
+        "remaining": "Completar denegación, revocación, expiración/cancelación y cualificación del refresh nativo corregido. No grupos, adjuntos, otros canales ni exclusividad externa acreditada por la lease local. Fase A abierta.",
+        "qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json",
+        "live_scope": "El dueño completó ambas revisiones, confirmó una ruta y activó canal; control ignorado sin run. Se observó 2 + 2 → 4 con journal completed y salida confirmada, sin herramientas. Después desconectó; el servicio anterior cerró antes del reemplazo. Snapshot previo al fix de refresh, pendiente de cualificación; no IDs ni secretos registrados."
+      },
+      {
+        "id": "P-VOICE-LOCAL",
+        "component": "Dictado y lectura locales de macOS",
+        "status": "contract_tested_partial",
+        "code": [
+          "native/JarvisDesktop/Sources/JarvisApp/Audio/MacLocalVoiceDriver.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/LocalVoiceController.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/LocalVoiceDraftBridge.swift"
+        ],
+        "tests": [
+          "native/JarvisDesktop/Tests/DesktopCoreTests/LocalVoiceControllerTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/LocalVoiceDraftBridgeTests.swift"
+        ],
+        "capability_ids": [
+          "A-54",
+          "A-55",
+          "A-60"
+        ],
+        "verified_scope": "Implementación de STT sólo on-device y TTS con voces locales instaladas; borrador revisable de conversación de origen, sin autoSend. Control de callbacks, permisos y límites mediante drivers sintéticos; cualificación final integrada PENDIENTE.",
+        "remaining": "TCC del dueño, micrófono/idioma/voz y prueba audible en Mac objetivo. No nube, wakeword, escucha permanente, llamadas ni voz continua. iPhone aplazado por decisión explícita.",
+        "qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json"
+      },
+      {
+        "id": "P-WEB-FETCH",
+        "component": "Lectura HTTPS pública y extracción estática por URL",
+        "status": "contract_tested_partial",
+        "code": [
+          "src/jarvis_core/web.py",
+          "src/jarvis_core/service.py",
+          "src/jarvis_core/tools.py"
+        ],
+        "tests": [
+          "tests/test_web.py"
+        ],
+        "capability_ids": [
+          "A-10",
+          "A-11",
+          "A-33"
+        ],
+        "verified_scope": "Herramienta propia de GET HTTPS público aprobado, DNS/IP fijados, TLS, framing/límites, tres redirects de mismo origen y contenido externo no verificado. Pruebas privadas no sustituyen cualificación global ni recorrido real; ambos PENDIENTES aquí.",
+        "remaining": "No buscador/proveedor de búsqueda, JS, navegador, cuentas, cookies o descarga de archivos. REA12 estática y acotada registrada; falta recorrido real y cualificación del ajuste de cierre posterior.",
+        "qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json",
+        "post_close_fix_validation": "156 pruebas acotadas aprobadas en 1,37 s; cuatro regresiones adicionales de cierre/cancelación. Integral posterior pendiente."
+      },
+      {
+        "id": "P-CLEANUP-OWNERS",
+        "component": "Cierre incompleto, propiedad retenida y retry explícito",
+        "status": "contract_tested_partial",
+        "code": [
+          "src/jarvis_core/codex.py",
+          "src/jarvis_core/mcp.py",
+          "src/jarvis_core/mcp_registry.py",
+          "src/jarvis_core/service.py"
+        ],
+        "tests": [
+          "tests/test_mcp_cleanup.py",
+          "tests/test_codex_cleanup.py",
+          "tests/test_service_management.py"
+        ],
+        "capability_ids": [
+          "A-01",
+          "A-08",
+          "A-09",
+          "A-10",
+          "A-13",
+          "A-21",
+          "A-46",
+          "A-48"
+        ],
+        "verified_scope": "Siete regresiones MCP del bloque083729885258c355f855963f09d4d59cdacf2dc4: señal/probe/barrido denegados no equivalen a cierre, propietarios/HOME retenidos y cierre posterior sin replay. Continuación de Codex/Telegram y cierres Scheduler/RPC: snapshot integrado anterior aprobado; cambios posteriores y recorridos finales pendientes.",
+        "remaining": "No certificar árboles arbitrarios, hijos escapados del grupo o compatibilidad Linux a partir de fixtures macOS sin fork. Añadir resultados finales y hashes de recursos/artefactos al registro de cualificación.",
+        "qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json"
       }
     ],
-    "detail_file": "PHASE_A_MANAGEMENT.md",
+    "detail_file": "PHASE_A_CHANNELS_VOICE_WEB.md",
     "rea": {
       "source_file": "REA_COVERAGE.json",
-      "static_batches": 9,
-      "unique_typescript_paths_in_completed_batches": 36,
+      "static_batches": 13,
+      "unique_typescript_paths_in_completed_batches": 52,
       "global_status": "partial",
       "runtime_executed": false,
       "semantic_unknowns_remain": true,
@@ -13967,10 +14164,17 @@
         "OC-06",
         "OC-07",
         "OC-08",
-        "OC-09"
+        "OC-09",
+        "OC-10",
+        "OC-11",
+        "OC-12",
+        "OC-13"
       ],
       "limits": "Contar rutas examinadas no significa comprensión semántica ni revisión global. IDs y evidencias completos en REA_COVERAGE.json/provenance."
-    }
+    },
+    "previous_detail_file": "PHASE_A_MANAGEMENT.md",
+    "qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json",
+    "latest_qualification_status": "pending_after_additional_fixes"
   },
   "target_decisions": {
     "date": "2026-10-24",

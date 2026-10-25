@@ -269,3 +269,92 @@ información sensible; separar chat temporal de almacenamiento durable; esperar
 el cierre del propietario de una conexión y no asignar una pregunta externa a un
 usuario ambiguo. La implementación propia se verifica aparte. La lectura estática
 no acredita equivalencia de comportamiento en ejecución.
+
+
+## Bloques OC-10 y OC-11: Telegram por capas
+
+Se registraron ocho fuentes TypeScript seleccionadas de transporte API, entradas
+runtime, claves de sesión, autorización/pipeline de entrada y persistencia de
+offset. Cada lote mantiene un archivo inventariado fuera de selección; su
+cobertura de aplicación es parcial. La semántica sigue unknown, con 124 y 837
+incógnitas respectivamente. Los resúmenes y procedencia están en
+[REA_PART10_SUMMARY.json](REA_PART10_SUMMARY.json),
+[REA_PART10_PROVENANCE.json](REA_PART10_PROVENANCE.json),
+[REA_PART11_SUMMARY.json](REA_PART11_SUMMARY.json) y
+[REA_PART11_PROVENANCE.json](REA_PART11_PROVENANCE.json).
+
+La separación útil para el contrato propio es transporte, identidad/ruta,
+autorización y cursor durable. Esa separación no prueba cada helper importado ni
+un intercambio real del canal. Jarvis requiere decisiones explícitas del dueño,
+una ruta de chat privado y recibo durable; el texto del canal no aprueba herramientas.
+Las diferencias y el alcance probado están en
+[PHASE_A_CHANNELS_VOICE_WEB.md](PHASE_A_CHANNELS_VOICE_WEB.md).
+
+## Bloque OC-12: selección web, extracción y SSRF
+
+Cuatro fuentes TypeScript y el manifiesto forman el artefacto acotado. REA marca
+aplicación complete sólo dentro de ese artefacto; la semántica permanece unknown
+con 791 incógnitas. Las vistas finas conservan Evidence IDs para selección de
+proveedor, resolver/política DNS, lookup fijado, extractor y páginas de hechos en
+[REA_PART12_SUMMARY.json](REA_PART12_SUMMARY.json). La adquisición documentó la
+cadena Git tree y los hashes por archivo en
+[REA_PART12_PROVENANCE.json](REA_PART12_PROVENANCE.json).
+
+La selección de proveedor, extracción legible y validación DNS son fronteras
+distintas. Su presencia estática no acredita los plugins importados, el recorrido
+HTTP/redirecciones completo, TLS/proxies reales o que pasen las pruebas de la
+referencia. Las preguntas de pinning, mezcla público/privado y cancelación guían
+pruebas de código propio; no autorizan autodetección de credenciales, excepciones
+de red o respaldos de proveedor en Jarvis.
+
+No se ejecutó OpenClaw en estos lotes. El cierre target-free de OC-12 y un fallo
+de readiness de Ghidra ajeno al análisis JavaScript se conservan como límites,
+sin afirmar snapshot de una app que no se abrió ni reparar herramientas ajenas.
+Con OC-12, el registro alcanzó doce lotes y 48 rutas TS/JS únicas seleccionadas.
+Ese antecedente no cerró los scopes restantes ni acreditó revisión completa.
+
+## Bloque OC-13: respaldo, restauración y propiedad de mantenimiento
+
+La partición selecciona cuatro módulos de comandos SQLite, verificación de
+archivos, restauración a staging y exclusión de mantenimiento doctor. Los árboles
+Git Root/Src/Commands y sus blobs se recalcularon hasta la revisión fija; la copia
+inerte procede de GitHub y no de leer o modificar el clon. Ver
+[procedencia](REA_PART13_PROVENANCE.json) y [resumen REA](REA_PART13_SUMMARY.json).
+REA conserva aplicación **partial**, aunque no quedaron archivos inventariados
+fuera de selección, y semántica **unknown** con 1429 incógnitas. No se ejecutó
+OpenClaw ni sus pruebas.
+
+El wrapper de SQLite exige elegir global o agente y delega crear/verificar/
+restaurar al proveedor; su consistencia real con WAL queda fuera de estas cuatro
+fuentes. La vista de `backupSqliteCreateCommand` conserva
+`ev_71cc85ded490c3742e0d0856549f742a04cbe1070e3bb575a03549d6d6daa47c`.
+El [verificador](https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/commands/backup-verify.ts#L484)
+comprueba manifiesto único, duplicados/colisiones, enlaces y snapshots con ámbito
+e integridad antes de preparar extracción. Los parsers y el proveedor importados
+no quedan acreditados por observar esas llamadas. Vista de preparación:
+`ev_d2716e8af8d154975b3c35f46f693962b25cc2ef78a9ca68e833987ebcb02db3`.
+
+La [restauración](https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/commands/backup-restore.ts#L277)
+prepara un destino nuevo o vacío fuera del estado activo y deja la activación
+como paso separado. Las advertencias de rollback incluyen aprobaciones y dedup;
+no prueban que sea seguro reutilizar permisos o credenciales. Un fallo de limpieza
+conserva el error inicial y el secundario. La vista
+`ev_15fbd81c9b16cf4bb0602f3aa8bc9907a20854fe02e5e6be1d14e848723fe26b`
+es estática, sin restaurar ningún perfil.
+
+El [wrapper doctor](https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/commands/doctor-sqlite-maintenance-lock.ts#L158)
+solicita propiedad exclusiva compartida con el dueño del estado, valida rutas y
+aliases, exige autoridad vigente y la expira al terminar; revalida después de
+esperar una reconciliación. Evidence ID
+`ev_de3feb59164c14651be93ab41ae447ef8961f6c8ba7f5a96b08fa7665760edd4`.
+El algoritmo interno del lock y los demás diagnósticos/reparaciones doctor siguen
+fuera de la partición.
+
+Estos contratos orientan una implementación propia futura: corte coherente,
+verificación antes de staging, activación explícita y reporte de sólo lectura
+separado de reparaciones autorizadas. **No añaden implementación de respaldo,
+restauración o doctor a Jarvis ni cierran una capacidad de A.** El export conserva
+ocho preguntas de alcance, además de las incógnitas semánticas; proveedores de
+snapshots, parser/manifiesto, credenciales, motores remotos y ejecución permanecen
+desconocidos. Trece lotes y 52 rutas TS/JS únicas amplían la investigación parcial;
+no equivalen a paridad ni revisión exhaustiva.

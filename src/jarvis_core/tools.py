@@ -155,6 +155,24 @@ def check_tool_authority(
     lease.check(tool_name, arguments, commit)
 
 
+def revalidate_committed_tool_authority(
+    tool_name: str, arguments: Mapping[str, Any],
+) -> None:
+    """Continue one bounded operation without granting or renewing authority.
+
+    This does not allow a second commit. The original committed lease must still
+    be active, exact, uncancelled, unexpired and at its original revocation epoch.
+    """
+    lease = _LEASE.get()
+    if lease is None:
+        raise ToolError("tool_authority_required")
+    if (not lease.active or not lease.committed
+            or lease.issued.operation.tool_name != tool_name
+            or lease.issued.operation.arguments_json != canonical_arguments(arguments)):
+        raise ToolError("tool_authority_mismatch")
+    lease.authority._check_issued(lease.issued)
+
+
 class ApprovalAuthority:
     def __init__(self, *, ttl: float = 120, max_pending: int = 32) -> None:
         if (type(ttl) not in {float, int} or not math.isfinite(ttl) or not 0 < ttl <= 600

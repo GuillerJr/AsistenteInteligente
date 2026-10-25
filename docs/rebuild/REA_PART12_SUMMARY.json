@@ -1,0 +1,299 @@
+{
+  "schema_version": 1,
+  "batch": "OC-12",
+  "topic": "Public web fetch selection, content extraction and SSRF/DNS pinning boundaries",
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "parent_evidence_id": "ev_fb243fa619291280abc90a15b505371284b7a9d4646eb4b8a4ee97dcb097a085",
+  "summary_evidence_id": "ev_db49aef0853c28feb67b237d5867b9c24dd44ffa8a2fe6db25b186b8f4d48a1c",
+  "partition_sha256": "855c5875fbd8641c2a00dca50ee9f452d06cd2b372996ea48dce7a754776f1d2",
+  "statistics": {
+    "relevant_files": 5,
+    "nested_asar_containers": 0,
+    "text_bytes_read": 189492,
+    "invalid_utf8_files": 0,
+    "parsed_javascript_files": 4,
+    "skipped_javascript_files": 0,
+    "visited_ast_nodes": 4290,
+    "findings": 106,
+    "modules": 0,
+    "parse_failures": 0
+  },
+  "source_selection": {
+    "requested_paths": [
+      "package.json",
+      "src/web-fetch/runtime.ts",
+      "src/web-fetch/content-extractors.runtime.ts",
+      "src/infra/net/ssrf.ts",
+      "src/infra/net/ssrf.pinning.test.ts"
+    ],
+    "unselected_files": 0
+  },
+  "coverage": {
+    "application": {
+      "status": "complete",
+      "truncated": false,
+      "omitted_count": 0,
+      "limits": []
+    },
+    "semantic": {
+      "status": "unknown",
+      "truncated": false,
+      "omitted_nodes": 0,
+      "omitted_relations": 0,
+      "limits": [],
+      "families": [
+        {
+          "family": "boundary",
+          "status": "partial",
+          "retained_relations": 1,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "call-flow",
+          "status": "partial",
+          "retained_relations": 254,
+          "omitted_relations": 0,
+          "unknown_count": 219
+        },
+        {
+          "family": "child-process",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "closure",
+          "status": "partial",
+          "retained_relations": 258,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "configuration",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "data-flow",
+          "status": "partial",
+          "retained_relations": 1987,
+          "omitted_relations": 0,
+          "unknown_count": 305
+        },
+        {
+          "family": "event",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "object-flow",
+          "status": "partial",
+          "retained_relations": 188,
+          "omitted_relations": 0,
+          "unknown_count": 246
+        },
+        {
+          "family": "promise-ownership",
+          "status": "partial",
+          "retained_relations": 27,
+          "omitted_relations": 0,
+          "unknown_count": 21
+        },
+        {
+          "family": "request",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "resource-lifecycle",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "timer",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        }
+      ]
+    },
+    "application_unknowns": 0,
+    "semantic_unknowns": 791
+  },
+  "view_coverage": {
+    "status": "complete-within-view",
+    "examined": 71,
+    "total": 75,
+    "next_offset": null,
+    "exhausted": true
+  },
+  "limitations": [
+    "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+    "Caller-selected source analysis leaves 0 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+    "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+    "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+    "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+    "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+    "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+    "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+    "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+    "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+    "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+    "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+    "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+    "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+    "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+    "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+    "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+  ],
+  "unknowns": [
+    "791 semantic graph unknowns remain in the parent Evidence.",
+    "Static selected sources do not establish imported implementations, runtime behavior or global semantic coverage.",
+    "complete-within-view is a bounded projection status, not complete application/reference parity."
+  ],
+  "runtime_executed": false,
+  "full_evidence_path": "/private/tmp/jarvis-openclaw-reference-20261024/part12/evidence.json",
+  "export_sha256": "4dda95f3d587373e7a52dcf599371d207216e812a5c220e4ac89870bba3db788",
+  "export_bytes": 5466957,
+  "provenance": "REA_PART12_PROVENANCE.json",
+  "fine_grained_views": [
+    {
+      "evidence_id": "ev_1f08a3228b674b9330f70c0777156562530b8244d80d3c5f5a2fe1201ff10027",
+      "view": {
+        "collection": "modules",
+        "kind": "item",
+        "selector": {
+          "node_id": "jag_node_3fb2bc3ce94411eb96f5da5811df9e8f97fcf2db80595292f0d67ff13a8f196d"
+        }
+      }
+    },
+    {
+      "evidence_id": "ev_3cff674ee9a3cbb59b4537fb129fc18bc32af86985ecd7514e623c9c1466c31e",
+      "view": {
+        "collection": "modules",
+        "kind": "item",
+        "selector": {
+          "node_id": "jag_node_6039f6e1030b81f453cbaa653c6836f60628054404dabf736f628c8bf85e9873"
+        }
+      }
+    },
+    {
+      "evidence_id": "ev_3d7c871b239baf63ad85d44c9eca7e3524ac46e54fed8d14d5d6a25451f810fc",
+      "view": {
+        "collection": "modules",
+        "kind": "item",
+        "selector": {
+          "node_id": "jag_node_039f72259de7232448b90bc7ab610a91df060e5fa18f28ee9dde4c596271c89e"
+        }
+      }
+    },
+    {
+      "evidence_id": "ev_687b5419f46322616c9b121f035f478621a87ee86785e572b1248d11d663638d",
+      "view": {
+        "include_available_property_keys": false,
+        "kind": "javascript-facts",
+        "limit": 64,
+        "offset": 0,
+        "property_keys": [
+          "exported_name",
+          "semantic_role",
+          "module_path"
+        ],
+        "where": {
+          "paths": [
+            "src/infra/net/ssrf.ts",
+            "src/web-fetch/runtime.ts",
+            "src/web-fetch/content-extractors.runtime.ts",
+            "src/infra/net/ssrf.pinning.test.ts"
+          ]
+        }
+      }
+    },
+    {
+      "evidence_id": "ev_7424385ea15ce094b607df3003ddc4ae98959c5414fe9edfe1045c07e335a1c7",
+      "view": {
+        "collection": "modules",
+        "kind": "item",
+        "selector": {
+          "node_id": "jag_node_d72b80dc3bca8978b571b2e49ebe1f5199917bf90d397ecb07fcdb03548637f9"
+        }
+      }
+    },
+    {
+      "evidence_id": "ev_768913f674099a6fd34af333ebaa758713db015d3f2461752833b51dbb4c54db",
+      "view": {
+        "collection": "modules",
+        "kind": "page",
+        "limit": 8,
+        "offset": 0
+      }
+    },
+    {
+      "evidence_id": "ev_d38ddc40e91c34b4cb94465ef5b1e2a0264b6ccca3d1675f0af8b47eba58aedf",
+      "view": {
+        "collection": "modules",
+        "kind": "item",
+        "selector": {
+          "node_id": "jag_node_583ff11b7c67d31e4887a987a74c6cdda91202fb814ab951e2915101523b1784"
+        }
+      }
+    },
+    {
+      "evidence_id": "ev_f421a5a14e6719f11361faaeca608d7ccfdfdf8a4fe0195fc53646cd46c12ea3",
+      "view": {
+        "include_available_property_keys": false,
+        "kind": "javascript-facts",
+        "limit": 64,
+        "offset": 64,
+        "property_keys": [
+          "exported_name",
+          "semantic_role",
+          "module_path"
+        ],
+        "where": {
+          "paths": [
+            "src/infra/net/ssrf.ts",
+            "src/web-fetch/runtime.ts",
+            "src/web-fetch/content-extractors.runtime.ts",
+            "src/infra/net/ssrf.pinning.test.ts"
+          ]
+        }
+      }
+    }
+  ],
+  "analysis_lifecycle": {
+    "analysis_kind": "target-free-inert-javascript",
+    "target_executed": false,
+    "clone_modified": false,
+    "configuration_modified": false,
+    "close_binary": {
+      "attempted": true,
+      "result": "target_unavailable",
+      "meaning": "No app target was opened by this target-free analysis",
+      "snapshot_created": false
+    },
+    "binary_session": {
+      "attempted_once": true,
+      "result": "execution_failure",
+      "underlying_readiness": "artifact_changed",
+      "provider": "ghidra",
+      "used_for_javascript_analysis": false,
+      "repaired": false,
+      "retried": false
+    },
+    "repository_modified": false,
+    "frozen": true
+  },
+  "analysis_lifecycle_note": "Ghidra readiness failure was unrelated to target-free JavaScript analysis; it was not repaired/retried and no target was opened."
+}
