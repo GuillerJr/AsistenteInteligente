@@ -51,6 +51,8 @@ _COUNTS = frozenset(
         "documents",
         "chunks",
         "metadata",
+        "memory_scope_copies",
+        "memory_scope_copy_documents",
         "schedules",
         "occurrences",
         "unsettled_runs",
@@ -553,7 +555,8 @@ def _sqlite_check(role, data, context, inspector):
         raise DoctorError("doctor_sqlite_identity_missing")
     if application_id != expected_app:
         raise DoctorError("doctor_sqlite_identity_invalid")
-    if version != expected_version:
+    accepted_versions = {1, 2} if role == "memory" else {expected_version}
+    if version not in accepted_versions:
         raise DoctorError("doctor_schema_unsupported")
     if inspector is None:
         try:
@@ -578,6 +581,8 @@ def _sqlite_check(role, data, context, inspector):
             "snapshot_integrity_failed": "doctor_sqlite_corrupt",
             "snapshot_foreign_key_failed": "doctor_sqlite_corrupt",
             "snapshot_memory_content_invalid": "doctor_sqlite_corrupt",
+            "snapshot_memory_history_invalid": "doctor_sqlite_corrupt",
+            "snapshot_memory_history_limit": "doctor_sqlite_budget",
             "snapshot_data_invalid": "doctor_sqlite_corrupt",
             "snapshot_invalid": "doctor_sqlite_corrupt",
             "snapshot_sqlite_capability_unavailable": "doctor_inspector_unavailable",
@@ -588,7 +593,7 @@ def _sqlite_check(role, data, context, inspector):
     context.checkpoint("sqlite_validated")
     if (
         result.application_id != expected_app
-        or result.user_version != expected_version
+        or result.user_version != version
         or result.integrity != "ok"
     ):
         raise DoctorError("doctor_sqlite_identity_invalid")

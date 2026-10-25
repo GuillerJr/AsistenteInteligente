@@ -476,6 +476,10 @@ def _transform_sqlite(role, data, context, limits, *, restoring):
                     "WHERE receipt_json IS NULL",
                     (receipt,),
                 )
+        elif role == "memory" and restoring and c.execute("PRAGMA user_version").fetchone()[0] == 2:
+            # Copy receipts are portable historical data, never local replay or
+            # permission. Preserve their maps/digests and mark their new origin.
+            c.execute("UPDATE memory_scope_copies SET origin_kind='restored_history'")
         elif role == "schedules" and restoring:
             c.execute("UPDATE schedules SET enabled=0,next_at=NULL")
             c.execute(

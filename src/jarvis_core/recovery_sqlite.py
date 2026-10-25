@@ -37,8 +37,7 @@ def deny_extension_loading(connection):
 
     def authorize(action, first, second, _database, _source):
         if action == sqlite3.SQLITE_FUNCTION and any(
-            isinstance(name, str) and name.lower() == "load_extension"
-            for name in (first, second)
+            isinstance(name, str) and name.lower() == "load_extension" for name in (first, second)
         ):
             return sqlite3.SQLITE_DENY
         return sqlite3.SQLITE_OK
@@ -93,6 +92,14 @@ _TABLES = {
 _UUID = re.compile(r"[a-f0-9]{32}\Z")
 _AGENT = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z")
 _SCOPE = re.compile(r"[A-Za-z0-9_-]{1,64}\Z")
+_HASH = re.compile(r"[a-f0-9]{64}\Z")
+_MAX_SAFE = (1 << 52) - 1
+_MAX_SQLITE_INTEGER = (1 << 63) - 1
+# Portable history v2 contract; no caller can raise these validation limits.
+_COPY_MAX_RECEIPTS = 256
+_COPY_MAX_MAPPING_ROWS = 100_000
+_COPY_MAX_METADATA_BYTES = 16 * 1024 * 1024
+_COPY_MAX_BYTES = 64 * 1024 * 1024
 # Tokens preserve quoted literals/identifiers verbatim. In particular whitespace
 # within 'jarvis' or the FTS tokenizer is never normalized away.
 _SQL_TOKEN = re.compile(r"'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"|[A-Za-z_][A-Za-z_0-9]*|\d+|\S")
@@ -114,10 +121,16 @@ def _schema(connection):
     )
 
 
-def _expected(role, fts):
+def _expected(role, fts, version=None):
     template = sqlite3.connect(":memory:")
     try:
+        template.execute("PRAGMA temp_store=MEMORY")
         template.executescript(_MODULES[role]._SCHEMA)
+        if role == "memory" and version == 2:
+            extension = getattr(memory, "_COPY_SCHEMA", None)
+            if not isinstance(extension, str):
+                raise SnapshotError("snapshot_schema_unsupported")
+            template.executescript(extension)
         if fts:
             template.execute(
                 "CREATE VIRTUAL TABLE chunk_fts USING "
@@ -205,6 +218,144 @@ def _check_schedule_shape(value):
         raise SnapshotError("snapshot_data_invalid")
 
 
+def _history_integer(value, low=0, high=_MAX_SAFE):
+    if type(value) is not int or not low <= value <= high:
+        raise SnapshotError("snapshot_memory_history_invalid")
+    return value
+
+
+def _history_scope(value):
+    parsed = _safe_json(value)
+    if not isinstance(parsed, list) or len(parsed) != 3 or parsed[2] is not None:
+        raise SnapshotError("snapshot_memory_history_invalid")
+    _match(_AGENT, parsed[0])
+    _match(_SCOPE, parsed[1])
+    if json.dumps(parsed, separators=(",", ":")) != value:
+        raise SnapshotError("snapshot_memory_history_invalid")
+    return parsed
+
+
+def _history_json(value):
+    return json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
+    ).encode()
+
+
+def _check_memory_copy_history(connection, check_current):
+    """Validate historical snapshot facts, never grants or today's documents.
+
+    Normal edit/delete/clear may change or remove both copied and source notes.
+    A receipt is checked against its own immutable map, not live document IDs,
+    revisions, hashes, scopes or the currently installed agent registry.
+    """
+    receipts = connection.execute("SELECT count(*) FROM memory_scope_copies").fetchone()[0]
+    mappings = connection.execute("SELECT count(*) FROM memory_scope_copy_documents").fetchone()[0]
+    if receipts > _COPY_MAX_RECEIPTS or mappings > _COPY_MAX_MAPPING_ROWS:
+        raise SnapshotError("snapshot_memory_history_limit")
+    # Exact canonical budget of [receipt_rows,mapping_rows], reserving the longer
+    # restored_history label so a legitimate restore cannot exceed the budget.
+    metadata_bytes = 7  # [[],[]]
+    map_count = 0
+    for receipt_index, receipt in enumerate(
+        connection.execute("SELECT * FROM memory_scope_copies ORDER BY operation_id")
+    ):
+        check_current()
+        (
+            operation,
+            request_digest,
+            source_key,
+            source_generation,
+            source_fingerprint,
+            destination_key,
+            before,
+            after,
+            document_count,
+            byte_length,
+            mapping_digest,
+            created_ns,
+            origin_kind,
+        ) = receipt
+        _match(_UUID, operation)
+        for value in (request_digest, source_fingerprint, mapping_digest):
+            _match(_HASH, value)
+        source, destination = _history_scope(source_key), _history_scope(destination_key)
+        if source[0] != destination[0] or source_key == destination_key:
+            raise SnapshotError("snapshot_memory_history_invalid")
+        for value in (source_generation, before, after):
+            _history_integer(value)
+        if after != before + 1 or origin_kind not in {"local", "restored_history"}:
+            raise SnapshotError("snapshot_memory_history_invalid")
+        _history_integer(document_count, 1, _COPY_MAX_MAPPING_ROWS)
+        _history_integer(byte_length, 1, _COPY_MAX_BYTES)
+        _history_integer(created_ns, 1, _MAX_SQLITE_INTEGER)
+        normalized_receipt = [*receipt[:-1], "restored_history"]
+        metadata_bytes += len(_history_json(normalized_receipt)) + bool(receipt_index)
+        if metadata_bytes > _COPY_MAX_METADATA_BYTES:
+            raise SnapshotError("snapshot_memory_history_limit")
+        observed, total = 0, 0
+        source_ids, destination_ids = set(), set()
+        hasher = hashlib.sha256(b"[")
+        for row in connection.execute(
+            "SELECT * FROM memory_scope_copy_documents WHERE operation_id=? ORDER BY ordinal",
+            (operation,),
+        ):
+            check_current()
+            (
+                row_operation,
+                ordinal,
+                source_id,
+                source_revision,
+                source_hash,
+                source_bytes,
+                destination_id,
+                destination_revision,
+                destination_hash,
+                destination_bytes,
+            ) = row
+            if row_operation != operation or ordinal != observed or observed >= document_count:
+                raise SnapshotError("snapshot_memory_history_invalid")
+            _history_integer(ordinal, 0, _COPY_MAX_MAPPING_ROWS - 1)
+            _match(_UUID, source_id)
+            _match(_UUID, destination_id)
+            _history_integer(source_revision, 1, _MAX_SQLITE_INTEGER)
+            _history_integer(destination_revision, 1, 1)
+            _match(_HASH, source_hash)
+            _match(_HASH, destination_hash)
+            _history_integer(source_bytes, 1, 1_048_576)
+            _history_integer(destination_bytes, 1, 1_048_576)
+            if (
+                source_id == destination_id
+                or source_hash != destination_hash
+                or source_bytes != destination_bytes
+            ):
+                raise SnapshotError("snapshot_memory_history_invalid")
+            if source_id in destination_ids or destination_id in source_ids:
+                raise SnapshotError("snapshot_memory_history_invalid")
+            source_ids.add(source_id)
+            destination_ids.add(destination_id)
+            if observed:
+                hasher.update(b",")
+            hasher.update(_history_json(row[1:]))
+            metadata_bytes += len(_history_json(row)) + bool(map_count)
+            if metadata_bytes > _COPY_MAX_METADATA_BYTES:
+                raise SnapshotError("snapshot_memory_history_limit")
+            observed += 1
+            map_count += 1
+            total += source_bytes
+            if total > byte_length:
+                raise SnapshotError("snapshot_memory_history_invalid")
+        hasher.update(b"]")
+        if (
+            observed != document_count
+            or total != byte_length
+            or hasher.hexdigest() != mapping_digest
+        ):
+            raise SnapshotError("snapshot_memory_history_invalid")
+    if map_count != mappings:
+        raise SnapshotError("snapshot_memory_history_invalid")
+    check_current()
+
+
 def inspect_sqlite_snapshot(
     role: str,
     data: bytes,
@@ -249,6 +400,7 @@ def inspect_sqlite_snapshot(
         deny_extension_loading(connection)
         connection.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, limits.max_bytes)
         connection.setlimit(sqlite3.SQLITE_LIMIT_SQL_LENGTH, 65_536)
+        connection.execute("PRAGMA temp_store=MEMORY")
         connection.deserialize(data)
         connection.execute("PRAGMA query_only=ON")
         connection.execute("PRAGMA trusted_schema=OFF")
@@ -256,11 +408,12 @@ def inspect_sqlite_snapshot(
         module = _MODULES[role]
         app_id = connection.execute("PRAGMA application_id").fetchone()[0]
         version = connection.execute("PRAGMA user_version").fetchone()[0]
-        if app_id != module._APPLICATION_ID or version != module._SCHEMA_VERSION:
+        versions = {1, 2} if role == "memory" else {module._SCHEMA_VERSION}
+        if app_id != module._APPLICATION_ID or version not in versions:
             raise SnapshotError("snapshot_schema_unsupported")
         schema = _schema(connection)
         fts = role == "memory" and any(row[1] == "chunk_fts" for row in schema)
-        if schema != _expected(role, fts):
+        if schema != _expected(role, fts, version):
             raise SnapshotError("snapshot_schema_unsupported")
         checks = iter(connection.execute("PRAGMA integrity_check"))
         if next(checks, None) != ("ok",) or next(checks, None) is not None:
@@ -269,7 +422,10 @@ def inspect_sqlite_snapshot(
             raise SnapshotError("snapshot_foreign_key_failed")
 
         counts = []
-        for table in _TABLES[role]:
+        tables = _TABLES[role]
+        if role == "memory" and version == 2:
+            tables += ("memory_scope_copies", "memory_scope_copy_documents")
+        for table in tables:
             check_current()
             # Names are constants, never caller-controlled SQL identifiers.
             count = connection.execute(f'SELECT count(*) FROM "{table}"').fetchone()[0]
@@ -378,6 +534,8 @@ def inspect_sqlite_snapshot(
                 ).fetchone()
                 if mismatch or extra:
                     raise SnapshotError("snapshot_memory_content_invalid")
+            if version == 2:
+                _check_memory_copy_history(connection, check_current)
         else:
             for (agent,) in connection.execute("SELECT agent_id FROM schedules"):
                 agents.add(_match(_AGENT, agent))

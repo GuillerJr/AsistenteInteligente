@@ -104,6 +104,11 @@ declara completa por los tests sintéticos.
   exactas, sin cuenta ni procesos hijos del proveedor y con controles intactos.
 - [ ] Cualificar escenarios reales negativos de activación y completar
   reconciliación de memoria y canales sin importar permisos.
+- [x] Integrar el núcleo de copia atómica de ámbitos de memoria y compatibilidad
+  de esquema v1/v2 con respaldo, diagnóstico y restauración de historia.
+  [Contrato y pruebas](rebuild/PHASE_A_MEMORY_RECONCILIATION.md).
+- [ ] Conectar esa copia a la autoridad y corte del host y a la interfaz nativa;
+  comprobar sus carreras y la decisión real del dueño con notas sintéticas.
 - [ ] Investigar la demora inicial observada en el perfil nuevo: se recuperó por
   supervisión lectora, sin reinicio; su causa no quedó establecida.
 - [ ] Completar familias frías con WAL/journals, archivos/artefactos de workspace, activación y
