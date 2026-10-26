@@ -7,11 +7,16 @@ account, a model, a network service, personal history or real approval decisions
 import asyncio
 import hashlib
 import json
+import os
 import sys
 
 import pytest
 
 from jarvis_core.codex import CodexClient, CodexError
+
+# Real stdio startup and replies need scheduling headroom. Inference, callback
+# and cancellation deadlines below remain independently short and explicit.
+PEER_RPC_TIMEOUT = 5
 
 TOOL = {
     "name": "fixture_write",
@@ -163,7 +168,9 @@ for line in sys.stdin:
 @pytest.fixture
 def tool_peer(tmp_path):
     executable = tmp_path / "synthetic-codex-tools-peer"
-    executable.write_text(f"#!{sys.executable}\n" + PEER)
+    # This stdlib-only peer needs neither the project's venv discovery nor user
+    # site imports. Pin the current interpreter and start it in isolated mode.
+    executable.write_text(f"#!{os.path.realpath(sys.executable)} -I\n" + PEER)
     executable.chmod(0o700)
     return executable
 
@@ -195,7 +202,7 @@ def confirmed(text="recibo sintético"):
 async def test_dynamic_tool_round_trip_has_official_shapes_and_one_real_fixture_effect(
     tmp_path, tool_peer,
 ):
-    client = CodexClient(tool_peer, tmp_path / "profile", timeout=1)
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
     effect = tmp_path / "synthetic-effect.txt"
     calls = []
 
@@ -224,7 +231,7 @@ async def test_dynamic_tool_round_trip_has_official_shapes_and_one_real_fixture_
 
 
 async def test_concurrent_server_calls_do_not_block_the_stdio_reader(tmp_path, tool_peer):
-    client = CodexClient(tool_peer, tmp_path / "profile", timeout=1)
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
     entered, release = [], asyncio.Event()
 
     async def callback(name, arguments):
@@ -254,7 +261,7 @@ async def test_concurrent_server_calls_do_not_block_the_stdio_reader(tmp_path, t
 async def test_unoffered_or_misbound_server_request_never_reaches_callback(
     tmp_path, tool_peer, scenario,
 ):
-    client = CodexClient(tool_peer, tmp_path / "profile", timeout=1)
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
     calls = []
 
     async def callback(name, arguments):
@@ -276,7 +283,7 @@ async def test_unoffered_or_misbound_server_request_never_reaches_callback(
 
 
 async def test_replayed_logical_call_id_does_not_repeat_fixture_effect(tmp_path, tool_peer):
-    client = CodexClient(tool_peer, tmp_path / "profile", timeout=1)
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
     effect = tmp_path / "synthetic-effect.txt"
     calls = 0
 
@@ -299,7 +306,7 @@ async def test_replayed_logical_call_id_does_not_repeat_fixture_effect(tmp_path,
 async def test_call_ids_and_explicit_histories_are_isolated_between_concurrent_threads(
     tmp_path, tool_peer,
 ):
-    client = CodexClient(tool_peer, tmp_path / "profile", timeout=1)
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
     entered, release = [], asyncio.Event()
 
     async def callback(name, arguments):
@@ -338,7 +345,7 @@ async def test_call_ids_and_explicit_histories_are_isolated_between_concurrent_t
 
 
 async def test_one_turn_has_a_finite_total_of_distinct_calls(tmp_path, tool_peer):
-    client = CodexClient(tool_peer, tmp_path / "profile", timeout=1)
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
     effects = []
 
     async def callback(name, arguments):
@@ -361,7 +368,7 @@ async def test_one_turn_has_a_finite_total_of_distinct_calls(tmp_path, tool_peer
 async def test_malformed_callback_result_is_never_reported_as_confirmed_success(
     tmp_path, tool_peer, bad_result,
 ):
-    client = CodexClient(tool_peer, tmp_path / "profile", timeout=1)
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
 
     async def callback(name, arguments):
         return bad_result
@@ -378,7 +385,7 @@ async def test_malformed_callback_result_is_never_reported_as_confirmed_success(
 async def test_callback_error_after_effect_reports_uncertainty_without_false_no_action(
     tmp_path, tool_peer,
 ):
-    client = CodexClient(tool_peer, tmp_path / "profile", timeout=1)
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
     effect = tmp_path / "synthetic-effect.txt"
 
     async def callback(name, arguments):
@@ -401,7 +408,7 @@ async def test_callback_error_after_effect_reports_uncertainty_without_false_no_
 async def test_cancel_pending_callback_settles_turn_cleans_tasks_and_reports_unknown(
     tmp_path, tool_peer,
 ):
-    client = CodexClient(tool_peer, tmp_path / "profile", timeout=1)
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
     entered, cancelled = asyncio.Event(), asyncio.Event()
     effect = tmp_path / "synthetic-effect.txt"
 
@@ -437,7 +444,7 @@ async def test_cancel_pending_callback_settles_turn_cleans_tasks_and_reports_unk
 
 
 async def test_pending_server_callback_tasks_are_bounded_and_excess_is_denied(tmp_path, tool_peer):
-    client = CodexClient(tool_peer, tmp_path / "profile", timeout=1)
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
     entered, release = [], asyncio.Event()
 
     async def callback(name, arguments):
@@ -464,7 +471,7 @@ async def test_pending_server_callback_tasks_are_bounded_and_excess_is_denied(tm
 async def test_close_while_callback_is_pending_joins_owned_tasks_without_another_effect(
     tmp_path, tool_peer,
 ):
-    client = CodexClient(tool_peer, tmp_path / "profile", timeout=1)
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
     entered, cancelled = asyncio.Event(), asyncio.Event()
     effects = []
 
@@ -499,7 +506,7 @@ async def test_close_while_callback_is_pending_joins_owned_tasks_without_another
 async def test_history_is_only_explicit_input_for_its_new_thread_and_never_discovered(
     tmp_path, tool_peer,
 ):
-    client = CodexClient(tool_peer, tmp_path / "profile", timeout=1)
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
     history = [{
         "type": "message", "role": "user",
         "content": [{"type": "input_text", "text": "SYNTHETIC-OWN-SESSION-ONLY"}],
@@ -522,7 +529,7 @@ async def test_history_is_only_explicit_input_for_its_new_thread_and_never_disco
 async def test_explicit_history_budget_failure_does_not_start_turn_or_inject_partial_data(
     tmp_path, tool_peer,
 ):
-    client = CodexClient(tool_peer, tmp_path / "profile", timeout=1)
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
     try:
         with pytest.raises(CodexError, match="codex_history_limit"):
             await client.chat("plain", history=[{"synthetic": "x"}] * 101)
@@ -536,7 +543,7 @@ async def test_explicit_history_budget_failure_does_not_start_turn_or_inject_par
 async def test_human_waits_for_multiple_sequential_callbacks_do_not_spend_inference_budget(
     tmp_path, tool_peer,
 ):
-    client = CodexClient(tool_peer, tmp_path / "profile", timeout=1)
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
     entered = []
     releases = [asyncio.Event(), asyncio.Event()]
 
@@ -573,7 +580,7 @@ async def test_human_waits_for_multiple_sequential_callbacks_do_not_spend_infere
 async def test_inference_clock_stays_paused_until_all_overlapping_callbacks_finish(
     tmp_path, tool_peer,
 ):
-    client = CodexClient(tool_peer, tmp_path / "profile", timeout=1)
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
     entered, release_first, release_last = [], asyncio.Event(), asyncio.Event()
 
     async def callback(name, arguments):
@@ -604,7 +611,7 @@ async def test_inference_clock_stays_paused_until_all_overlapping_callbacks_fini
 async def test_idle_inference_still_expires_and_malformed_calls_cannot_pause_it(
     tmp_path, tool_peer, scenario,
 ):
-    client = CodexClient(tool_peer, tmp_path / "profile", timeout=1)
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
     called = []
 
     async def callback(name, arguments):
@@ -627,7 +634,7 @@ async def test_idle_inference_still_expires_and_malformed_calls_cannot_pause_it(
 async def test_stuck_host_callback_has_its_own_finite_ceiling_and_an_uncertain_reply(
     tmp_path, tool_peer, suppress_cancellation,
 ):
-    client = CodexClient(tool_peer, tmp_path / "profile", timeout=1)
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
     entered, cancelled = asyncio.Event(), asyncio.Event()
 
     async def callback(name, arguments):
@@ -659,7 +666,7 @@ async def test_stuck_host_callback_has_its_own_finite_ceiling_and_an_uncertain_r
 async def test_cancellation_remains_prompt_while_the_inference_budget_is_paused(
     tmp_path, tool_peer,
 ):
-    client = CodexClient(tool_peer, tmp_path / "profile", timeout=1)
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
     entered, cancelled = asyncio.Event(), asyncio.Event()
 
     async def callback(name, arguments):
@@ -693,7 +700,7 @@ async def test_cancellation_remains_prompt_while_the_inference_budget_is_paused(
 async def test_inference_and_host_wait_limits_are_finite_before_launch(
     tmp_path, tool_peer, parameter, limit,
 ):
-    client = CodexClient(tool_peer, tmp_path / "profile", timeout=1)
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
     try:
         with pytest.raises(ValueError, match="codex_timeout_invalid"):
             await client.chat("plain", **{parameter: limit})

@@ -242,5 +242,43 @@
     "Restore consumes portable DELETE images from the earlier WAL backup, not the original WAL family directly.",
     "Destination was only staged, never admitted, activated, opened as a host, logged in or associated with a workspace.",
     "No complete qualification of WAL variants, journals, arbitrary inputs, distribution, authenticity or the whole Phase A."
-  ]
+  ],
+  "publication_fixture_followup": {
+    "failed_publication_commit": "690aa8ae9e77e01773e9ce66de3776b2be92d895",
+    "failed_gate": {
+      "python_passed": 1981,
+      "python_failed": 1,
+      "failure": "tests/test_codex_tools.py::test_callback_error_after_effect_reports_uncertainty_without_false_no_action",
+      "method": "initialize",
+      "rpc_timeout_seconds": 1,
+      "synthetic_wire_log_created": false,
+      "synthetic_effect_created": false,
+      "log_sha256": "7af446c6d2c5954884dc41c9dbbca94ce33b0cf074423729765e5bb284f7aec4"
+    },
+    "before_change_focused_file": {
+      "passed": 43,
+      "seconds": 10.94
+    },
+    "second_startup_failure": {
+      "failure": "tests/test_codex_tools.py::test_dynamic_tool_round_trip_has_official_shapes_and_one_real_fixture_effect",
+      "method": "initialize",
+      "python_passed": 42,
+      "python_failed": 1,
+      "rpc_timeout_seconds": 1,
+      "log_sha256": "36c796d6dff6db1f58bd202820a73d8441da8bb71be2fa3703d0cdb1e50e604c"
+    },
+    "fixture_change": "Use the same canonical Python interpreter in isolated mode and a bounded 5-second stdio RPC budget. Keep inference, callback, cancellation and pre-launch validation assertions and deadlines unchanged; do not preinitialize concurrent clients.",
+    "underlying_startup_delay_cause": "not_established",
+    "python_product_or_native_sources_changed_by_followup": false,
+    "test_source": "tests/test_codex_tools.py",
+    "test_source_sha256": "70c9fe6367b1cbc2fe538d9dc87c99e2dc17882ae7e791e32f23ee77840bc0a9",
+    "focused_file_after_change": {
+      "passed": 43,
+      "failed": 0,
+      "seconds": 9.34,
+      "log_sha256": "5adc167b55ce3e511e905dd1d4054d31549976554caefc8296a68b223f172c8d"
+    },
+    "restoration_or_owner_effect_repeated": false,
+    "final_hooks_and_ci": "required_at_publication_not_recorded_as_passed_here"
+  }
 }

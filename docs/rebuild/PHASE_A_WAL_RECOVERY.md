@@ -151,6 +151,14 @@ tamaños del respaldo. El caso IPC WAL existente ahora verifica también el cont
 de los tres SQLite restaurados y sus controles desarmados; pasó junto a la suite
 de 225 Swift. No añade casos duplicados ni cambia el backend de restauración.
 
+El primer control de publicación encontró un timeout de un segundo al inicializar
+un peer Codex sintético, antes de registrar mensajes o ejecutar el efecto de prueba.
+Otro caso reprodujo ese límite de arranque. Se aisló el intérprete del fixture y
+se dio un margen de cinco segundos al transporte stdio; los plazos específicos
+de inferencia, callback y cancelación se conservaron. Sus 43 casos focalizados
+pasaron. La causa física de la demora no quedó establecida; no se cambió el
+producto ni se repitió la restauración. El registro conserva intentos y hashes.
+
 Siguen pendientes los journals de rollback, WAL vacío o sin WAL asociado,
 recuperación de prefijos ante corrupción/reset antiguo, reparaciones, archivos
 del workspace, reclamación tras muerte abrupta y la matriz real completa. Esas
