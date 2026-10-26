@@ -138,9 +138,18 @@ final class MaintenanceTests: XCTestCase {
             XCTAssertFalse(MaintenanceMonitorPolicy.isTemporaryBusy(error))
         }
     }
-    func testUnknownRemoteDiagnosticsAreNeverShownInMaintenanceUI() {
+    func testUnknownRemoteDiagnosticsAreNeverShownInMaintenanceUI() throws {
         XCTAssertFalse(MaintenancePresentation.error(RPCFailure.remote(-32040, "PRIVATE TOKEN CANARY")).contains("PRIVATE"))
         XCTAssertFalse(MaintenancePresentation.error(NSError(domain: "PRIVATE HISTORY", code: 1)).contains("PRIVATE"))
+        let message = "No se pudo validar el journal SQLite; el diagnóstico no acredita recuperación. Consulta el resultado, no se repetirá automáticamente."
+        for code in ["profile_cold_journal_checksum_invalid", "profile_cold_journal_changed", "profile_cold_journal_unsupported"] {
+            XCTAssertEqual(MaintenancePresentation.operationError(code), message)
+            XCTAssertEqual(MaintenancePresentation.error(RPCFailure.remote(-32040, code)), message)
+        }
+        let diagnostic = "profile_cold_journal_checksum_invalid"
+        let rejected = try MaintenanceOperation(changed(operation(phase: "failed", pending: false, kind: "doctor.report"), ["error_code": .string(diagnostic)]))
+        XCTAssertEqual(rejected.errorCode, diagnostic, "The view may show only the bounded machine code already validated by the operation DTO")
+        XCTAssertThrowsError(try MaintenanceOperation(changed(operation(phase: "failed", pending: false, kind: "doctor.report"), ["error_code": .string("PRIVATE TOKEN CANARY")])))
     }
     func testUnavailableSourceDoesNotRequestOwnerApprovalOrInitializeIt() async throws {
         var metadata = MaintenanceFixtures.review["metadata"].object!

@@ -375,7 +375,12 @@ public struct MaintenanceVerification: Sendable {
 
 public enum MaintenancePresentation {
     public static func operationError(_ code: String) -> String? {
+        if code.hasPrefix("profile_cold_journal_") {
+            return "No se pudo validar el journal SQLite; el diagnóstico no acredita recuperación. Consulta el resultado, no se repetirá automáticamente."
+        }
         switch code {
+        case "maintenance_review_expired", "memory_restore_review_expired", "activation_review_expired", "restore_review_expired":
+            return "La revisión caducó. Ya no puede autorizarse; consulta el estado y prepara otra cuando termine la espera anterior. No se repetirá la operación automáticamente."
         case "profile_cold_wal_cleanup_pending":
             return "La limpieza de la copia privada WAL sigue sin confirmar. Completa sólo esa limpieza antes de continuar."
         case "profile_cold_wal_invalid", "profile_cold_wal_no_commit":

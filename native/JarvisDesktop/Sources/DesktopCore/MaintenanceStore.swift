@@ -45,6 +45,12 @@ public final class MaintenanceStore {
     public var blocksInteraction: Bool { isRequesting || isRefreshing || (review != nil && operation == nil) || responseUnconfirmed || readAwaitingSettlement || liveResourcesPending }
     public var mayPrepare: Bool { !isRequesting && !isRefreshing && !responseUnconfirmed && !readAwaitingSettlement && !liveResourcesPending }
     public var canCleanup: Bool { !isRequesting && !isRefreshing && operation?.cleanupOwnerPending == true && operation?.workerPending == false }
+    public var canDecide: Bool {
+        guard !isRequesting, !responseUnconfirmed, !readAwaitingSettlement,
+              let approval, let review, let operation, status?.scope == approval.scope,
+              status?.scope == review.scope, status?.scope == operation.scope else { return false }
+        return approval.matches(review, operation: operation)
+    }
 
     public func configure(client: LocalRPCClient) {
         configure(client: MaintenanceClient(transport: client))
@@ -73,7 +79,7 @@ public final class MaintenanceStore {
             guard snapshot.scope == pending.scope else { throw RPCFailure.invalidResponse }
             let profileChanged = status?.scope.profileID != nil && status?.scope.profileID != snapshot.scope.profileID
             status = snapshot
-            approval = nil
+            var nextApproval: MaintenanceApproval?
             if profileChanged {
                 verification = nil; verificationPath = nil; requestedVerificationPath = nil; doctor = nil
             }
@@ -104,10 +110,17 @@ public final class MaintenanceStore {
                review.scope == snapshot.scope, operation.scope == snapshot.scope {
                 let matches = pending.approvals.filter { $0.matches(review, operation: operation) }
                 guard matches.count <= 1 else { throw RPCFailure.invalidResponse }
-                approval = matches.first
+                nextApproval = matches.first
             }
-            errorMessage = nil
-        } catch { if version == context, sequence == readSequence { errorMessage = MaintenancePresentation.error(error) } }
+            if !OwnerDecisionTicketPolicy.same(approval, nextApproval) { approval = nextApproval }
+            errorMessage = operation?.errorCode.flatMap(MaintenancePresentation.operationError)
+        } catch {
+            if version == context, sequence == readSequence, !isRequesting, !Task.isCancelled {
+                if approval != nil || operation?.settled == false { responseUnconfirmed = true }
+                approval = nil
+                errorMessage = MaintenancePresentation.error(error)
+            }
+        }
     }
 
     public func acknowledgeUnconfirmedLocally() {
@@ -190,7 +203,7 @@ public final class MaintenanceStore {
         }
     }
     public func decide(allow: Bool) async {
-        guard let client, let captured = approval, let review, let operation, !isRequesting,
+        guard let client, let captured = approval, let review, let operation, canDecide,
               status?.scope == captured.scope, status?.scope == review.scope, status?.scope == operation.scope else { return }
         isRequesting = true; readSequence += 1; approval = nil; let version = context
         defer { if version == context { isRequesting = false; discardHiddenPreview() } }

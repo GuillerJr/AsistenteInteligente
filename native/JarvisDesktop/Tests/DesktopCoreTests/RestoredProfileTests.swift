@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 @testable import DesktopCore
 
-private enum RestoreFixture {
+enum RestoreFixture {
     static let operationID = String(repeating: "a", count: 32)
     static let reviewID = String(repeating: "b", count: 32)
     static let marker = String(repeating: "c", count: 64)

@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import XCTest
 @testable import DesktopCore
 
@@ -60,6 +61,12 @@ private actor RecoveryGate {
     var waiters: [CheckedContinuation<Void, Never>] = []
     func wait() async { if released { return }; await withCheckedContinuation { waiters.append($0) } }
     func release() { released = true; let current = waiters; waiters.removeAll(); for waiter in current { waiter.resume() } }
+}
+private final class RecoveryTicketChanges: @unchecked Sendable {
+    private let lock = NSLock()
+    private var changes = 0
+    func changed() { lock.lock(); changes += 1; lock.unlock() }
+    var count: Int { lock.lock(); defer { lock.unlock() }; return changes }
 }
 
 final class RecoveryExtensionTests: XCTestCase {
@@ -132,6 +139,17 @@ final class RecoveryExtensionTests: XCTestCase {
         await store.decide(allow: false, ticket: ticket)
         let decisions = await wire.count("maintenance.decide"); XCTAssertEqual(decisions, 1)
         await gate.release(); await refresh.value; await wire.setGate(nil)
+        await store.close()
+    }
+    @MainActor func testIdenticalPollDoesNotWithdrawOrRecreateDisplayedTicket() async throws {
+        let wire = RecoveryWire(), store = store(wire); try await prepare(store); await store.submit()
+        await wire.setRows([try RecoveryFixture.operation()], ticket: true)
+        for _ in 0..<100 { await store.refresh(); if store.approval != nil { break }; await Task.yield() }
+        let ticket = try XCTUnwrap(store.approval), changes = RecoveryTicketChanges()
+        withObservationTracking { _ = store.approval } onChange: { changes.changed() }
+        await store.refresh()
+        XCTAssertEqual(store.approval?.id, ticket.id); XCTAssertTrue(store.canDecide)
+        XCTAssertEqual(changes.count, 0, "An identical status poll must not invalidate the displayed owner card")
         await store.close()
     }
     @MainActor func testRetiredRuntimeCannotSubmitOrDecide() async throws {

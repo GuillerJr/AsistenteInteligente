@@ -27,13 +27,19 @@ public struct LaunchOptions: Sendable, Equatable {
     public let codex: String
     public let providerState: String?
     public let expectedRestore: ExpectedRestoreBootstrap?
+    public let recoveryOnly: Bool
 
     public static func parse(_ arguments: [String]) throws -> Self {
         let paths = ["--python", "--source", "--state", "--codex", "--provider-state"]
         var flags: [String: String] = [:]
         var index = 0
+        var recoveryOnly = false
         while index < arguments.count {
             let flag = arguments[index]
+            if flag == "--recovery-only" {
+                guard !recoveryOnly else { throw RPCFailure.configuration }
+                recoveryOnly = true; index += 1; continue
+            }
             guard (paths + ExpectedRestoreBootstrap.flags).contains(flag), index + 1 < arguments.count, flags[flag] == nil else { throw RPCFailure.configuration }
             let value = arguments[index + 1]
             guard !value.contains("\0"), !paths.contains(flag) || MaintenanceValidation.path(value) else { throw RPCFailure.configuration }
@@ -42,10 +48,11 @@ public struct LaunchOptions: Sendable, Equatable {
         guard let python = flags["--python"], let source = flags["--source"], let state = flags["--state"], let codex = flags["--codex"] else { throw RPCFailure.configuration }
         let expectedCount = ExpectedRestoreBootstrap.flags.filter { flags[$0] != nil }.count
         guard expectedCount == 0 || expectedCount == 5, expectedCount == 0 || flags["--provider-state"] == nil else { throw RPCFailure.configuration }
-        return Self(python: python, source: source, state: state, codex: codex, providerState: flags["--provider-state"], expectedRestore: expectedCount == 0 ? nil : try ExpectedRestoreBootstrap(flags: flags))
+        guard !recoveryOnly || expectedCount == 0 else { throw RPCFailure.configuration }
+        return Self(python: python, source: source, state: state, codex: codex, providerState: flags["--provider-state"], expectedRestore: expectedCount == 0 ? nil : try ExpectedRestoreBootstrap(flags: flags), recoveryOnly: recoveryOnly)
     }
     public func openingRestored(_ target: ProfileOpenTarget) -> Self {
-        Self(python: python, source: source, state: target.path, codex: codex, providerState: nil, expectedRestore: ExpectedRestoreBootstrap(target: target))
+        Self(python: python, source: source, state: target.path, codex: codex, providerState: nil, expectedRestore: ExpectedRestoreBootstrap(target: target), recoveryOnly: false)
     }
     public var serviceArguments: [String] {
         var args = ["-m", "jarvis_core.service", "--state", state, "--codex", codex]

@@ -1,0 +1,238 @@
+{
+  "schema_version": 1,
+  "record_kind": "jarvis_phase_a_startup_isolation",
+  "date": "2026-10-26",
+  "language": "es",
+  "scope": "Procesos, entradas y perfiles sintéticos propios; sin cuenta ni app instalada del dueño.",
+  "operational_status": "mitigacion_implementada_y_verificada",
+  "phase_a_complete": false,
+  "phase_b_started": false,
+  "historical_attribution": {
+    "record": "PHASE_A_MEMORY_COPY_LIVE.json.runtime_isolation",
+    "recorded_sample_sha256": "c5939b256e38c0bc2e0ed184305d1a6b3e9c33e19606e5991773cab8c233a62d",
+    "reported_stage": "Inicialización de rutas de CPython anterior a un frame de Jarvis o a su socket.",
+    "exact_original_file_and_OS_cause": "not_established",
+    "identity_with_new_FIFO_or_iCloud_cause": "not_established",
+    "implementation_increment_closed": true,
+    "explanation": "La atribución física histórica no se inventa ni implica otra implementación pendiente del aislamiento ya probado."
+  },
+  "controlled_causes": [
+    {
+      "input": "pyvenv.cfg FIFO propio, descubierto mediante un intérprete enlazado dentro de un venv.",
+      "before": "Bloqueado antes del primer frame propio.",
+      "intervention": "Liberar únicamente el FIFO seleccionado.",
+      "after": "El mismo PID avanza y produce su primer frame.",
+      "isolated_comparison": "El intérprete elegido canónico evita esa consulta; el servicio nativo llega a salud con el FIFO todavía presente.",
+      "sample_stack": [
+        "pymain_init",
+        "Py_InitializeFromConfig",
+        "config_init_import",
+        "getpath_readlines",
+        "fread",
+        "__read_nocancel"
+      ]
+    },
+    {
+      "input": "PYTHONUSERBASE propio con usercustomize bloqueado por un FIFO.",
+      "before": "El hook se ejecuta y el socket de salud no existe.",
+      "intervention": "Liberar únicamente el FIFO del hook.",
+      "after": "El mismo PID original llega a salud.",
+      "isolated_comparison": "Un proceso nuevo aislado llega a salud sin entrar en el hook."
+    },
+    {
+      "input": "PYTHONHOME inválido y propio.",
+      "before": "Salida distinta de cero antes del primer frame propio.",
+      "isolated_comparison": "El mismo binario seleccionado produce el frame; no se elige otro intérprete."
+    }
+  ],
+  "implementation": {
+    "contract": "canonical_python_isolated_stdlib_bootstrap/1",
+    "selected_executable_symlinks_resolved": true,
+    "fallback_interpreter": false,
+    "python_flags": [
+      "-I",
+      "-S",
+      "-B",
+      "-u",
+      "-c"
+    ],
+    "bootstrap": "runpy y sys de la biblioteca estándar; fuente como argv separado; run_module de jarvis_core.service.",
+    "source_interpolated_as_code": false,
+    "shell_or_eval": false,
+    "working_directory": "/",
+    "environment_allowlist": [
+      "PATH",
+      "HOME",
+      "TMPDIR",
+      "LANG",
+      "LC_ALL",
+      "LC_CTYPE",
+      "TZ",
+      "__CF_USER_TEXT_ENCODING"
+    ],
+    "native_recovery_only_forwarded_to_python": false,
+    "product_stdout_stderr": "Dispositivo nulo; no se expone contenido del entorno ni trazas.",
+    "python_core_external_dependencies": 0,
+    "official_codex_external": true,
+    "credentials_imported": false
+  },
+  "measurements_seconds": {
+    "canonical_first_frame": 0.037186,
+    "isolated_health_with_own_user_site_hook_present": 0.31627,
+    "actual_native_service_health_with_blocking_venv_config_present": 0.3140106665669009
+  },
+  "qualification": {
+    "python_causal": {
+      "passed": 4,
+      "seconds": 0.71,
+      "scope": "Fixtures causales propios con ACK de consumo y configuración persistente; sin proveedor."
+    },
+    "native_bootstrap": {
+      "passed": 8,
+      "seconds": 8.319,
+      "new_cases": 3,
+      "existing_cases": 5,
+      "scope": "Proceso real y sockets locales con perfiles propios; Codex no se ejecuta."
+    },
+    "provider_service_login_contracts": {
+      "passed": 127,
+      "seconds": 33.97,
+      "scope": "Peers sintéticos del protocolo oficial; no cuenta ni modelo reales.",
+      "account_or_model_entitlement_qualified": false
+    },
+    "ruff": "passed",
+    "increment_diff_whitespace_check": "passed",
+    "full_publication_gates": "Se registran por separado; no se afirman a partir de estos focales.",
+    "initial_python_causal": {
+      "passed": 3,
+      "seconds": 0.98,
+      "scope": "Fixtures causales propios, sin proveedor."
+    }
+  },
+  "sources_sha256": {
+    "native/JarvisDesktop/Sources/DesktopCore/ServiceProcess.swift": "15490763973ee1509ae3de83129fee5c5a234cc4a2de4844255446c441fc268a",
+    "native/JarvisDesktop/Sources/DesktopCore/ServiceLaunchPlan.swift": "338309cc067faf749e57dfed3d197052fc81fde543ae34368cce48dbc9bb9a85",
+    "native/JarvisDesktop/Tests/DesktopCoreTests/ProcessBootstrapTests.swift": "983ad92d6ea6a2af4472489a9560c6f73cdc7a2271c91926a1e7e617afe805e4",
+    "native/JarvisDesktop/Tests/DesktopCoreTests/StartupIsolationTests.swift": "853a6e3214439d4bc86e3d6e918745404bedeb8e85958813f3c7488efb27b825",
+    "tests/test_startup_path_isolation.py": "363b8d38917092a4c9baa47e6a90b6cadc4eac6fc84621a8936075581e1bb3c6"
+  },
+  "logs": {
+    "causal_python": {
+      "path": "/private/tmp/jarvis-startup-rendezvous-final.log",
+      "sha256": "673318a39e5e3d762306010961a0c7e7e7bdbb55f5e9427fb50fb1f544d1dd81"
+    },
+    "native_bootstrap": {
+      "path": "/private/tmp/jarvis-startup-isolation-swift.log",
+      "sha256": "cf63b5ceeff302909f9276c4a6df61a55ca1b05f142f41172743082367d677f0"
+    },
+    "provider_contracts": {
+      "path": "/private/tmp/jarvis-startup-provider-contracts.log",
+      "sha256": "6d6e68f8b1c6ca50d9d11b2a2dac372c49ea77d59e2fb2d99562d3aeddb9c4c4"
+    },
+    "initial_causal_python": {
+      "path": "/private/tmp/jarvis-startup-path-python.log",
+      "sha256": "412eb610ba8fbff84385add796e96bdc6afc491520c95d87790f69e7e4f1849f"
+    }
+  },
+  "owned_process_sample": {
+    "path": "/private/tmp/jarvis-startup-owned-sample-0685ybnt/own-blocked-cpython.sample.txt",
+    "sha256": "0185be514ee658b90562f90915f13aa62c510c58a0504356d088b281f6fa4b9a"
+  },
+  "input_evidence": {
+    "path": "/private/tmp/jarvis-startup-investigation-20261026.json",
+    "sha256": "7e0370efff027cea2d9cb04bf1e845f7892359113274cb55ae3d0be29454fde0"
+  },
+  "limits": [
+    "La muestra sintética no identifica el archivo original ni la causa de sistema o iCloud del incidente histórico.",
+    "Los tiempos medidos no garantizan una latencia máxima de cualquier sistema de archivos o fuente seleccionada.",
+    "No se leyeron auth.json, historial o perfiles privados, ni se usaron cuentas, inferencia, aprobaciones reales o la app instalada.",
+    "Los contratos con peers sintéticos no acreditan acceso, cuenta, entitlement o inferencia reales.",
+    "El canal de desarrollo sigue requiriendo Python y Codex externos; no acredita distribución autocontenida."
+  ],
+  "test_environment_note": "El primer intento con restricciones del ejecutor no pudo crear sus propios sockets Unix. Los recorridos cualificados se repitieron con autorización limitada al IPC de los fixtures, sin alterar el producto para ocultar el fallo.",
+  "initial_qualification_sources_sha256": {
+    "native/JarvisDesktop/Sources/DesktopCore/ServiceProcess.swift": "15490763973ee1509ae3de83129fee5c5a234cc4a2de4844255446c441fc268a",
+    "native/JarvisDesktop/Sources/DesktopCore/ServiceLaunchPlan.swift": "338309cc067faf749e57dfed3d197052fc81fde543ae34368cce48dbc9bb9a85",
+    "native/JarvisDesktop/Tests/DesktopCoreTests/ProcessBootstrapTests.swift": "983ad92d6ea6a2af4472489a9560c6f73cdc7a2271c91926a1e7e617afe805e4",
+    "native/JarvisDesktop/Tests/DesktopCoreTests/StartupIsolationTests.swift": "853a6e3214439d4bc86e3d6e918745404bedeb8e85958813f3c7488efb27b825",
+    "tests/test_startup_path_isolation.py": "0577541373bb8a8a1bc3e8c83939421cef66eb279613c0a12f075920c8ace04d"
+  },
+  "fixture_rendezvous_followup": {
+    "status": "fixture_sincronizado_y_verificado",
+    "product_sources_changed": false,
+    "full_suite_failure_before_followup": {
+      "passed": 2319,
+      "failed": 1,
+      "seconds": 254.75,
+      "case": "test_venv_fifo_blocks_first_frame_and_canonical_avoids_it_same_pid_advances",
+      "observation": "TimeoutExpired después de publicar contenido del FIFO; la comparación canónica ya había pasado.",
+      "log": {
+        "path": "/private/tmp/jarvis-startup-followup-proof-nio75hg3/full-suite-before-fifo-ack.log",
+        "sha256": "4d3c711af4933586ff5655c289be849749b1fddcee55b929e0811e21d3a59bab"
+      },
+      "original_log_path": "/private/tmp/jarvis-recovery-closeout-python-full.log"
+    },
+    "nominal_replicas_before_ACK": {
+      "attempts": 100,
+      "failures": 0,
+      "evidence": {
+        "path": "/private/tmp/jarvis-startup-rendezvous-ob2jksjk/result.json",
+        "sha256": "49ac29450f0461b59e507027e8613996a661aeb317b3bf6673d974a95785ee98"
+      },
+      "meaning": "No reproduce ni identifica por sí solo la causa del fallo de la ejecución completa."
+    },
+    "persistent_configuration_without_ACK": {
+      "file_iterations": 20,
+      "passed_cases": 79,
+      "failed_cases": 1,
+      "evidence": {
+        "path": "/private/tmp/jarvis-startup-rendezvous-load-cyioyd1z/result.json",
+        "sha256": "276f6c3945778bce26b772f766a4ac47004ee4e029c443dabecb61fd65b3f89c"
+      },
+      "failed_case_log": {
+        "path": "/private/tmp/jarvis-startup-rendezvous-load-cyioyd1z/iteration-19.log",
+        "sha256": "002ca5971deb29e744eeac9679c497d430ab8b9b9d237fd863086cb073bfc69e"
+      },
+      "report_count_note": "El campo passed=76 del informe suma sólo las 19 iteraciones totalmente aprobadas; el log de la vigésima acredita otros 3 casos aprobados y uno fallido."
+    },
+    "actual_CPython_second_config_read": "not_established",
+    "internal_cause_of_previous_timeout": "not_established",
+    "identified_fixture_weakness": "Abrir el escritor no acreditaba consumo del payload antes de enviar EOF.",
+    "correction": "Esperar FIONREAD=0 tras escribir; publicar previamente una configuración regular con idénticos bytes para consultas posteriores.",
+    "marker_absent_after_rename_before_FIFO_release": true,
+    "deterministic_two_read_case": true,
+    "release_write_through_first_frame_deadline_seconds": 3,
+    "deadline_increased": false,
+    "temporary_roots": {
+      "Darwin": "/private/tmp",
+      "Linux": "/tmp"
+    },
+    "load_qualification": {
+      "file_iterations": 20,
+      "cases_per_iteration": 4,
+      "passed": 80,
+      "failed": 0,
+      "cpu_workers": 2,
+      "worker_max_seconds": 40,
+      "all_iterations_began_with_two_active_workers": true,
+      "accumulated_iteration_seconds": 19.850484666530974,
+      "evidence": {
+        "path": "/private/tmp/jarvis-startup-ack-load-na52hy5v/result.json",
+        "sha256": "782706554e48122085681c7b187af2eadd0767f5b10e4aca0581f09090fcb1ac"
+      }
+    },
+    "final_focused": {
+      "passed": 4,
+      "seconds": 0.71,
+      "log": {
+        "path": "/private/tmp/jarvis-startup-rendezvous-final.log",
+        "sha256": "673318a39e5e3d762306010961a0c7e7e7bdbb55f5e9427fb50fb1f544d1dd81"
+      }
+    },
+    "global_publication_gates": "Se repiten y registran por separado después de congelar este fixture."
+  },
+  "followup_measurements_seconds": {
+    "canonical_first_frame": 0.023848,
+    "isolated_health_with_own_user_site_hook_present": 0.227067
+  }
+}

@@ -34,10 +34,12 @@ final class OwnerDecisionWindowPolicyTests: XCTestCase {
             XCTAssertTrue(target === settings)
         }
     }
-    @MainActor func testClosedSettingsFallsBackToMainAndAbsentMainRequestsCreation() {
+    @MainActor func testClosedSettingsRequestsSettingsForOwnerAndMainOnlyWithoutOwner() {
         let (main, settings) = fixture(); settings.fixtureVisible = false
+        XCTAssertNil(OwnerDecisionWindowPolicy.target(windows: [settings, main], modal: nil,
+            key: nil, awaitingOwner: true, preserveVisibleOnReopen: false))
         XCTAssertTrue(OwnerDecisionWindowPolicy.target(windows: [settings, main], modal: nil,
-            key: nil, awaitingOwner: true, preserveVisibleOnReopen: false) === main)
+            key: nil, awaitingOwner: false, preserveVisibleOnReopen: false) === main)
         XCTAssertNil(OwnerDecisionWindowPolicy.target(windows: [settings], modal: nil,
             key: nil, awaitingOwner: true, preserveVisibleOnReopen: false))
     }

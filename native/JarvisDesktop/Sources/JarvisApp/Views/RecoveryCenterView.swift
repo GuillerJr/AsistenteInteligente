@@ -3,6 +3,7 @@ import SwiftUI
 
 struct RecoveryCenterView: View {
     @Bindable var recovery: RecoveryExtensionStore
+    let navigation: SettingsOwnerNavigation
     let workspacePath: String?
     let profilePath: String?
     let verificationID: String?
@@ -103,7 +104,7 @@ struct RecoveryCenterView: View {
                     Text("Ambas entradas pertenecen a la misma versión. Necesitan Python externo y el cliente oficial de Codex. Esta consulta no inicia la app ni activa un perfil.").font(.caption)
                 }
             }
-        }.formStyle(.grouped).task { await recovery.refresh() }
+        }.formStyle(.grouped).ownerDecisionScrolling(navigation, tab: "recovery").task { await recovery.refresh() }
     }
     private var releaseControls: some View {
         Section("Versiones locales de desarrollo") {
@@ -152,12 +153,15 @@ struct RecoveryCenterView: View {
                 DisclosureGroup("Evidencia de plataforma") { Text(detail.signatureEvidence).font(.caption.monospaced()).textSelection(.enabled) }
             }
             Text("Revisión: \(review.digest)").font(.caption.monospaced()).textSelection(.enabled)
-        }
+        }.id(review.id)
     }
     @ViewBuilder private func operationDetails(_ operation: MaintenanceOperation) -> some View {
         Section("Operación de recuperación") {
             Text(MaintenancePresentation.phase(operation.phase)).font(.headline)
-            if let review = recovery.effectReview, let ticket = recovery.approval, review.matches(ticket, operation: operation) {
+            if let notice = OwnerDecisionNotice(tab: "recovery", operation: operation, reviewID: recovery.effectReview?.id, expiresAt: recovery.effectReview?.expiresAt, unconfirmed: recovery.responseUnconfirmed) {
+                OwnerDecisionStatusView(notice: notice)
+            }
+            if recovery.canDecide, let review = recovery.effectReview, let ticket = recovery.approval, review.matches(ticket, operation: operation) {
                 Text("La decisión aplica únicamente a la revisión y al destino mostrados arriba. No crea un permiso reutilizable.")
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     VStack(alignment: .leading) {
@@ -182,6 +186,6 @@ struct RecoveryCenterView: View {
             if !operation.settled { Button("Cancelar operación") { Task { await recovery.cancel() } }.disabled(recovery.isRequesting || operation.cancellationRequested) }
             if recovery.pollingPaused { Button("Retomar consulta del estado") { recovery.resumePolling() } }
             Text(operation.id).font(.caption.monospaced()).textSelection(.enabled)
-        }
+        }.id(operation.id)
     }
 }

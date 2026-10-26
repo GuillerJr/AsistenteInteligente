@@ -44,7 +44,7 @@ El [bloque de recuperación](PHASE_A_RECOVERY.md) registra el checkpoint `b8ce4b
 | Lectura HTTPS pública y extracción estática por URL | GET HTTPS público con aprobación, IP/DNS fijados y límites; suite Python de 1234 incluye las regresiones de cierre. Un GET real example.com completó HTTP 200 con contenido externo no verificado, sin JS ni seguimiento de enlaces. Pendiente: Buscador/proveedor de búsqueda, JS, navegador, cuentas, cookies y descarga de archivos no implementados. Una URL real no cualifica sitios arbitrarios ni toda la familia. |
 | Cierre incompleto, propiedad retenida y retry explícito | Regresiones MCP/Codex/Telegram y servicio integradas en 1234 Python; supervisor nativo con dueño retenido, stop compartido, 35 s monotónicos y señales tras identidad/propiedad kernel. 129 nativas incluyen 12 lifecycle y teardown acotado de fixtures. Pendiente: No certifica árboles arbitrarios ni descendientes escapados. Identidad kernel inmediata más señal PID no es primitiva atómica de audit-token. Recuperación productiva completa sigue pendiente. |
 
-La [continuación de recuperación](PHASE_A_RECOVERY_COMPLETION.md) implementa variantes WAL ausente/vacío/cabecera, journals compatibles, archivos/artefactos de workspace, reparaciones FTS/prefijo WAL y actualización/rollback locales. Conserva originales, usa una copia verificada actual y esquemas compatibles para versiones, y publica nuevos destinos para reparación/restauración. Los tests de motor y host son sintéticos; los nuevos recorridos GUI con aprobación real y la distribución completa siguen pendientes de cualificación. A-71 no se declara cerrada.
+La [continuación de recuperación](PHASE_A_RECOVERY_COMPLETION.md) implementa variantes WAL ausente/vacío/cabecera, journals compatibles, archivos/artefactos de workspace, reparaciones FTS/prefijo WAL y actualización/rollback locales. Conserva originales, usa una copia verificada actual y esquemas compatibles para versiones, y publica nuevos destinos para reparación/restauración. Los tests de motor y host usan decisiones sintéticas. Los recorridos GUI autorizados/delegados y la matriz finita de variantes y negativas están acreditados en PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md; quedan la distribución completa y los escenarios adicionales especificados en P-RECOVERY.remaining. A-71 no se declara cerrada.
 
 REA registra veinte lotes estáticos con 80 rutas TypeScript/JavaScript únicas seleccionadas. La cobertura global sigue parcial, conserva incógnitas semánticas y no observó ejecución de OpenClaw. Fuentes, hashes y Evidence IDs están en REA_COVERAGE.json y los registros de [OC-19](REA_PART19_SUMMARY.json)/[OC-20](REA_PART20_SUMMARY.json). El censo sigue en 43 familias con avance parcial y 37 sin implementación; no es un porcentaje de paridad completa.
 
@@ -183,3 +183,9 @@ Los inventarios históricos de Jarvis permanecen congelados. Este contrato añad
 ## Próxima partición
 
 Estudiar una familia con dependencias/entradas de efecto, fijar fuentes/hashes y evidencia REA pertinente, escribir contrato propio y ensayar casos en datos aislados. Reconciliar hallazgos con esta matriz. Un estado «complete-within-view» no cierra el repositorio entero.
+
+El [cierre nativo de recuperación e incidencias](PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md)
+completa la matriz finita de variantes y negativas, con modo local de recuperación,
+arranque aislado y tarjetas persistentes sin tickets reutilizados tras desconexión.
+Los registros distinguen decisiones sintéticas, reales y delegadas; no cierran
+la fase A ni la distribución.

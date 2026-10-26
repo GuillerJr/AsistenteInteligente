@@ -3,6 +3,7 @@ import SwiftUI
 
 struct RestoreProfileView: View {
     @Bindable var restored: RestoreProfileStore
+    let navigation: SettingsOwnerNavigation
     let profiles: AppProfileCoordinator
     let runtimeID: UUID
     let mayBegin: Bool
@@ -43,13 +44,16 @@ struct RestoreProfileView: View {
                             Button("Descartar revisión") { restored.discardReview() }.disabled(!restored.mayPrepare)
                         }
                     }
-                }
+                }.id(review.id)
             }
             if let operation = restored.operation {
                 Section("Resultado de la operación") {
                     Text(MaintenancePresentation.phase(operation.phase)).font(.headline)
                     Text("Operación: \(operation.id)").font(.caption.monospaced()).textSelection(.enabled)
-                    if let review = restored.review, let approval = restored.approval, review.matches(approval, operation: operation) {
+                    if let notice = OwnerDecisionNotice(tab: "restored", operation: operation, reviewID: restored.review?.id, expiresAt: restored.review?.expiresAt, unconfirmed: restored.responseUnconfirmed) {
+                        OwnerDecisionStatusView(notice: notice)
+                    }
+                    if restored.canDecide, let review = restored.review, let approval = restored.approval, review.matches(approval, operation: operation) {
                         Text("Esta aprobación admite localmente sólo el perfil revisado. Todavía no cambia el perfil abierto ni conecta ninguna cuenta.")
                         HStack {
                             Button("Autorizar activación local") { Task { await restored.decide(allow: true) } }.buttonStyle(.borderedProminent)
@@ -66,7 +70,7 @@ struct RestoreProfileView: View {
                         Text("Resultado sin confirmar. Limpiar o inspeccionar no convierte este recibo en éxito ni repite la activación.").foregroundStyle(.orange)
                     }
                     if restored.pollingPaused { Button("Consultar de nuevo") { restored.resumePolling() } }
-                }
+                }.id(operation.id)
             }
             if let inspection = restored.inspection {
                 Section("Inspección local de sólo lectura") {
@@ -85,6 +89,6 @@ struct RestoreProfileView: View {
                 }
             }
             if let notice = profiles.notice { Section { Text(notice).font(.callout).textSelection(.enabled) } }
-        }.formStyle(.grouped)
+        }.formStyle(.grouped).ownerDecisionScrolling(navigation, tab: "restored")
     }
 }

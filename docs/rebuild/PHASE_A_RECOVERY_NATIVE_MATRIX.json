@@ -1,0 +1,2438 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-26",
+  "scope": "Matriz finita de variantes SQLite y negativos de recuperación propios; datos sintéticos.",
+  "status": "evidencia_acotada_previa_al_cierre_integrado",
+  "does_not_close_phase_a": true,
+  "source_files": [
+    {
+      "path": "script/recovery_qualification_matrix.py",
+      "sha256": "04cd7fd7ab0848e2707850f90c11b6a0cd83d3c8e3f012f059fb6b0ae52dfd47"
+    },
+    {
+      "path": "tests/test_recovery_qualification_matrix.py",
+      "sha256": "04090352d49f1933b0735c38554f01d907ceacf1fab374387657bad411c19426"
+    },
+    {
+      "path": "native/JarvisDesktop/Tests/DesktopCoreTests/RecoveryFiniteMatrixIntegrationTests.swift",
+      "sha256": "e3534b86cd8957f777a253994bbb611bb2878761585621a7f25372a18bd52544"
+    },
+    {
+      "path": "native/JarvisDesktop/Tests/DesktopCoreTests/RecoveryNegativeIntegrationTests.swift",
+      "sha256": "78a9d5394e738217e6e98bc25ebdf2acdf6aa4d6247d89e8d40bd8c99d233c1a"
+    }
+  ],
+  "fixture_index": {
+    "path": "/private/tmp/jr-q26-c/matrix.json",
+    "sha256": "0182f42ee3e85fa56e4cb179435045ff1717da2a640644deba4a1109624246f0",
+    "cases": 16,
+    "maximum_service_socket_bytes": 74
+  },
+  "oracle_contract": {
+    "originals": "Sólo los cuatro nombres fijos por rol, mediante FD O_NOFOLLOW, directorios fijados y metadata antes/después; nunca SQLite sobre el original al cualificar.",
+    "metadata_order": [
+      "device",
+      "inode",
+      "uid",
+      "mode",
+      "nlink",
+      "size",
+      "mtime_ns",
+      "ctime_ns"
+    ],
+    "content_hash": "SHA-256 de cada miembro presente; también se fija la ausencia de sidecars.",
+    "projection": "Filas completas de tablas propias, IDs, ámbitos y FTS; esperado construido con SQLite nativo exclusivamente sobre copias privadas antes de dañar el fixture.",
+    "published": "Inventario cerrado, SHA y tamaño de recursos, manifiesto ligado al recibo y proyección SQLite mediante deserialize en RAM, trusted_schema=OFF y query_only=ON.",
+    "restored": "Destino nuevo desarmado, marcador/configuración exactos y tres proyecciones; únicamente se espera el desarme documentado schedules.enabled=0 y next_at=NULL.",
+    "authority": "El verificador informa owner_decision_verified_by_this_script=false; no identifica ni reproduce el clic del dueño."
+  },
+  "automated_checks": {
+    "python": {
+      "tests": 20,
+      "status": "passed",
+      "seconds": 41.16
+    },
+    "swift_real_ipc": {
+      "xctest_methods": 7,
+      "positive_scenarios": 16,
+      "negative_scenarios": 8,
+      "status": "passed",
+      "seconds": 53.29
+    },
+    "ruff": "passed",
+    "own_diff_check": "passed",
+    "decisions": "Las aprobaciones automatizadas son sintéticas en procesos y perfiles propios, sin proveedor ni inferencia.",
+    "bootstrap": "RecoveryBootstrap.inspect real antes y después: sólo health y service.local_status; stores de los tres SQLite permanecen cerrados.",
+    "counting": "Los 16 positivos y 8 negativos son escenarios de bucles XCTest; no son 24 métodos Swift adicionales. Estos conjuntos se solapan con las suites integradas."
+  },
+  "cases": [
+    {
+      "action": "backup.create",
+      "case_id": "wal_absent_all",
+      "expected_loss": null,
+      "fixture": "/private/tmp/jr-q26-c/wal_absent_all/fixture.json",
+      "profile": "/private/tmp/jr-q26-c/wal_absent_all/profile",
+      "repair_role": null,
+      "sha256": "a818f427ea626403a3352b6fa7e8d3eb4043fdf44de6619779a9a427788e673b",
+      "variants": {
+        "memory": "wal_absent",
+        "schedules": "wal_absent",
+        "state": "wal_absent"
+      },
+      "original_member_oracle": {
+        "jarvis.sqlite3": {
+          "metadata": [
+            16777230,
+            69570712,
+            501,
+            384,
+            1,
+            61440,
+            1793033361810502216,
+            1793033361810502216
+          ],
+          "sha256": "8734eb0648a54bb7b456c3560d90e3e51a07f30b0d7f0f9ab0352574ba51560c"
+        },
+        "jarvis.sqlite3-journal": null,
+        "jarvis.sqlite3-shm": null,
+        "jarvis.sqlite3-wal": null,
+        "memory.sqlite3": {
+          "metadata": [
+            16777230,
+            69570716,
+            501,
+            384,
+            1,
+            65536,
+            1793033361812263549,
+            1793033361812263549
+          ],
+          "sha256": "6fe8bfecd5ed2619a7a7397dbd380237562266134b447cd2273b0fd1bc139489"
+        },
+        "memory.sqlite3-journal": null,
+        "memory.sqlite3-shm": null,
+        "memory.sqlite3-wal": null,
+        "schedules.sqlite3": {
+          "metadata": [
+            16777230,
+            69570720,
+            501,
+            384,
+            1,
+            32768,
+            1793033361813977673,
+            1793033361813977673
+          ],
+          "sha256": "3c9985a31c5297ea881f01b99959d4bb4e5a4c9d6c8d9e84aa787937514d838e"
+        },
+        "schedules.sqlite3-journal": null,
+        "schedules.sqlite3-shm": null,
+        "schedules.sqlite3-wal": null
+      },
+      "expected_projection_sha256": {
+        "memory": "f0f18e6faea5ed451e38fd6fca9b9b7429b7b4fb8dd36bcccf43ca32134c603e",
+        "schedules": "4266c2a145b69a10c3b1e15f3b328c06a2190f6a557be943591c3352a7e331da",
+        "state": "35d3409da8da047300516a9944c41b44336359b4984cedfc84fd064582657116"
+      },
+      "native_gui": {
+        "case_id": "wal_absent_all",
+        "review_digest_observed_by_cua": "a5c452bc0e98134e3ce8a8814f3245bfdf4877f2b158f7c7e5f39a1abff0608f",
+        "review_kind": "backup",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": null,
+        "originals_intact_before_and_after": true
+      },
+      "native_launch_oracle": {
+        "case_id": "wal_absent_all",
+        "before": {
+          "case_id": "wal_absent_all",
+          "source_unchanged": true,
+          "fixture_sha256": "a818f427ea626403a3352b6fa7e8d3eb4043fdf44de6619779a9a427788e673b",
+          "owner_decision_verified_by_this_script": false
+        },
+        "after": {
+          "case_id": "wal_absent_all",
+          "source_unchanged": true,
+          "fixture_sha256": "a818f427ea626403a3352b6fa7e8d3eb4043fdf44de6619779a9a427788e673b",
+          "owner_decision_verified_by_this_script": false
+        },
+        "launch_exit": 0,
+        "elapsed_including_human_review_seconds": 15.771209125057794
+      },
+      "automated_native_effect": "aprobado_con_decision_sintetica"
+    },
+    {
+      "action": "backup.create",
+      "case_id": "wal_empty_all",
+      "expected_loss": null,
+      "fixture": "/private/tmp/jr-q26-c/wal_empty_all/fixture.json",
+      "profile": "/private/tmp/jr-q26-c/wal_empty_all/profile",
+      "repair_role": null,
+      "sha256": "4b59fb27af360065d3ae3fd91967b245089f7bb98cabec261267592fd8c7e106",
+      "variants": {
+        "memory": "wal_empty",
+        "schedules": "wal_empty",
+        "state": "wal_empty"
+      },
+      "original_member_oracle": {
+        "jarvis.sqlite3": {
+          "metadata": [
+            16777230,
+            69570746,
+            501,
+            384,
+            1,
+            61440,
+            1793033361928888441,
+            1793033361928888441
+          ],
+          "sha256": "e957f0e03fa26cd8938f5867cc4b5a7c8ae588fd595c0a4feb10f09c8b3c5084"
+        },
+        "jarvis.sqlite3-journal": null,
+        "jarvis.sqlite3-shm": null,
+        "jarvis.sqlite3-wal": {
+          "metadata": [
+            16777230,
+            69570766,
+            501,
+            384,
+            1,
+            0,
+            1793033361929876482,
+            1793033361930040982
+          ],
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "memory.sqlite3": {
+          "metadata": [
+            16777230,
+            69570750,
+            501,
+            384,
+            1,
+            65536,
+            1793033361932016106,
+            1793033361932016106
+          ],
+          "sha256": "8507be65286594377c8a9a4a96180cca73d00006c26bf6c74b09564c119778aa"
+        },
+        "memory.sqlite3-journal": null,
+        "memory.sqlite3-shm": null,
+        "memory.sqlite3-wal": {
+          "metadata": [
+            16777230,
+            69570767,
+            501,
+            384,
+            1,
+            0,
+            1793033361933397146,
+            1793033361933559980
+          ],
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "schedules.sqlite3": {
+          "metadata": [
+            16777230,
+            69570754,
+            501,
+            384,
+            1,
+            32768,
+            1793033361935401854,
+            1793033361935401854
+          ],
+          "sha256": "512e37d64b1d8c25dfc32a82fa80c87c046361e14d39e35f334e939655af19e4"
+        },
+        "schedules.sqlite3-journal": null,
+        "schedules.sqlite3-shm": null,
+        "schedules.sqlite3-wal": {
+          "metadata": [
+            16777230,
+            69570768,
+            501,
+            384,
+            1,
+            0,
+            1793033361936560020,
+            1793033361936705270
+          ],
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "expected_projection_sha256": {
+        "memory": "8182107815ef435085a4acb229d17077c61da445ab1ebc796ec7b73680c82f9d",
+        "schedules": "dad809a86239b701cffa11b25698059b68b6a2deae3ed07cf5b02185633f2044",
+        "state": "4a0fd73473f8759c7fc7a2fdf5c8d5f5395749cf6bbea9ec5bf6dabf8b4444b0"
+      },
+      "native_gui": {
+        "case_id": "wal_empty_all",
+        "review_digest_observed_by_cua": "64ac7495c7098e73fd0c86f45ee89ecb4ed1ea9d77cffd3e9a1af3d5d84bef89",
+        "review_kind": "backup",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": null,
+        "originals_intact_before_and_after": true
+      },
+      "native_launch_oracle": {
+        "case_id": "wal_empty_all",
+        "before": {
+          "case_id": "wal_empty_all",
+          "source_unchanged": true,
+          "fixture_sha256": "4b59fb27af360065d3ae3fd91967b245089f7bb98cabec261267592fd8c7e106",
+          "owner_decision_verified_by_this_script": false
+        },
+        "after": {
+          "case_id": "wal_empty_all",
+          "source_unchanged": true,
+          "fixture_sha256": "4b59fb27af360065d3ae3fd91967b245089f7bb98cabec261267592fd8c7e106",
+          "owner_decision_verified_by_this_script": false
+        },
+        "launch_exit": 0,
+        "elapsed_including_human_review_seconds": 18.55912787502166
+      },
+      "automated_native_effect": "aprobado_con_decision_sintetica"
+    },
+    {
+      "action": "backup.create",
+      "case_id": "wal_header_all",
+      "expected_loss": null,
+      "fixture": "/private/tmp/jr-q26-c/wal_header_all/fixture.json",
+      "profile": "/private/tmp/jr-q26-c/wal_header_all/profile",
+      "repair_role": null,
+      "sha256": "6346b9c2839a41aaaabc3282e4532a9e8d0cb9ad60ee2d960b504e0df10e7345",
+      "variants": {
+        "memory": "wal_header",
+        "schedules": "wal_header",
+        "state": "wal_header"
+      },
+      "original_member_oracle": {
+        "jarvis.sqlite3": {
+          "metadata": [
+            16777230,
+            69570784,
+            501,
+            384,
+            1,
+            61440,
+            1793033362106073673,
+            1793033362106073673
+          ],
+          "sha256": "2a0f51c653d9477556d2ecbb6a5150d6dc128cc839720d069a86c81ff1d6c353"
+        },
+        "jarvis.sqlite3-journal": null,
+        "jarvis.sqlite3-shm": null,
+        "jarvis.sqlite3-wal": {
+          "metadata": [
+            16777230,
+            69570806,
+            501,
+            384,
+            1,
+            32,
+            1793033362107286964,
+            1793033362107354006
+          ],
+          "sha256": "f2d7046eefa1a66a02f0956f552f1a1b0b8da6940c13155a8e1290dd06d1aa3d"
+        },
+        "memory.sqlite3": {
+          "metadata": [
+            16777230,
+            69570788,
+            501,
+            384,
+            1,
+            65536,
+            1793033362109091921,
+            1793033362109091921
+          ],
+          "sha256": "73ecd8aee53f8adabe7afcecd61ed85c918d891f9aa02d7a338f4a3e99f71515"
+        },
+        "memory.sqlite3-journal": null,
+        "memory.sqlite3-shm": null,
+        "memory.sqlite3-wal": {
+          "metadata": [
+            16777230,
+            69570807,
+            501,
+            384,
+            1,
+            32,
+            1793033362110382420,
+            1793033362110455545
+          ],
+          "sha256": "06f194fec1fd936e2bce2eb6a32f644aac8c871539a75425a3f1aeb1fdbddcdb"
+        },
+        "schedules.sqlite3": {
+          "metadata": [
+            16777230,
+            69570792,
+            501,
+            384,
+            1,
+            32768,
+            1793033362112262003,
+            1793033362112262003
+          ],
+          "sha256": "e4c6eab462ab1d0566d9cd30f388b5d46e466c8f41dc439adeca29bd573c0c32"
+        },
+        "schedules.sqlite3-journal": null,
+        "schedules.sqlite3-shm": null,
+        "schedules.sqlite3-wal": {
+          "metadata": [
+            16777230,
+            69570808,
+            501,
+            384,
+            1,
+            32,
+            1793033362113251502,
+            1793033362113318419
+          ],
+          "sha256": "b1b45aa740b41e9a973dea13711689dd9ae1e7805dd611b853a759d4e293cc02"
+        }
+      },
+      "expected_projection_sha256": {
+        "memory": "9c0243e41affbd0e7a7ccd0ce5e979ee0f3096a90c4d222bf39fc17d9dcf04bb",
+        "schedules": "ade10d2ec52ac0b6b2fb987fff29499be22fddf22a971f17c4e4870286815e5b",
+        "state": "e54baf8e81d0cb56ebe043dbcf8a952b14aa88794230119ceca6bc8353ade4c0"
+      },
+      "native_gui": {
+        "case_id": "wal_header_all",
+        "review_digest_observed_by_cua": "aae1c58ff3084c1d997a873a32d070ef0912fc93140de04409fbe67859513ef3",
+        "review_kind": "backup",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": null,
+        "originals_intact_before_and_after": true
+      },
+      "native_launch_oracle": {
+        "case_id": "wal_header_all",
+        "before": {
+          "case_id": "wal_header_all",
+          "source_unchanged": true,
+          "fixture_sha256": "6346b9c2839a41aaaabc3282e4532a9e8d0cb9ad60ee2d960b504e0df10e7345",
+          "owner_decision_verified_by_this_script": false
+        },
+        "after": {
+          "case_id": "wal_header_all",
+          "source_unchanged": true,
+          "fixture_sha256": "6346b9c2839a41aaaabc3282e4532a9e8d0cb9ad60ee2d960b504e0df10e7345",
+          "owner_decision_verified_by_this_script": false
+        },
+        "launch_exit": 0,
+        "elapsed_including_human_review_seconds": 72.55969324999023
+      },
+      "automated_native_effect": "aprobado_con_decision_sintetica"
+    },
+    {
+      "action": "backup.create",
+      "case_id": "journal_hot_delete_all",
+      "expected_loss": null,
+      "fixture": "/private/tmp/jr-q26-c/journal_hot_delete_all/fixture.json",
+      "profile": "/private/tmp/jr-q26-c/journal_hot_delete_all/profile",
+      "repair_role": null,
+      "sha256": "d5f5d1551a38e184beca4f634b66ebccce92c21d40d264c3a8c91f6dabcbf49e",
+      "variants": {
+        "memory": "journal_hot_delete",
+        "schedules": "journal_hot_delete",
+        "state": "journal_hot_delete"
+      },
+      "original_member_oracle": {
+        "jarvis.sqlite3": {
+          "metadata": [
+            16777230,
+            69570825,
+            501,
+            384,
+            1,
+            69632,
+            1793033362268612039,
+            1793033362268612039
+          ],
+          "sha256": "e817d0182342abd54013f953daf32518cde0a852e632bd2cd3512a9df08766f8"
+        },
+        "jarvis.sqlite3-journal": {
+          "metadata": [
+            16777230,
+            69570839,
+            501,
+            384,
+            1,
+            9736,
+            1793033362268709580,
+            1793033362268709580
+          ],
+          "sha256": "d92d5491721d7f5c2d194516a93c4f2c43cc25dbcbc601abc66d4c52b9545709"
+        },
+        "jarvis.sqlite3-shm": null,
+        "jarvis.sqlite3-wal": null,
+        "memory.sqlite3": {
+          "metadata": [
+            16777230,
+            69570829,
+            501,
+            384,
+            1,
+            110592,
+            1793033362278701033,
+            1793033362278701033
+          ],
+          "sha256": "d59cbb1faea4fc87f3b59ca3d8fa9bd52f34a06ba14de71d24c9b7f856e0cc4d"
+        },
+        "memory.sqlite3-journal": {
+          "metadata": [
+            16777230,
+            69570841,
+            501,
+            384,
+            1,
+            25096,
+            1793033362278893408,
+            1793033362278893408
+          ],
+          "sha256": "8c9e399f8eba2ce316c298fb4988b800cf9a970d337396764559fa2464dd442a"
+        },
+        "memory.sqlite3-shm": null,
+        "memory.sqlite3-wal": null,
+        "schedules.sqlite3": {
+          "metadata": [
+            16777230,
+            69570833,
+            501,
+            384,
+            1,
+            53248,
+            1793033362285173029,
+            1793033362285173029
+          ],
+          "sha256": "be6cd13a440f7102cff14432803e4fa7f2198b8f561960565cd70e8a0013d3ab"
+        },
+        "schedules.sqlite3-journal": {
+          "metadata": [
+            16777230,
+            69570843,
+            501,
+            384,
+            1,
+            25096,
+            1793033362285223237,
+            1793033362285223237
+          ],
+          "sha256": "85673724dbffc370c6c2fefa73b645c866f955bfe31397b4a1526bb8f660bfe6"
+        },
+        "schedules.sqlite3-shm": null,
+        "schedules.sqlite3-wal": null
+      },
+      "expected_projection_sha256": {
+        "memory": "ee861c3c7184149b1d07cb230e5661ac642912de4db2ad751eb6d58a2437a5a4",
+        "schedules": "99ef737f67582c216f52e0992e84c10b5662591e1f96b6779ab61184f0d4feb3",
+        "state": "ff1171092c3efd29077e046f3d537910c3f2c68a95a8955b4f12a287c60de0bf"
+      },
+      "native_gui": {
+        "case_id": "journal_hot_delete_all",
+        "review_digest_observed_by_cua": "dc5b62d4f6cd0225826a940e050e2f6f19fddc170f47407361df873fa0e21050",
+        "review_kind": "backup",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": null,
+        "originals_intact_before_and_after": true
+      },
+      "native_launch_oracle": {
+        "case_id": "journal_hot_delete_all",
+        "before": {
+          "case_id": "journal_hot_delete_all",
+          "source_unchanged": true,
+          "fixture_sha256": "d5f5d1551a38e184beca4f634b66ebccce92c21d40d264c3a8c91f6dabcbf49e",
+          "owner_decision_verified_by_this_script": false
+        },
+        "after": {
+          "case_id": "journal_hot_delete_all",
+          "source_unchanged": true,
+          "fixture_sha256": "d5f5d1551a38e184beca4f634b66ebccce92c21d40d264c3a8c91f6dabcbf49e",
+          "owner_decision_verified_by_this_script": false
+        },
+        "launch_exit": 0,
+        "elapsed_including_human_review_seconds": 32.267003749962896
+      },
+      "automated_native_effect": "aprobado_con_decision_sintetica"
+    },
+    {
+      "action": "backup.create",
+      "case_id": "journal_hot_persist_all",
+      "expected_loss": null,
+      "fixture": "/private/tmp/jr-q26-c/journal_hot_persist_all/fixture.json",
+      "profile": "/private/tmp/jr-q26-c/journal_hot_persist_all/profile",
+      "repair_role": null,
+      "sha256": "0fbbe931cb4c0d27c8001b0ffb2421a18b4964cf35fa6ec62a2a5c905372679e",
+      "variants": {
+        "memory": "journal_hot_persist",
+        "schedules": "journal_hot_persist",
+        "state": "journal_hot_persist"
+      },
+      "original_member_oracle": {
+        "jarvis.sqlite3": {
+          "metadata": [
+            16777230,
+            69570858,
+            501,
+            384,
+            1,
+            69632,
+            1793033362439028358,
+            1793033362439028358
+          ],
+          "sha256": "5e0a84729e36362f67b44e88e9e3acfafa1b41a6dd28772e282195e16e0e2556"
+        },
+        "jarvis.sqlite3-journal": {
+          "metadata": [
+            16777230,
+            69570873,
+            501,
+            384,
+            1,
+            9736,
+            1793033362439080691,
+            1793033362439080691
+          ],
+          "sha256": "8e3c2460932cda511bac4e277ae47e248dbf80b778c47d34aa21f882900c6233"
+        },
+        "jarvis.sqlite3-shm": null,
+        "jarvis.sqlite3-wal": null,
+        "memory.sqlite3": {
+          "metadata": [
+            16777230,
+            69570862,
+            501,
+            384,
+            1,
+            110592,
+            1793033362443506147,
+            1793033362443506147
+          ],
+          "sha256": "f8387bfa4f58e5d3d3ecb41b2b1d26f764c9df53721961103b3742ce986d9cb3"
+        },
+        "memory.sqlite3-journal": {
+          "metadata": [
+            16777230,
+            69570875,
+            501,
+            384,
+            1,
+            25096,
+            1793033362443564689,
+            1793033362443564689
+          ],
+          "sha256": "9666c6bc583f5fa995a10e4405bd9f91d258f57d9396635a3bf7bdd058aa8a2c"
+        },
+        "memory.sqlite3-shm": null,
+        "memory.sqlite3-wal": null,
+        "schedules.sqlite3": {
+          "metadata": [
+            16777230,
+            69570866,
+            501,
+            384,
+            1,
+            53248,
+            1793033362446769479,
+            1793033362446769479
+          ],
+          "sha256": "92216030b61c7c75ad9fc1c26d631333d77f370e2379a056ce4c00cdeeb45298"
+        },
+        "schedules.sqlite3-journal": {
+          "metadata": [
+            16777230,
+            69570877,
+            501,
+            384,
+            1,
+            25096,
+            1793033362446803520,
+            1793033362446803520
+          ],
+          "sha256": "d0ef828b1f0ccc9e64e78c92ed59a25a4811654e4826074adfb0fd2f89418c71"
+        },
+        "schedules.sqlite3-shm": null,
+        "schedules.sqlite3-wal": null
+      },
+      "expected_projection_sha256": {
+        "memory": "78378f7074fc91e7ab0cd3e726cde30d6807af30615946f13cf933ecb0736655",
+        "schedules": "04e2ebcd97e7e0175f8d75d866552984e8e35fea76983080306119fb2577b6b8",
+        "state": "c65ff8544e5f32a33513bd14429a96b04d9a05225dee034045f11d073d22249c"
+      },
+      "native_gui": {
+        "case_id": "journal_hot_persist_all",
+        "review_digest_observed_by_cua": "e21956c5321adc3c024028d0f62803f14a282f39028abc4308355e60b9bf4e54",
+        "review_kind": "backup",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": null,
+        "originals_intact_before_and_after": true
+      },
+      "native_launch_oracle": {
+        "case_id": "journal_hot_persist_all",
+        "before": {
+          "case_id": "journal_hot_persist_all",
+          "source_unchanged": true,
+          "fixture_sha256": "0fbbe931cb4c0d27c8001b0ffb2421a18b4964cf35fa6ec62a2a5c905372679e",
+          "owner_decision_verified_by_this_script": false
+        },
+        "after": {
+          "case_id": "journal_hot_persist_all",
+          "source_unchanged": true,
+          "fixture_sha256": "0fbbe931cb4c0d27c8001b0ffb2421a18b4964cf35fa6ec62a2a5c905372679e",
+          "owner_decision_verified_by_this_script": false
+        },
+        "launch_exit": 0,
+        "elapsed_including_human_review_seconds": 21.199365959037095
+      },
+      "automated_native_effect": "aprobado_con_decision_sintetica"
+    },
+    {
+      "action": "backup.create",
+      "case_id": "journal_inactive_persist_all",
+      "expected_loss": null,
+      "fixture": "/private/tmp/jr-q26-c/journal_inactive_persist_all/fixture.json",
+      "profile": "/private/tmp/jr-q26-c/journal_inactive_persist_all/profile",
+      "repair_role": null,
+      "sha256": "2f47d16139e55854ad5d069880781565fbf64cc80b0727af67def4bc3fb4c447",
+      "variants": {
+        "memory": "journal_inactive_persist",
+        "schedules": "journal_inactive_persist",
+        "state": "journal_inactive_persist"
+      },
+      "original_member_oracle": {
+        "jarvis.sqlite3": {
+          "metadata": [
+            16777230,
+            69570889,
+            501,
+            384,
+            1,
+            69632,
+            1793033362589790231,
+            1793033362589790231
+          ],
+          "sha256": "e3997b8ebe18d9dac4c022e75c0ca39ce2c9636bdc05ee84a7bcf469ee14e243"
+        },
+        "jarvis.sqlite3-journal": {
+          "metadata": [
+            16777230,
+            69570901,
+            501,
+            384,
+            1,
+            13840,
+            1793033362589926439,
+            1793033362589926439
+          ],
+          "sha256": "4c67fd7d8498d3da1e3e69a038103fa79fe7f7854a5d765bab6bc3ca75847f3d"
+        },
+        "jarvis.sqlite3-shm": null,
+        "jarvis.sqlite3-wal": null,
+        "memory.sqlite3": {
+          "metadata": [
+            16777230,
+            69570893,
+            501,
+            384,
+            1,
+            110592,
+            1793033362597216601,
+            1793033362597216601
+          ],
+          "sha256": "2aaea0fce58062c1f5ff0ea4294e94be37b15bcfaeef944321711a0a5356e2bd"
+        },
+        "memory.sqlite3-journal": {
+          "metadata": [
+            16777230,
+            69570903,
+            501,
+            384,
+            1,
+            29200,
+            1793033362597353393,
+            1793033362597353393
+          ],
+          "sha256": "e6fb635b8049e2999ddf290d0035ccc80387949e116b383ce78eaa8376caca27"
+        },
+        "memory.sqlite3-shm": null,
+        "memory.sqlite3-wal": null,
+        "schedules.sqlite3": {
+          "metadata": [
+            16777230,
+            69570897,
+            501,
+            384,
+            1,
+            53248,
+            1793033362601212141,
+            1793033362601212141
+          ],
+          "sha256": "d49b7f31ed023747141084d35746d7a1282ff298bdbe57f7f63c2b38f5c2b032"
+        },
+        "schedules.sqlite3-journal": {
+          "metadata": [
+            16777230,
+            69570905,
+            501,
+            384,
+            1,
+            29200,
+            1793033362601283099,
+            1793033362601283099
+          ],
+          "sha256": "aff3ced124586d5468969d655dabefc2fb77aa0fc0c3c614e9883beae4e6ed92"
+        },
+        "schedules.sqlite3-shm": null,
+        "schedules.sqlite3-wal": null
+      },
+      "expected_projection_sha256": {
+        "memory": "5740f0d9b9f4f24df66503816c4cd0eca5feaac539898ad68687fbaafd8bd3aa",
+        "schedules": "631fd348be82b06fa3a2f97f0ec141e823fe7968264cd6bf8ec79a3e35da6f71",
+        "state": "1edbbab85e925840c199626fc33db74c67d42afe92632211c4b56473179dc7a0"
+      },
+      "native_gui": {
+        "case_id": "journal_inactive_persist_all",
+        "review_digest_observed_by_cua": "8eadf8342b0da97f3b1bcf2f4880da6d141d266b6081f498917694d12bb033ad",
+        "review_kind": "backup",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": null,
+        "originals_intact_before_and_after": true
+      },
+      "native_launch_oracle": {
+        "case_id": "journal_inactive_persist_all",
+        "before": {
+          "case_id": "journal_inactive_persist_all",
+          "source_unchanged": true,
+          "fixture_sha256": "2f47d16139e55854ad5d069880781565fbf64cc80b0727af67def4bc3fb4c447",
+          "owner_decision_verified_by_this_script": false
+        },
+        "after": {
+          "case_id": "journal_inactive_persist_all",
+          "source_unchanged": true,
+          "fixture_sha256": "2f47d16139e55854ad5d069880781565fbf64cc80b0727af67def4bc3fb4c447",
+          "owner_decision_verified_by_this_script": false
+        },
+        "launch_exit": 0,
+        "elapsed_including_human_review_seconds": 20.007288708002307
+      },
+      "automated_native_effect": "aprobado_con_decision_sintetica"
+    },
+    {
+      "action": "backup.create",
+      "case_id": "journal_inactive_truncate_all",
+      "expected_loss": null,
+      "fixture": "/private/tmp/jr-q26-c/journal_inactive_truncate_all/fixture.json",
+      "profile": "/private/tmp/jr-q26-c/journal_inactive_truncate_all/profile",
+      "repair_role": null,
+      "sha256": "8357a4562e0a87567fc3c3a4a4bfb2e519d8b6be96c0e6b13dfc7917846fe16c",
+      "variants": {
+        "memory": "journal_inactive_truncate",
+        "schedules": "journal_inactive_truncate",
+        "state": "journal_inactive_truncate"
+      },
+      "original_member_oracle": {
+        "jarvis.sqlite3": {
+          "metadata": [
+            16777230,
+            69570918,
+            501,
+            384,
+            1,
+            69632,
+            1793033362725324528,
+            1793033362725324528
+          ],
+          "sha256": "c35296314ce3a6ab8407d44988c9bdf7e0e9a540c98964a4909c5a95561229fd"
+        },
+        "jarvis.sqlite3-journal": {
+          "metadata": [
+            16777230,
+            69570930,
+            501,
+            384,
+            1,
+            0,
+            1793033362725398945,
+            1793033362725398945
+          ],
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "jarvis.sqlite3-shm": null,
+        "jarvis.sqlite3-wal": null,
+        "memory.sqlite3": {
+          "metadata": [
+            16777230,
+            69570922,
+            501,
+            384,
+            1,
+            110592,
+            1793033362728897026,
+            1793033362728897026
+          ],
+          "sha256": "df320006b9ade7971fdc70825d326582582d8ef34f6bd8e77d8043c24a7bdc62"
+        },
+        "memory.sqlite3-journal": {
+          "metadata": [
+            16777230,
+            69570932,
+            501,
+            384,
+            1,
+            0,
+            1793033362728996068,
+            1793033362728996068
+          ],
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "memory.sqlite3-shm": null,
+        "memory.sqlite3-wal": null,
+        "schedules.sqlite3": {
+          "metadata": [
+            16777230,
+            69570926,
+            501,
+            384,
+            1,
+            53248,
+            1793033362731736191,
+            1793033362731736191
+          ],
+          "sha256": "fca29c347f7341d842a46c6feab228146b8b688edebe41169f7ed7471c3b8b95"
+        },
+        "schedules.sqlite3-journal": {
+          "metadata": [
+            16777230,
+            69570934,
+            501,
+            384,
+            1,
+            0,
+            1793033362731800775,
+            1793033362731800775
+          ],
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "schedules.sqlite3-shm": null,
+        "schedules.sqlite3-wal": null
+      },
+      "expected_projection_sha256": {
+        "memory": "842e640f12edc7a3fab7d679fcce664d1b58917edac2469e1da8df7a80faa910",
+        "schedules": "043aa5e91a768c776537ec121b39b187def2630bd652cf996e0ca7e1e1e6da40",
+        "state": "0914109c90f122db4042f9638025f925633b468537f767554c7b7d1e11f97508"
+      },
+      "native_gui": {
+        "case_id": "journal_inactive_truncate_all",
+        "review_digest_observed_by_cua": "eb87187d0a84f26cdeaf496e27144676d54116844ca231c40f816933012e787f",
+        "review_kind": "backup",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": null,
+        "originals_intact_before_and_after": true
+      },
+      "native_launch_oracle": {
+        "case_id": "journal_inactive_truncate_all",
+        "before": {
+          "case_id": "journal_inactive_truncate_all",
+          "source_unchanged": true,
+          "fixture_sha256": "8357a4562e0a87567fc3c3a4a4bfb2e519d8b6be96c0e6b13dfc7917846fe16c",
+          "owner_decision_verified_by_this_script": false
+        },
+        "after": {
+          "case_id": "journal_inactive_truncate_all",
+          "source_unchanged": true,
+          "fixture_sha256": "8357a4562e0a87567fc3c3a4a4bfb2e519d8b6be96c0e6b13dfc7917846fe16c",
+          "owner_decision_verified_by_this_script": false
+        },
+        "launch_exit": 0,
+        "elapsed_including_human_review_seconds": 16.85020300000906
+      },
+      "automated_native_effect": "aprobado_con_decision_sintetica"
+    },
+    {
+      "action": "doctor.repair.apply",
+      "case_id": "prefix_truncated_state",
+      "expected_loss": {
+        "data_loss_possible": true,
+        "discarded_bytes": 4119,
+        "discarded_frame_slots": 1,
+        "failure": "partial_frame",
+        "lost_committed_transactions": "unknown",
+        "retained_bytes": 8272
+      },
+      "fixture": "/private/tmp/jr-q26-c/prefix_truncated_state/fixture.json",
+      "profile": "/private/tmp/jr-q26-c/prefix_truncated_state/profile",
+      "repair_role": "state",
+      "sha256": "999bf8bddb9039015bc26290d43873cd8c242a1f0c38e0c97970d878ac290cd4",
+      "variants": {
+        "memory": "cold_delete",
+        "schedules": "cold_delete",
+        "state": "wal_prefix_truncated"
+      },
+      "original_member_oracle": {
+        "jarvis.sqlite3": {
+          "metadata": [
+            16777230,
+            69570946,
+            501,
+            384,
+            1,
+            61440,
+            1793033362828344345,
+            1793033362828344345
+          ],
+          "sha256": "2ca87da4abb52baf1f12ed330049a5835851aaa1dcc1bcd4348f6b7df1c179a0"
+        },
+        "jarvis.sqlite3-journal": null,
+        "jarvis.sqlite3-shm": {
+          "metadata": [
+            16777230,
+            69570959,
+            501,
+            384,
+            1,
+            32768,
+            1793033362828907594,
+            1793033362834563508
+          ],
+          "sha256": "c2e9254431cf4f4ac743a719070b7d098f134fae12798dc471120cd31b72394c"
+        },
+        "jarvis.sqlite3-wal": {
+          "metadata": [
+            16777230,
+            69570958,
+            501,
+            384,
+            1,
+            12391,
+            1793033362860976659,
+            1793033362860976659
+          ],
+          "sha256": "81d9210bd113e02cd03cf2adfacb2299eae73e0e8f3c18bfe1db5fbca3539f48"
+        },
+        "memory.sqlite3": {
+          "metadata": [
+            16777230,
+            69570950,
+            501,
+            384,
+            1,
+            65536,
+            1793033362838190256,
+            1793033362838190256
+          ],
+          "sha256": "1dc5df2178f4d567a7bc2290782c31d13987d45df68ed32e2887cc7121e86bb8"
+        },
+        "memory.sqlite3-journal": null,
+        "memory.sqlite3-shm": null,
+        "memory.sqlite3-wal": null,
+        "schedules.sqlite3": {
+          "metadata": [
+            16777230,
+            69570954,
+            501,
+            384,
+            1,
+            32768,
+            1793033362840456379,
+            1793033362840456379
+          ],
+          "sha256": "fe05a674ed1536c12833378d276614292275eb5315e4d552f9af90c29e4f65b0"
+        },
+        "schedules.sqlite3-journal": null,
+        "schedules.sqlite3-shm": null,
+        "schedules.sqlite3-wal": null
+      },
+      "expected_projection_sha256": {
+        "memory": "313f0f800923e71a5c862c758a1a2cfe0820749d06428bef1185f090ba1e35b6",
+        "schedules": "900abdab39811a6d5a75a64f92e109ec0ef8c06d20be8985f7812a05824570dd",
+        "state": "ec3ac036621fc12299f41ddc8aaafe8d0506b37124c470c61717083a6d18c39a"
+      },
+      "native_gui": {
+        "case_id": "prefix_truncated_state",
+        "review_digest_observed_by_cua": "2f9902ac469f260735f84a9e18ebd141318207c92e0c55216d7991556cf1bfc9",
+        "review_kind": "repair",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": true,
+        "originals_intact_before_and_after": true
+      },
+      "native_launch_oracle": {
+        "case_id": "prefix_truncated_state",
+        "before": {
+          "case_id": "prefix_truncated_state",
+          "source_unchanged": true,
+          "fixture_sha256": "999bf8bddb9039015bc26290d43873cd8c242a1f0c38e0c97970d878ac290cd4",
+          "owner_decision_verified_by_this_script": false
+        },
+        "after": {
+          "case_id": "prefix_truncated_state",
+          "source_unchanged": true,
+          "fixture_sha256": "999bf8bddb9039015bc26290d43873cd8c242a1f0c38e0c97970d878ac290cd4",
+          "owner_decision_verified_by_this_script": false
+        },
+        "launch_exit": 0,
+        "elapsed_including_human_review_seconds": 46.496486208052374
+      },
+      "automated_native_effect": "aprobado_con_decision_sintetica"
+    },
+    {
+      "action": "doctor.repair.apply",
+      "case_id": "prefix_truncated_memory",
+      "expected_loss": {
+        "data_loss_possible": true,
+        "discarded_bytes": 4119,
+        "discarded_frame_slots": 1,
+        "failure": "partial_frame",
+        "lost_committed_transactions": "unknown",
+        "retained_bytes": 8272
+      },
+      "fixture": "/private/tmp/jr-q26-c/prefix_truncated_memory/fixture.json",
+      "profile": "/private/tmp/jr-q26-c/prefix_truncated_memory/profile",
+      "repair_role": "memory",
+      "sha256": "b0ddf3f9eac0ed03a3ae828f42154a5a420ead6835557ad602b20727268a6728",
+      "variants": {
+        "memory": "wal_prefix_truncated",
+        "schedules": "cold_delete",
+        "state": "cold_delete"
+      },
+      "original_member_oracle": {
+        "jarvis.sqlite3": {
+          "metadata": [
+            16777230,
+            69570978,
+            501,
+            384,
+            1,
+            61440,
+            1793033362943502904,
+            1793033362943502904
+          ],
+          "sha256": "0079606c6eb78a3ff5e3ac2028692012a1b69dd8db393676efe2a9e991a99189"
+        },
+        "jarvis.sqlite3-journal": null,
+        "jarvis.sqlite3-shm": null,
+        "jarvis.sqlite3-wal": null,
+        "memory.sqlite3": {
+          "metadata": [
+            16777230,
+            69570982,
+            501,
+            384,
+            1,
+            65536,
+            1793033362935903033,
+            1793033362935903033
+          ],
+          "sha256": "55ebac8d98ad7e8c38b5ec808f8737ea27b06b44abeb0111bc5a6cc0910eec4b"
+        },
+        "memory.sqlite3-journal": null,
+        "memory.sqlite3-shm": {
+          "metadata": [
+            16777230,
+            69570994,
+            501,
+            384,
+            1,
+            32768,
+            1793033362936577991,
+            1793033362939943572
+          ],
+          "sha256": "a57a0847cf3b6b011cdacc449c7c9ffac68cdfd13c6202dbeba7b521bdd08bd3"
+        },
+        "memory.sqlite3-wal": {
+          "metadata": [
+            16777230,
+            69570993,
+            501,
+            384,
+            1,
+            12391,
+            1793033362965237516,
+            1793033362965237516
+          ],
+          "sha256": "18a9300b6e39d5a635a66abdea5cd55a0a94d97044b441739c1b8bafa93e90ea"
+        },
+        "schedules.sqlite3": {
+          "metadata": [
+            16777230,
+            69570986,
+            501,
+            384,
+            1,
+            32768,
+            1793033362945688069,
+            1793033362945688069
+          ],
+          "sha256": "b3943b83f38254c9f3019523e01f375e663f66590737b775a7f1b88d69dcd4cf"
+        },
+        "schedules.sqlite3-journal": null,
+        "schedules.sqlite3-shm": null,
+        "schedules.sqlite3-wal": null
+      },
+      "expected_projection_sha256": {
+        "memory": "53e2aefbe2f93b50d2b4c0b77f299195db63cb524890eeb8216b14971f6c3dcb",
+        "schedules": "7390586df89d823bfaaa38a4a21fd754571560cfcabb8376aac9338385c4b5f2",
+        "state": "fb411f0da06aa5ebf1fb23a404d03084a1358baff23ae3a45609aba64a75ca63"
+      },
+      "native_gui": {
+        "case_id": "prefix_truncated_memory",
+        "review_digest_observed_by_cua": "428610a61bfac332d5ba571b4aeebfec8ad8b3cc61bf9233ba970667f9919d89",
+        "review_kind": "repair",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": true,
+        "originals_intact_before_and_after": true
+      },
+      "native_launch_oracle": {
+        "case_id": "prefix_truncated_memory",
+        "before": {
+          "case_id": "prefix_truncated_memory",
+          "source_unchanged": true,
+          "fixture_sha256": "b0ddf3f9eac0ed03a3ae828f42154a5a420ead6835557ad602b20727268a6728",
+          "owner_decision_verified_by_this_script": false
+        },
+        "after": {
+          "case_id": "prefix_truncated_memory",
+          "source_unchanged": true,
+          "fixture_sha256": "b0ddf3f9eac0ed03a3ae828f42154a5a420ead6835557ad602b20727268a6728",
+          "owner_decision_verified_by_this_script": false
+        },
+        "launch_exit": 0,
+        "elapsed_including_human_review_seconds": 822.8742358750897
+      },
+      "automated_native_effect": "aprobado_con_decision_sintetica"
+    },
+    {
+      "action": "doctor.repair.apply",
+      "case_id": "prefix_truncated_schedules",
+      "expected_loss": {
+        "data_loss_possible": true,
+        "discarded_bytes": 4119,
+        "discarded_frame_slots": 1,
+        "failure": "partial_frame",
+        "lost_committed_transactions": "unknown",
+        "retained_bytes": 8272
+      },
+      "fixture": "/private/tmp/jr-q26-c/prefix_truncated_schedules/fixture.json",
+      "profile": "/private/tmp/jr-q26-c/prefix_truncated_schedules/profile",
+      "repair_role": "schedules",
+      "sha256": "dd82072d8a1e7b9f6921c2e4a5208488ab3aa41b81911d1affd356f3ddf58a9c",
+      "variants": {
+        "memory": "cold_delete",
+        "schedules": "wal_prefix_truncated",
+        "state": "cold_delete"
+      },
+      "original_member_oracle": {
+        "jarvis.sqlite3": {
+          "metadata": [
+            16777230,
+            69571010,
+            501,
+            384,
+            1,
+            61440,
+            1793033363047659886,
+            1793033363047659886
+          ],
+          "sha256": "92c6e6085910c751e59bb97daa0361ee6cc62b232736027eca9c2f15289f0b96"
+        },
+        "jarvis.sqlite3-journal": null,
+        "jarvis.sqlite3-shm": null,
+        "jarvis.sqlite3-wal": null,
+        "memory.sqlite3": {
+          "metadata": [
+            16777230,
+            69571014,
+            501,
+            384,
+            1,
+            65536,
+            1793033363049707218,
+            1793033363049707218
+          ],
+          "sha256": "f6393caf5dc77516bef144739ee9c22152ee772184657c79fb92518e1d200dcd"
+        },
+        "memory.sqlite3-journal": null,
+        "memory.sqlite3-shm": null,
+        "memory.sqlite3-wal": null,
+        "schedules.sqlite3": {
+          "metadata": [
+            16777230,
+            69571018,
+            501,
+            384,
+            1,
+            32768,
+            1793033363042331889,
+            1793033363042331889
+          ],
+          "sha256": "dac158f53702601a52d2847a0e099f45757bbcb927c5e2ecdc8c17c265469f0c"
+        },
+        "schedules.sqlite3-journal": null,
+        "schedules.sqlite3-shm": {
+          "metadata": [
+            16777230,
+            69571029,
+            501,
+            384,
+            1,
+            32768,
+            1793033363042934347,
+            1793033363044321680
+          ],
+          "sha256": "e46c9ee7a5a510d83b16843b937d3b702af47c2041c8802bb4594dbf01809d8b"
+        },
+        "schedules.sqlite3-wal": {
+          "metadata": [
+            16777230,
+            69571028,
+            501,
+            384,
+            1,
+            12391,
+            1793033363069323957,
+            1793033363069323957
+          ],
+          "sha256": "f599fbb92ce8c9a166f87f174e1becedefbc39a6f35565260808f170cbee2308"
+        }
+      },
+      "expected_projection_sha256": {
+        "memory": "bcff3a350d51eec5c61ede88ae4ba1fba14384fc90489768cd223d6a0b60c7bc",
+        "schedules": "b57954524789a27522cde3eee163c0426d827a7867e2264ca7764168d21a90f4",
+        "state": "9cb953b8b99084e1befc4fe0dc1d572d10dea0446ea94fb20b6cc00bbf710e69"
+      },
+      "native_gui": {
+        "case_id": "prefix_truncated_schedules",
+        "review_digest_observed_by_cua": "7e8bba09345edfb7c4e122aa4dad532c2d6a929a73d1641810f0a00f8ce5691c",
+        "review_kind": "repair",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": true,
+        "originals_intact_before_and_after": true
+      },
+      "native_launch_oracle": {
+        "case_id": "prefix_truncated_schedules",
+        "before": {
+          "case_id": "prefix_truncated_schedules",
+          "source_unchanged": true,
+          "fixture_sha256": "dd82072d8a1e7b9f6921c2e4a5208488ab3aa41b81911d1affd356f3ddf58a9c",
+          "owner_decision_verified_by_this_script": false
+        },
+        "after": {
+          "case_id": "prefix_truncated_schedules",
+          "source_unchanged": true,
+          "fixture_sha256": "dd82072d8a1e7b9f6921c2e4a5208488ab3aa41b81911d1affd356f3ddf58a9c",
+          "owner_decision_verified_by_this_script": false
+        },
+        "launch_exit": 0,
+        "elapsed_including_human_review_seconds": 48.495869042002596
+      },
+      "automated_native_effect": "aprobado_con_decision_sintetica"
+    },
+    {
+      "action": "doctor.repair.apply",
+      "case_id": "prefix_checksum_state",
+      "expected_loss": {
+        "data_loss_possible": true,
+        "discarded_bytes": 4120,
+        "discarded_frame_slots": 1,
+        "failure": "checksum",
+        "lost_committed_transactions": "unknown",
+        "retained_bytes": 12392
+      },
+      "fixture": "/private/tmp/jr-q26-c/prefix_checksum_state/fixture.json",
+      "profile": "/private/tmp/jr-q26-c/prefix_checksum_state/profile",
+      "repair_role": "state",
+      "sha256": "51c60cf8cad555c935d09300a2126336a7ed0c4f4230ad059d7490959924f8aa",
+      "variants": {
+        "memory": "cold_delete",
+        "schedules": "cold_delete",
+        "state": "wal_prefix_checksum"
+      },
+      "original_member_oracle": {
+        "jarvis.sqlite3": {
+          "metadata": [
+            16777230,
+            69571042,
+            501,
+            384,
+            1,
+            61440,
+            1793033363139883209,
+            1793033363139883209
+          ],
+          "sha256": "b6474cbde3f61cfd6afdf9b4af63b769ac3f2abb11badf09950612095fb26eb7"
+        },
+        "jarvis.sqlite3-journal": null,
+        "jarvis.sqlite3-shm": {
+          "metadata": [
+            16777230,
+            69571055,
+            501,
+            384,
+            1,
+            32768,
+            1793033363140593667,
+            1793033363146260455
+          ],
+          "sha256": "19490ed4719ca3f58e22f7b8bc13db178ae07f66c722e6fa8210a73ee517c6ad"
+        },
+        "jarvis.sqlite3-wal": {
+          "metadata": [
+            16777230,
+            69571054,
+            501,
+            384,
+            1,
+            16512,
+            1793033363171189399,
+            1793033363171189399
+          ],
+          "sha256": "8d2ffb90a9bc251fbec086744a1fa02013e73b9d2f447d3b47fc3aa46935df9f"
+        },
+        "memory.sqlite3": {
+          "metadata": [
+            16777230,
+            69571046,
+            501,
+            384,
+            1,
+            65536,
+            1793033363149272578,
+            1793033363149272578
+          ],
+          "sha256": "eaf4ed9b5ea3afcfd30f732384256bc8584a781a7f1a675bd8271a7d67e1ff6d"
+        },
+        "memory.sqlite3-journal": null,
+        "memory.sqlite3-shm": null,
+        "memory.sqlite3-wal": null,
+        "schedules.sqlite3": {
+          "metadata": [
+            16777230,
+            69571050,
+            501,
+            384,
+            1,
+            32768,
+            1793033363151315077,
+            1793033363151315077
+          ],
+          "sha256": "ef72a1c1d61c85b305181a64ce2f60cb6226cb04cf95c34ec15348366aecd6a5"
+        },
+        "schedules.sqlite3-journal": null,
+        "schedules.sqlite3-shm": null,
+        "schedules.sqlite3-wal": null
+      },
+      "expected_projection_sha256": {
+        "memory": "d6a00357ba0e4519d53e742498e186b12dad53eca60131ef348b22bef67e7651",
+        "schedules": "40273d453bbd49bb8a923dd9f6750f4ff8626e47b13d2be9c64b20263bae2d0e",
+        "state": "3fa4588f478647b188a51b9dd85d6475f110e0944e015fe53236df0c33fc004c"
+      },
+      "native_gui": {
+        "case_id": "prefix_checksum_state",
+        "review_digest_observed_by_cua": "199df191f2d8eb2bd893062c9892da0795a20643823b3845b3b4500d8b2bfc50",
+        "review_kind": "repair",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": true,
+        "originals_intact_before_and_after": true
+      },
+      "native_launch_oracle": {
+        "case_id": "prefix_checksum_state",
+        "before": {
+          "case_id": "prefix_checksum_state",
+          "source_unchanged": true,
+          "fixture_sha256": "51c60cf8cad555c935d09300a2126336a7ed0c4f4230ad059d7490959924f8aa",
+          "owner_decision_verified_by_this_script": false
+        },
+        "after": {
+          "case_id": "prefix_checksum_state",
+          "source_unchanged": true,
+          "fixture_sha256": "51c60cf8cad555c935d09300a2126336a7ed0c4f4230ad059d7490959924f8aa",
+          "owner_decision_verified_by_this_script": false
+        },
+        "launch_exit": 0,
+        "elapsed_including_human_review_seconds": 19.267498250002973
+      },
+      "automated_native_effect": "aprobado_con_decision_sintetica"
+    },
+    {
+      "action": "doctor.repair.apply",
+      "case_id": "prefix_checksum_memory",
+      "expected_loss": {
+        "data_loss_possible": true,
+        "discarded_bytes": 4120,
+        "discarded_frame_slots": 1,
+        "failure": "checksum",
+        "lost_committed_transactions": "unknown",
+        "retained_bytes": 12392
+      },
+      "fixture": "/private/tmp/jr-q26-c/prefix_checksum_memory/fixture.json",
+      "profile": "/private/tmp/jr-q26-c/prefix_checksum_memory/profile",
+      "repair_role": "memory",
+      "sha256": "b27b2406a1f9e625823f2a1f5ca7d82bce6fbbf6326bc0de6e9b00cc0708d97f",
+      "variants": {
+        "memory": "wal_prefix_checksum",
+        "schedules": "cold_delete",
+        "state": "cold_delete"
+      },
+      "original_member_oracle": {
+        "jarvis.sqlite3": {
+          "metadata": [
+            16777230,
+            69571074,
+            501,
+            384,
+            1,
+            61440,
+            1793033363251470562,
+            1793033363251470562
+          ],
+          "sha256": "fc2803478b24ce648eb10d05c8bb10bfe5cb59cf570997031c2311bd0cf18fdd"
+        },
+        "jarvis.sqlite3-journal": null,
+        "jarvis.sqlite3-shm": null,
+        "jarvis.sqlite3-wal": null,
+        "memory.sqlite3": {
+          "metadata": [
+            16777230,
+            69571078,
+            501,
+            384,
+            1,
+            65536,
+            1793033363244500191,
+            1793033363244500191
+          ],
+          "sha256": "fec81eb47c8a82bd4f74590662e2014f8b4b03183042782d5640789972d042a8"
+        },
+        "memory.sqlite3-journal": null,
+        "memory.sqlite3-shm": {
+          "metadata": [
+            16777230,
+            69571091,
+            501,
+            384,
+            1,
+            32768,
+            1793033363244999024,
+            1793033363248302730
+          ],
+          "sha256": "bb50366659a9f35c4fbc3ea58902a3f69d68f85005c24aa5a060b98a61ceeef4"
+        },
+        "memory.sqlite3-wal": {
+          "metadata": [
+            16777230,
+            69571090,
+            501,
+            384,
+            1,
+            16512,
+            1793033363274128257,
+            1793033363274128257
+          ],
+          "sha256": "a76d66d8e031d606f90da7790c130f460e61b676cfe5653cdbe9e2d7637fbb18"
+        },
+        "schedules.sqlite3": {
+          "metadata": [
+            16777230,
+            69571082,
+            501,
+            384,
+            1,
+            32768,
+            1793033363253532519,
+            1793033363253532519
+          ],
+          "sha256": "60df11539cff11c09bd2cb3d8e279c8087c48efa69f514e8d6f56fd65aa57a98"
+        },
+        "schedules.sqlite3-journal": null,
+        "schedules.sqlite3-shm": null,
+        "schedules.sqlite3-wal": null
+      },
+      "expected_projection_sha256": {
+        "memory": "c2665796024e064e76cf1ab54740d8c526b14c8345f0e276c20cd4cb2acbd0b0",
+        "schedules": "6230666a8bc59ff2240b18a62519cdea32fd5097cb3c422b087503e0a250cef8",
+        "state": "3583295cc7363438683c04b366bafec91a5e418275593697c5a76759389eb353"
+      },
+      "native_gui": {
+        "case_id": "prefix_checksum_memory",
+        "review_digest_observed_by_cua": "d14ba9b7a67344f5dd91556e7129e49e0db3a9ccc706d068ab4d7d691b141a3f",
+        "review_kind": "repair",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": true,
+        "originals_intact_before_and_after": true
+      },
+      "native_launch_oracle": {
+        "case_id": "prefix_checksum_memory",
+        "before": {
+          "case_id": "prefix_checksum_memory",
+          "source_unchanged": true,
+          "fixture_sha256": "b27b2406a1f9e625823f2a1f5ca7d82bce6fbbf6326bc0de6e9b00cc0708d97f",
+          "owner_decision_verified_by_this_script": false
+        },
+        "after": {
+          "case_id": "prefix_checksum_memory",
+          "source_unchanged": true,
+          "fixture_sha256": "b27b2406a1f9e625823f2a1f5ca7d82bce6fbbf6326bc0de6e9b00cc0708d97f",
+          "owner_decision_verified_by_this_script": false
+        },
+        "launch_exit": 0,
+        "elapsed_including_human_review_seconds": 20.81850554200355
+      },
+      "automated_native_effect": "aprobado_con_decision_sintetica"
+    },
+    {
+      "action": "doctor.repair.apply",
+      "case_id": "prefix_checksum_schedules",
+      "expected_loss": {
+        "data_loss_possible": true,
+        "discarded_bytes": 4120,
+        "discarded_frame_slots": 1,
+        "failure": "checksum",
+        "lost_committed_transactions": "unknown",
+        "retained_bytes": 12392
+      },
+      "fixture": "/private/tmp/jr-q26-c/prefix_checksum_schedules/fixture.json",
+      "profile": "/private/tmp/jr-q26-c/prefix_checksum_schedules/profile",
+      "repair_role": "schedules",
+      "sha256": "00de4e30c94efc65ccbe9026a909751bef5795287d6b134da32e14d672ed7eb1",
+      "variants": {
+        "memory": "cold_delete",
+        "schedules": "wal_prefix_checksum",
+        "state": "cold_delete"
+      },
+      "original_member_oracle": {
+        "jarvis.sqlite3": {
+          "metadata": [
+            16777230,
+            69571109,
+            501,
+            384,
+            1,
+            61440,
+            1793033363354139878,
+            1793033363354139878
+          ],
+          "sha256": "191fe7e86de52d8a196305377495357a8fb106a802bc260f565b688edaf8646a"
+        },
+        "jarvis.sqlite3-journal": null,
+        "jarvis.sqlite3-shm": null,
+        "jarvis.sqlite3-wal": null,
+        "memory.sqlite3": {
+          "metadata": [
+            16777230,
+            69571113,
+            501,
+            384,
+            1,
+            65536,
+            1793033363356146710,
+            1793033363356146710
+          ],
+          "sha256": "dc6880c641d170df30ec789cc3779897717b4e67653f2d1c337943a2ee90b7d5"
+        },
+        "memory.sqlite3-journal": null,
+        "memory.sqlite3-shm": null,
+        "memory.sqlite3-wal": null,
+        "schedules.sqlite3": {
+          "metadata": [
+            16777230,
+            69571117,
+            501,
+            384,
+            1,
+            32768,
+            1793033363348648548,
+            1793033363348648548
+          ],
+          "sha256": "1d4c462558c00e99ac3107c2d6ed16881fe423c965238a05d02b6c4480a6bc43"
+        },
+        "schedules.sqlite3-journal": null,
+        "schedules.sqlite3-shm": {
+          "metadata": [
+            16777230,
+            69571128,
+            501,
+            384,
+            1,
+            32768,
+            1793033363349364297,
+            1793033363350868422
+          ],
+          "sha256": "3504ad8b6509440a309a18c8bd4d04aa9e948643d968f0030ada474424de8f6c"
+        },
+        "schedules.sqlite3-wal": {
+          "metadata": [
+            16777230,
+            69571127,
+            501,
+            384,
+            1,
+            16512,
+            1793033363376514990,
+            1793033363376514990
+          ],
+          "sha256": "b250319b7923a9ca749822244bbb5b9dc73124534176e09a6166430bab4a5172"
+        }
+      },
+      "expected_projection_sha256": {
+        "memory": "c8f1835e6b6d8f13a55a55409bce5ebb7751956e65edb0cabbd603e6d065e959",
+        "schedules": "eac1dbf743d9b9a30f658f981ed7f477981bc5982555defc04293c9b7ef03e70",
+        "state": "9c6e6a7bb1713dba2466b21f2f93663c63c20a4bbf3644a8a3ad1fe42533a770"
+      },
+      "native_gui": {
+        "case_id": "prefix_checksum_schedules",
+        "review_digest_observed_by_cua": "4700d1e71d3350551dddf08ffddcb91e9ab0469ca48d6278363806c02bf1d168",
+        "review_kind": "repair",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": true,
+        "originals_intact_before_and_after": true
+      },
+      "native_launch_oracle": {
+        "case_id": "prefix_checksum_schedules",
+        "before": {
+          "case_id": "prefix_checksum_schedules",
+          "source_unchanged": true,
+          "fixture_sha256": "00de4e30c94efc65ccbe9026a909751bef5795287d6b134da32e14d672ed7eb1",
+          "owner_decision_verified_by_this_script": false
+        },
+        "after": {
+          "case_id": "prefix_checksum_schedules",
+          "source_unchanged": true,
+          "fixture_sha256": "00de4e30c94efc65ccbe9026a909751bef5795287d6b134da32e14d672ed7eb1",
+          "owner_decision_verified_by_this_script": false
+        },
+        "launch_exit": 0,
+        "elapsed_including_human_review_seconds": 34.45167762506753
+      },
+      "automated_native_effect": "aprobado_con_decision_sintetica"
+    },
+    {
+      "action": "doctor.repair.apply",
+      "case_id": "prefix_old_generation_state",
+      "expected_loss": {
+        "data_loss_possible": true,
+        "discarded_bytes": 4120,
+        "discarded_frame_slots": 1,
+        "failure": "page_or_generation",
+        "lost_committed_transactions": "unknown",
+        "retained_bytes": 12392
+      },
+      "fixture": "/private/tmp/jr-q26-c/prefix_old_generation_state/fixture.json",
+      "profile": "/private/tmp/jr-q26-c/prefix_old_generation_state/profile",
+      "repair_role": "state",
+      "sha256": "55d27d6807712304e27eed73b20d3c900a1bc544ec3800f9270208f7d29130b4",
+      "variants": {
+        "memory": "cold_delete",
+        "schedules": "cold_delete",
+        "state": "wal_prefix_old_generation"
+      },
+      "original_member_oracle": {
+        "jarvis.sqlite3": {
+          "metadata": [
+            16777230,
+            69571141,
+            501,
+            384,
+            1,
+            61440,
+            1793033363448305116,
+            1793033363448305116
+          ],
+          "sha256": "d9ea6dd9477f742ebc9cde2952e85ecf4ec71a01e7759c84fc01cac03c9916d0"
+        },
+        "jarvis.sqlite3-journal": null,
+        "jarvis.sqlite3-shm": {
+          "metadata": [
+            16777230,
+            69571154,
+            501,
+            384,
+            1,
+            32768,
+            1793033363448989032,
+            1793033363454491612
+          ],
+          "sha256": "5c524174b8e22fb350cf4b41087ec6cbac035ad996f86b404836e50d4b11ef00"
+        },
+        "jarvis.sqlite3-wal": {
+          "metadata": [
+            16777230,
+            69571153,
+            501,
+            384,
+            1,
+            16512,
+            1793033363479853223,
+            1793033363479853223
+          ],
+          "sha256": "71d337ae808887e690864fb1a874c745f4eaefb8b46d2162a84b0f2825f50cef"
+        },
+        "memory.sqlite3": {
+          "metadata": [
+            16777230,
+            69571145,
+            501,
+            384,
+            1,
+            65536,
+            1793033363457883069,
+            1793033363457883069
+          ],
+          "sha256": "7b1299f52dd2e605c5dd41d14111c389f49c7c86dcd6a1684f27630704952682"
+        },
+        "memory.sqlite3-journal": null,
+        "memory.sqlite3-shm": null,
+        "memory.sqlite3-wal": null,
+        "schedules.sqlite3": {
+          "metadata": [
+            16777230,
+            69571149,
+            501,
+            384,
+            1,
+            32768,
+            1793033363460021818,
+            1793033363460021818
+          ],
+          "sha256": "f14f5960c33ccb849d3d5a1b98208be71ac99a9b7ef13dfbb562d2607665c2f1"
+        },
+        "schedules.sqlite3-journal": null,
+        "schedules.sqlite3-shm": null,
+        "schedules.sqlite3-wal": null
+      },
+      "expected_projection_sha256": {
+        "memory": "1976c82ea809da76add45971d550d64c79d81ae83c969ac74c600a2befa205b0",
+        "schedules": "92a095123d811a277cd296f4fcebfc7ec568c21be6aad3b63ecd857618cc0686",
+        "state": "f5c3a4e647d0b20d89f4ec62c3c16212f47d0abe1396c3304df2ee69d38bd439"
+      },
+      "native_gui": {
+        "case_id": "prefix_old_generation_state",
+        "review_digest_observed_by_cua": "49b1adf45ce8e5f6767981ce54518579123508e3ae17d1e008af26383013cd8c",
+        "review_kind": "repair",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": true,
+        "originals_intact_before_and_after": true
+      },
+      "native_launch_oracle": {
+        "case_id": "prefix_old_generation_state",
+        "before": {
+          "case_id": "prefix_old_generation_state",
+          "source_unchanged": true,
+          "fixture_sha256": "55d27d6807712304e27eed73b20d3c900a1bc544ec3800f9270208f7d29130b4",
+          "owner_decision_verified_by_this_script": false
+        },
+        "after": {
+          "case_id": "prefix_old_generation_state",
+          "source_unchanged": true,
+          "fixture_sha256": "55d27d6807712304e27eed73b20d3c900a1bc544ec3800f9270208f7d29130b4",
+          "owner_decision_verified_by_this_script": false
+        },
+        "launch_exit": 0,
+        "elapsed_including_human_review_seconds": 21.405158790992573
+      },
+      "automated_native_effect": "aprobado_con_decision_sintetica"
+    },
+    {
+      "action": "doctor.repair.apply",
+      "case_id": "prefix_old_generation_memory",
+      "expected_loss": {
+        "data_loss_possible": true,
+        "discarded_bytes": 4120,
+        "discarded_frame_slots": 1,
+        "failure": "page_or_generation",
+        "lost_committed_transactions": "unknown",
+        "retained_bytes": 12392
+      },
+      "fixture": "/private/tmp/jr-q26-c/prefix_old_generation_memory/fixture.json",
+      "profile": "/private/tmp/jr-q26-c/prefix_old_generation_memory/profile",
+      "repair_role": "memory",
+      "sha256": "66ed733852797065233c8f16567660a913fffd49bbd6ed405bf038790f15b725",
+      "variants": {
+        "memory": "wal_prefix_old_generation",
+        "schedules": "cold_delete",
+        "state": "cold_delete"
+      },
+      "original_member_oracle": {
+        "jarvis.sqlite3": {
+          "metadata": [
+            16777230,
+            69571173,
+            501,
+            384,
+            1,
+            61440,
+            1793033363571968629,
+            1793033363571968629
+          ],
+          "sha256": "64aa87b41cea4e42ae321b4ee72c481a987a745abbd3598fa29300ac33aa120d"
+        },
+        "jarvis.sqlite3-journal": null,
+        "jarvis.sqlite3-shm": null,
+        "jarvis.sqlite3-wal": null,
+        "memory.sqlite3": {
+          "metadata": [
+            16777230,
+            69571177,
+            501,
+            384,
+            1,
+            65536,
+            1793033363558581720,
+            1793033363558581720
+          ],
+          "sha256": "0fb477e8fc8bc95431a31bb2e5c59765535ad1ba32779060e18b00bf149cd05f"
+        },
+        "memory.sqlite3-journal": null,
+        "memory.sqlite3-shm": {
+          "metadata": [
+            16777230,
+            69571194,
+            501,
+            384,
+            1,
+            32768,
+            1793033363559225511,
+            1793033363568597756
+          ],
+          "sha256": "71fa4eee4f06a8b9f0c1f89dc9f98b5fb0ee01c56f6abce2f4257d47d90a23da"
+        },
+        "memory.sqlite3-wal": {
+          "metadata": [
+            16777230,
+            69571193,
+            501,
+            384,
+            1,
+            16512,
+            1793033363593573867,
+            1793033363593573867
+          ],
+          "sha256": "afb15c622b039b68969576b6d4653e46f58100fc2b525be5dfbbec3b1926808f"
+        },
+        "schedules.sqlite3": {
+          "metadata": [
+            16777230,
+            69571181,
+            501,
+            384,
+            1,
+            32768,
+            1793033363574057878,
+            1793033363574057878
+          ],
+          "sha256": "bb75694081cc17c125b2309a7610c902e17f0612ee3d24f8b490bb4fcb31da58"
+        },
+        "schedules.sqlite3-journal": null,
+        "schedules.sqlite3-shm": null,
+        "schedules.sqlite3-wal": null
+      },
+      "expected_projection_sha256": {
+        "memory": "8bebf83cfa07a5f4b1a66700ddb24a768a3276f7f0c69b1619ebb8b3418d8afb",
+        "schedules": "4939cb594c7e1f1c6a2101364dc0f663f08fd587660328c157b39337a0609d21",
+        "state": "6d7ecb3840af96be303290c018bf4e34fd96db513cfaf1b1a07cf9c192e605e6"
+      },
+      "native_gui": {
+        "case_id": "prefix_old_generation_memory",
+        "review_digest_observed_by_cua": "a8938de9615b9d5acb23a65643bac15fe897e79002f7ef902fb146ee2a23dd7c",
+        "review_kind": "repair",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": true,
+        "originals_intact_before_and_after": true
+      },
+      "native_launch_oracle": {
+        "case_id": "prefix_old_generation_memory",
+        "before": {
+          "case_id": "prefix_old_generation_memory",
+          "source_unchanged": true,
+          "fixture_sha256": "66ed733852797065233c8f16567660a913fffd49bbd6ed405bf038790f15b725",
+          "owner_decision_verified_by_this_script": false
+        },
+        "after": {
+          "case_id": "prefix_old_generation_memory",
+          "source_unchanged": true,
+          "fixture_sha256": "66ed733852797065233c8f16567660a913fffd49bbd6ed405bf038790f15b725",
+          "owner_decision_verified_by_this_script": false
+        },
+        "launch_exit": 0,
+        "elapsed_including_human_review_seconds": 19.876305375015363
+      },
+      "automated_native_effect": "aprobado_con_decision_sintetica"
+    },
+    {
+      "action": "doctor.repair.apply",
+      "case_id": "prefix_old_generation_schedules",
+      "expected_loss": {
+        "data_loss_possible": true,
+        "discarded_bytes": 4120,
+        "discarded_frame_slots": 1,
+        "failure": "page_or_generation",
+        "lost_committed_transactions": "unknown",
+        "retained_bytes": 12392
+      },
+      "fixture": "/private/tmp/jr-q26-c/prefix_old_generation_schedules/fixture.json",
+      "profile": "/private/tmp/jr-q26-c/prefix_old_generation_schedules/profile",
+      "repair_role": "schedules",
+      "sha256": "7da99ae3ff80e13bd32dd953c42998a7b7f3d4944119cd1131e00a8acde63577",
+      "variants": {
+        "memory": "cold_delete",
+        "schedules": "wal_prefix_old_generation",
+        "state": "cold_delete"
+      },
+      "original_member_oracle": {
+        "jarvis.sqlite3": {
+          "metadata": [
+            16777230,
+            69571212,
+            501,
+            384,
+            1,
+            61440,
+            1793033363685046023,
+            1793033363685046023
+          ],
+          "sha256": "5486830eb687153d9c5e9075d451a4e67db742f529186e031a43e9b58319f14b"
+        },
+        "jarvis.sqlite3-journal": null,
+        "jarvis.sqlite3-shm": null,
+        "jarvis.sqlite3-wal": null,
+        "memory.sqlite3": {
+          "metadata": [
+            16777230,
+            69571217,
+            501,
+            384,
+            1,
+            65536,
+            1793033363687512021,
+            1793033363687512021
+          ],
+          "sha256": "b480663625d1038f934f12444aa309b28b066e036b60b8ab2ca3255ee51d8c23"
+        },
+        "memory.sqlite3-journal": null,
+        "memory.sqlite3-shm": null,
+        "memory.sqlite3-wal": null,
+        "schedules.sqlite3": {
+          "metadata": [
+            16777230,
+            69571223,
+            501,
+            384,
+            1,
+            32768,
+            1793033363678125527,
+            1793033363678125527
+          ],
+          "sha256": "472b934fd959ac6527fb2775c5d64b820f5baafc56bc0a7260cca62a8058e214"
+        },
+        "schedules.sqlite3-journal": null,
+        "schedules.sqlite3-shm": {
+          "metadata": [
+            16777230,
+            69571235,
+            501,
+            384,
+            1,
+            32768,
+            1793033363678886735,
+            1793033363680930067
+          ],
+          "sha256": "0d893dd0bdd13625001713ff0dad4e48bd034615df94e4e1ba9af97c1589fb6b"
+        },
+        "schedules.sqlite3-wal": {
+          "metadata": [
+            16777230,
+            69571234,
+            501,
+            384,
+            1,
+            16512,
+            1793033363710901841,
+            1793033363710901841
+          ],
+          "sha256": "bb2268f56bd4a7c10c557849ccb64433e76d82ff830bcfab7a9769e34b53d761"
+        }
+      },
+      "expected_projection_sha256": {
+        "memory": "6a164f59968b2175ded36f480c8ef167dbaad1fa7ebf6204326c39da8301b305",
+        "schedules": "26fc0a0cbd79fbb3d133c39bed0631cbeb01e47dc6682c14f7286d962fdef633",
+        "state": "3f6fbe9a7f4fa9dca14ca8b2b8c95b8afea71b7a55d000a462db3448f6d8d077"
+      },
+      "native_gui": {
+        "case_id": "prefix_old_generation_schedules",
+        "review_digest_observed_by_cua": "8219b6492c285c20963ee4d90a03eb727d975f0ab23faeca3c08fe5611fcd506",
+        "review_kind": "repair",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": true,
+        "originals_intact_before_and_after": true
+      },
+      "native_launch_oracle": {
+        "case_id": "prefix_old_generation_schedules",
+        "before": {
+          "case_id": "prefix_old_generation_schedules",
+          "source_unchanged": true,
+          "fixture_sha256": "7da99ae3ff80e13bd32dd953c42998a7b7f3d4944119cd1131e00a8acde63577",
+          "owner_decision_verified_by_this_script": false
+        },
+        "after": {
+          "case_id": "prefix_old_generation_schedules",
+          "source_unchanged": true,
+          "fixture_sha256": "7da99ae3ff80e13bd32dd953c42998a7b7f3d4944119cd1131e00a8acde63577",
+          "owner_decision_verified_by_this_script": false
+        },
+        "launch_exit": 0,
+        "elapsed_including_human_review_seconds": 25.407513916958123
+      },
+      "automated_native_effect": "aprobado_con_decision_sintetica"
+    }
+  ],
+  "automated_negative_scenarios": [
+    {
+      "id": "N-01",
+      "case": "WAL sin commit verificable",
+      "expected": "Reparación rechazada: profile_cold_wal_invalid; sin aprobación ni destino."
+    },
+    {
+      "id": "N-02",
+      "case": "Familia mixta WAL y rollback journal",
+      "expected": "Revisión rechazada: profile_lazy_source_unavailable; sin aprobación ni destino."
+    },
+    {
+      "id": "N-03",
+      "case": "Checksum de journal caliente inválido",
+      "expected": "Publicación rechazada; recibo durable no_published_effect; origen intacto."
+    },
+    {
+      "id": "N-04",
+      "case": "Denegación antes del efecto",
+      "expected": "denied, sin destino; reenviar la revisión devuelve la misma operación."
+    },
+    {
+      "id": "N-05",
+      "case": "Cancelación antes del efecto",
+      "expected": "cancelled, sin destino ni nueva aprobación al reenviar."
+    },
+    {
+      "id": "N-06",
+      "case": "Deadline del efecto vencida",
+      "expected": "Reloj sintético adelantado; recovery_deadline_exceeded, sin publicación."
+    },
+    {
+      "id": "N-07",
+      "case": "TTL real de autorización de fixture",
+      "expected": "Temporizador de 0.08 segundos, presupuesto sintético; caduca sin decisión ni publicación."
+    },
+    {
+      "id": "N-08",
+      "case": "Caída real del servicio propio durante un worker",
+      "expected": "Salida del hijo mientras el worker está bloqueado antes de publicar; rechazo de socket residual; intervención explícita de fixture; reinicio con interrupted_unknown, staging conservado y revisión anterior no repetida."
+    }
+  ],
+  "gui_review_evidence": {
+    "review_count": 16,
+    "app_binary_sha256": "084540d84b961e4776809e4fb92f3162413da4f51af00a7451f7b3563fd86aba",
+    "all_cases_published_with_real_owner_decisions": false,
+    "method": "Revisiones nativas observadas por accesibilidad/CUA; comparación del oracle antes/después de cada lanzamiento.",
+    "records": [
+      {
+        "path": "/private/tmp/jr-q26-c/gui-observed-review-records.json",
+        "sha256": "fde3baaa95e8277f2fe7d30411a24f39ea34bffe602ad3e79e7714cfbcfe8391"
+      },
+      {
+        "path": "/private/tmp/jr-q26-c/gui-launch-and-originals.json",
+        "sha256": "dcb89ac034f57035743bde708481d4b21b0f72ff458d70b41dfc3e9a787fb7d2"
+      }
+    ],
+    "boundaries": [
+      "Las 16 observaciones GUI son revisiones. Los efectos de los 16 casos completos se acreditan separadamente por IPC nativo con decisiones sintéticas.",
+      "No se instrumentó físicamente el clic del dueño. Las decisiones reales seleccionadas se apoyan en la interacción del dueño y en el estado del host.",
+      "Los tiempos de lanzamiento incluyen lectura e interacción humanas; no constituyen mediciones de rendimiento."
+    ],
+    "local_launch_flag": "--recovery-only",
+    "launch_boundary": "La bandera evita enumeración de sesiones/tareas al arrancar; no se transmite como permiso al servicio ni constituye una sandbox."
+  },
+  "selected_owner_records": {
+    "reparacion_aprobada": {
+      "path": "/private/tmp/jr-q26-c/prefix_truncated_memory/repaired-status.json",
+      "sha256": "58b91f0045d61a8f1b86b5250d66ff7fae14295b2c6787b8c5bc8b0bfa8d182c",
+      "operation": {
+        "operation_id": "9097324a6cb4490993add26c0dd3d10f",
+        "kind": "doctor.repair.apply",
+        "scope": {
+          "profile_id": "fae15d8eb84c46f382d4727c5ca2b853",
+          "generation": 0
+        },
+        "review_id": "91f5a88b6931489da761ef95f3e44caf",
+        "review_digest": "428610a61bfac332d5ba571b4aeebfec8ad8b3cc61bf9233ba970667f9919d89",
+        "phase": "complete",
+        "stage": "verify_complete",
+        "result": {
+          "repair": {
+            "committed_frames": 2,
+            "data_loss_possible": true,
+            "discarded_bytes": 4119,
+            "discarded_frame_slots": 1,
+            "failure": "partial_frame",
+            "frames": 2,
+            "image_bytes": 65536,
+            "image_sha256": "457f8c250900ff33452af5c0952971bcf4b632f5b5994e8375ece831460742e2",
+            "kind": "wal_valid_prefix",
+            "lost_committed_transactions": "unknown",
+            "main_only": false,
+            "page_size": 4096,
+            "pages": 16,
+            "retained_bytes": 8272,
+            "role": "memory",
+            "semantics": "validated_committed_prefix_only",
+            "source_fingerprint": "41e0839bed49da67345078aa9bf8b6c9147805a7d7594d48df21e9e2f9bc7b34",
+            "source_member_sha256": {
+              "-shm": "a57a0847cf3b6b011cdacc449c7c9ffac68cdfd13c6202dbeba7b521bdd08bd3",
+              "-wal": "18a9300b6e39d5a635a66abdea5cd55a0a94d97044b441739c1b8bafa93e90ea",
+              "main": "55ebac8d98ad7e8c38b5ec808f8737ea27b06b44abeb0111bc5a6cc0910eec4b"
+            },
+            "source_mode": "cold_wal",
+            "source_modified": false,
+            "valid_frames": 2
+          },
+          "restoration_required": true,
+          "original_preserved": true
+        },
+        "error_code": null,
+        "receipt": {
+          "operation_id": "9097324a6cb4490993add26c0dd3d10f",
+          "purpose": "doctor.repair.apply",
+          "status": "completed",
+          "effect_status": "published_verified_bytes",
+          "target_name": "reparado",
+          "artifact_id": "ff6b6d3317fe4b238302493aa0374819",
+          "manifest_sha256": "d3d34ec5bea9d772707333fa83b3ccd07d55fad25b6632261626f09e33ddeb57",
+          "target_identity": {
+            "device": "16777230",
+            "inode": "69587917"
+          },
+          "new_profile_id": null,
+          "error_code": null,
+          "cleanup_error_code": null,
+          "cleanup_pending": false
+        },
+        "receipt_durable": true,
+        "worker_pending": false,
+        "cancellation_requested": false,
+        "cleanup_owner_pending": false
+      }
+    },
+    "restauracion_aprobada": {
+      "path": "/private/tmp/jr-q26-c/prefix_truncated_memory/restored-status.json",
+      "sha256": "fc38543661ceec42dbf77e0289bb611f3348728ab3cc8ebca94b75f8359ab50a",
+      "operation": {
+        "operation_id": "4e929179631c4ccd9c56f2d558dd6aa8",
+        "kind": "restore.stage",
+        "scope": {
+          "profile_id": "fae15d8eb84c46f382d4727c5ca2b853",
+          "generation": 0
+        },
+        "review_id": "ad48b10418fd4eadacfe006df8ccb433",
+        "review_digest": "22df2f2006c53ea57ff3ad6d1d1c712deb0cd5359de24c37772939b67e60c1bc",
+        "phase": "staged_disarmed",
+        "stage": "restore_verify_complete",
+        "result": null,
+        "error_code": null,
+        "receipt": {
+          "operation_id": "4e929179631c4ccd9c56f2d558dd6aa8",
+          "purpose": "restore.stage",
+          "status": "completed",
+          "effect_status": "new_disarmed_profile",
+          "target_name": "restaurado",
+          "artifact_id": "ff6b6d3317fe4b238302493aa0374819",
+          "manifest_sha256": "d3d34ec5bea9d772707333fa83b3ccd07d55fad25b6632261626f09e33ddeb57",
+          "target_identity": {
+            "device": "16777230",
+            "inode": "69593911"
+          },
+          "new_profile_id": "2f6eac9294a54d199d3b7b42b30a0ad0",
+          "error_code": null,
+          "cleanup_error_code": null,
+          "cleanup_pending": false
+        },
+        "receipt_durable": true,
+        "worker_pending": false,
+        "cancellation_requested": false,
+        "cleanup_owner_pending": false
+      }
+    },
+    "denegacion": {
+      "path": "/private/tmp/jr-q26-c/prefix_truncated_memory/denied-status.json",
+      "sha256": "870182d803af7addb153a2251f126ec71d4f8fb6bc75ef7e6367d38f81e47d77",
+      "operation": {
+        "operation_id": "cf370181e36243358987427f8e66042c",
+        "kind": "doctor.repair.apply",
+        "scope": {
+          "profile_id": "fae15d8eb84c46f382d4727c5ca2b853",
+          "generation": 0
+        },
+        "review_id": "dd9be165667b4dee943d2dc0e8dc66d7",
+        "review_digest": "838a9d0f28ad9ae39a50df2b24b8ffc2f9268bf5e30d437f6ac997116332fa3e",
+        "phase": "denied",
+        "stage": null,
+        "result": null,
+        "error_code": null,
+        "receipt": null,
+        "receipt_durable": true,
+        "worker_pending": false,
+        "cancellation_requested": false,
+        "cleanup_owner_pending": false
+      }
+    },
+    "cancelacion": {
+      "path": "/private/tmp/jr-q26-c/prefix_truncated_memory/cancelled-status.json",
+      "sha256": "a114ebc877c18f499cedd115da7d130cfaf293b0f4f7e74dfa7b48ec085e3bd6",
+      "operation": {
+        "operation_id": "6750835ab8d34f2fa59e8035bbaabd7e",
+        "kind": "doctor.repair.apply",
+        "scope": {
+          "profile_id": "fae15d8eb84c46f382d4727c5ca2b853",
+          "generation": 0
+        },
+        "review_id": "1c4d9b6b7e3d4494a7007ff0a0e3948f",
+        "review_digest": "a6546f0fd07ec8efc0766e84d84911f670a63b73f102ba0c903bcfa8a87b5573",
+        "phase": "cancelled",
+        "stage": null,
+        "result": null,
+        "error_code": null,
+        "receipt": null,
+        "receipt_durable": true,
+        "worker_pending": false,
+        "cancellation_requested": true,
+        "cleanup_owner_pending": false
+      }
+    },
+    "caducidad_restauracion": {
+      "path": "/private/tmp/jr-q26-c/prefix_truncated_memory/expired-restore-status.json",
+      "sha256": "5447b4bc7c6b9fa2b2c77084667cd266203bda07cf45a50041242d07ff8373c6",
+      "operation": {
+        "operation_id": "31b1c5cc19f2421482cc28b48c141811",
+        "kind": "restore.stage",
+        "scope": {
+          "profile_id": "fae15d8eb84c46f382d4727c5ca2b853",
+          "generation": 0
+        },
+        "review_id": "7140cc54eed149e591540e6cb6b9221f",
+        "review_digest": "22df2f2006c53ea57ff3ad6d1d1c712deb0cd5359de24c37772939b67e60c1bc",
+        "phase": "failed",
+        "stage": null,
+        "result": null,
+        "error_code": "maintenance_review_expired",
+        "receipt": null,
+        "receipt_durable": true,
+        "worker_pending": false,
+        "cancellation_requested": false,
+        "cleanup_owner_pending": false
+      }
+    }
+  },
+  "selected_owner_verification": {
+    "case_id": "prefix_truncated_memory",
+    "discarded_bytes": 4119,
+    "discarded_frame_slots": 1,
+    "lost_committed_transactions": "unknown",
+    "data_loss_possible": true,
+    "repaired_manifest_sha256": "d3d34ec5bea9d772707333fa83b3ccd07d55fad25b6632261626f09e33ddeb57",
+    "source_unchanged": true,
+    "repaired_artifact_integrity": true,
+    "logical_roles": [
+      "memory",
+      "schedules",
+      "state"
+    ],
+    "restored_disarmed": true,
+    "restored_profile_activated_or_opened": false,
+    "restored_sqlite_sha256": {
+      "memory": "9efa7f25e71774ae63e083f0b1989a6e3cc2fbf71e141fa0cfbb3b0f8ff218af",
+      "schedules": "57a528cd5a8a66826d084ec0906cf8d94d631cd5d9584feadba1778229794e49",
+      "state": "32551139d01b11eac2c08b2fb0056eff317fd6b2b2b348325600d3d5e78a8e0d"
+    },
+    "verification_method": "Dos lecturas independientes del runner verify sobre reparado/restaurado y los estados guardados; no abre SQLite original."
+  },
+  "native_interruption_03": {
+    "path": "/private/tmp/jr-q26-c/prefix_truncated_memory/interruption-native-03.json",
+    "sha256": "d3c79ee3ff53ce203a38bd5ca6a81551a3603b87b06c6c906eb3de42fcef50b8",
+    "evidence": {
+      "operation": {
+        "operation_id": "a6cf91e9f0344c248388d10f465719ff",
+        "kind": "doctor.repair.apply",
+        "scope": {
+          "profile_id": "5da45a1067e0433784ced650ce692b90",
+          "generation": 0
+        },
+        "review_id": "456bd56b60f24f92ac97bceb977f0c12",
+        "review_digest": "cc1cd0c7ba0c11adf5c498d83bf1b53c3d99722921031712ed0cea56a0d25c2d",
+        "phase": "awaiting_owner",
+        "stage": null,
+        "result": null,
+        "error_code": null,
+        "receipt": null,
+        "receipt_durable": false,
+        "worker_pending": true,
+        "cancellation_requested": false,
+        "cleanup_owner_pending": false
+      },
+      "service_peer_pid": 91316,
+      "native_parent_pid": 91301,
+      "native_command": "/private/tmp/jarvis-recovery-closeout-app-20261026-03/Jarvis.app/Contents/MacOS/Jarvis --python /opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/bin/python3.11 --source /private/tmp/jarvis-recovery-closeout.ESSe65/src --state /private/tmp/jr-q26-c/prefix_truncated_memory/profile --codex /opt/homebrew/bin/codex --provider-state /private/tmp/jarvis-recovery-closeout.ESSe65/codex-matriz --recovery-only",
+      "socket_binding": {
+        "metadata": [
+          "16777230",
+          "69618383",
+          "501",
+          "384",
+          "1",
+          "0",
+          "1793035646258400822",
+          "1793035646258579198"
+        ],
+        "type": "socket"
+      },
+      "before": {
+        "case_id": "prefix_truncated_memory",
+        "source_unchanged": true,
+        "fixture_sha256": "b0ddf3f9eac0ed03a3ae828f42154a5a420ead6835557ad602b20727268a6728",
+        "owner_decision_verified_by_this_script": false
+      },
+      "fault": "SIGKILL own verified synthetic service while awaiting_owner; no approval delivered",
+      "unix": 1793036062.4188402,
+      "after": {
+        "case_id": "prefix_truncated_memory",
+        "source_unchanged": true,
+        "fixture_sha256": "b0ddf3f9eac0ed03a3ae828f42154a5a420ead6835557ad602b20727268a6728",
+        "owner_decision_verified_by_this_script": false
+      },
+      "target_absent": true,
+      "explicit_fixture_transport_retirement": {
+        "removed_only": "service.sock",
+        "identity_matched": true,
+        "profile_lease_held": true,
+        "confirmed_child_exit": true,
+        "explicit_synthetic_intervention": true,
+        "production_auto_recovery": false
+      },
+      "previous_after_interruption": {
+        "operation_id": "a6cf91e9f0344c248388d10f465719ff",
+        "phase": "interrupted_unknown",
+        "purpose": "doctor.repair.apply",
+        "receipt": null,
+        "review_digest": "cc1cd0c7ba0c11adf5c498d83bf1b53c3d99722921031712ed0cea56a0d25c2d"
+      },
+      "native_warning_visible": "El servicio terminó de forma no habitual; no se repetirán automáticamente",
+      "after_cleanup": {
+        "case_id": "prefix_truncated_memory",
+        "source_unchanged": true,
+        "fixture_sha256": "b0ddf3f9eac0ed03a3ae828f42154a5a420ead6835557ad602b20727268a6728",
+        "owner_decision_verified_by_this_script": false
+      }
+    },
+    "interpretation": "La GUI03 perdió su servicio propio mientras esperaba al dueño, sin autorización entregada ni destino. El reinicio registrado requirió retirar explícitamente sólo su endpoint fijado, después de confirmar salida y obtener lease. Esto no acredita autorrecuperación del producto."
+  },
+  "not_qualified_by_this_record": [
+    "Reapertura GUI final y solución de tickets desconectados de la revisión 05.",
+    "Causa o corrección universal de las incidencias anteriores de ventanas/tarjetas.",
+    "Publicación humana repetida para cada uno de los 16 casos.",
+    "Corrupción arbitraria de B-trees, super-journals, datos borrados o toda combinación SQLite posible.",
+    "Perfiles personales, autenticidad del paquete, TCC, distribución autocontenida o cierre completo de A-71/fase A."
+  ]
+}

@@ -96,7 +96,7 @@ declara completa por los tests sintéticos.
 - [x] Comprobar diagnóstico, respaldo y verificación WAL en la app con aprobación
   real del dueño y un perfil sintético: memoria WAL, estado/tareas DELETE; último
   commit, hashes y cinco originales intactos verificados independientemente.
-  [Evidencia y límites](rebuild/PHASE_A_WAL_RECOVERY_LIVE.json). La cualificación real de las variantes nuevas sigue pendiente.
+  [Evidencia y límites](rebuild/PHASE_A_WAL_RECOVERY_LIVE.json). La ampliación posterior de variantes está en el [cierre nativo](rebuild/PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md).
 - [x] Restaurar ese respaldo WAL desde la app con aprobación del dueño a otro
   perfil sintético desarmado: último commit, IDs/ámbitos y datos conservados;
   cinco originales y seis archivos del respaldo intactos. [Evidencia](rebuild/PHASE_A_WAL_RESTORE_LIVE.json).
@@ -132,8 +132,11 @@ declara completa por los tests sintéticos.
 - [x] Reproducir y corregir el descarte de una pulsación durante el sondeo de
   estado, con pruebas del Store, gesto en vista real con transporte falso y cola
   IPC serial real; [evidencia y límites](rebuild/PHASE_A_OWNER_CLICK_REGRESSION.json).
-- [ ] Investigar la demora inicial observada en el perfil nuevo: se recuperó por
-  supervisión lectora, sin reinicio; su causa no quedó establecida.
+- [x] Investigar la demora inicial y corregir la exposición del arranque a
+  configuración de venv, hooks de usuario y variables Python heredadas. Hay
+  reproducciones causales y arranque canónico aislado verificado. La atribución
+  al archivo o causa de sistema históricos precisos no está acreditada; no se
+  inventa a partir del fixture. [Investigación](rebuild/PHASE_A_STARTUP_ISOLATION.md).
 - [x] Implementar las variantes frías WAL ausente, vacío y sólo cabecera válida,
   y journals DELETE/PERSIST calientes o PERSIST/TRUNCATE inactivos, mediante
   recuperación privada y rechazo de familias ambiguas. Los originales se conservan.
@@ -154,9 +157,17 @@ declara completa por los tests sintéticos.
   2297 pruebas Python y 249 Swift aprobadas; paquetes y bundle comprobados.
   [Implementación y límites](rebuild/PHASE_A_RECOVERY_COMPLETION.md), informados por
   [OC-19](rebuild/REA_PART19_SUMMARY.json) y [OC-20](rebuild/REA_PART20_SUMMARY.json).
-- [ ] Ampliar cualificación nativa de variantes WAL/journal, reparación de prefijo
-  y negativos reales pertinentes. Sus contratos y negativos automatizados están
-  probados; los recorridos GUI anteriores no acreditan todas sus combinaciones.
+- [x] Completar la matriz nativa finita: siete modos WAL/journal con tres roles,
+  nueve prefijos dañados, 16 revisiones GUI y tres rechazos GUI. Los efectos de
+  todos los casos se comprueban por IPC nativo con decisiones sintéticas; los
+  recorridos autorizados/delegados publican y restauran prefijos de memoria y
+  tareas con proyecciones SQL y originales verificados. Se comprueban denegación,
+  caducidad, cancelación e interrupción sin replay. [Matriz](rebuild/PHASE_A_RECOVERY_NATIVE_MATRIX.md).
+- [x] Reproducir y corregir decisiones ocultas por pestaña, caducidad, prioridad
+  de un resultado anterior, apertura de Ajustes y pérdida de conexión. Aviso en
+  la ventana principal, acceso a la operación exacta y retirada del ticket tras
+  desconexión comprobados en la app. No se renuevan permisos ni se repiten
+  solicitudes automáticamente. [Cierre de los puntos 1 y 2](rebuild/PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md).
 - [ ] Completar negativos reales de activación y copia de memoria, reconciliación
   de canales y distribución cualificada. El canal local `development` mantiene
   Python/Codex externos; no acredita autenticidad del paquete, distribución

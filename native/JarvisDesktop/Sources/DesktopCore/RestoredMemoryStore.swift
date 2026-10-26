@@ -213,6 +213,7 @@ public final class RestoredMemoryStore {
             errorMessage = operationNotice
         } catch {
             if version == epoch, sequence == readSequence, !isRequesting, !Task.isCancelled {
+                if approval != nil || operation?.settled == false { responseUnconfirmed = true }
                 approval = nil; errorMessage = RestoredMemoryPresentation.error(error)
             }
         }

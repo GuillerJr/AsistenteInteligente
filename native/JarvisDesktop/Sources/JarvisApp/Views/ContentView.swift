@@ -7,6 +7,21 @@ struct ContentView: View {
     @State private var inspectorTab = "tools"
 
     var body: some View {
+        Group {
+            if store.isRecoveryOnly {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Recuperación local").font(.title2)
+                    Text(store.statusText)
+                    Text("Este inicio conserva cerradas las conversaciones y las tareas para recuperar sus archivos. No conecta cuentas. Abre Ajustes para revisar el perfil y preparar copias en carpetas nuevas.")
+                    SettingsLink { Text("Abrir Mantenimiento y Recuperación…") }
+                    if let error = store.errorMessage { Text(error).foregroundStyle(.orange).textSelection(.enabled) }
+                    if store.starting { ProgressView() }
+                }.padding(32).frame(minWidth: 720, minHeight: 520)
+            } else { chatBody }
+        }
+    }
+
+    private var chatBody: some View {
         NavigationSplitView {
             SidebarView(store: store)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 245, max: 320)

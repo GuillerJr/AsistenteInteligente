@@ -147,13 +147,12 @@ final class FoundationServiceChild: OwnedServiceChild {
     }
 
     convenience init(_ options: LaunchOptions) throws {
+        let plan = try ServiceLaunchPlan(options)
         let child = Process()
-        child.executableURL = URL(fileURLWithPath: options.python)
-        child.arguments = options.serviceArguments
-        var environment = ProcessInfo.processInfo.environment
-        environment["PYTHONPATH"] = options.source
-        environment["PYTHONUNBUFFERED"] = "1"
-        child.environment = environment
+        child.executableURL = plan.executable
+        child.arguments = plan.arguments
+        child.currentDirectoryURL = plan.workingDirectory
+        child.environment = plan.environment
         child.standardInput = FileHandle.nullDevice
         child.standardOutput = FileHandle.nullDevice
         child.standardError = FileHandle.nullDevice

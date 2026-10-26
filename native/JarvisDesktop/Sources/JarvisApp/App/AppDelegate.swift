@@ -7,10 +7,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var store: ChatStore?
     var profiles: AppProfileCoordinator?
     var openMainWindow: (() -> Void)?
+    let settingsWindowAction = SettingsSceneActionRegistration()
+    let settingsNavigation = SettingsOwnerNavigation()
     var shortcutError: String?
     private var hotKey: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
     private var terminating = false
+    private var currentStore: ChatStore? { profiles?.active.store ?? store }
+    var ownerDecisionNotices: [OwnerDecisionNotice] {
+        guard let store = currentStore else { return [] }
+        return ownerDecisionNotices(for: store)
+    }
+    func ownerDecisionNotices(for store: ChatStore) -> [OwnerDecisionNotice] {
+        return [
+            OwnerDecisionNotice(tab: "recovery", operation: store.recovery.operation, reviewID: store.recovery.effectReview?.id, expiresAt: store.recovery.effectReview?.expiresAt, unconfirmed: store.recovery.responseUnconfirmed),
+            OwnerDecisionNotice(tab: "maintenance", operation: store.maintenance.operation, reviewID: store.maintenance.review?.id, expiresAt: store.maintenance.review?.expiresAt, unconfirmed: store.maintenance.responseUnconfirmed),
+            OwnerDecisionNotice(tab: "memory-restored", operation: store.memoryRestoration.operation, reviewID: store.memoryRestoration.effectReview?.id, expiresAt: store.memoryRestoration.effectReview?.expiresAt, unconfirmed: store.memoryRestoration.responseUnconfirmed),
+            OwnerDecisionNotice(tab: "restored", operation: store.restored.operation, reviewID: store.restored.review?.id, expiresAt: store.restored.review?.expiresAt, unconfirmed: store.restored.responseUnconfirmed),
+        ].compactMap { $0 }
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
@@ -25,14 +40,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func presentWindow(preserveVisibleOnReopen: Bool) {
         let ordered = NSApp.orderedWindows
         let windows = ordered + NSApp.windows.filter { candidate in !ordered.contains { $0 === candidate } }
-        let pending = OwnerDecisionWindowPolicy.awaitingOwner([
-            store?.recovery.operation?.phase, store?.maintenance.operation?.phase,
-            store?.memoryRestoration.operation?.phase, store?.restored.operation?.phase,
-        ])
-        if let window = OwnerDecisionWindowPolicy.target(windows: windows, modal: NSApp.modalWindow,
-            key: NSApp.keyWindow, awaitingOwner: pending, preserveVisibleOnReopen: preserveVisibleOnReopen) {
+        if let store = currentStore { settingsNavigation.configure(runtimeID: store.runtime.id) }
+        let notice = settingsNavigation.attention(in: ownerDecisionNotices)
+        let target = OwnerDecisionWindowPolicy.target(windows: windows, modal: NSApp.modalWindow,
+            key: NSApp.keyWindow, awaitingOwner: notice != nil, preserveVisibleOnReopen: preserveVisibleOnReopen)
+        // A modal/sheet remains in charge. Otherwise an explicit reopen/shortcut
+        // reveals the owning tab, including a terminal expiry explanation.
+        if target == nil || target?.identifier?.rawValue == OwnerDecisionWindowPolicy.settingsIdentifier {
+            if let notice { settingsNavigation.reveal(notice) }
+        }
+        if let window = target {
             window.makeKeyAndOrderFront(nil)
-        } else { openMainWindow?() }
+        } else if notice != nil { settingsWindowAction.perform() }
+        else { openMainWindow?() }
         NSApp.activate(ignoringOtherApps: true)
     }
 

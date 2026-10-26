@@ -3,6 +3,7 @@ import SwiftUI
 
 struct MaintenanceView: View {
     @Bindable var maintenance: MaintenanceStore
+    let navigation: SettingsOwnerNavigation
     let mayBegin: Bool
     @State private var backupParent = ""
     @State private var backupName = "jarvis-copia"
@@ -79,6 +80,7 @@ struct MaintenanceView: View {
             }
         }
         .formStyle(.grouped)
+        .ownerDecisionScrolling(navigation, tab: "maintenance")
         .task { await maintenance.refresh() }
     }
 
@@ -110,19 +112,25 @@ struct MaintenanceView: View {
                     Button("Descartar revisión") { maintenance.discardReview() }.disabled(maintenance.responseUnconfirmed)
                 }
             }
-        }
+        }.id(review.id)
     }
     @ViewBuilder private func operationSection(_ operation: MaintenanceOperation) -> some View {
         Section("Operación de mantenimiento") {
             Text(MaintenancePresentation.phase(operation.phase)).font(.headline)
             Text("Operación: \(operation.id)").font(.caption.monospaced()).textSelection(.enabled)
+            if let code = operation.errorCode {
+                Text("Diagnóstico: \(code)").font(.caption.monospaced()).textSelection(.enabled)
+            }
+            if let notice = OwnerDecisionNotice(tab: "maintenance", operation: operation, reviewID: maintenance.review?.id, expiresAt: maintenance.review?.expiresAt, unconfirmed: maintenance.responseUnconfirmed) {
+                OwnerDecisionStatusView(notice: notice)
+            }
             if operation.workerPending { Text("El servicio mantiene la propiedad del trabajo hasta terminar su limpieza.").font(.caption) }
             if operation.cleanupOwnerPending {
                 Text("El trabajo terminó, pero el servicio aún conserva recursos de recuperación. La conversación y el cambio de perfil seguirán bloqueados hasta confirmar su limpieza.").font(.caption).foregroundStyle(.orange)
                 Button("Completar limpieza") { Task { await maintenance.cleanup() } }
                     .disabled(!maintenance.canCleanup)
             }
-            if let approval = maintenance.approval, let review = maintenance.review, approval.matches(review, operation: operation) {
+            if maintenance.canDecide, let approval = maintenance.approval, let review = maintenance.review, approval.matches(review, operation: operation) {
                 Text("Esta decisión corresponde al dueño. Autoriza únicamente el destino, revisión y generación que se muestran arriba.").font(.callout)
                 HStack {
                     Button(review.kind == "backup.create" ? "Autorizar crear esta copia" : "Autorizar preparar este perfil") { Task { await maintenance.decide(allow: true) } }
@@ -148,7 +156,7 @@ struct MaintenanceView: View {
                      : message).font(.caption).foregroundStyle(.orange)
             }
             if let receipt = operation.receipt, let hash = receipt.manifestHash { Text("Manifiesto: \(hash)").font(.caption.monospaced()).textSelection(.enabled) }
-        }
+        }.id(operation.id)
     }
     private func checkLabel(_ value: String) -> String {
         ["ok":"Correcto", "absent":"Ausente", "uninitialized":"Sin inicializar", "unsafe":"Acceso inseguro", "corrupt":"Integridad inválida", "blocked":"Bloqueado", "unknown":"No acreditado"][value] ?? "No acreditado"

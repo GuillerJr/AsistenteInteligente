@@ -107,7 +107,8 @@ final class ProcessBootstrapTests: XCTestCase {
                 try await Task.sleep(for: .milliseconds(20))
             }
             let arguments = try JSONDecoder().decode([String].self, from: Data(contentsOf: target))
-            XCTAssertEqual(arguments, ["-m", "jarvis_core.service", "--state", options.state,
+            XCTAssertEqual(arguments, try ServiceLaunchPlan(options).arguments)
+            XCTAssertEqual(Array(arguments.suffix(6)), ["--state", options.state,
                                        "--codex", options.codex, "--provider-state", try XCTUnwrap(options.providerState)])
             let graceful = await service.stop()
             XCTAssertTrue(graceful)

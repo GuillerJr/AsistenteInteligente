@@ -3,6 +3,7 @@ import SwiftUI
 
 struct RestoredMemoryView: View {
     @Bindable var restoration: RestoredMemoryStore
+    let navigation: SettingsOwnerNavigation
     let agents: [AgentDescriptor]
     let mayBegin: Bool
     var body: some View {
@@ -74,7 +75,10 @@ struct RestoredMemoryView: View {
             if let operation = restoration.operation {
                 Section("Operación de copia") {
                     Text(operation.phase == "publication_unknown" ? "Confirmación de la copia desconocida" : MaintenancePresentation.phase(operation.phase)).font(.headline)
-                    if let review = restoration.effectReview, let approval = restoration.approval, review.matches(approval, operation: operation) {
+                    if let notice = OwnerDecisionNotice(tab: "memory-restored", operation: operation, reviewID: restoration.effectReview?.id, expiresAt: restoration.effectReview?.expiresAt, unconfirmed: restoration.responseUnconfirmed) {
+                        OwnerDecisionStatusView(notice: notice)
+                    }
+                    if restoration.canDecide, let review = restoration.effectReview, let approval = restoration.approval, review.matches(approval, operation: operation) {
                         Text("Autoriza sólo esta copia revisada. Se conserva el origen y el destino debe seguir vacío.")
                         HStack {
                             Button("Autorizar esta copia") { Task { await restoration.decide(allow: true, ticket: approval) } }.buttonStyle(.borderedProminent)
@@ -99,7 +103,7 @@ struct RestoredMemoryView: View {
                         Text(operation.id).font(.caption.monospaced()).textSelection(.enabled)
                         if let review = restoration.effectReview { Text(review.digest).font(.caption.monospaced()).textSelection(.enabled) }
                     }
-                }
+                }.id(operation.id)
             }
             if restoration.observationWasQueried {
                 Section("Registro local de sólo lectura") {
@@ -111,6 +115,6 @@ struct RestoredMemoryView: View {
                     Text("Esta consulta no acredita la confirmación anterior, no modifica su recibo y no autoriza otra copia.").font(.caption).foregroundStyle(.secondary)
                 }
             }
-        }.formStyle(.grouped)
+        }.formStyle(.grouped).ownerDecisionScrolling(navigation, tab: "memory-restored")
     }
 }

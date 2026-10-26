@@ -23,9 +23,11 @@ import AppKit
         for parent in windows where visible(parent) {
             if let sheet = parent.attachedSheet, visible(sheet) { return sheet }
         }
-        if awaitingOwner, let settings = windows.first(where: {
-            $0.identifier?.rawValue == settingsIdentifier && visible($0)
-        }) { return settings }
+        if awaitingOwner {
+            // nil asks the app's public SwiftUI openSettings action to reopen
+            // the owning pane; never fall through to the conversation browser.
+            return windows.first { $0.identifier?.rawValue == settingsIdentifier && visible($0) }
+        }
         // A Dock reopen with visible windows should preserve its existing
         // context, even when it is not an approval. The explicit main-window
         // command keeps its usual behavior once no owner decision is visible.

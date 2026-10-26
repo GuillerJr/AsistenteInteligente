@@ -1,0 +1,863 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-26",
+  "record_kind": "jarvis_recovery_points_1_2_operational_closeout",
+  "scope": "Matriz local finita de recuperación e incidencias de arranque y descubrimiento/invalidez de aprobaciones",
+  "status": "implemented_selected_native_workflows_verified_publication_requires_gates",
+  "phase_a_complete": false,
+  "phase_b_started": false,
+  "source_identity": {
+    "algorithm": "SHA256 of sorted path/hash JSON objects; UTF-8 sort_keys=True separators=(comma,colon), without newline",
+    "file_count": 132,
+    "python_modules": 50,
+    "swift_sources": 82,
+    "sha256": "8f14047117bd06ccc2c1812b3d01f8f36082fa9854049803d0bbe2cae8fbc487"
+  },
+  "runtime": {
+    "source": "/private/tmp/jarvis-recovery-closeout.ESSe65/src",
+    "snapshot_commit": "dfc4e3dbf83f8210bc4f57156309ce12e249a395",
+    "python_sources_byte_identical_to_current": true,
+    "note": "No Python product source changed in this increment; native source and test/qualification scripts did."
+  },
+  "native_bundles": [
+    {
+      "path": "/private/tmp/jarvis-recovery-closeout-app-20261026-01/Jarvis.app",
+      "binary_sha256": "084540d84b961e4776809e4fb92f3162413da4f51af00a7451f7b3563fd86aba",
+      "signature": "ad_hoc_verified_strict",
+      "scope": "16 GUI reviews plus selected owner repair/restore; before later authority/UI fixes"
+    },
+    {
+      "path": "/private/tmp/jarvis-recovery-closeout-app-20261026-05/Jarvis.app",
+      "binary_sha256": "e3d336543b9f88ec5e6a3ae676bac7844b8da477310a8f5dec71d9a2a75e4066",
+      "signature": "ad_hoc_verified_strict",
+      "scope": "Corrected main entry, latest-operation expiry, delegated effects, negative GUI and disconnect ticket invalidation"
+    },
+    {
+      "path": "/private/tmp/jarvis-recovery-closeout-app-20261026-06/Jarvis.app",
+      "binary_sha256": "17a04d88ba218ff2fa8aedec695bc4ee33d7ef98835d5cd27d8f067920c7311b",
+      "signature": "ad_hoc_verified_strict",
+      "scope": "Final diagnostic explanation/caption on rejected journal; other product behavior unchanged from05"
+    }
+  ],
+  "delegation": {
+    "source": "Direct human instruction in this task",
+    "instruction": "realiza tu mismo las aprobaciones en jarvis ya que te dejo a cargo por ahora hasta que regrese",
+    "application": "Sólo decisiones de estas pruebas con perfiles sintéticos; se conservaron autoridad, argumentos, identidad y TTL; no se editaron las reglas permanentes ni se usaron credenciales/TCC."
+  },
+  "matrix": {
+    "detail": "PHASE_A_RECOVERY_NATIVE_MATRIX.json",
+    "case_count": 16,
+    "sqlite_roles": [
+      "state",
+      "memory",
+      "schedules"
+    ],
+    "negative_scenarios_native_ipc": 8,
+    "gui_review_evidence_sha256": "fde3baaa95e8277f2fe7d30411a24f39ea34bffe602ad3e79e7714cfbcfe8391",
+    "gui_original_verification_sha256": "dcb89ac034f57035743bde708481d4b21b0f72ff458d70b41dfc3e9a787fb7d2",
+    "gui_case_records": [
+      {
+        "case_id": "wal_absent_all",
+        "review_digest_observed_by_cua": "a5c452bc0e98134e3ce8a8814f3245bfdf4877f2b158f7c7e5f39a1abff0608f",
+        "review_kind": "backup",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": null,
+        "originals_intact_before_and_after": true
+      },
+      {
+        "case_id": "wal_empty_all",
+        "review_digest_observed_by_cua": "64ac7495c7098e73fd0c86f45ee89ecb4ed1ea9d77cffd3e9a1af3d5d84bef89",
+        "review_kind": "backup",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": null,
+        "originals_intact_before_and_after": true
+      },
+      {
+        "case_id": "wal_header_all",
+        "review_digest_observed_by_cua": "aae1c58ff3084c1d997a873a32d070ef0912fc93140de04409fbe67859513ef3",
+        "review_kind": "backup",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": null,
+        "originals_intact_before_and_after": true
+      },
+      {
+        "case_id": "journal_hot_delete_all",
+        "review_digest_observed_by_cua": "dc5b62d4f6cd0225826a940e050e2f6f19fddc170f47407361df873fa0e21050",
+        "review_kind": "backup",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": null,
+        "originals_intact_before_and_after": true
+      },
+      {
+        "case_id": "journal_hot_persist_all",
+        "review_digest_observed_by_cua": "e21956c5321adc3c024028d0f62803f14a282f39028abc4308355e60b9bf4e54",
+        "review_kind": "backup",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": null,
+        "originals_intact_before_and_after": true
+      },
+      {
+        "case_id": "journal_inactive_persist_all",
+        "review_digest_observed_by_cua": "8eadf8342b0da97f3b1bcf2f4880da6d141d266b6081f498917694d12bb033ad",
+        "review_kind": "backup",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": null,
+        "originals_intact_before_and_after": true
+      },
+      {
+        "case_id": "journal_inactive_truncate_all",
+        "review_digest_observed_by_cua": "eb87187d0a84f26cdeaf496e27144676d54116844ca231c40f816933012e787f",
+        "review_kind": "backup",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": null,
+        "originals_intact_before_and_after": true
+      },
+      {
+        "case_id": "prefix_truncated_state",
+        "review_digest_observed_by_cua": "2f9902ac469f260735f84a9e18ebd141318207c92e0c55216d7991556cf1bfc9",
+        "review_kind": "repair",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": true,
+        "originals_intact_before_and_after": true
+      },
+      {
+        "case_id": "prefix_truncated_schedules",
+        "review_digest_observed_by_cua": "7e8bba09345edfb7c4e122aa4dad532c2d6a929a73d1641810f0a00f8ce5691c",
+        "review_kind": "repair",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": true,
+        "originals_intact_before_and_after": true
+      },
+      {
+        "case_id": "prefix_checksum_state",
+        "review_digest_observed_by_cua": "199df191f2d8eb2bd893062c9892da0795a20643823b3845b3b4500d8b2bfc50",
+        "review_kind": "repair",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": true,
+        "originals_intact_before_and_after": true
+      },
+      {
+        "case_id": "prefix_checksum_memory",
+        "review_digest_observed_by_cua": "d14ba9b7a67344f5dd91556e7129e49e0db3a9ccc706d068ab4d7d691b141a3f",
+        "review_kind": "repair",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": true,
+        "originals_intact_before_and_after": true
+      },
+      {
+        "case_id": "prefix_checksum_schedules",
+        "review_digest_observed_by_cua": "4700d1e71d3350551dddf08ffddcb91e9ab0469ca48d6278363806c02bf1d168",
+        "review_kind": "repair",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": true,
+        "originals_intact_before_and_after": true
+      },
+      {
+        "case_id": "prefix_old_generation_state",
+        "review_digest_observed_by_cua": "49b1adf45ce8e5f6767981ce54518579123508e3ae17d1e008af26383013cd8c",
+        "review_kind": "repair",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": true,
+        "originals_intact_before_and_after": true
+      },
+      {
+        "case_id": "prefix_old_generation_memory",
+        "review_digest_observed_by_cua": "a8938de9615b9d5acb23a65643bac15fe897e79002f7ef902fb146ee2a23dd7c",
+        "review_kind": "repair",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": true,
+        "originals_intact_before_and_after": true
+      },
+      {
+        "case_id": "prefix_old_generation_schedules",
+        "review_digest_observed_by_cua": "8219b6492c285c20963ee4d90a03eb727d975f0ab23faeca3c08fe5611fcd506",
+        "review_kind": "repair",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": true,
+        "originals_intact_before_and_after": true
+      },
+      {
+        "case_id": "prefix_truncated_memory",
+        "review_digest_observed_by_cua": "428610a61bfac332d5ba571b4aeebfec8ad8b3cc61bf9233ba970667f9919d89",
+        "review_kind": "repair",
+        "original_preservation_notice_visible": true,
+        "loss_warning_visible": true,
+        "originals_intact_before_and_after": true
+      }
+    ],
+    "negative_gui_cases": [
+      {
+        "case": "prefix_checksum_memory",
+        "operations": [
+          {
+            "operation_id": "99b4ebb259e149dd89cca291487e7256",
+            "kind": "doctor.repair.review",
+            "scope": {
+              "profile_id": "13d5cac076a64f509dfa4e26b80ee150",
+              "generation": 0
+            },
+            "review_id": null,
+            "review_digest": null,
+            "phase": "failed",
+            "stage": "cold_wal_validate",
+            "result": null,
+            "error_code": "profile_cold_wal_invalid",
+            "receipt": null,
+            "receipt_durable": false,
+            "worker_pending": false,
+            "cancellation_requested": false,
+            "cleanup_owner_pending": false
+          }
+        ],
+        "source_verification": {
+          "case_id": "prefix_checksum_memory",
+          "source_unchanged": true,
+          "fixture_sha256": "15d7e2c1470f2fb6e52064a0c49f2c380db7c5a825b0632d63f41515f2a1d61f",
+          "owner_decision_verified_by_this_script": false
+        },
+        "no_target_created": true,
+        "native_observation": "No se pudo acreditar una familia WAL válida con transacciones confirmadas; sin tarjeta de autorización ni destino.",
+        "record_sha256": "44f50eaa178cb062aa07ac6f22728c3712d2f06c4f4fb870ed918514c5e8d2f0"
+      },
+      {
+        "case": "wal_header_all",
+        "operations": [
+          {
+            "operation_id": "99c3de81ffef4421be6e49832b2a7125",
+            "kind": "doctor.report",
+            "scope": {
+              "profile_id": "692ed7fe799747b0ad9fe92d11d299d0",
+              "generation": 0
+            },
+            "review_id": null,
+            "review_digest": null,
+            "phase": "complete",
+            "stage": null,
+            "result": {
+              "report": {
+                "report_id": "faacb6cef229499aaecc1074320f0a40",
+                "profile_id": "692ed7fe799747b0ad9fe92d11d299d0",
+                "generation": 0,
+                "status": "blocked",
+                "coherence": "unverified",
+                "profile_identity": [
+                  "16777230",
+                  "69591720"
+                ],
+                "checks": [
+                  {
+                    "role": "state",
+                    "status": "ok",
+                    "code": null,
+                    "identity": [
+                      "16777230",
+                      "69591722"
+                    ],
+                    "permissions": "0600",
+                    "byte_length": 61440,
+                    "format_version": null,
+                    "application_id": 1246910035,
+                    "schema_version": 2,
+                    "integrity": "ok",
+                    "counts": [
+                      [
+                        "events",
+                        0
+                      ],
+                      [
+                        "messages",
+                        0
+                      ],
+                      [
+                        "runs",
+                        0
+                      ],
+                      [
+                        "sessions",
+                        1
+                      ],
+                      [
+                        "unsettled_runs",
+                        0
+                      ]
+                    ],
+                    "inspection_source": "host_ram_snapshot",
+                    "snapshot_byte_length": 61440,
+                    "snapshot_sha256": "f4b7e297afae0d596e24ffbb0cba58925dfdd7e7c2ad69cf11705aef77895e78"
+                  },
+                  {
+                    "role": "memory",
+                    "status": "blocked",
+                    "code": "doctor_snapshot_source_unavailable",
+                    "identity": [
+                      "16777230",
+                      "69591726"
+                    ],
+                    "permissions": "0600",
+                    "byte_length": 65536,
+                    "format_version": null,
+                    "application_id": null,
+                    "schema_version": null,
+                    "integrity": "not_checked",
+                    "counts": [],
+                    "inspection_source": "metadata",
+                    "snapshot_byte_length": null,
+                    "snapshot_sha256": null
+                  },
+                  {
+                    "role": "schedules",
+                    "status": "ok",
+                    "code": null,
+                    "identity": [
+                      "16777230",
+                      "69591730"
+                    ],
+                    "permissions": "0600",
+                    "byte_length": 32768,
+                    "format_version": null,
+                    "application_id": 1246909251,
+                    "schema_version": 1,
+                    "integrity": "ok",
+                    "counts": [
+                      [
+                        "occurrences",
+                        0
+                      ],
+                      [
+                        "schedules",
+                        1
+                      ],
+                      [
+                        "unsettled_occurrences",
+                        0
+                      ]
+                    ],
+                    "inspection_source": "host_ram_snapshot",
+                    "snapshot_byte_length": 32768,
+                    "snapshot_sha256": "0f38f332fc54eb51a57187f1441c78065684892a6e31fd6211911f5ddbc8a7d7"
+                  },
+                  {
+                    "role": "agents",
+                    "status": "absent",
+                    "code": "doctor_resource_absent",
+                    "identity": null,
+                    "permissions": null,
+                    "byte_length": null,
+                    "format_version": null,
+                    "application_id": null,
+                    "schema_version": null,
+                    "integrity": "not_checked",
+                    "counts": [],
+                    "inspection_source": "metadata",
+                    "snapshot_byte_length": null,
+                    "snapshot_sha256": null
+                  },
+                  {
+                    "role": "skills",
+                    "status": "absent",
+                    "code": "doctor_resource_absent",
+                    "identity": null,
+                    "permissions": null,
+                    "byte_length": null,
+                    "format_version": null,
+                    "application_id": null,
+                    "schema_version": null,
+                    "integrity": "not_checked",
+                    "counts": [],
+                    "inspection_source": "metadata",
+                    "snapshot_byte_length": null,
+                    "snapshot_sha256": null
+                  },
+                  {
+                    "role": "telegram",
+                    "status": "absent",
+                    "code": "doctor_resource_absent",
+                    "identity": null,
+                    "permissions": null,
+                    "byte_length": null,
+                    "format_version": null,
+                    "application_id": null,
+                    "schema_version": null,
+                    "integrity": "not_checked",
+                    "counts": [],
+                    "inspection_source": "metadata",
+                    "snapshot_byte_length": null,
+                    "snapshot_sha256": null
+                  },
+                  {
+                    "role": "configuration_portable",
+                    "status": "ok",
+                    "code": "doctor_host_projection_only",
+                    "identity": null,
+                    "permissions": null,
+                    "byte_length": null,
+                    "format_version": 1,
+                    "application_id": null,
+                    "schema_version": null,
+                    "integrity": "not_checked",
+                    "counts": [
+                      [
+                        "bindings_excluded",
+                        0
+                      ],
+                      [
+                        "mcp_commands_excluded",
+                        0
+                      ]
+                    ],
+                    "inspection_source": "metadata",
+                    "snapshot_byte_length": null,
+                    "snapshot_sha256": null
+                  },
+                  {
+                    "role": "cross_references",
+                    "status": "unknown",
+                    "code": "doctor_reference_sources_missing",
+                    "identity": null,
+                    "permissions": null,
+                    "byte_length": null,
+                    "format_version": null,
+                    "application_id": null,
+                    "schema_version": null,
+                    "integrity": "not_checked",
+                    "counts": [],
+                    "inspection_source": "metadata",
+                    "snapshot_byte_length": null,
+                    "snapshot_sha256": null
+                  }
+                ],
+                "blockers": [],
+                "suggestions": [],
+                "supported_repair_actions": [],
+                "effect": "read_only_diagnostic"
+              }
+            },
+            "error_code": null,
+            "receipt": null,
+            "receipt_durable": false,
+            "worker_pending": false,
+            "cancellation_requested": false,
+            "cleanup_owner_pending": false
+          }
+        ],
+        "source_verification": {
+          "case_id": "wal_header_all",
+          "source_unchanged": true,
+          "fixture_sha256": "465445cd4a2fb95619d3be7a97e3511d2c5417046926fb9cb6cb1f6dfbc8f3ee",
+          "owner_decision_verified_by_this_script": false
+        },
+        "no_target_created": true,
+        "native_observation": "Diagnóstico completado: memoria bloqueada por familia ambigua; relaciones no acreditadas; sin aprobación ni destino.",
+        "record_sha256": "27e2c991172836a4368ce62c8384ced6c2e88c03302d58eaec1f9b0e8264a039"
+      },
+      {
+        "case": "journal_hot_delete_all",
+        "operations": [
+          {
+            "operation_id": "af151df6bf8e49f6890e95ee6de6a7e0",
+            "kind": "doctor.report",
+            "scope": {
+              "profile_id": "5119b7fbed8745aeb1cd782a4ecc5ab9",
+              "generation": 0
+            },
+            "review_id": null,
+            "review_digest": null,
+            "phase": "failed",
+            "stage": null,
+            "result": null,
+            "error_code": "profile_cold_journal_checksum_invalid",
+            "receipt": null,
+            "receipt_durable": false,
+            "worker_pending": false,
+            "cancellation_requested": false,
+            "cleanup_owner_pending": false
+          }
+        ],
+        "source_verification": {
+          "case_id": "journal_hot_delete_all",
+          "source_unchanged": true,
+          "fixture_sha256": "058687f1c7616937651fe4377f9a8195d37aa0df3b0030631e9cc2cf9768e39f",
+          "owner_decision_verified_by_this_script": false
+        },
+        "no_target_created": true,
+        "native_observation": "GUI06: explicación del journal inválido y diagnóstico profile_cold_journal_checksum_invalid visibles; ningún botón de autorización ni destino.",
+        "record_sha256": "0517297f3a45e2a2f23c6d1896528c30fa99ccdf1a66e555defafaea6f796fbd"
+      }
+    ]
+  },
+  "publications": [
+    {
+      "case": "prefix_truncated_memory",
+      "actor": "owner",
+      "operation_id": "9097324a6cb4490993add26c0dd3d10f",
+      "kind": "doctor.repair.apply",
+      "phase": "complete",
+      "receipt": {
+        "operation_id": "9097324a6cb4490993add26c0dd3d10f",
+        "purpose": "doctor.repair.apply",
+        "status": "completed",
+        "effect_status": "published_verified_bytes",
+        "target_name": "reparado",
+        "artifact_id": "ff6b6d3317fe4b238302493aa0374819",
+        "manifest_sha256": "d3d34ec5bea9d772707333fa83b3ccd07d55fad25b6632261626f09e33ddeb57",
+        "target_identity": {
+          "device": "16777230",
+          "inode": "69587917"
+        },
+        "new_profile_id": null,
+        "error_code": null,
+        "cleanup_error_code": null,
+        "cleanup_pending": false
+      },
+      "receipt_durable": true,
+      "independent_verified_roles": [
+        "memory",
+        "schedules",
+        "state"
+      ],
+      "status_record_sha256": "58b91f0045d61a8f1b86b5250d66ff7fae14295b2c6787b8c5bc8b0bfa8d182c",
+      "profile_activated": false
+    },
+    {
+      "case": "prefix_truncated_memory",
+      "actor": "owner",
+      "operation_id": "4e929179631c4ccd9c56f2d558dd6aa8",
+      "kind": "restore.stage",
+      "phase": "staged_disarmed",
+      "receipt": {
+        "operation_id": "4e929179631c4ccd9c56f2d558dd6aa8",
+        "purpose": "restore.stage",
+        "status": "completed",
+        "effect_status": "new_disarmed_profile",
+        "target_name": "restaurado",
+        "artifact_id": "ff6b6d3317fe4b238302493aa0374819",
+        "manifest_sha256": "d3d34ec5bea9d772707333fa83b3ccd07d55fad25b6632261626f09e33ddeb57",
+        "target_identity": {
+          "device": "16777230",
+          "inode": "69593911"
+        },
+        "new_profile_id": "2f6eac9294a54d199d3b7b42b30a0ad0",
+        "error_code": null,
+        "cleanup_error_code": null,
+        "cleanup_pending": false
+      },
+      "receipt_durable": true,
+      "independent_verified_roles": [
+        "memory",
+        "schedules",
+        "state"
+      ],
+      "status_record_sha256": "fc38543661ceec42dbf77e0289bb611f3348728ab3cc8ebca94b75f8359ab50a",
+      "profile_activated": false
+    },
+    {
+      "case": "prefix_truncated_schedules",
+      "actor": "assistant_with_explicit_temporary_delegation",
+      "operation_id": "60890b2921cb4848b5b0e1f8b6b12d9b",
+      "kind": "doctor.repair.apply",
+      "phase": "complete",
+      "receipt": {
+        "operation_id": "60890b2921cb4848b5b0e1f8b6b12d9b",
+        "purpose": "doctor.repair.apply",
+        "status": "completed",
+        "effect_status": "published_verified_bytes",
+        "target_name": "reparado",
+        "artifact_id": "8971c37bb4504d3c8768a6220eabd40c",
+        "manifest_sha256": "1754b4c570174263735f9168bed90c9aca9c749a483b2c3cd3f89e52e5216a43",
+        "target_identity": {
+          "device": "16777230",
+          "inode": "69685214"
+        },
+        "new_profile_id": null,
+        "error_code": null,
+        "cleanup_error_code": null,
+        "cleanup_pending": false
+      },
+      "receipt_durable": true,
+      "independent_verified_roles": [
+        "memory",
+        "schedules",
+        "state"
+      ],
+      "status_record_sha256": "434ea23053217b5c380db7b2b7669e17e94096edc0c5e4778023b36c728377bb",
+      "profile_activated": false
+    },
+    {
+      "case": "prefix_truncated_schedules",
+      "actor": "assistant_with_explicit_temporary_delegation",
+      "operation_id": "f3ff4b024a6a47888f15ae496ec174bd",
+      "kind": "restore.stage",
+      "phase": "staged_disarmed",
+      "receipt": {
+        "operation_id": "f3ff4b024a6a47888f15ae496ec174bd",
+        "purpose": "restore.stage",
+        "status": "completed",
+        "effect_status": "new_disarmed_profile",
+        "target_name": "restaurado",
+        "artifact_id": "8971c37bb4504d3c8768a6220eabd40c",
+        "manifest_sha256": "1754b4c570174263735f9168bed90c9aca9c749a483b2c3cd3f89e52e5216a43",
+        "target_identity": {
+          "device": "16777230",
+          "inode": "69694052"
+        },
+        "new_profile_id": "2966d3775f764b2c9d5b71ded3b607c0",
+        "error_code": null,
+        "cleanup_error_code": null,
+        "cleanup_pending": false
+      },
+      "receipt_durable": true,
+      "independent_verified_roles": [
+        "memory",
+        "schedules",
+        "state"
+      ],
+      "status_record_sha256": "ec225c67f7b7f757944abde12fcd97f468e230ea011d8783fd00dff01aa030f6",
+      "profile_activated": false
+    }
+  ],
+  "final_navigation": {
+    "path": "/private/tmp/jr-q26-c/prefix_truncated_memory/owner-navigation-native-05.json",
+    "sha256": "90adbbfef3904acaea94088d3a818a301140fdc357f1b66476f12c032075b914",
+    "record": {
+      "denial": {
+        "operation_id": "677c517d2b7e45e7a0fe266144707333",
+        "phase": "denied",
+        "purpose": "doctor.repair.apply",
+        "receipt": null,
+        "review_digest": "daf4dc314233707498c72b8009f0f65f4740e5e020fff5b0f3cafdc29d92ce8f"
+      },
+      "expiry": {
+        "operation_id": "da10a4ac775f4b239bf369ef3282d8cc",
+        "phase": "failed",
+        "purpose": "backup.create",
+        "receipt": null,
+        "review_digest": "39a04a024c2bf2bbe9bc871873a4def5ef209f839a9997f36d83440b5e1ddcbe"
+      },
+      "native_observations": {
+        "main_pending_button_opens_matching_recovery_card": true,
+        "new_maintenance_decision_has_priority_over_old_recovery_denial": true,
+        "main_button_opens_matching_maintenance_card": true,
+        "expired_card_and_banner_remain_visible": true,
+        "main_result_button_opens_latest_expired_maintenance_card": true,
+        "expired_authorization_button_absent": true
+      },
+      "actor": "assistant under explicit user delegation for these Jarvis tests; native CUA actions",
+      "scope": "Own synthetic profile only; no provider calls requested",
+      "targets_absent": true
+    }
+  },
+  "final_interruption": {
+    "path": "/private/tmp/jr-q26-c/prefix_truncated_memory/interruption-native-05.json",
+    "sha256": "9cca5fff79f06fc06a81618ebf10bb6f0e3072bebbf1d96a461e4992fc2a078f",
+    "record": {
+      "operation": {
+        "operation_id": "ea38f72bceec42a9827ea83126f7f4ed",
+        "kind": "doctor.repair.apply",
+        "scope": {
+          "profile_id": "5618a4a744d14b6ca145f6ec88e619ea",
+          "generation": 0
+        },
+        "review_id": "9a1f108961924ded9b881ace47205e3d",
+        "review_digest": "a13379ce26680fa890d7857469e98f8f027541833bd5980775e9bc26f34a4535",
+        "phase": "awaiting_owner",
+        "stage": null,
+        "result": null,
+        "error_code": null,
+        "receipt": null,
+        "receipt_durable": false,
+        "worker_pending": true,
+        "cancellation_requested": false,
+        "cleanup_owner_pending": false
+      },
+      "service_peer_pid": 95409,
+      "native_parent_pid": 95385,
+      "native_command": "/private/tmp/jarvis-recovery-closeout-app-20261026-05/Jarvis.app/Contents/MacOS/Jarvis --python /opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/bin/python3.11 --source /private/tmp/jarvis-recovery-closeout.ESSe65/src --state /private/tmp/jr-q26-c/prefix_truncated_memory/profile --codex /opt/homebrew/bin/codex --provider-state /private/tmp/jarvis-recovery-closeout.ESSe65/codex-matriz --recovery-only",
+      "socket_binding": {
+        "metadata": [
+          "16777230",
+          "69652349",
+          "501",
+          "384",
+          "1",
+          "0",
+          "1793036608205219654",
+          "1793036608205511529"
+        ],
+        "type": "socket"
+      },
+      "before": {
+        "case_id": "prefix_truncated_memory",
+        "source_unchanged": true,
+        "fixture_sha256": "b0ddf3f9eac0ed03a3ae828f42154a5a420ead6835557ad602b20727268a6728",
+        "owner_decision_verified_by_this_script": false
+      },
+      "fault": "SIGKILL own verified synthetic service awaiting_owner; no approval delivered",
+      "unix": 1793036876.24806,
+      "after": {
+        "case_id": "prefix_truncated_memory",
+        "source_unchanged": true,
+        "fixture_sha256": "b0ddf3f9eac0ed03a3ae828f42154a5a420ead6835557ad602b20727268a6728",
+        "owner_decision_verified_by_this_script": false
+      },
+      "target_absent": true,
+      "explicit_fixture_transport_retirement": {
+        "removed_only": "service.sock",
+        "identity_matched": true,
+        "profile_lease_held": true,
+        "confirmed_child_exit": true,
+        "explicit_synthetic_intervention": true,
+        "production_auto_recovery": false
+      },
+      "previous_after_interruption": {
+        "operation_id": "ea38f72bceec42a9827ea83126f7f4ed",
+        "phase": "interrupted_unknown",
+        "purpose": "doctor.repair.apply",
+        "receipt": null,
+        "review_digest": "a13379ce26680fa890d7857469e98f8f027541833bd5980775e9bc26f34a4535"
+      },
+      "after_cleanup": {
+        "case_id": "prefix_truncated_memory",
+        "source_unchanged": true,
+        "fixture_sha256": "b0ddf3f9eac0ed03a3ae828f42154a5a420ead6835557ad602b20727268a6728",
+        "owner_decision_verified_by_this_script": false
+      },
+      "native_observation": {
+        "identity_retained": true,
+        "uncertain_message_visible": true,
+        "authorization_button_absent": true,
+        "denial_button_absent": true,
+        "no_approval_sent": true,
+        "connection_interrupted_message_visible": true
+      }
+    }
+  },
+  "before_fix": {
+    "hidden_card_repro": {
+      "path": "/private/tmp/jarvis-recovery-closeout.ESSe65/approval-before-fix.json",
+      "sha256": "c0910bdca1b8ebf180a9717c85242caaa833ea515e6aa8bea24e0b9a6ede23f8",
+      "record": {
+        "recorded_unix": 1793032610.602104,
+        "snapshot_commit": "dfc4e3dbf83f8210bc4f57156309ce12e249a395",
+        "operation": {
+          "operation_id": "b8b0c330b841455284774cf867cb6bf1",
+          "kind": "backup.create",
+          "scope": {
+            "profile_id": "0be85b2b896f4301a37e94a195e9fb59",
+            "generation": 3
+          },
+          "review_id": "47e1ffd2b141483d9827dc3fc10f2c5f",
+          "review_digest": "38a21cc155cbef0705d2cb5d6e7ecf3621bfc8dfc1c0e5fd28abef9117fee458",
+          "phase": "awaiting_owner",
+          "stage": null,
+          "result": null,
+          "error_code": null,
+          "receipt": null,
+          "receipt_durable": false,
+          "worker_pending": true,
+          "cancellation_requested": false,
+          "cleanup_owner_pending": false
+        },
+        "native_observations": [
+          "Aprobación visible en Mantenimiento",
+          "Cambiar a General oculta la tarjeta sin indicador de decisión pendiente",
+          "Cerrar Ajustes y reabrir con Cmd+coma conserva General sin tarjeta",
+          "Volver a Mantenimiento recupera la misma tarjeta y operación"
+        ],
+        "observer_decision_sent": false,
+        "target_exists": false
+      }
+    },
+    "expiry_missing_reason": {
+      "path": "/private/tmp/jarvis-recovery-closeout.ESSe65/expiry-before-fix.json",
+      "sha256": "ee2e6b9b66978820d8ac9900cb61585b75922e2f11b7adba1f03cb932a29e759",
+      "record": {
+        "recorded_unix": 1793032691.171926,
+        "operation": {
+          "operation_id": "b8b0c330b841455284774cf867cb6bf1",
+          "kind": "backup.create",
+          "scope": {
+            "profile_id": "0be85b2b896f4301a37e94a195e9fb59",
+            "generation": 3
+          },
+          "review_id": "47e1ffd2b141483d9827dc3fc10f2c5f",
+          "review_digest": "38a21cc155cbef0705d2cb5d6e7ecf3621bfc8dfc1c0e5fd28abef9117fee458",
+          "phase": "failed",
+          "stage": null,
+          "result": null,
+          "error_code": "maintenance_review_expired",
+          "receipt": null,
+          "receipt_durable": true,
+          "worker_pending": false,
+          "cancellation_requested": false,
+          "cleanup_owner_pending": false
+        },
+        "target_absent": true,
+        "native_terminal_text": "Fallida Operación: b8b0c330b841455284774cf867cb6bf1",
+        "observer_decision_sent": false
+      }
+    },
+    "disconnect_gui03_authorization_buttons_remained_enabled": true,
+    "cross_store_attention_repro": "Old Recovery denied result eclipsed newer Maintenance expiry in GUI01; deterministic test failed four assertions before recency fix."
+  },
+  "startup_investigation": "PHASE_A_STARTUP_ISOLATION.json",
+  "checks": {
+    "ruff": "passed",
+    "compileall": "passed",
+    "git_gates": "active",
+    "diff_check": "passed",
+    "native_manual_full": {
+      "status": "passed",
+      "tests": 282,
+      "failures": 0,
+      "log": "/private/tmp/jarvis-recovery-closeout-swift-full.log",
+      "scope_note": "Functional fixes through GUI05; final journal explanation additionally passed 24 targeted tests. Pre-push repeats all282 on the committed final sources."
+    },
+    "python_full_initial": {
+      "status": "one_fixture_timeout",
+      "passed": 2319,
+      "failed": 1,
+      "log": "/private/tmp/jarvis-recovery-closeout-python-full.log",
+      "note": "Canonical product path passed; timeout was in release of a deliberately blocked synthetic interpreter. Separate fixture correction and verification recorded in startup investigation."
+    },
+    "final_publication_contract": {
+      "python_full_required": true,
+      "swift_full_required": true,
+      "fresh_sdist_wheel_and_isolated_smoke_required": true,
+      "desktop_build_and_signature_required": true,
+      "unchanged_clean_HEAD_required": true,
+      "no_bypass": true
+    },
+    "package_manual": {
+      "status": "passed",
+      "log": "/private/tmp/jarvis-recovery-closeout-package.log",
+      "note": "Fresh final package gate repeated at publication after test-fixture/doc completion."
+    },
+    "python_collection": {
+      "tests": 2321,
+      "log": "/private/tmp/jarvis-recovery-closeout-collected.log"
+    },
+    "python_fixture_followup": {
+      "status": "passed",
+      "focused_tests": 4,
+      "bounded_load_cases": 80,
+      "focused_log": "/private/tmp/jarvis-startup-rendezvous-final.log",
+      "detail": "PHASE_A_STARTUP_ISOLATION.json",
+      "fix": "ACK de consumo FIONREAD antes de EOF y configuración persistente; mismo plazo total de tres segundos, sin cambio del producto.",
+      "first_timeout_precise_cause": "No se capturó la causa de sistema exacta; no se afirma una segunda lectura real de CPython."
+    }
+  },
+  "boundaries": [
+    "No personal history, auth.json, prior installed app or owner profile was read or altered.",
+    "All source/oracle data is synthetic. Original SQLite and sidecar hashes/metadata were checked; maintenance/transport receipts are expected new profile metadata.",
+    "Full16 effect matrix uses synthetic decisions in native IPC tests; GUI review observations and actual selected owner/delegated publications are distinct.",
+    "The exact historic OS/file cause and causal identity with FIFO fixture are not established; no retrospective iCloud/FIFO attribution.",
+    "Physical global-hotkey/menu automation is not asserted; actual visible main-button route uses the same delegate and was observed opening matching Settings cards.",
+    "Recovery-only is a client workflow, not a sandbox or a new RPC permission.",
+    "After abrupt exit, product refuses a residual socket. Explicit fixture-only retirement pins inode/owner/mode and exclusive lease after confirmed exit; no automatic productive recovery claim.",
+    "No arbitrary B-tree/deleted-file/super-journal recovery; development distribution/external Python/Codex remain distinct pending scope."
+  ],
+  "requested_points": {
+    "1": "Matriz finita soportada implementada y verificada mediante GUI, IPC nativo, oráculos y negativos; no recuperación forense universal.",
+    "2": "Mecanismos reproducidos corregidos y arranque aislado verificado; no se inventa atribución retrospectiva al archivo/OS históricos."
+  }
+}

@@ -1,3 +1,4 @@
+import DesktopCore
 import SwiftUI
 
 @main @MainActor
@@ -9,10 +10,11 @@ struct JarvisApp: App {
 
     var body: some Scene {
         WindowGroup("Jarvis", id: "main") {
-            ContentView(store: store)
+            MainSceneContent(store: store, delegate: delegate)
                 .id(profiles.active.runtimeID)
                 .disabled(profiles.isOpening)
                 .background(WindowIdentity())
+                .background(SettingsSceneActionBridge(registration: delegate.settingsWindowAction))
                 .onAppear {
                     delegate.store = store
                     delegate.profiles = profiles
@@ -51,6 +53,26 @@ struct JarvisApp: App {
             Button("Salir de Jarvis") { NSApp.terminate(nil) }.keyboardShortcut("q")
         }
         Settings { SettingsView(store: store, delegate: delegate, profiles: profiles).id(profiles.active.runtimeID).disabled(profiles.isOpening) }
+    }
+}
+
+/// The pointer is outside ContentView so it is present in both ordinary chat
+/// and recovery-only launches. Opening it uses the same app route as a reopen.
+@MainActor private struct MainSceneContent: View {
+    let store: ChatStore
+    let delegate: AppDelegate
+    private var notices: [OwnerDecisionNotice] { delegate.ownerDecisionNotices(for: store) }
+    private var navigation: SettingsOwnerNavigation { delegate.settingsNavigation }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if let notice = navigation.attention(in: notices) {
+                OwnerDecisionBanner(notice: notice, navigation: navigation, onReveal: delegate.showMainWindow)
+            }
+            ContentView(store: store)
+        }
+        .onAppear { navigation.configure(runtimeID: store.runtime.id); navigation.detect(notices, visible: false) }
+        .onChange(of: notices) { _, rows in navigation.detect(rows, visible: false) }
     }
 }
 

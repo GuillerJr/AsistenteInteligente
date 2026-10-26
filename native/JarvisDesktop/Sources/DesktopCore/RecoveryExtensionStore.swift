@@ -184,8 +184,15 @@ import Observation
                 }
             }
             if let preview, preview.scope != snapshot.scope { self.preview = nil }
-            approval = ticket; errorMessage = nil
-        } catch { if version == epoch, sequence == readSequence { errorMessage = RecoveryExtensionPresentation.error(error) } }
+            if !OwnerDecisionTicketPolicy.same(approval, ticket) { approval = ticket }
+            errorMessage = operation?.errorCode.map(RecoveryExtensionPresentation.code)
+        } catch {
+            if version == epoch, sequence == readSequence, !isRequesting, !Task.isCancelled {
+                if approval != nil || operation?.settled == false { responseUnconfirmed = true }
+                approval = nil
+                errorMessage = RecoveryExtensionPresentation.error(error)
+            }
+        }
     }
     public func decide(allow: Bool, ticket: MaintenanceApproval) async {
         guard let client, let review = effectReview, let operation, canDecide, approval?.params == ticket.params, approval?.reviewMetadata == ticket.reviewMetadata, review.matches(ticket, operation: operation) else { return }

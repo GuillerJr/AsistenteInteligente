@@ -127,6 +127,18 @@ una copia verificada actual y esquemas compatibles. El arranque explícito valid
 la pareja app/Python de un mismo CURRENT y los esquemas fríos; no admite un
 perfil restaurado ni invierte migraciones de datos.
 
+El [cierre nativo posterior](PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md) completa los
+puntos de variantes y negativas solicitados: 16 revisiones de la matriz finita y
+tres rechazos desde la interfaz, publicaciones IPC con oráculos independientes
+y prefijos publicados/restaurados en perfiles sintéticos con decisiones reales
+y delegadas. El modo explícito `--recovery-only` evita consumir los WAL/journals
+durante la carga automática de conversaciones y tareas. Se corrigieron la
+localización y caducidad de las tarjetas, la prioridad entre operaciones y la
+retirada de tickets tras perder el servicio. La [investigación de arranque](PHASE_A_STARTUP_ISOLATION.md)
+acredita reproducciones controladas y aislamiento del intérprete elegido.
+Estos recorridos no atribuyen retrospectivamente una causa de sistema precisa
+al incidente histórico ni acreditan un canal de distribución completo.
+
 Este canal `development` utiliza Python y Codex oficial externos. No acredita
 autenticidad completa, distribución autocontenida, Developer ID, notarización o
 canal remoto firmado. La instalación personal anterior permanece independiente.
