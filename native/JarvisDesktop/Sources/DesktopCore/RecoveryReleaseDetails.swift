@@ -53,7 +53,7 @@ public struct RecoveryReleaseDetails: Sendable {
         for key in ["state", "memory", "schedules"] { _ = try MaintenanceValidation.integer(row["schemas"][key], max: 2_147_483_647) }; return parsed
     }
     static func maintenancePurposes(_ value: RPCValue) throws -> [String] {
-        let allowed: Set<String> = ["backup.create", "restore.stage", "profile.restore.activate", "memory.restore.copy_scope", "doctor.repair.apply", "workspace.backup.create", "workspace.restore.stage", "release.update.apply", "release.rollback.apply"]
+        let allowed: Set<String> = ["backup.create", "restore.stage", "profile.restore.activate", "memory.restore.copy_scope", "doctor.repair.apply", "workspace.backup.create", "workspace.restore.stage", "release.update.apply", "release.rollback.apply", ChannelReconciliationValidation.effect]
         guard let values = value.array, values.count <= allowed.count else { throw RPCFailure.invalidResponse }
         let purposes = try values.map { value -> String in
             guard let text = value.string, allowed.contains(text) else { throw RPCFailure.invalidResponse }; return text

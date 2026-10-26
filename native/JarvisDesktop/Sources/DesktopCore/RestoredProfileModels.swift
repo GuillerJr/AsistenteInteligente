@@ -61,7 +61,7 @@ public struct RestoreProfileReview: Identifiable, Sendable {
         operation.kind == "profile.restore.activate" && operation.scope == scope && operation.reviewID == id && operation.reviewDigest == digest
     }
     public func matches(_ approval: MaintenanceApproval, operation: MaintenanceOperation, now: Date = Date()) -> Bool {
-        matches(operation) && approval.operationID == operation.id && approval.scope == scope && approval.purpose == operation.kind && approval.reviewID == id && approval.reviewDigest == digest && approval.reviewMetadata == metadata && approval.expiresAt > now
+        matches(operation) && approval.operationID == operation.id && approval.scope == scope && approval.purpose == operation.kind && approval.reviewID == id && approval.reviewDigest == digest && approval.reviewMetadata == metadata && expiresAt > now && approval.expiresAt > now
     }
 }
 

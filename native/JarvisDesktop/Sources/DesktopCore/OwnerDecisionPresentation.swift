@@ -11,10 +11,10 @@ public struct OwnerDecisionNotice: Identifiable, Sendable, Equatable {
     public let resourcesPending: Bool
     public let unconfirmed: Bool
     public var tabTitle: String {
-        ["maintenance":"Mantenimiento", "recovery":"Recuperación", "memory-restored":"Memoria conservada", "restored":"Perfil restaurado"][tab] ?? "Ajustes"
+        ["maintenance":"Mantenimiento", "recovery":"Recuperación", "memory-restored":"Memoria conservada", "restored":"Perfil restaurado", "channels-restored":"Canales conservados"][tab] ?? "Ajustes"
     }
     public init?(tab: String, operation: MaintenanceOperation?, reviewID: String?, expiresAt: Date?, unconfirmed: Bool = false) {
-        guard ["maintenance", "recovery", "memory-restored", "restored"].contains(tab), let reviewID else { return nil }
+        guard ["maintenance", "recovery", "memory-restored", "restored", "channels-restored"].contains(tab), let reviewID else { return nil }
         if let operation, operation.reviewID == reviewID {
             id = operation.id; phase = operation.phase; errorCode = operation.errorCode; resourcesPending = operation.resourcesPending
         } else {
@@ -70,7 +70,7 @@ public struct OwnerDecisionNotice: Identifiable, Sendable, Equatable {
         self.runtimeID = runtimeID; selectedTab = "general"; focusID = nil; dismissed = []; seen = []; firstObserved = [:]; observationSequence = 0; revealSequence += 1
     }
     public func select(_ tab: String) {
-        guard ["general", "maintenance", "recovery", "restored", "memory-restored"].contains(tab) else { return }; selectedTab = tab
+        guard ["general", "maintenance", "recovery", "restored", "memory-restored", "channels-restored"].contains(tab) else { return }; selectedTab = tab
     }
     public func attention(in notices: [OwnerDecisionNotice]) -> OwnerDecisionNotice? {
         let rows = notices.filter { $0.requiresAttention && !dismissed.contains($0.id) }

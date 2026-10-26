@@ -105,6 +105,7 @@ class HostPurpose(StrEnum):
     RESTORE_STAGE = "restore.stage"
     PROFILE_RESTORE_ACTIVATE = "profile.restore.activate"
     MEMORY_RESTORE_COPY_SCOPE = "memory.restore.copy_scope"
+    TELEGRAM_RESTORE_RECONCILE = "telegram.restore.reconcile"
     DOCTOR_REPAIR_APPLY = "doctor.repair.apply"
     WORKSPACE_BACKUP_CREATE = "workspace.backup.create"
     WORKSPACE_RESTORE_STAGE = "workspace.restore.stage"

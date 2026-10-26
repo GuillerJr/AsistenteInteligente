@@ -38,8 +38,8 @@ El [bloque de recuperación](PHASE_A_RECOVERY.md) registra el checkpoint `b8ce4b
 | Cliente SwiftUI propio de desarrollo | Ventana/Dock/menú/atajo y conversación oficial reales del recorrido inicial. Nuevos paneles de herramientas, aprobación por operación, memoria/citas, MCP, sesiones, borradores y recibos con contratos de socket/DTO probados. Pendiente: No todas las vistas/funciones de referencia ni paquete autocontenido. Firma ad hoc y Python/Codex externos no sustituyen instalación anterior ni Developer ID/notarización. |
 | Cliente stdio y registro MCP conectados a servicio/runtime/app | Procesos stdio y socket locales propios; versiones2025-11-25 y2026-07-28 explícitas, catálogo versionado, mantenimiento, no autoconexión, misma autoridad por operación consumida justo antes de escribir tools/call, revocación y efecto incierto sin replay. Pendiente: Sin servidores externos cualificados, OAuth/HTTP/SSE, apps completas, subscriptions/sampling/tasks/MRTR o JSON Schema completo. HOME privado no es sandbox OS. Recursos/prompts del transporte aún no expuestos como tools/UI de producto. |
 | Herramientas de workspace y autoridad central | Filesystem real propio: listar/leer/escribir/editar/mkdir, raíz fijada, rutas privadas/enlaces rechazados, compare-and-swap de bytes, leases exactos de un uso y guard antes del efecto. Configuración privada transaccional con lock y merge. Pendiente: No exec/sandbox, parches completos, perfiles persistentes de permisos ni herramientas completas de referencia. |
-| Memoria local léxica con procedencia y citas de snapshot | SQLite real propio y temporales RAM, ámbito host por agente/workspace, búsqueda local FTS5 o lexical_scan explícita, revisiones/hashes/citas y generación invalidables; guardar/olvidar pasa por autoridad común. Pendiente: No embeddings ni híbrida/semántica, indexación automática, flush completo, wiki/motores externos, cifrado integral o migración de datos personales. |
-| Telegram privado y vinculación explícita | Pruebas RPC/HTTP sintéticas y recorridos reales limitados: vinculación, suma, y workspace_write con aprobación nativa y archivo/hash verificado. Tarjeta y resultado observados en el chat seleccionado sin recarga del agente. Pendiente: Matriz completa de denegación/revocación/expiración, resiliencia prolongada y causa del canal detenido posterior aún pendientes. No grupos, adjuntos, otros canales ni exclusividad externa acreditada por lease local. |
+| Memoria local léxica con procedencia y citas de snapshot | SQLite real propio y temporales RAM, ámbito host por agente/workspace, búsqueda local FTS5 o lexical_scan explícita, revisiones/hashes/citas y generación invalidables; guardar/olvidar pasa por autoridad común. Copia explícita de ámbitos ampliada a imágenes frías WAL/journal compatibles, con revisión sin efectos y apertura autorizada separada. Pendiente: Cualificación final del incremento en PHASE_A_RECONCILIATION_CLOSEOUT.md; embeddings/híbrida, indexación automática, flush completo, motores externos, cifrado integral y migración de datos personales siguen fuera del avance. |
+| Telegram privado y vinculación explícita | Vinculación, suma y workspace_write tienen recorridos reales acotados anteriores. Reconciliación local de rutas restauradas ahora usa la autoridad central, recibos e incertidumbre sin replay; conserva sesión/historia y no conecta. Arrancar exige además prueba fresca por nonce/claim sólo en RAM; cambios de conexión/ruta/agente/workspace la invalidan y se descarta el primer segundo parcial de entrada. Pendiente: Evidencia final del incremento y cualificación externa prolongada; no grupos, adjuntos, otros canales ni exclusividad externa acreditada por lease local. |
 | Dictado y lectura locales de macOS | SpeechAnalyzer idioma exacto ya instalado en macOS 26 o posterior, legacy sólo con soporte local real, preparación/captura cancelables y borrador sin autoSend. Una frase es-ES real se añadió preservando BORRADOR BASE; reproducción sintética volvió a idle sin error visible. Pendiente: Resto de idiomas/dispositivos, denegación/revocación TCC real y matriz acústica. Sin wakeword, escucha permanente, llamadas ni voz continua. iPhone aplazado por el dueño. |
 | Lectura HTTPS pública y extracción estática por URL | GET HTTPS público con aprobación, IP/DNS fijados y límites; suite Python de 1234 incluye las regresiones de cierre. Un GET real example.com completó HTTP 200 con contenido externo no verificado, sin JS ni seguimiento de enlaces. Pendiente: Buscador/proveedor de búsqueda, JS, navegador, cuentas, cookies y descarga de archivos no implementados. Una URL real no cualifica sitios arbitrarios ni toda la familia. |
 | Cierre incompleto, propiedad retenida y retry explícito | Regresiones MCP/Codex/Telegram y servicio integradas en 1234 Python; supervisor nativo con dueño retenido, stop compartido, 35 s monotónicos y señales tras identidad/propiedad kernel. 129 nativas incluyen 12 lifecycle y teardown acotado de fixtures. Pendiente: No certifica árboles arbitrarios ni descendientes escapados. Identidad kernel inmediata más señal PID no es primitiva atómica de audit-token. Recuperación productiva completa sigue pendiente. |
@@ -48,20 +48,31 @@ La [continuación de recuperación](PHASE_A_RECOVERY_COMPLETION.md) implementa v
 
 REA registra veinte lotes estáticos con 80 rutas TypeScript/JavaScript únicas seleccionadas. La cobertura global sigue parcial, conserva incógnitas semánticas y no observó ejecución de OpenClaw. Fuentes, hashes y Evidence IDs están en REA_COVERAGE.json y los registros de [OC-19](REA_PART19_SUMMARY.json)/[OC-20](REA_PART20_SUMMARY.json). El censo sigue en 43 familias con avance parcial y 37 sin implementación; no es un porcentaje de paridad completa.
 
+La [continuación de reconciliación](PHASE_A_RECONCILIATION_CLOSEOUT.md) distingue
+contratos implementados, regresiones sintéticas y cualificación GUI final:
+copia de memoria sobre familias frías íntegras, rutas locales y vinculación fresca
+separada del arranque. El núcleo de activación se conserva; sus negativos y el
+plazo nativo de las decisiones se amplían sin renovar la autoridad. Ninguna fila
+se cierra por este incremento antes de sus evidencias finales ni por un test aislado.
+
 La [decisión de destinos](PHASE_A_TARGETS.md) fija macOS como entrega inicial, aplaza iPhone y elige Telegram como primer canal externo. No acredita plataformas o conectores pendientes.
 
 El checkpoint histórico de las partes REA 10–13 alcanzó trece lotes y 56 rutas TS/JS únicas seleccionadas. Aplicación parcial en las partes 10, 11 y 13; complete sólo dentro del artefacto de la parte 12; semántica unknown en las cuatro. La parte 13 estudió fronteras de respaldo/restauración y propiedad de mantenimiento antes de implementar esas funciones en Jarvis. OC-19/20 añaden lectura de prefijo WAL, archivos y activación de versiones, sin ejecutar ni incorporar el runtime de la referencia. No equivale a revisión global.
 
 ## Matriz funcional
 
-Todas las filas mantienen pendiente la cualificación real propia. «Sintético parcial» sólo identifica parte del contrato probado en kernel. El JSON añade caso de fallo/revocación, dependencias y fuentes por familia.
+Todas las familias mantienen pendiente su cierre completo. Los recorridos reales
+acotados ya registrados conservan su evidencia; «sintético parcial» sólo identifica
+parte del contrato probado en kernel. El JSON añade caso de fallo/revocación,
+dependencias y fuentes por familia.
 
 La [continuación de recuperación](PHASE_A_RECOVERY_COMPLETION.md) ya registra
 ocho publicaciones nativas con decisiones reales del dueño y verificación
 independiente sobre datos sintéticos: archivos, journal caliente, reparación FTS
 y versiones locales, más el arranque real de la v1 recuperada sin cuenta.
-2297 pruebas Python y 249 Swift aprobadas. Son recorridos acotados: no cierran
-todos los negativos o variantes, A-71 ni la distribución completa.
+2297 pruebas Python y 249 Swift aprobadas en ese checkpoint. La matriz finita
+posterior de variantes y negativas quedó registrada en el cierre nativo; no se
+reabre como trabajo nuevo. A-71 y la distribución completa siguen pendientes.
 
 | ID | Capacidad | Estado inicial | Caso observable propio requerido |
 | --- | --- | --- | --- |

@@ -1,9 +1,30 @@
 # Fase A: activación local y apertura de perfiles restaurados
 
-Implementación propia integrada, con 1.754 pruebas Python y 175 nativas aprobadas.
+Checkpoint inicial de implementación propia: 1.754 pruebas Python y 175 nativas aprobadas.
 La activación y la apertura explícita del perfil sintético se observaron en la app
 con ambas decisiones del dueño; el nuevo perfil quedó local y desconectado. No cierra A-69, A-71
 ni la fase A. La fase B sigue pendiente.
+
+## Continuación de activación y reconciliación
+
+El incremento posterior amplía los negativos del host con flock adquirido durante
+la espera, sustitución física del destino y cancelación repetida tras publicar.
+El núcleo productivo de activación se conserva; las pruebas verifican su autoridad,
+custodia y recibo incierto sin repetir la publicación. La validación nativa exige
+que sigan vigentes tanto revisión como ticket; no se amplía su TTL.
+
+La copia de memoria admite familias frías WAL/journal compatibles mediante una
+decisión independiente. Las rutas conservadas tienen ahora revisión y cambio
+local explícitos; activar el perfil sigue sin conectar ni reactivar el canal.
+Telegram exige después una vinculación fresca del chat, mantenida sólo en RAM,
+además de conectar el mismo bot y autorizar el arranque. No se importan permisos,
+tokens ni pruebas de vinculación del respaldo.
+
+La evidencia final y los límites del incremento se consolidan en
+[el registro de reconciliación](PHASE_A_RECONCILIATION_CLOSEOUT.md). Este texto
+registra los recorridos GUI delegados, reinicios y oráculos actuales, además de
+2402 pruebas Python y 305 Swift aprobadas. La publicación exige repetir los hooks
+sobre el árbol congelado; la CI no se anticipa. Las cifras siguientes son checkpoints históricos.
 
 La referencia se estudió mediante REA por partes, incluidos los contratos de
 respaldo y cierre de los lotes 13–16. No se copia ni ejecuta OpenClaw.
@@ -38,7 +59,9 @@ la posibilidad de rechazar un perfil ocupado o cambiado.
 El nuevo workspace es privado y vacío. La memoria existente conserva sus scopes;
 **no se reasocia automáticamente al nuevo workspace**. Un resultado vacío en el
 scope nuevo no demuestra pérdida de datos ni acredita reconciliación de memoria.
-Tareas, rutas de Telegram y skills siguen deshabilitadas; no se importan programas
+En la apertura inicial, tareas, rutas de Telegram y skills siguen deshabilitadas;
+los cambios posteriores de memoria y rutas requieren decisiones separadas.
+No se importan programas
 MCP, transporte o permisos vivos. No se añade un selector persistente de perfiles.
 
 ## Incertidumbre, inspección y limpieza
@@ -133,14 +156,17 @@ local; los hashes de los controles seguían iguales y el workspace estaba vacío
 No se leyeron credenciales ni se abrió el original SQLite desde el auditor.
 El registro de evidencia `b037b23` pasó también CI en macOS y Linux.
 
-Faltan los casos reales de denegación, cancelación y resultado incierto. Los fixtures cubren estos estados, con límites
-separados de este recorrido nativo del dueño.
+En ese checkpoint faltaban los casos reales de denegación, cancelación y resultado
+incierto. Su continuación está separada en el registro de reconciliación; los
+fixtures no se presentan como decisiones reales ni como observación GUI.
 Los borradores duraderos anteriores se retienen sólo en RAM durante esta sesión;
 no hay selector para recuperarlos. Chats y borradores temporales no se trasladan.
 
 Las lecturas tienen límites de bytes y checkpoints, pero no interrumpen una llamada
 bloqueada en el kernel. La barrera es cooperativa, sin aislamiento frente al mismo
-UID. Siguen pendientes WAL frío/journals, archivos de workspace, reconciliación y
-reactivación de memoria/canales, reparación, migraciones y distribución autónoma.
+UID. Los antiguos pendientes de WAL/journals, archivos y reparaciones se ampliaron
+después en el [cierre de recuperación](PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md); no se
+vuelven a declarar trabajo nuevo. La reconciliación tiene su incremento propio,
+mientras distribución autónoma y cierre completo de A-71 siguen pendientes.
 Ver [recuperación](PHASE_A_RECOVERY.md) y el bloque `activation_followup` del
 [registro de cualificación](PHASE_A_RECOVERY_QUALIFICATION.json).

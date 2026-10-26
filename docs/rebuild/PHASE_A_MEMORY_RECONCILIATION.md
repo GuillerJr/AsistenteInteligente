@@ -5,6 +5,30 @@ están integrados. Las decisiones de las pruebas automáticas son sintéticas. U
 copia autorizada desde la app de dos notas de prueba quedó verificada por separado;
 su alcance se registra abajo. No cierra A-71 ni la fase A. La fase B no ha comenzado.
 
+## Ampliación a memoria fría WAL y journal
+
+El inventario y la revisión leen el estado confirmado de familias compatibles
+DELETE, WAL y journals íntegros mediante imágenes privadas. Las fuentes hermanas
+participan en el presupuesto agregado y el mismo corte del host. El DTO presenta
+el tipo de imagen y si la copia exigirá recuperación SQLite; las familias ambiguas
+o dañadas requieren el recorrido de reparación separado.
+
+La copia autorizada delega únicamente esa familia congelada al store de memoria.
+Revalida identidad, autoridad, plazo y cancelación antes de abrir y antes de COMMIT.
+Inventario y revisión conservan los archivos; tras aprobar, abrir SQLite puede
+recuperar y consumir sus sidecars. La garantía posterior es conservar las notas
+originales y verificar la copia/procedencia, no mantener bytes y metadatos físicos
+de una base que se acaba de mutar. La incertidumbre conserva el Owner y el corte;
+su limpieza nunca vuelve a confirmar ni repetir la copia.
+
+Los negativos de activación y las rutas restauradas se cualifican conjuntamente
+en el [registro de reconciliación](PHASE_A_RECONCILIATION_CLOSEOUT.md), con decisiones
+sintéticas de tests y decisiones GUI delegadas diferenciadas. Sus identidades,
+recibos y controles finales se registran allí; las cifras de abajo conservan
+su alcance histórico. La continuación acredita copia DELETE de dos notas y copia
+WAL de tres notas, con rechazo/cancelación/caducidad, recibos únicos y reinicios.
+La prueba de vinculación externa sigue teniendo el límite explícito del registro.
+
 ## Contrato del núcleo
 
 `memory_scope_summaries` y `review_memory_scope_copy` inspeccionan imágenes RAM
@@ -100,9 +124,11 @@ esos controles no cubrían; se documenta a continuación.
 
 La copia de dos notas de prueba desde la app quedó completada y asentada con
 aprobación real, sin simularla. Sus originales sintéticos tenían revisiones 2 y 1.
-Los escenarios reales negativos, mutación/reconciliación de memoria sobre WAL frío,
-recuperación de archivos de workspace,
-otros canales y distribución autocontenida continúan pendientes dentro de la fase A.
+En ese checkpoint los negativos y la copia sobre WAL frío seguían pendientes.
+La ampliación actual los trata por separado; archivos de workspace y la matriz
+finita de recuperación ya tienen evidencia posterior en
+[el cierre nativo](PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md). Otros canales y la
+distribución autocontenida permanecen fuera de ese recorrido y de este caso feliz.
 
 La investigación estática que orienta estas decisiones es
 [OC-17](REA_PART17_SUMMARY.json), con [procedencia](REA_PART17_PROVENANCE.json).

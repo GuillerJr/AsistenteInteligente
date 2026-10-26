@@ -84,7 +84,9 @@ async def ready(client, *, agent="jarvis"):
 
 
 def fresh_update(identity=1, **options):
-    return update(identity, date=int(time.time()), **options)
+    # Synthetic future whole second, after the conservatively discarded start
+    # second. The cutoff boundary itself has dedicated negative coverage.
+    return update(identity, date=int(time.time()) + 1, **options)
 
 
 async def event(client, identity=1):

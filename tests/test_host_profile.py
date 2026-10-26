@@ -123,6 +123,7 @@ async def test_all_registered_rpc_handlers_are_denied_before_validation_during_c
         "profile.restore.inspect", "maintenance.cleanup",
         "memory.restore.inventory", "memory.restore.review", "memory.restore.copy_scope",
         "memory.restore.receipt",
+        "telegram.restore.review", "telegram.restore.reconcile", "telegram.restore.inspect",
         "workspace.backup.review", "workspace.backup.create",
         "workspace.restore.review", "workspace.restore.stage",
         "doctor.repair.review", "doctor.repair.apply",

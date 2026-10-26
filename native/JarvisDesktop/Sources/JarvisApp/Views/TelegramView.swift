@@ -56,6 +56,10 @@ struct TelegramView: View {
                 Text(TelegramPresentation.channelError(error))
                     .foregroundStyle(.red)
             }
+            if !snapshot.restoredPairingRequiredChatIDs.isEmpty {
+                Text("Hay rutas conservadas pendientes de un enlace nuevo con Telegram. Usa «Revisar e iniciar enlace…» para cada chat habilitado; después podrás activar el canal.")
+                    .font(.caption).foregroundStyle(.orange)
+            }
             DisclosureGroup("Carpeta e identidad de configuración") {
                 Text("Carpeta: \(snapshot.workspaceID)").textSelection(.enabled)
                 Text("Configuración: \(snapshot.configurationHash)").textSelection(.enabled)
@@ -119,7 +123,7 @@ struct TelegramView: View {
                 Button("Detener canal…") { Task { await store.telegram.stop() } }.disabled(!editable)
             } else {
                 Button("Activar canal…") { Task { await store.telegram.start(workspacePath: store.access.workspacePath) } }
-                    .disabled(!editable || !snapshot.connected || store.telegram.pairing?.active == true || !snapshot.routes.contains(where: \.enabled))
+                    .disabled(!editable || !snapshot.connected || store.telegram.pairing?.active == true || !snapshot.restoredPairingRequiredChatIDs.isEmpty || !snapshot.routes.contains(where: \.enabled))
             }
             if snapshot.connected {
                 Button("Desconectar…", role: .destructive) { Task { await store.telegram.disconnect() } }.disabled(!editable)

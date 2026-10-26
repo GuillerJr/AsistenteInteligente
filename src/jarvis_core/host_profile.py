@@ -489,7 +489,39 @@ def _json_state(role, document):
             os.close(fd)
 
 
-def _inventory(service, *, full_admission=True):
+def _json_staging(service, staging):
+    """Validate one exact private-registry temporary, never a filename exemption.
+
+    Only a transaction's own fixed document may contribute the pin. It grants no
+    authority and does not exclude its old JSON or any sibling from comparison.
+    """
+    import re
+
+    from jarvis_core.private_json import PrivateJsonStaging
+
+    resources = (service.agent_profiles, service.skills, service._telegram_journal)
+    if any(type(resource) is not BoundProfileResource for resource in resources):
+        raise HostProfileError("profile_registry_staging_invalid")
+    documents = tuple(resource._resource.document for resource in resources)
+    if (type(staging) is not PrivateJsonStaging
+            or not any(staging.document is document for document in documents)
+            or type(staging.name) is not str
+            or re.fullmatch(r"\.registry-[a-f0-9]{32}", staging.name) is None):
+        raise HostProfileError("profile_registry_staging_invalid")
+    document = staging.document
+    with Directory(document.directory, expected=FileIdentity(*document.identity)) as parent:
+        info = os.stat(staging.name, dir_fd=parent.fd, follow_symlinks=False)
+        _regular(info, limit=document.max_bytes)
+        actual = (info.st_dev, info.st_ino, stat.S_IMODE(info.st_mode), info.st_uid,
+                  info.st_nlink, info.st_size)
+        if actual != staging.identity:
+            raise HostProfileError("profile_registry_staging_changed")
+        parent.check()
+    return document, staging.name
+
+
+def _inventory(service, *, full_admission=True, staging=None):
+    staged = None if staging is None else _json_staging(service, staging)
     root_allowed = {"profile.lock", "configuration.json", "configuration.lock",
                     "maintenance.json", "maintenance.json.lock", "transport.token", "service.sock",
                     "provider", "mcp", "workspace", "profiles", "telegram", "auth.json",
@@ -511,13 +543,16 @@ def _inventory(service, *, full_admission=True):
         (service._telegram_journal.document,
          {"telegram.json", "telegram.json.lock", "telegram.runner.lock"}),
     ):
+        allowed = set(allowed)
+        if staged is not None and staged[0].directory == document.directory:
+            allowed.add(staged[1])
         with Directory(document.directory, expected=FileIdentity(*document.identity)) as directory:
             if set(os.listdir(directory.fd)) - allowed:
                 raise HostProfileError("profile_inventory_unclassified")
 
 
-def _states(service):
-    _inventory(service)
+def _states(service, *, staging=None):
+    _inventory(service, staging=staging)
     sql = tuple(_sqlite_state(role, store) for role, store in (
         ("state", service.store), ("memory", service.memory), ("schedules", service.schedule_store),
     ))
@@ -590,18 +625,23 @@ class FrozenSources:
     def assert_current(self, cut, *, full=False):
         return self._assert_current(cut, full=full, memory_mutating=False)
 
+    def assert_json_staging_current(self, cut, staging):
+        """All frozen inputs stay current beside one pinned registry staging file."""
+        return self._assert_current(cut, full=True, memory_mutating=False, staging=staging)
+
     def _assert_nonmemory_current(self, cut):
         # Only MemoryMutationCut invokes this after consuming an exact grant.
         # The selected MemoryStore mutex/identity/CAS then own that one row.
         return self._assert_current(cut, full=False, memory_mutating=True)
 
-    def _assert_current(self, cut, *, full, memory_mutating):
+    def _assert_current(self, cut, *, full, memory_mutating, staging=None):
         cut.assert_current()
         if cut.gate is not self.service.profile_gate or cut.scope != self.scope:
             raise HostProfileError("profile_generation_stale")
-        _inventory(self.service, full_admission=full)
+        _inventory(self.service, full_admission=full, staging=staging)
         if full:
-            sql, docs = _states(self.service)
+            sql, docs = (_states(self.service) if staging is None
+                         else _states(self.service, staging=staging))
             current = _fingerprint(self.scope, self.root_identity, sql, docs,
                                    _configuration_state(self.service))
             if current != self.fingerprint:

@@ -265,7 +265,7 @@ final class WalMaintenanceOwnershipTests: XCTestCase {
         await store.close()
     }
 
-    func testWalReviewBindsExactRecoverySemanticsAndRetainsDeleteOnlyMemoryDTO() throws {
+    func testWalReviewBindsExactRecoverySemanticsAndSupportsValidatedColdMemoryDTO() throws {
         let review = try MaintenanceReview(WalMaintenanceFixture.walReview())
         XCTAssertEqual(review.sqliteRecovery.map(\.role), ["memory"])
         let valid: RPCValue = .object(["role": .string("memory"), "mode": .string("cold_wal"), "semantics": .string("confirmed_transactions_only")])
@@ -276,7 +276,9 @@ final class WalMaintenanceOwnershipTests: XCTestCase {
         }
         XCTAssertThrowsError(try MaintenanceReview(WalMaintenanceFixture.walReview(kind: "restore.stage")))
         let walMemory = WalMaintenanceFixture.changed(RestoredMemoryFixture.inventory(), ["source_kind": .string("cold_wal_snapshot")])
-        XCTAssertThrowsError(try RestoredMemoryInventory(walMemory))
+        let inventory = try RestoredMemoryInventory(walMemory)
+        XCTAssertEqual(inventory.sourceKind, "cold_wal_snapshot")
+        XCTAssertEqual(inventory.schemaVersion, 1)
     }
 
     func testWalErrorsAreLocalizedAndNeverExposeRemoteDetails() {

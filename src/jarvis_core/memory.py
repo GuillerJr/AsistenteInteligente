@@ -694,9 +694,10 @@ class MemoryStore:
                     return True
         return False
 
-    def copy_scope(self, review, context, *, copy_limits=None):
+    def copy_scope(self, review, context, *, copy_limits=None, cold_family=None):
         """Host-only approved durable scope copy, never a model tool or implicit migration."""
-        return _execute_scope_copy(self, review, context, copy_limits or MemoryCopyLimits())
+        return _execute_scope_copy(self, review, context, copy_limits or MemoryCopyLimits(),
+                                   cold_family=cold_family)
 
     def _page(self, limit: int, offset: int) -> None:
         if (type(limit) is not int or not 1 <= limit <= self.limits.max_page_size
@@ -1646,7 +1647,7 @@ class MemoryCopyOwner:
             self.store._copy_owner = None
 
 
-def _copy_existing_identity(store, expected, *, cold):
+def _copy_existing_identity(store, expected, *, cold, cold_family=None):
     if store._closed:
         raise MemoryError("memory_closed")
     if store._copy_owner is not None and not store._copy_owner.closed:
@@ -1662,6 +1663,20 @@ def _copy_existing_identity(store, expected, *, cold):
     ):
         raise MemoryError("memory_copy_database_changed")
     if cold:
+        if cold_family is not None:
+            # Only the host's frozen family may admit WAL/journal recovery. The
+            # core still checks its physical identity before the first consented
+            # SQLite open and CAS-checks the logical review before and inside SQL.
+            # This object is not a permission, and it never reaches RPC/model data.
+            from jarvis_core.cold_sqlite import ColdFamily
+            if (type(cold_family) is not ColdFamily or cold_family.role != "memory"
+                    or cold_family.root != store.path.parent
+                    or store.path.name != "memory.sqlite3"
+                    or not cold_family.snapshot_eligible
+                    or cold_family.members[0][:2] != expected):
+                raise MemoryError("memory_copy_cold_image_unavailable")
+            cold_family.assert_current()
+            return
         for suffix in ("-wal", "-shm", "-journal"):
             if os.path.lexists(store.path.with_name(store.path.name + suffix)):
                 raise MemoryError("memory_copy_cold_image_unavailable")
@@ -1783,7 +1798,7 @@ def _copy_planned_rows(connection, review, context, limits, copy_limits, check_c
     return documents, new_maps, operation
 
 
-def _execute_scope_copy(store, review, context, copy_limits):
+def _execute_scope_copy(store, review, context, copy_limits, *, cold_family=None):
     if not isinstance(context, MemoryCopyContext):
         raise MemoryScopeCopyError("memory_copy_invalid_context")
     owner, operation, connection = None, None, None
@@ -1795,13 +1810,15 @@ def _execute_scope_copy(store, review, context, copy_limits):
         ):
             raise MemoryError("memory_copy_review_mismatch")
         with store._mutex:
-            _copy_existing_identity(store, review.database_identity, cold=store._disk is None)
+            _copy_existing_identity(store, review.database_identity, cold=store._disk is None,
+                                    cold_family=cold_family)
             if store._disk is not None and store._disk.in_transaction:
                 raise MemoryError("memory_copy_transaction_active")
             # Original open may create its own .lock and configure SQLite.
             # No such effect happens before the single central host consent.
             context.checkpoint("memory_copy_open_existing", True)
-            _copy_existing_identity(store, review.database_identity, cold=store._disk is None)
+            _copy_existing_identity(store, review.database_identity, cold=store._disk is None,
+                                    cold_family=cold_family)
             connection = store._open_disk(create=False)
             store._check_disk()
             info = os.fstat(store._file_fd)

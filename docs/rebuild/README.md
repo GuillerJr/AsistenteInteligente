@@ -139,6 +139,19 @@ acredita reproducciones controladas y aislamiento del intérprete elegido.
 Estos recorridos no atribuyen retrospectivamente una causa de sistema precisa
 al incidente histórico ni acreditan un canal de distribución completo.
 
+La [continuación de activación, memoria y canales](PHASE_A_RECONCILIATION_CLOSEOUT.md)
+amplía la copia de ámbitos a WAL/journals íntegros y añade reconciliación local
+de rutas Telegram con la autoridad central. Habilitar o revocar una ruta conserva
+su sesión e historia; no conecta el bot ni restaura permisos. La activación del canal
+exige después un claim fresco del chat por nonce, con prueba sólo en RAM y
+validación de conexión, ruta, agente y workspace. Se descarta el primer segundo
+parcial de entrada para impedir consumir mensajes anteriores al arranque.
+Las regresiones de activación amplían los negativos; la interfaz comprueba el
+plazo de revisión además del ticket. Se registran 14 casos nativos, reinicios
+desconectados, 2402 pruebas Python y 305 Swift aprobadas. La evidencia conserva
+los fallos previos y sus correcciones. Los hooks vuelven a comprobar el árbol
+congelado al publicar; las cifras anteriores siguen siendo checkpoints históricos.
+
 Este canal `development` utiliza Python y Codex oficial externos. No acredita
 autenticidad completa, distribución autocontenida, Developer ID, notarización o
 canal remoto firmado. La instalación personal anterior permanece independiente.

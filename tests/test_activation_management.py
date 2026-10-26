@@ -1,6 +1,8 @@
 """Real synthetic restore/host/authority paths; no owner data or SDK accounts."""
 import asyncio
+import fcntl
 import os
+import threading
 from dataclasses import replace
 from unittest.mock import patch
 
@@ -449,3 +451,98 @@ async def test_restored_fast_source_guard_never_rereads_admission_bodies_and_det
                 frozen.assert_current(cut)
     finally:
         await service.aclose()
+
+
+async def test_target_becomes_kernel_busy_while_owner_card_waits_keeps_exact_originals(
+        host, prepared):
+    """The review is not a lease on the selected target's future availability."""
+    _, coordinator = host
+    descriptor = os.open(prepared / "profile.lock", os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        review = await reviewed(coordinator, prepared)
+        before = snapshot(prepared)
+        operation = await coordinator.activate({key: review[key] for key in
+                                                ("review_id", "review_digest")})
+        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        await allow_synthetic_owner(coordinator)
+        result = await finish(coordinator, operation["operation_id"])
+        assert result["phase"] == "failed", result
+        assert result["error_code"] == "activation_profile_busy"
+        assert result["receipt"]["effect_status"] == "not_activated"
+        assert not result["cleanup_owner_pending"]
+        assert snapshot(prepared) == before
+        assert not (await coordinator.pending({}))["pending"]
+        # The failed attempt neither releases our lock nor retargets another root.
+        with pytest.raises(BlockingIOError):
+            with open(prepared / "profile.lock", "r+b") as other:
+                fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    finally:
+        os.close(descriptor)
+
+
+async def test_selected_physical_target_replaced_during_owner_wait_is_not_followed(
+        host, prepared):
+    _, coordinator = host
+    review = await reviewed(coordinator, prepared)
+    operation = await coordinator.activate({key: review[key] for key in
+                                            ("review_id", "review_digest")})
+    moved = prepared.with_name("original-prepared-fixture")
+    prepared.rename(moved)
+    prepared.mkdir(mode=0o700)
+    sentinel = prepared / "unknown.fixture"
+    sentinel.write_bytes(b"THIS REPLACEMENT IS NOT THE REVIEWED TARGET")
+    sentinel.chmod(0o600)
+    replacement_before, original_before = snapshot(prepared), snapshot(moved)
+    await allow_synthetic_owner(coordinator)
+    result = await finish(coordinator, operation["operation_id"])
+    assert result["phase"] == "failed", result
+    assert not result["cleanup_owner_pending"]
+    assert snapshot(prepared) == replacement_before
+    assert snapshot(moved) == original_before
+    assert not (await coordinator.pending({}))["pending"]
+
+
+async def test_cancelled_activation_awaiter_waits_for_real_worker_and_keeps_unknown_receipt(
+        host, prepared, monkeypatch):
+    """Cancelling after dispatch cannot erase the actual admission publication."""
+    _, coordinator = host
+    published, release = threading.Event(), threading.Event()
+    calls = []
+
+    def injected(review, context):
+        def publish(directory, old, new):
+            calls.append(context.operation_id)
+            core.no_replace(directory, old, new)
+            published.set()
+            assert release.wait(3), "fixture publication gate not released"
+        return activate_prepared_profile(review, context, publish=publish)
+
+    monkeypatch.setattr(module, "activate_prepared_profile", injected)
+    review = await reviewed(coordinator, prepared)
+    operation = await coordinator.activate({key: review[key] for key in
+                                            ("review_id", "review_digest")})
+    await allow_synthetic_owner(coordinator)
+    row = coordinator._operations[operation["operation_id"]]
+    try:
+        assert await asyncio.to_thread(published.wait, 2)
+        row.task.cancel()
+        await asyncio.sleep(0)
+        row.task.cancel()
+        await asyncio.sleep(0)
+        assert not row.task.done() and coordinator.gate._cut is not None
+        assert row.cancellation.is_set()
+    finally:
+        release.set()
+    result = await finish(coordinator, operation["operation_id"])
+    assert result["phase"] == "cleanup_pending", result
+    assert result["receipt"]["status"] == "unknown"
+    assert result["receipt"]["effect_status"] == "publication_unknown"
+    assert (prepared / "restore_admission.json").is_file()
+    historical_receipt = result["receipt"]
+    await coordinator.cleanup({"operation_id": row.operation_id})
+    result = await finish(coordinator, row.operation_id)
+    assert result["receipt"] == historical_receipt
+    assert result["phase"] == "publication_unknown" and not result["cleanup_owner_pending"]
+    again = await coordinator.activate({key: review[key] for key in
+                                        ("review_id", "review_digest")})
+    assert again["receipt"] == historical_receipt and calls == [row.operation_id]

@@ -50,6 +50,9 @@ class TelegramManagementAPI:
         self._telegram_last_error = None
         self._telegram_pairing = None
         self._telegram_pairing_factory = pairing_factory
+        # A restored route is historical configuration. A new local review
+        # cannot prove a live chat: each process/connection needs a fresh claim.
+        self._telegram_restored_pairings = {}
 
     def telegram_handlers(self):
         return {
@@ -67,6 +70,7 @@ class TelegramManagementAPI:
             "telegram.pairing.status": self.telegram_pairing_status,
             "telegram.pairing.confirm": self.telegram_pairing_confirm,
             "telegram.pairing.cancel": self.telegram_pairing_cancel,
+            "telegram.restore.pairing.confirm": self.telegram_restore_pairing_confirm,
         }
 
     def telegram_uses_agent(self, agent_id):
@@ -118,7 +122,40 @@ class TelegramManagementAPI:
             "pinned_workspace_id": self._telegram_workspace_id,
             "error": (channel.error_code if channel is not None else None)
             or self._telegram_last_error,
+            "restored_pairing_required_chat_ids": self._telegram_missing_restored_pairings(routes),
         }
+
+    def _telegram_restored_pairing_key(self, route):
+        identity = (self._telegram_channel.client.identity
+                    if self._telegram_channel is not None else None)
+        agent = self.agent_profiles.get(route["agent_id"])
+        return (identity.bot_id if identity else None, route["chat_id"], route["agent_id"],
+                agent.revision, route["session_id"], route["revision"],
+                self._workspace_id, self.workspace_tools.identity,
+                self._telegram_configuration()[2])
+
+    def _telegram_missing_restored_pairings(self, routes=None):
+        if self.profile_lease.admission is None:
+            return []
+        if routes is None:
+            routes = self._telegram_configuration()[0]
+        missing = []
+        for route in routes:
+            if not route["enabled"]:
+                continue
+            try:
+                key = self._telegram_restored_pairing_key(route)
+            except (StateError, ValueError):
+                missing.append(route["chat_id"])
+            else:
+                if (key[0] is None
+                        or self._telegram_restored_pairings.get(route["chat_id"]) != key):
+                    missing.append(route["chat_id"])
+        return missing
+
+    def _telegram_require_fresh_pairings(self):
+        if self._telegram_missing_restored_pairings():
+            raise TelegramError("telegram_restore_fresh_pairing_required")
 
     @asynccontextmanager
     async def _telegram_mutation(self):
@@ -146,7 +183,9 @@ class TelegramManagementAPI:
             raise TelegramError("telegram_disconnect_required")
         async with self._telegram_mutation():
             client = self._telegram_client_factory(value["token"])
-            channel = TelegramChannel(client, self._telegram_journal, self._dispatch_telegram)
+            channel = TelegramChannel(
+                client, self._telegram_journal, self._dispatch_telegram,
+                configuration_guard=self._telegram_require_fresh_pairings)
             self._telegram_channel = channel
             try:
                 await channel.connect()
@@ -188,6 +227,7 @@ class TelegramManagementAPI:
         self._telegram_require_stopped()
         async with self._telegram_mutation():
             self._telegram_journal.remove_route(**value)
+            self._telegram_restored_pairings.pop(value["chat_id"], None)
         return self._telegram_snapshot()
 
     async def telegram_start(self, value):
@@ -201,6 +241,8 @@ class TelegramManagementAPI:
             routes, internal_hash, configuration_hash = self._telegram_configuration()
             if value["configuration_hash"] != configuration_hash:
                 raise TelegramError("telegram_configuration_changed")
+            if self._telegram_missing_restored_pairings(routes):
+                raise TelegramError("telegram_restore_fresh_pairing_required")
             self._assert_workspace_current()
             for route in routes:
                 self._telegram_validate_route(TelegramRoute(**route))
@@ -242,6 +284,7 @@ class TelegramManagementAPI:
             await channel.aclose()
         self._telegram_channel = None
         self._telegram_workspace_id = None
+        self._telegram_restored_pairings.clear()
 
     def _telegram_pairing_review(self, agent_id):
         channel = self._telegram_channel
@@ -310,6 +353,7 @@ class TelegramManagementAPI:
             raise TelegramError("telegram_configuration_changed")
         self._assert_workspace_current()
         async with self._telegram_mutation():
+            self._telegram_restored_pairings.clear()
             if self._telegram_pairing is not None:
                 await self._telegram_pairing.stop()
             pairing = self._telegram_pairing_factory(
@@ -361,6 +405,7 @@ class TelegramManagementAPI:
     async def telegram_pairing_cancel(self, value):
         params(value, set())
         async with self._telegram_mutation():
+            self._telegram_restored_pairings.clear()
             if self._telegram_pairing is not None:
                 await self._telegram_pairing.stop()
         return await self.telegram_pairing_status({})
@@ -386,15 +431,83 @@ class TelegramManagementAPI:
             raise TelegramError("telegram_route_revision_conflict")
         if len(self._telegram_journal.routes()) >= 32:
             raise TelegramError("telegram_route_limit")
+        channel = self._telegram_channel
+        _routes, _hash, configuration_hash = self._telegram_configuration()
         async with self._telegram_mutation():
             claim = pairing.consume(**value)
             await pairing.stop(state="confirmed")
+            self._assert_workspace_current()
+            if (self.agent_profiles.get(profile.agent_id).revision != claim.agent_revision
+                    or self._telegram_configuration()[2] != configuration_hash
+                    or self._telegram_channel is not channel or channel.client.closed
+                    or channel.client.identity is None
+                    or channel.client.identity.bot_id != claim.bot_id):
+                raise TelegramError("telegram_configuration_changed")
             session = self.store.create_session(
                 "Telegram · " + profile.name, agent_id=profile.agent_id
             )
             self._telegram_journal.set_route(
                 claim.chat_id, profile.agent_id, session.ref.session_id
             )
+            if self.profile_lease.admission is not None:
+                routes = self._telegram_configuration()[0]
+                route = next(row for row in routes if row["chat_id"] == claim.chat_id)
+                self._telegram_restored_pairings[claim.chat_id] = (
+                    self._telegram_restored_pairing_key(route))
+        return self._telegram_snapshot()
+
+    async def telegram_restore_pairing_confirm(self, value):
+        """Consume a fresh private-chat claim for one exact historical route.
+
+        This is the existing native pairing decision, with no route/session
+        write and no reader start. RAM evidence cannot survive reconnect or be
+        imported by backup/restore. A failed/unknown confirmation is not retried.
+        """
+        fields = {"claim_id", "agent_id", "expected_profile_revision", "chat_id",
+                  "expected_route_revision", "configuration_hash"}
+        params(value, fields, fields)
+        self._management_idle()
+        self.profile_lease.check_bootstrap_ready()
+        if self.profile_lease.admission is None:
+            raise TelegramError("telegram_restore_profile_required")
+        pairing = self._telegram_pairing
+        claim = pairing.claim() if pairing is not None else None
+        channel = self._telegram_channel
+        identity = channel.client.identity if channel is not None else None
+        if claim is None or identity is None or channel.client.closed:
+            raise TelegramError("telegram_pairing_claim_invalid")
+        profile = self.agent_profiles.get(value["agent_id"])
+        routes, _internal_hash, configuration_hash = self._telegram_configuration()
+        route = next((row for row in routes if row["chat_id"] == value["chat_id"]), None)
+        if (type(value["chat_id"]) is not int or type(value["expected_route_revision"]) is not int
+                or type(value["expected_profile_revision"]) is not int
+                or value["configuration_hash"] != configuration_hash
+                or route is None or not route["enabled"]
+                or route["revision"] != value["expected_route_revision"]
+                or route["chat_id"] != claim.chat_id or claim.bot_id != identity.bot_id
+                or route["agent_id"] != profile.agent_id or claim.agent_id != profile.agent_id
+                or profile.revision != value["expected_profile_revision"]
+                or claim.agent_revision != profile.revision):
+            raise TelegramError("telegram_configuration_changed")
+        self._assert_workspace_current()
+        self._telegram_validate_route(TelegramRoute(**route))
+        key = self._telegram_restored_pairing_key(route)
+        async with self._telegram_mutation():
+            pairing.consume(claim_id=value["claim_id"], agent_id=value["agent_id"],
+                            expected_profile_revision=value["expected_profile_revision"])
+            await pairing.stop(state="confirmed")
+            # Closing the fresh pairing reader can await. Revalidate every
+            # pinned identity, configuration and destination before retaining it.
+            current_routes, _hash, current_hash = self._telegram_configuration()
+            current_route = next((row for row in current_routes
+                                  if row["chat_id"] == value["chat_id"]), None)
+            self._assert_workspace_current()
+            if (current_hash != configuration_hash or current_route != route
+                    or self._telegram_channel is not channel or channel.client.closed
+                    or self._telegram_restored_pairing_key(route) != key):
+                raise TelegramError("telegram_configuration_changed")
+            self._telegram_validate_route(TelegramRoute(**route))
+            self._telegram_restored_pairings[route["chat_id"]] = key
         return self._telegram_snapshot()
 
     def _telegram_validate_route(self, route):
@@ -425,6 +538,10 @@ class TelegramManagementAPI:
             or route.revision != incoming.route_revision
         ):
             raise TelegramError("telegram_route_unavailable")
+        if self.profile_lease.admission is not None:
+            routes = self._telegram_configuration()[0]
+            if incoming.chat_id in self._telegram_missing_restored_pairings(routes):
+                raise TelegramError("telegram_restore_fresh_pairing_required")
         return self._telegram_validate_route(route)
 
     async def _telegram_cancel_owned_run(self, run_id, ref):

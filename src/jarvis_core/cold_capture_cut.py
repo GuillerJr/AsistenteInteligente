@@ -25,9 +25,11 @@ class CapturedProfileCut:
     def retain(self, owner):
         from jarvis_core.cold_wal import WalCaptureOwner
         from jarvis_core.local_release_update import ReleaseOwner
+        from jarvis_core.private_json import PrivateJsonPendingOwner
         from jarvis_core.workspace_recovery import WorkspaceRecoveryOwner
         self.cut.assert_current()
-        if not isinstance(owner, (WalCaptureOwner, ReleaseOwner, WorkspaceRecoveryOwner)):
+        if not isinstance(owner, (WalCaptureOwner, ReleaseOwner, WorkspaceRecoveryOwner,
+                                  PrivateJsonPendingOwner)):
             raise HostProfileError("profile_wal_owner_mismatch")
         if self.owner is not None and self.owner is not owner:
             raise HostProfileError("profile_wal_owner_mismatch")

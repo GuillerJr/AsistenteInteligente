@@ -57,6 +57,29 @@ final class RestoredProfileTests: XCTestCase {
         receipt["target_identity"] = .object(["device": .string("1"), "inode": .string("999")])
         XCTAssertThrowsError(try ProfileOpenTarget(review: review, operation: MaintenanceOperation(RestoreFixture.operation(["receipt": .object(receipt)]))))
     }
+    func testExpiredActivationReviewCannotBorrowALongerLivedApprovalTicket() throws {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let payload = try RestoreFixture.reviewValue()
+        let review = try RestoreProfileReview(payload, now: now)
+        let operation = try MaintenanceOperation(RestoreFixture.operation([
+            "phase": .string("awaiting_owner"), "receipt": .null, "receipt_durable": .bool(false)]))
+        let arguments = try MaintenanceValidation.canonical(.object([
+            "review_id": payload["review_id"], "review_digest": payload["review_digest"],
+            "review": payload["metadata"]]))
+        let binding: RPCValue = .object(["domain": .string("jarvis.host.approval/1"),
+            "profile": payload["metadata"]["profile_id"], "generation": payload["metadata"]["generation"],
+            "purpose": .string(operation.kind), "operation": .string(operation.id), "arguments_json": .string(arguments)])
+        let approval = try MaintenanceApproval(.object([
+            "approval_id": .string(String(repeating: "9", count: 32)), "scope": RestoreFixture.scope,
+            "purpose": .string(operation.kind), "operation_id": .string(operation.id),
+            "arguments_json": .string(arguments),
+            "digest": .string(ManagementValidation.digest(try MaintenanceValidation.canonical(binding))),
+            "expires_at_ns": .string("4102444800000000000")]))
+        XCTAssertTrue(review.matches(approval, operation: operation, now: now.addingTimeInterval(119)))
+        XCTAssertFalse(review.matches(approval, operation: operation, now: now.addingTimeInterval(120)))
+        XCTAssertFalse(review.matches(approval, operation: operation, now: now.addingTimeInterval(121)))
+        XCTAssertGreaterThan(approval.expiresAt, review.expiresAt)
+    }
     func testUnknownReceiptCanOnlyProduceNewExplicitInspectionTargetWithoutRewritingIt() throws {
         let review = try RestoreProfileReview(RestoreFixture.reviewValue())
         var receipt = RestoreFixture.receipt().object!

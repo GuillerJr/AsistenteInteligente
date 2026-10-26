@@ -45,7 +45,7 @@
       "Contratos declarados y rutas UI no acreditan disponibilidad ni funcionamiento real.",
       "No se ejecutó OpenClaw ni se leyó configuración/cuenta del dueño."
     ],
-    "current_jarvis_state": "Desarrollo propio con Codex oficial, herramientas/archivos, memoria léxica, MCP, procesos aislados, agentes, skills y programador. Telegram, voz local y lectura HTTPS tienen recorridos acotados. Los seis bloques locales de recuperación están implementados; la matriz nativa finita de variantes, rechazos y pruebas de incertidumbre y los recorridos autorizados/delegados se registran en PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md. Se corrigieron arranque aislado, recuperación sin abrir SQLite original y descubrimiento/retirada de tickets en la interfaz. No equivale a cierre de familias, distribución completa ni referencia exhaustiva. macOS inicial, iPhone aplazado; fase A abierta y B no iniciada."
+    "current_jarvis_state": "Desarrollo propio con Codex oficial, herramientas/archivos, memoria léxica, MCP, procesos aislados, agentes, skills y programador. Telegram, voz local y lectura HTTPS tienen recorridos acotados. Los seis bloques locales de recuperación están implementados; la matriz nativa finita de variantes, rechazos y pruebas de incertidumbre y los recorridos autorizados/delegados se registran en PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md. Se corrigieron arranque aislado, recuperación sin abrir SQLite original y descubrimiento/retirada de tickets en la interfaz. No equivale a cierre de familias, distribución completa ni referencia exhaustiva. macOS inicial, iPhone aplazado; fase A abierta y B no iniciada. Continuación actual: copia de memoria sobre familias frías WAL/journal íntegras, reconciliación local de rutas mediante autoridad central y prueba fresca de chat sólo en RAM antes de arrancar Telegram. La cualificación final del incremento se consolida en PHASE_A_RECONCILIATION_CLOSEOUT.md; los checkpoints anteriores no se atribuyen a fuentes posteriores."
   },
   "status_vocabulary": {
     "no_implementado": "Sin evidencia productiva propia de cierre.",
@@ -1953,7 +1953,7 @@
       "implementation_evidence": [
         {
           "progress_id": "P-RECOVERY",
-          "scope": "Base de respaldo/restauración y seis bloques propios implementados. Matriz nativa finita y recorridos autorizados/delegados de los puntos1/2 acreditados en PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md; decisiones sintéticas IPC y observaciones GUI distinguidas. Pendientes adicionales precisos en P-RECOVERY.remaining: negativos de activación/copia de memoria, reconciliación de canales y distribución cualificada. No cierra toda la familia."
+          "scope": "Base de respaldo/restauración y seis bloques propios implementados. Matriz nativa finita y recorridos autorizados/delegados de los puntos 1 y 2 acreditados en PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md, sin confundir decisiones sintéticas IPC con GUI. La continuación amplía activación/copia de memoria y rutas conservadas; cualificación final del incremento en PHASE_A_RECONCILIATION_CLOSEOUT.md. Distribución y cierre global de la familia siguen pendientes; ver P-RECOVERY.remaining."
         }
       ],
       "acceptance": {
@@ -13787,7 +13787,7 @@
   },
   "progress_snapshot": {
     "date": "2026-10-26",
-    "revision_scope": "Cierre operativo de los puntos 1 y 2: matriz nativa finita de recuperación con oráculos, rechazos/denegación/cancelación/caducidad/interrupción, modo recovery-only y correcciones de arranque y tarjetas. Registros separan GUI, IPC con decisiones sintéticas y decisiones reales/delegadas. No cierra A-71 ni fase A; B no iniciada.",
+    "revision_scope": "Continuación de activación, copia de memoria y reconciliación de canales: contratos propios ampliados, regresiones de negativos/custodia/caducidad y prueba fresca RAM por conexión/ruta/agente/workspace. La matriz finita de recuperación cerrada en b03ad7a no se reabre. La evidencia GUI y los controles finales del incremento se consolidan por separado; A-71/fase A abiertas y B no iniciada.",
     "complete_capability_count": 0,
     "complete_reference_parity": false,
     "authenticated_inference_verified": true,
@@ -13951,12 +13951,17 @@
         "status": "contract_tested_partial",
         "code": [
           "src/jarvis_core/memory.py",
-          "src/jarvis_core/memory_tools.py"
+          "src/jarvis_core/memory_tools.py",
+          "src/jarvis_core/memory_management.py",
+          "src/jarvis_core/memory_host_read.py",
+          "src/jarvis_core/memory_host_cut.py"
         ],
         "tests": [
           "tests/test_memory.py",
           "tests/test_memory_tools.py",
-          "tests/test_service_capabilities.py"
+          "tests/test_service_capabilities.py",
+          "tests/test_memory_cold_reconciliation.py",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/RestoredMemoryColdMetadataTests.swift"
         ],
         "capability_ids": [
           "A-12",
@@ -13965,7 +13970,7 @@
           "A-26",
           "A-28"
         ],
-        "verified_scope": "SQLite real propio y temporales RAM, ámbito host por agente/workspace, búsqueda local FTS5 o lexical_scan explícita, revisiones/hashes/citas y generación invalidables; guardar/olvidar pasa por autoridad común.",
+        "verified_scope": "SQLite real propio y temporales RAM, ámbito host por agente/workspace, búsqueda local FTS5 o lexical_scan explícita, revisiones/hashes/citas y generación invalidables; guardar/olvidar pasa por autoridad común. La copia explícita de ámbitos admite ahora imágenes frías WAL/journal compatibles mediante revisión sin efectos y una apertura/reconstrucción SQLite sólo tras la autoridad exacta. Conserva notas originales y procedencia; no promete inmutabilidad física después del efecto autorizado. La evidencia final y los límites adicionales se consolidan en PHASE_A_RECONCILIATION_CLOSEOUT.md.",
         "remaining": "No embeddings ni híbrida/semántica, indexación automática, flush completo, wiki/motores externos, cifrado integral o migración de datos personales."
       },
       {
@@ -14077,7 +14082,12 @@
           "src/jarvis_core/telegram_management.py",
           "src/jarvis_core/service.py",
           "native/JarvisDesktop/Sources/DesktopCore/TelegramPairingClient.swift",
-          "native/JarvisDesktop/Sources/JarvisApp/Stores/TelegramNativeOpener.swift"
+          "native/JarvisDesktop/Sources/JarvisApp/Stores/TelegramNativeOpener.swift",
+          "src/jarvis_core/channel_reconciliation.py",
+          "native/JarvisDesktop/Sources/DesktopCore/ChannelReconciliationClient.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/ChannelReconciliationModels.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/ChannelReconciliationStore.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Views/RestoredChannelsView.swift"
         ],
         "tests": [
           "tests/test_telegram.py",
@@ -14087,7 +14097,12 @@
           "native/JarvisDesktop/Tests/DesktopCoreTests/TelegramIntegrationTests.swift",
           "native/JarvisDesktop/Tests/DesktopCoreTests/TelegramPairingIntegrationTests.swift",
           "native/JarvisDesktop/Tests/DesktopCoreTests/ConversationRefreshTests.swift",
-          "native/JarvisDesktop/Tests/DesktopCoreTests/TelegramModelsTests.swift"
+          "native/JarvisDesktop/Tests/DesktopCoreTests/TelegramModelsTests.swift",
+          "tests/test_channel_reconciliation.py",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/ChannelReconciliationTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/ChannelReconciliationLifecycleTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/ChannelReconciliationIntegrationTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/TelegramRestoredPairingClientTests.swift"
         ],
         "capability_ids": [
           "A-03",
@@ -14096,8 +14111,8 @@
           "A-60",
           "A-72"
         ],
-        "verified_scope": "Pruebas RPC/HTTP sintéticas y recorridos reales limitados: vinculación, suma, y workspace_write con aprobación nativa y archivo/hash verificado. Tarjeta y resultado observados en el chat seleccionado sin recarga del agente.",
-        "remaining": "Matriz completa de denegación/revocación/expiración, resiliencia prolongada y causa del canal detenido posterior aún pendientes. No grupos, adjuntos, otros canales ni exclusividad externa acreditada por lease local.",
+        "verified_scope": "Pruebas RPC/HTTP sintéticas y recorridos reales limitados: vinculación, suma, y workspace_write con aprobación nativa y archivo/hash verificado. Tarjeta y resultado observados en el chat seleccionado sin recarga del agente. Reconciliación local de rutas restauradas implementada con la autoridad central, revisión exacta, recibos durables, incertidumbre/custodia y limpieza sin replay. No inicia conexión ni restaura tokens o permisos. El arranque exige nonce/claim nuevo del chat, con prueba sólo en RAM ligada a conexión/ruta/agente/workspace; reiniciar o cambiar esos vínculos la invalida. Se descarta el primer segundo parcial del lector. Tests de RPC/Store y transportes propios separan esas garantías de una cuenta externa; la evidencia GUI final se registra en PHASE_A_RECONCILIATION_CLOSEOUT.md.",
+        "remaining": "Cualificación final del incremento de reconciliación local en su registro propio, y cualificación externa prolongada de Telegram privado. La causa histórica de la detención posterior no está establecida. Grupos, adjuntos, otros canales y exclusividad externa no se acreditan por la lease local ni por las pruebas sintéticas de vinculación fresca.",
         "qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json",
         "live_scope": "Suma y salida confirmada; archivo sintético de20bytes/hash coincide con recibo tras aprobación del dueño. Token/nonce no documentados. Una detención posterior tuvo causa no establecida; nueva UI distingue errores futuros seguros."
       },
@@ -14235,7 +14250,10 @@
           "native/JarvisDesktop/Sources/DesktopCore/OwnerDecisionStatusView.swift",
           "native/JarvisDesktop/Sources/DesktopCore/SettingsSceneActionBridge.swift",
           "native/JarvisDesktop/Sources/DesktopCore/RestoreProfileStore.swift",
-          "script/recovery_qualification_matrix.py"
+          "script/recovery_qualification_matrix.py",
+          "src/jarvis_core/channel_reconciliation.py",
+          "script/activation_reconciliation_fixture.py",
+          "script/prepare_memory_reconciliation_fixture.py"
         ],
         "tests": [
           "tests/test_host_authority.py",
@@ -14290,7 +14308,13 @@
           "native/JarvisDesktop/Tests/DesktopCoreTests/OwnerAuthorityInterruptionTests.swift",
           "native/JarvisDesktop/Tests/DesktopCoreTests/OwnerDecisionPresentationTests.swift",
           "native/JarvisDesktop/Tests/DesktopCoreTests/SettingsSceneActionRegistrationTests.swift",
-          "native/JarvisDesktop/Tests/DesktopCoreTests/StartupIsolationTests.swift"
+          "native/JarvisDesktop/Tests/DesktopCoreTests/StartupIsolationTests.swift",
+          "tests/test_activation_reconciliation_fixture.py",
+          "tests/test_memory_cold_reconciliation.py",
+          "tests/test_channel_reconciliation.py",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/ChannelReconciliationIntegrationTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/ChannelReconciliationLifecycleTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/TelegramRestoredPairingClientTests.swift"
         ],
         "capability_ids": [
           "A-01",
@@ -14300,8 +14324,8 @@
           "A-70",
           "A-71"
         ],
-        "verified_scope": "Checkpoint b8ce4bc con 1585 Python / 162 Swift y CI aprobados; respaldo, verificación y staging sintéticos desde la app con decisiones reales del dueño. Captura/diagnóstico frío DELETE y rechazo de bootstrap restaurado; los tres SQLite de otro recorrido nativo no vacío conservaron bytes/metadatos. Alcances y demora inicial no atribuida registrados por separado. Ampliación local integrada: 1754 Python/175 Swift, admisión contextual y handoff explícito sin SDK inicial; revisión GUI descartada conservando borrador. Checkpoint 1d378a6 con CI macOS/Linux aprobado y activación/apertura reales del perfil sintético elegidas por el dueño. Estado local sin cuenta, diagnóstico y revisión de copia observados; límites y pruebas independientes en PHASE_A_ACTIVATION.md. Copia explícita de memoria conservada integrada con autoridad/corte, límites de perfil y panel nativo; 85 casos nuevos del host, 154 regresiones anteriores y 23 casos Swift focalizados, incluidas dos conexiones IPC reales con SQLite y decisiones sintéticas. Núcleo/compatibilidad f8e5a67 con CI macOS/Linux aprobada; contrato, fallo de custodia corregido y límites en PHASE_A_MEMORY_RECONCILIATION.md. Una incidencia real posterior acabó caducada sin efecto. Se reprodujo y corrigió el descarte de decisiones durante sondeo; 32 casos focalizados y comparación GUI sintética, más prueba de cola IPC serial real. Detalle en PHASE_A_OWNER_CLICK_REGRESSION.json; la copia corregida quedó completada y asentada en la app (2 notas sintéticas, 175 bytes), con originales intactos, IDs nuevos, revisión 1, un recibo y dos mapas verificados independientemente. Consulta nativa coincidente sin replay; identidad y límites en PHASE_A_MEMORY_COPY_LIVE.json. Producto 985b72a con 1914 Python, 207 Swift, gates y CI aprobados; no cierra la familia. OC-18 estudia adquisición privada SQLite y custodia de staging (cinco TS, sin runtime). El contrato PHASE_A_COLD_WAL_CONTRACT.md fija requisitos; la investigación por sí sola no acredita implementación. Primer incremento WAL implementado en código propio: backup/doctor sobre copias privadas, estado confirmado y fuentes intactas, propietario/mismo corte retenidos ante cleanup incierto; 45 casos núcleo y 21 host nuevos, 14 Swift de custodia y dos IPC WAL nuevos. Suites integradas: 1980 Python y 223 Swift aprobadas. Identidad, política estricta y límites en PHASE_A_WAL_RECOVERY_QUALIFICATION.json. Producto 8c7e7bc con 1982 Python, 225 Swift, paquetes, bundle y CI macOS/Linux aprobados. Diagnóstico y respaldo WAL desde la app sobre un perfil sintético (memoria WAL; estado/tareas DELETE), con aprobación real del dueño, publicación y recibo durable. Verificación independiente del último commit, hashes de recursos y los cinco originales intactos; verificación nativa coincidente. Se corrigió y comprobó visualmente la identidad del aviso WAL. Evidencia y límites en PHASE_A_WAL_RECOVERY_LIVE.json; no cierra A-71. Continuación 26-10: restauración del respaldo WAL por la app con aprobación real del dueño a otro perfil sintético desarmado. Verificador independiente conserva datos lógicos, nota del último commit, IDs/ámbitos, cinco originales y seis archivos del respaldo. La revisión muestra origen/hash y distingue las cifras del host activo. El caso IPC WAL existente ahora comprueba los tres destinos restaurados; 225 Swift aprobadas, sin aumentar el número de casos. Evidencia y límites en PHASE_A_WAL_RESTORE_LIVE.json; no activa el destino ni cierra la familia. Continuación de implementación 26-10: seis bloques propios conectados al host: WAL ausente/vacío/cabecera, journals compatibles recuperados en privado, archivo portátil independiente de workspace, reparación FTS y prefijo WAL hacia respaldo nuevo, actualizaciones y rollback locales de una pareja app/Python coherente. Autoridad central, copia actual verificada, pin de perfil/esquemas y custodia ante ACK incierto; lanzamiento explícito comprueba familias frías y mismo CURRENT. Los tests de motor/host y launcher propio son sintéticos; cualificación real del nuevo panel y controles finales se registran aparte. Canal development con Python/Codex externos, sin migración inversa ni activación implícita. Alcance en PHASE_A_RECOVERY_COMPLETION.md; no cierra A-71. Cualificación final del incremento: 2297 pruebas Python, 249 Swift, Ruff, paquetes/smoke y bundle aprobados. Copia/restauración nativas de dos archivos (283 bytes), respaldo con journal caliente (65 notas), reparación FTS/restauración de una nota e instalación v1, actualización v2 y rollback v1 con decisiones del dueño. Todos los recibos durables y hashes verificados independientemente; originales conservados. La v1 seleccionada arrancó realmente con app/Python coherentes y cerró correctamente, sin cuenta. Las dos versiones positivas sólo difieren en marcadores de prueba del código final. Snapshot propio antiguo incompatible rechazado sin ejecutarlo. Registro PHASE_A_RECOVERY_COMPLETION_QUALIFICATION.json. Cierre posterior de los puntos 1 y 2:16 revisiones GUI (siete modos en tres roles y nueve prefijos), tres rechazos GUI y16 publicaciones nativas IPC con oráculos. Memoria/tareas recuperadas y restauradas con decisiones del dueño y delegación expresa posterior; originales intactos. Caducidad, denegación, cancelación e interrupción conservan identidad/recibos sin replay. Recovery-only evita abrir las bases por consultas automáticas; avisos persistentes y tickets retirados tras desconexión. Detalle y límites en PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md y PHASE_A_STARTUP_ISOLATION.md.",
-        "remaining": "Negativos productivos adicionales de activación/copia de memoria y reconciliación de canales, y distribución cualificada. La matriz nativa finita de variantes de este incremento queda verificada; no es recuperación forense universal. Tras caída, el producto rechaza un socket residual: la intervención de transporte ensayada pertenece al fixture explícito y no se presenta como autorrecuperación productiva. Distribución autocontenida, autenticidad completa, Developer ID/notarización y actualización remota firmada siguen sin acreditar. A-71/fase A abiertas, B no iniciada.",
+        "verified_scope": "Checkpoint b8ce4bc con 1585 Python / 162 Swift y CI aprobados; respaldo, verificación y staging sintéticos desde la app con decisiones reales del dueño. Captura/diagnóstico frío DELETE y rechazo de bootstrap restaurado; los tres SQLite de otro recorrido nativo no vacío conservaron bytes/metadatos. Alcances y demora inicial no atribuida registrados por separado. Ampliación local integrada: 1754 Python/175 Swift, admisión contextual y handoff explícito sin SDK inicial; revisión GUI descartada conservando borrador. Checkpoint 1d378a6 con CI macOS/Linux aprobado y activación/apertura reales del perfil sintético elegidas por el dueño. Estado local sin cuenta, diagnóstico y revisión de copia observados; límites y pruebas independientes en PHASE_A_ACTIVATION.md. Copia explícita de memoria conservada integrada con autoridad/corte, límites de perfil y panel nativo; 85 casos nuevos del host, 154 regresiones anteriores y 23 casos Swift focalizados, incluidas dos conexiones IPC reales con SQLite y decisiones sintéticas. Núcleo/compatibilidad f8e5a67 con CI macOS/Linux aprobada; contrato, fallo de custodia corregido y límites en PHASE_A_MEMORY_RECONCILIATION.md. Una incidencia real posterior acabó caducada sin efecto. Se reprodujo y corrigió el descarte de decisiones durante sondeo; 32 casos focalizados y comparación GUI sintética, más prueba de cola IPC serial real. Detalle en PHASE_A_OWNER_CLICK_REGRESSION.json; la copia corregida quedó completada y asentada en la app (2 notas sintéticas, 175 bytes), con originales intactos, IDs nuevos, revisión 1, un recibo y dos mapas verificados independientemente. Consulta nativa coincidente sin replay; identidad y límites en PHASE_A_MEMORY_COPY_LIVE.json. Producto 985b72a con 1914 Python, 207 Swift, gates y CI aprobados; no cierra la familia. OC-18 estudia adquisición privada SQLite y custodia de staging (cinco TS, sin runtime). El contrato PHASE_A_COLD_WAL_CONTRACT.md fija requisitos; la investigación por sí sola no acredita implementación. Primer incremento WAL implementado en código propio: backup/doctor sobre copias privadas, estado confirmado y fuentes intactas, propietario/mismo corte retenidos ante cleanup incierto; 45 casos núcleo y 21 host nuevos, 14 Swift de custodia y dos IPC WAL nuevos. Suites integradas: 1980 Python y 223 Swift aprobadas. Identidad, política estricta y límites en PHASE_A_WAL_RECOVERY_QUALIFICATION.json. Producto 8c7e7bc con 1982 Python, 225 Swift, paquetes, bundle y CI macOS/Linux aprobados. Diagnóstico y respaldo WAL desde la app sobre un perfil sintético (memoria WAL; estado/tareas DELETE), con aprobación real del dueño, publicación y recibo durable. Verificación independiente del último commit, hashes de recursos y los cinco originales intactos; verificación nativa coincidente. Se corrigió y comprobó visualmente la identidad del aviso WAL. Evidencia y límites en PHASE_A_WAL_RECOVERY_LIVE.json; no cierra A-71. Continuación 26-10: restauración del respaldo WAL por la app con aprobación real del dueño a otro perfil sintético desarmado. Verificador independiente conserva datos lógicos, nota del último commit, IDs/ámbitos, cinco originales y seis archivos del respaldo. La revisión muestra origen/hash y distingue las cifras del host activo. El caso IPC WAL existente ahora comprueba los tres destinos restaurados; 225 Swift aprobadas, sin aumentar el número de casos. Evidencia y límites en PHASE_A_WAL_RESTORE_LIVE.json; no activa el destino ni cierra la familia. Continuación de implementación 26-10: seis bloques propios conectados al host: WAL ausente/vacío/cabecera, journals compatibles recuperados en privado, archivo portátil independiente de workspace, reparación FTS y prefijo WAL hacia respaldo nuevo, actualizaciones y rollback locales de una pareja app/Python coherente. Autoridad central, copia actual verificada, pin de perfil/esquemas y custodia ante ACK incierto; lanzamiento explícito comprueba familias frías y mismo CURRENT. Los tests de motor/host y launcher propio son sintéticos; cualificación real del nuevo panel y controles finales se registran aparte. Canal development con Python/Codex externos, sin migración inversa ni activación implícita. Alcance en PHASE_A_RECOVERY_COMPLETION.md; no cierra A-71. Cualificación final del incremento: 2297 pruebas Python, 249 Swift, Ruff, paquetes/smoke y bundle aprobados. Copia/restauración nativas de dos archivos (283 bytes), respaldo con journal caliente (65 notas), reparación FTS/restauración de una nota e instalación v1, actualización v2 y rollback v1 con decisiones del dueño. Todos los recibos durables y hashes verificados independientemente; originales conservados. La v1 seleccionada arrancó realmente con app/Python coherentes y cerró correctamente, sin cuenta. Las dos versiones positivas sólo difieren en marcadores de prueba del código final. Snapshot propio antiguo incompatible rechazado sin ejecutarlo. Registro PHASE_A_RECOVERY_COMPLETION_QUALIFICATION.json. Cierre posterior de los puntos 1 y 2:16 revisiones GUI (siete modos en tres roles y nueve prefijos), tres rechazos GUI y16 publicaciones nativas IPC con oráculos. Memoria/tareas recuperadas y restauradas con decisiones del dueño y delegación expresa posterior; originales intactos. Caducidad, denegación, cancelación e interrupción conservan identidad/recibos sin replay. Recovery-only evita abrir las bases por consultas automáticas; avisos persistentes y tickets retirados tras desconexión. Detalle y límites en PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md y PHASE_A_STARTUP_ISOLATION.md. La continuación de reconciliación mantiene el núcleo de activación y añade regresiones adversariales del host y validación nativa del plazo de revisión. Amplía copia de memoria sobre familias frías íntegras y reconciliación local de rutas conservadas, sin restaurar autoridad externa. Detalle de contratos en PHASE_A_ACTIVATION.md/PHASE_A_MEMORY_RECONCILIATION.md y evidencia final del incremento en PHASE_A_RECONCILIATION_CLOSEOUT.md; el cierre local añade 14 casos nativos observados, reinicio de ambos perfiles, 2402 pruebas Python y 305 Swift aprobadas. El registro conserva los fallos previos y sus correcciones; la CI se verifica al publicar.",
+        "remaining": "Distribución autocontenida, autenticidad completa, Developer ID/notarización y actualización remota firmada siguen sin acreditar. Tras caída, el producto rechaza un socket residual: la intervención explícita del fixture no acredita autorrecuperación. El cierre local de activación, copia de memoria y reconciliación de rutas se registra por separado con decisiones sintéticas y gestos delegados; no cierra A-71 global ni la fase A. B no iniciada.",
         "detail_file": "PHASE_A_RECOVERY.md",
         "qualification_file": "PHASE_A_RECOVERY_QUALIFICATION.json",
         "wal_qualification_file": "PHASE_A_WAL_RECOVERY_QUALIFICATION.json",
@@ -14350,10 +14374,13 @@
     },
     "previous_detail_file": "PHASE_A_CHANNELS_VOICE_WEB.md",
     "qualification_file": "PHASE_A_RECOVERY_QUALIFICATION.json",
-    "latest_qualification_status": "207native_1914python_ci_and_bounded_native_memory_copy_passed_phase_a_open",
-    "latest_qualification_record": "PHASE_A_MEMORY_COPY_LIVE.json",
+    "latest_qualification_status": "local_reconciliation_native_verified_publication_requires_gates",
+    "latest_qualification_record": "PHASE_A_RECONCILIATION_CLOSEOUT.json",
     "completion_increment_file": "PHASE_A_RECOVERY_COMPLETION.md",
-    "completion_increment_qualification": "implemented_with_focused_synthetic_tests_native_owner_qualification_pending"
+    "completion_increment_qualification": "recovery_finite_matrix_and_local_reconciliation_native_verified",
+    "previous_qualification_status": "207native_1914python_ci_and_bounded_native_memory_copy_passed_phase_a_open",
+    "previous_qualification_record": "PHASE_A_MEMORY_COPY_LIVE.json",
+    "reconciliation_increment_file": "PHASE_A_RECONCILIATION_CLOSEOUT.md"
   },
   "target_decisions": {
     "date": "2026-10-24",

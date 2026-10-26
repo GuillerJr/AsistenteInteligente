@@ -309,6 +309,9 @@ class MemoryManagement:
                     "source_fingerprint": core.source.fingerprint,
                     "source_documents": core.source.document_count,
                     "source_bytes": core.source.byte_length,
+                    "source_kind": inventory.image.source_kind,
+                    "cold_sqlite_recovery_required": inventory.image.source_kind
+                    in {"cold_wal_snapshot", "cold_journal_snapshot"},
                     "largest_document_bytes": core.source.largest_document_bytes,
                     "destination_workspace_path": inventory.workspace_path,
                     "destination_workspace_identity": _physical(inventory.workspace_identity),

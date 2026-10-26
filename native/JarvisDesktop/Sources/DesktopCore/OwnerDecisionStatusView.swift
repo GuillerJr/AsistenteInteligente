@@ -1,5 +1,20 @@
 import SwiftUI
 
+/// Local display expiry is independent of polling. This never renews a ticket,
+/// performs an RPC or substitutes for the authority's check at execution time.
+public struct OwnerDecisionValidityView<Content: View>: View {
+    private let expiresAt: Date
+    private let content: () -> Content
+    public init(expiresAt: Date, @ViewBuilder content: @escaping () -> Content) {
+        self.expiresAt = expiresAt; self.content = content
+    }
+    public var body: some View {
+        TimelineView(.periodic(from: Date(timeIntervalSince1970: 0), by: 1)) { context in
+            if context.date < expiresAt { content() }
+        }
+    }
+}
+
 /// Shared actual presentation for all four Settings owner workflows. It remains
 /// present after expiry even when no valid ticket/approval button remains.
 public struct OwnerDecisionStatusView: View {

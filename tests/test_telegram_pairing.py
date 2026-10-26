@@ -144,7 +144,7 @@ async def test_second_owner_confirmation_only_creates_route_and_control_never_re
     redelivery = {**original, "update_id": redelivery_id}
     next_id = redelivery_id + 1
     normal = update(
-        next_id, date=original["message"]["date"], text="consulta normal", message_id=99
+        next_id, date=original["message"]["date"] + 1, text="consulta normal", message_id=99
     )
     await bot.updates.put([redelivery, normal])
     await asyncio.wait_for(peer.entered.wait(), 3)
@@ -342,7 +342,7 @@ async def test_late_cancelled_start_message_is_control_even_without_a_tombstone(
     date = int(time.time())
     service._telegram_channel.clock = lambda: date
     await client.call("telegram.start", {"configuration_hash": snapshot["configuration_hash"]})
-    await bot.updates.put([update(text="/start " + nonce, date=date)])
+    await bot.updates.put([update(text="/start " + nonce, date=date + 1)])
     result = await event(client)
     assert result["status"] == "ignored" and result["error_code"] == "telegram_control_ignored"
     assert not peer.calls and not bot.sent()

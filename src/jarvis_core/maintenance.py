@@ -18,6 +18,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from jarvis_core.activation_management import ActivationManagement, _Prepared
+from jarvis_core.channel_reconciliation import ChannelReconciliation
 from jarvis_core.cold_capture_cut import CapturedProfileCut
 from jarvis_core.doctor import DoctorContext, DoctorInventory, inspect_report
 from jarvis_core.host_profile import freeze_sources
@@ -89,7 +90,7 @@ def _code(error):
     # Never return exception text: it can include a path, SQL or external data.
     code = getattr(error, "code", None)
     if type(code) is str and re.fullmatch(
-        r"(?:memory|activation|recovery|snapshot|doctor|host|profile|maintenance|workspace_recovery|release)_[a-z0-9_]{1,100}",
+        r"(?:memory|activation|recovery|snapshot|doctor|host|profile|maintenance|workspace_recovery|release|telegram|registry)_[a-z0-9_]{1,100}",
         code
     ):
         return code
@@ -166,7 +167,8 @@ def _receipt_phase(receipt):
 
 
 class MaintenanceCoordinator(RecoveryExtensions, WorkspaceMaintenance, RepairManagement,
-                             ReleaseManagement, MemoryManagement, ActivationManagement):
+                             ReleaseManagement, MemoryManagement, ActivationManagement,
+                             ChannelReconciliation):
     def __init__(self, service, gate, *, clock=time.monotonic):
         self.service, self.gate, self.clock = service, gate, clock
         self.authority = service.authority
@@ -188,6 +190,7 @@ class MaintenanceCoordinator(RecoveryExtensions, WorkspaceMaintenance, RepairMan
         methods.update(self.workspace_handlers())
         methods.update(self.repair_handlers())
         methods.update(self.release_handlers())
+        methods.update(self.channel_reconciliation_handlers())
 
         def safe(callback):
             async def invoke(params):
@@ -520,7 +523,8 @@ class MaintenanceCoordinator(RecoveryExtensions, WorkspaceMaintenance, RepairMan
             capture = operation.capture_cut
             if capture is None or operation.cleanup_owner is not capture:
                 raise RecoveryFsError("profile_wal_owner_mismatch")
-            operation.stage = "cold_wal_cleanup"
+            operation.stage = ("telegram_registry_cleanup" if operation.kind
+                               == "telegram.restore.reconcile" else "cold_wal_cleanup")
             outcome = await self.gate.run_worker(capture.cut, capture.cleanup,
                                                  operation.cancellation)
             if outcome.error is not None:
@@ -530,7 +534,8 @@ class MaintenanceCoordinator(RecoveryExtensions, WorkspaceMaintenance, RepairMan
             operation.capture_cut = None
             # Preserve the original receipt, including its historical cleanup
             # flag. Retiring a private reader does not retry a backup or read.
-            status = getattr(operation.receipt, "status", None)
+            status = (operation.receipt.get("status") if isinstance(operation.receipt, dict)
+                      else getattr(operation.receipt, "status", None))
             operation.phase = ("publication_unknown" if status == "unknown" else
                                status if status in {"failed", "cancelled"} else
                                "cancelled" if operation.cancellation.is_set() else "failed")

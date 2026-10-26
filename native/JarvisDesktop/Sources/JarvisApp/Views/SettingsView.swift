@@ -32,9 +32,9 @@ import SwiftUI
             Section("Cuenta de ChatGPT") {
                 Text(store.statusText)
                 HStack {
-                    Button("Abrir inicio de sesión") { Task { await store.login() } }.disabled(store.isRecoveryOnly || !store.ready || store.maintenance.blocksInteraction || store.memoryRestoration.blocksInteraction || store.recovery.blocksInteraction || store.restored.blocksInteraction || profiles.isOpening)
+                    Button("Abrir inicio de sesión") { Task { await store.login() } }.disabled(store.isRecoveryOnly || !store.ready || store.maintenance.blocksInteraction || store.channelRestoration.blocksInteraction || store.memoryRestoration.blocksInteraction || store.recovery.blocksInteraction || store.restored.blocksInteraction || profiles.isOpening)
                     Button("Cerrar sesión") { Task { await store.logout() } }
-                        .disabled(store.isRecoveryOnly || !store.connected || store.activeRunID != nil || store.maintenance.blocksInteraction || store.memoryRestoration.blocksInteraction || store.recovery.blocksInteraction || store.restored.blocksInteraction || profiles.isOpening)
+                        .disabled(store.isRecoveryOnly || !store.connected || store.activeRunID != nil || store.maintenance.blocksInteraction || store.channelRestoration.blocksInteraction || store.memoryRestoration.blocksInteraction || store.recovery.blocksInteraction || store.restored.blocksInteraction || profiles.isOpening)
                 }
             }
             Section("Perfil actual") {
@@ -47,12 +47,13 @@ import SwiftUI
                     .font(.caption).foregroundStyle(.secondary)
             }
         }.formStyle(.grouped).tabItem { Label("General", systemImage: "gearshape") }.tag("general")
-            MaintenanceView(maintenance: store.maintenance, navigation: navigation, mayBegin: !store.memoryRestoration.blocksInteraction && !store.recovery.blocksInteraction && !store.restored.blocksInteraction && store.ready && !store.starting && !store.handoffPreparing && !store.busy && store.activeRunID == nil && !store.voice.canStopDictation).tabItem { Label("Mantenimiento", systemImage: "externaldrive.badge.timemachine") }.tag("maintenance")
+            MaintenanceView(maintenance: store.maintenance, navigation: navigation, mayBegin: !store.channelRestoration.blocksInteraction && !store.memoryRestoration.blocksInteraction && !store.recovery.blocksInteraction && !store.restored.blocksInteraction && store.ready && !store.starting && !store.handoffPreparing && !store.busy && store.activeRunID == nil && !store.voice.canStopDictation).tabItem { Label("Mantenimiento", systemImage: "externaldrive.badge.timemachine") }.tag("maintenance")
             if !store.isRecoveryOnly {
-            RestoreProfileView(restored: store.restored, navigation: navigation, profiles: profiles, runtimeID: store.runtime.id, mayBegin: !store.memoryRestoration.blocksInteraction && !store.recovery.blocksInteraction && !store.maintenance.blocksInteraction && store.ready && !store.starting && !store.handoffPreparing && !store.busy && store.activeRunID == nil && !store.voice.canStopDictation && !profiles.isOpening).tabItem { Label("Perfil restaurado", systemImage: "arrow.triangle.2.circlepath") }.tag("restored")
-            RestoredMemoryView(restoration: store.memoryRestoration, navigation: navigation, agents: store.management.agents, mayBegin: store.ready && !store.starting && !store.handoffPreparing && !store.busy && store.activeRunID == nil && !store.voice.canStopDictation && !profiles.isOpening && !store.maintenance.blocksInteraction && !store.restored.blocksInteraction && !store.recovery.blocksInteraction).tabItem { Label("Memoria conservada", systemImage: "brain") }.tag("memory-restored")
+            RestoreProfileView(restored: store.restored, navigation: navigation, profiles: profiles, runtimeID: store.runtime.id, mayBegin: !store.channelRestoration.blocksInteraction && !store.memoryRestoration.blocksInteraction && !store.recovery.blocksInteraction && !store.maintenance.blocksInteraction && store.ready && !store.starting && !store.handoffPreparing && !store.busy && store.activeRunID == nil && !store.voice.canStopDictation && !profiles.isOpening).tabItem { Label("Perfil restaurado", systemImage: "arrow.triangle.2.circlepath") }.tag("restored")
+            RestoredChannelsView(channels: store.channelRestoration, telegram: store.telegram, navigation: navigation, mayBegin: store.ready && !store.starting && !store.busy && !store.handoffPreparing && !profiles.isOpening && store.activeRunID == nil && !store.voice.canStopDictation && !store.maintenance.blocksInteraction && !store.memoryRestoration.blocksInteraction && !store.restored.blocksInteraction && !store.recovery.blocksInteraction).tabItem { Label("Canales", systemImage: "point.3.connected.trianglepath.dotted") }.tag("channels-restored")
+            RestoredMemoryView(restoration: store.memoryRestoration, navigation: navigation, agents: store.management.agents, mayBegin: store.ready && !store.starting && !store.handoffPreparing && !store.busy && store.activeRunID == nil && !store.voice.canStopDictation && !profiles.isOpening && !store.maintenance.blocksInteraction && !store.channelRestoration.blocksInteraction && !store.restored.blocksInteraction && !store.recovery.blocksInteraction).tabItem { Label("Memoria conservada", systemImage: "brain") }.tag("memory-restored")
             }
-            RecoveryCenterView(recovery: store.recovery, navigation: navigation, workspacePath: store.access.workspacePath, profilePath: store.launchOptions?.state, verificationID: store.maintenance.verification?.id, mayBegin: store.ready && !store.starting && !store.handoffPreparing && !store.busy && store.activeRunID == nil && !store.voice.canStopDictation && !profiles.isOpening && !store.maintenance.blocksInteraction && !store.memoryRestoration.blocksInteraction && !store.restored.blocksInteraction).tabItem { Label("Recuperación", systemImage: "externaldrive.badge.checkmark") }.tag("recovery")
+            RecoveryCenterView(recovery: store.recovery, navigation: navigation, workspacePath: store.access.workspacePath, profilePath: store.launchOptions?.state, verificationID: store.maintenance.verification?.id, mayBegin: store.ready && !store.starting && !store.handoffPreparing && !store.busy && store.activeRunID == nil && !store.voice.canStopDictation && !profiles.isOpening && !store.maintenance.blocksInteraction && !store.channelRestoration.blocksInteraction && !store.memoryRestoration.blocksInteraction && !store.restored.blocksInteraction).tabItem { Label("Recuperación", systemImage: "externaldrive.badge.checkmark") }.tag("recovery")
         }
         }.frame(width: 760, height: 680)
             .onAppear { navigation.configure(runtimeID: store.runtime.id); navigation.detect(notices, visible: windowVisible) }
@@ -65,6 +66,7 @@ import SwiftUI
                 // SwiftUI storage while still needing to retire this owner.
                 store.maintenance.setVisible(maintenanceViewID, visible: visible && selectedTab == "maintenance")
                 store.restored.setVisible(maintenanceViewID, visible: visible && selectedTab == "restored")
+                store.channelRestoration.setVisible(maintenanceViewID, visible: visible && selectedTab == "channels-restored")
                 store.memoryRestoration.setVisible(maintenanceViewID, visible: visible && selectedTab == "memory-restored")
                 store.recovery.setVisible(maintenanceViewID, visible: visible && selectedTab == "recovery")
             })
@@ -73,6 +75,7 @@ import SwiftUI
                 windowVisible = false
                 store.maintenance.setVisible(maintenanceViewID, visible: false)
                 store.restored.setVisible(maintenanceViewID, visible: false)
+                store.channelRestoration.setVisible(maintenanceViewID, visible: false)
                 store.memoryRestoration.setVisible(maintenanceViewID, visible: false)
                 store.recovery.setVisible(maintenanceViewID, visible: false)
             }
@@ -80,6 +83,7 @@ import SwiftUI
     private func updateMaintenanceVisibility() {
         store.maintenance.setVisible(maintenanceViewID, visible: windowVisible && selectedTab == "maintenance")
         store.restored.setVisible(maintenanceViewID, visible: windowVisible && selectedTab == "restored")
+        store.channelRestoration.setVisible(maintenanceViewID, visible: windowVisible && selectedTab == "channels-restored")
         store.memoryRestoration.setVisible(maintenanceViewID, visible: windowVisible && selectedTab == "memory-restored")
         store.recovery.setVisible(maintenanceViewID, visible: windowVisible && selectedTab == "recovery")
     }

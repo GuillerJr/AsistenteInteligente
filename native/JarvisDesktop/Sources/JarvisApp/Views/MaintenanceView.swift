@@ -131,11 +131,13 @@ struct MaintenanceView: View {
                     .disabled(!maintenance.canCleanup)
             }
             if maintenance.canDecide, let approval = maintenance.approval, let review = maintenance.review, approval.matches(review, operation: operation) {
+                OwnerDecisionValidityView(expiresAt: min(review.expiresAt, approval.expiresAt)) {
                 Text("Esta decisión corresponde al dueño. Autoriza únicamente el destino, revisión y generación que se muestran arriba.").font(.callout)
                 HStack {
                     Button(review.kind == "backup.create" ? "Autorizar crear esta copia" : "Autorizar preparar este perfil") { Task { await maintenance.decide(allow: true) } }
                         .buttonStyle(.borderedProminent).disabled(maintenance.isRequesting)
                     Button("No autorizar") { Task { await maintenance.decide(allow: false) } }.disabled(maintenance.isRequesting)
+                }
                 }
             }
             if !operation.settled {

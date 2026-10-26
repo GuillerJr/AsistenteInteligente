@@ -38,7 +38,10 @@ struct RestoredMemoryView: View {
                                 VStack(alignment: .leading) {
                                     Text("Ámbito conservado \(index + 1)")
                                     Text("\(source.documents) notas · \(source.bytes) bytes").font(.caption).foregroundStyle(.secondary)
-                                    if !source.eligible { Text("Supera los límites de esta copia.").font(.caption).foregroundStyle(.orange) }
+                                    if !source.eligible {
+                                        Text(source.reason == "memory_copy_destination_not_empty" ? "El destino ya contiene notas para este agente." : "Supera los límites de esta copia.")
+                                            .font(.caption).foregroundStyle(.orange)
+                                    }
                                 }
                             }
                         }.buttonStyle(.plain).disabled(!source.eligible || !restoration.mayPrepare)
@@ -54,6 +57,10 @@ struct RestoredMemoryView: View {
             if let review = restoration.preview {
                 Section("Revisión de la copia") {
                     Text("\(review.documents) notas · \(review.bytes) bytes")
+                    if review.coldSQLiteRecoveryRequired {
+                        Text("La revisión leyó una copia privada de SQLite. Al autorizar, SQLite podrá recuperar o actualizar sus archivos WAL/journal; se conservan las notas del ámbito de origen. Cancelar después de abrir no garantiza conservar esos archivos auxiliares byte por byte.")
+                            .font(.callout).foregroundStyle(.orange)
+                    }
                     Text("Destino: \(review.workspacePath)").textSelection(.enabled)
                     Text(review.migrationRequired ? "Esta decisión también actualizará la memoria del formato 1 al 2 en la misma transacción." : "La memoria ya usa el formato 2.")
                     Text("Cada nota copiada tendrá un identificador nuevo y revisión 1. El agente, texto y etiquetas se conservan; no se crea ninguna autorización reutilizable.").font(.caption)
@@ -79,11 +86,13 @@ struct RestoredMemoryView: View {
                         OwnerDecisionStatusView(notice: notice)
                     }
                     if restoration.canDecide, let review = restoration.effectReview, let approval = restoration.approval, review.matches(approval, operation: operation) {
+                        OwnerDecisionValidityView(expiresAt: min(review.expiresAt, approval.expiresAt)) {
                         Text("Autoriza sólo esta copia revisada. Se conserva el origen y el destino debe seguir vacío.")
                         HStack {
                             Button("Autorizar esta copia") { Task { await restoration.decide(allow: true, ticket: approval) } }.buttonStyle(.borderedProminent)
                             Button("No autorizar") { Task { await restoration.decide(allow: false, ticket: approval) } }
                         }.disabled(!restoration.canDecide)
+                        }
                     }
                     if let notice = restoration.operationNotice, notice != restoration.errorMessage { Text(notice).foregroundStyle(.orange) }
                     if let receipt = operation.memoryCopyReceipt {

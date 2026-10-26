@@ -35,7 +35,7 @@ def update(
     chat=CHAT,
     sender=None,
     text="Consulta de prueba",
-    date=NOW,
+    date=NOW + 1,
     chat_type="private",
     is_bot=False,
     **message_fields,

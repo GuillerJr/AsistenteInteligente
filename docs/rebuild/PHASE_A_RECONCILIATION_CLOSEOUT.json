@@ -1,0 +1,1431 @@
+{
+  "format": "jarvis-local-reconciliation-closeout/1",
+  "status": "local_contract_and_selected_native_workflows_verified_publication_requires_gates",
+  "base_revision": "b03ad7a9958c2fdc1d3e8179f9be2829ee967326",
+  "scope": [
+    "restored_profile_activation",
+    "explicit_memory_scope_copy",
+    "restored_private_telegram_reconciliation"
+  ],
+  "phase_a_complete": false,
+  "phase_b_started": false,
+  "personal_profile_accessed": false,
+  "installed_previous_app_replaced": false,
+  "rea_new_parts": 0,
+  "owner_decisions": "Explicit human delegation applies only to the own synthetic profiles. Credentials and TCC were not delegated or used.",
+  "product_source_count": 137,
+  "product_sources_sha256": "982ce3d80d59e89a62e7c678722d78cf2309bf4fd178ee8d85c65f2ecd8f771c",
+  "product_sources": [
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/CapabilityModels.swift",
+      "sha256": "e97b3c12f160cf840ae1f74bdb45f193c176ff3703a44d6eae9ef24ddb529ad2"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/CapabilityPresentation.swift",
+      "sha256": "5c4dfe39c7e889ece37f428800585d0a70db090537d8e6430644f6ca6c551a5e"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/ChannelReconciliationClient.swift",
+      "sha256": "c3fb6fac1fb4b990e0d1356d175781f5638e5f262554ef0c1f616d894fa96e01"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/ChannelReconciliationModels.swift",
+      "sha256": "40ce96cbe15d3918d29f7d4628e93472067efdd9d5f1038029f7a11fb0deeff3"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/ChannelReconciliationStore.swift",
+      "sha256": "cd53ecc76de94b09d67ac9372cae051eadb66c98496b9cd6d553b9fa247b744e"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/ConversationReader.swift",
+      "sha256": "5c4f21aae1264e710ad53ccd6538b0283ab3035998547dff68381a6f91b1b793"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/LaunchOptions.swift",
+      "sha256": "58e30a01fd971b7163de80f6e2edebdf5b8dd7907a0e796df1a850b9650b5cb5"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/LocalRPCClient.swift",
+      "sha256": "afbff70616aa2f351ff5b146f49d2b76449c7143bede5fc6caddcda116aaf970"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/LocalVoiceController.swift",
+      "sha256": "611f24ad3569fc23674f3db2d92001b1e9d7786cb94549f38793bd917321a024"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/LocalVoiceDraftBridge.swift",
+      "sha256": "926c99b78a554300144e4e5967b358b600b2298d349b8fb3a08e82f376625c39"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/MCPManagementClient.swift",
+      "sha256": "ed80dd7873b02adde64b0ef9e88d5358c789ec484bf7b0e177af0e3ff6ce9ec9"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/MCPModels.swift",
+      "sha256": "7e578e1c71282ed056042da096899b7c87c5c22996e76140ec4ccfb4c000131e"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/MCPPresentation.swift",
+      "sha256": "f10592e4eb3e1b4761b1320c8ebe72b48443ffebcb1f5e0fdd721c94200feb20"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/MaintenanceClient.swift",
+      "sha256": "f369add15500a3bfbafaf12b0c9730e998b32b135cdd0e53b05cd8b4b9e9fa68"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/MaintenanceModels.swift",
+      "sha256": "3526014a1bd37c4c12d7784701dc9a08ad2c78afb0aa6a61858f42e00ec68390"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/MaintenanceMonitorPolicy.swift",
+      "sha256": "0d83f960c5e22b54663d5b850395e0a1a0953f22f95a1519c4e430c6cb3355da"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/MaintenanceReviewSourceRows.swift",
+      "sha256": "f3b2d75e40cda1e1b4b62a5e7bfa4be647ed75b7d54b64a90810bf3ecfd0a87e"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/MaintenanceStore.swift",
+      "sha256": "534e037d4523c4c6d6a7b3800b3ae395e1e6b4f762f29e6f9a0c30c6419609f6"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/ManagementClient.swift",
+      "sha256": "24a5f5eeffc9f70769e84936cbf248b5e3b7eddbff9ed2506c3af0a4d8a83cf0"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/ManagementModels.swift",
+      "sha256": "1449e299b541ba09690e64d810eceed02e536bb794c7d0b0cf03258d9f34abac"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/ManagementPresentation.swift",
+      "sha256": "185e4a64b62dd57df50ae0ce44390c9d4c6df5e46dd213a50a42110c94b483f5"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/OwnerDecisionPresentation.swift",
+      "sha256": "792a62523c551a1fb87bfa7ea20833ea01aa51a59756086e05a5c2b2fcb7160a"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/OwnerDecisionStatusView.swift",
+      "sha256": "6c200d534d8805d8770830eed933ac508c911dc56f42a3e07e0127d735e86d52"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/OwnerDecisionWindowPolicy.swift",
+      "sha256": "52248220d885b6fb879530b88e19d7970d678bffbc0418fbf5d0cb8eae31cdd6"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/ProfileHandoff.swift",
+      "sha256": "464d75b85bf37a31780a10818722417f119c38ccf8ab57bd2a310426f60aad09"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/RPCValue.swift",
+      "sha256": "1bd6e16433a535136b84fba52dec025a4373ba96081206c58450692d0763059e"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/RecoveryBootstrap.swift",
+      "sha256": "039cb27c96879605a6f7bdc757dae20d20dc058c424354f304479e1c6f8076d3"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/RecoveryExtensionClient.swift",
+      "sha256": "91c171a19fe73c1a0d90675f81386ebf4e0f26f10e9f9a215eb0df328eca8e16"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/RecoveryExtensionModels.swift",
+      "sha256": "c2c0c2c2a5f884b47b9d55d13eb8f97eaf9154ca80b759b372074da7c54cfc5f"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/RecoveryExtensionPresentation.swift",
+      "sha256": "e60571794ebe7b92e76025d6ade37c5ce2c3e4421f81a807dd8698549c01fd47"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/RecoveryExtensionResults.swift",
+      "sha256": "079459daf8704832ab5e7f0cef05a73264569b9a67dbcdfebaf800626174cdc6"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/RecoveryExtensionStore.swift",
+      "sha256": "ff1588588eacf7eb004a3dd8fb5ff2eb0121663129dadff0b7aed89a79f9dd3b"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/RecoveryReleaseDetails.swift",
+      "sha256": "c9975e3438efa3a5ee39f9e1b12ab1b1ba6a3fb45b07fa9b35e9f94786a9075d"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/RestoreProfileClient.swift",
+      "sha256": "aa37a64954932929696ea946852164d4b776b4e1feaa80e0cf29c9ebe3dcb6a9"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/RestoreProfileStore.swift",
+      "sha256": "178f3fda6574c989b6867854dad5b635ad3f4b948c6d0639d58dff93cbf2f340"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/RestoredMemoryClient.swift",
+      "sha256": "060ce5ab4203bc8f454f9d0e9d534215775274d9d3287cb22e7d32156d8139c4"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/RestoredMemoryModels.swift",
+      "sha256": "2dae9158246692decadb76fd380dcd06aad90caf97066e6b9cf96afecedf5d63"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/RestoredMemoryStore.swift",
+      "sha256": "108d27e850cd1fefc292a33baf6079a7a51d5173c763d4d0ea8a1231bae1c1d6"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/RestoredProfileModels.swift",
+      "sha256": "5dac65b92a3203d98ecbd64d9f0c24a4b42185580728a4946098587a942accdd"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/RunPresentation.swift",
+      "sha256": "4caec9315d9810d5d8ad5fb757a6dc71ab78f6bdb2e0fb3ce59ea129f1cb2c24"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/ServiceBootstrap.swift",
+      "sha256": "5dda661fda351e3c2cd077b38ca2682a350c952fa001af69632baa3178e48eab"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/ServiceLaunchPlan.swift",
+      "sha256": "338309cc067faf749e57dfed3d197052fc81fde543ae34368cce48dbc9bb9a85"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/ServiceProcess.swift",
+      "sha256": "15490763973ee1509ae3de83129fee5c5a234cc4a2de4844255446c441fc268a"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/SettingsSceneActionBridge.swift",
+      "sha256": "d1cdce235943666b0f9a5720a067043ea494b9c91bce472195312fe24a2c48f2"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/TelegramClient.swift",
+      "sha256": "50149a095b0a9417114fdcc2e77b4b70d8f5b1c8e7727aaf438295d112d897ef"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/TelegramModels.swift",
+      "sha256": "9042c432a84f13451f31a02e738934171d86ba89df175c89b02cf703d1e741dc"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/TelegramPairingClient.swift",
+      "sha256": "587021bdf92587816b6503ed84c0837dce433875a706bf71ab323f5a83fc050c"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/TelegramPairingModels.swift",
+      "sha256": "14128c19cd1f5e6426a307ef2c20a9e8e594925fe1caf1124b83ad1e61c9ce59"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/TelegramPresentation.swift",
+      "sha256": "601ba11306f003bcb9f7ee5c9b3e5d7d564dd9a3d49bcab5eee7a4f74b4c01ff"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/DesktopCore/WindowVisibilityMonitor.swift",
+      "sha256": "19bdf4bd6ec58da63afe428a61d07c1ece501656d161913a376e5a7d9d51bd35"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/App/AppDelegate.swift",
+      "sha256": "c9ebb1f3665d671142f2bd247ffd83a00cf104de342a2865bcf2924970b8017c"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/App/JarvisApp.swift",
+      "sha256": "4820695a1979b5e1e318fe61faef17147ea9e31f0800a12d31a3d6dae8905f58"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Audio/MacLocalVoiceDriver.swift",
+      "sha256": "68df5b9e20021891aecd4d7ca880e3c06256e0910130dfc09265c055db01c42d"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Audio/ModernLocalRecognition.swift",
+      "sha256": "5f48b94178d030a3c0b6f5ea364c6ab87009f6685d039aea2ce6ab189cfa0f2d"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Models/ChatModels.swift",
+      "sha256": "e438eb92c1f7cb31a2bf19baa595fe9ff6a07e6ee73842caa7e2e32dc55e72d2"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Stores/AccessStore.swift",
+      "sha256": "a602f2874f20a3359f1970d7d6a36fe836b214d385c7c5b8c892a3d87754ee4f"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Stores/AppProfileCoordinator.swift",
+      "sha256": "1b13e2fb19f83624b8e2576c4d47e224399a424fbb48166f30bced556334a196"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Stores/ChatStore.swift",
+      "sha256": "c57bc8e9f192edd5cd6a1a1d49273fefd351389217b6ac92ad5e2f34e4d2ae21"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Stores/MCPStore.swift",
+      "sha256": "f07b576d4b2b42d3bffa2fcb413f3e78b06a1722a6e4daf2be904d4470991c10"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Stores/ManagementStore.swift",
+      "sha256": "6bb38b9271e088f231128d06051f630a1fda5664af01735a8f008d5ff95f470d"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Stores/TelegramNativeOpener.swift",
+      "sha256": "9ccb366c2bad354dcd53d315b5fa0154d868ea6aa204dc359389b34c7ffb2189"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Stores/TelegramStore.swift",
+      "sha256": "2e6098844a3dbc0fa0bc462bb45062b55d537b80552bd31930ad4a9769d5728a"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/AgentsView.swift",
+      "sha256": "c845d0dc53483d3438185924b6ac3c5aa6485b83d2c18aee6ed02b7735c9a507"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/ApprovalListView.swift",
+      "sha256": "ff9d0ebd274b73a221938cd219cb916fddf57aa6f8aaced70402f27f69ec0ac5"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/CapabilitiesView.swift",
+      "sha256": "5f3bd2cd5751ebbd6c2096ecf46aef63a497e9084fd3a16ff58f0fb238476608"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/ComposerView.swift",
+      "sha256": "094003a6cd404f6a4467cd636d6aa4713603e667ce508e0fd97f73be7cb980e9"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/ContentView.swift",
+      "sha256": "b5156e437c4c51bb636e6ec80f0b6f5b5104331bc336cd8fe306e71d8256d911"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/MCPConfigurationView.swift",
+      "sha256": "f4bbc4d409a606d371780289d46d9bda1239952532abe45110a86b4bc836fbd9"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/MCPView.swift",
+      "sha256": "b577902b393864916963d5b93fd831ddecab498bf25b3f9970e06e17ade9d470"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/MaintenanceView.swift",
+      "sha256": "871af61162fcb56b889b63f273fd6a416f8ca57312622844511ea91f95904164"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/MemoryView.swift",
+      "sha256": "f40b8c0b11bacc8f88a02840837562e7a5cbcd045c5b03e78a629e780ab96122"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/MessageListView.swift",
+      "sha256": "5506db9b5a97f4d5386b41c9f8e0d440790fb038f956dcc71f6614d0e0c4f986"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/ProcessesView.swift",
+      "sha256": "f81d2dbdab9dd223c564e023de7ca34aa71ad2a39127a808232394b7face9473"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/ReceiptListView.swift",
+      "sha256": "b73c5ce8703d17a3a4a3e58e635d76fcf1df6f7e7383cb6dc1e83c256d8dc287"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/RecoveryCenterView.swift",
+      "sha256": "ebdf9e5ecf14c2640fd8eb88104e15e5d7e432d99a9d1062106343a249b06298"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/RenameSessionView.swift",
+      "sha256": "f5ea43f74ae521ad790b81cdd22d280874f11c5de1047b63816e07aeed9ff227"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/RestoreProfileView.swift",
+      "sha256": "f9165c1da6cf21e6bdbfddb79d3a9b766e51be55336128d3e3ddc4ffcf2aad5f"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/RestoredChannelsView.swift",
+      "sha256": "591f0ff31c51aa78a9f11229721a45f6afa9b0dbde94810dd4f256b02e146d73"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/RestoredMemoryView.swift",
+      "sha256": "fa7a0361f26cb1a028ac657b13aec7fc94eae3d5f353a0016a1ddeef4a3c5ebf"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/SchedulesView.swift",
+      "sha256": "92b16558209f7d999f13d34bb9ecbc50882c8d5197c8a1c22d9c126efd0637e2"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/SettingsView.swift",
+      "sha256": "c98dadaf2b0d08cf1596618935c206a07ca2f8e90cef124fde8057ffc800f19a"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/SettingsWindowVisibilityBridge.swift",
+      "sha256": "1ff0eb079807d38725ec85bf1cee44484a4cbac715101a055524d595312ce741"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/SidebarView.swift",
+      "sha256": "d1fed691a982eca4ce0572ecc9aff72aa230809ef4c385301b1faa6f9063abc4"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/SkillsView.swift",
+      "sha256": "b9ce8e66a2fef4e33e0021c4956afd6f09df5ecf372a9283136859eec9497c7b"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/TelegramPairingView.swift",
+      "sha256": "8ccc4bfe66b4d381d62b390daac0f9e091a9c69f8fbc56356868d9c4960f4a19"
+    },
+    {
+      "path": "native/JarvisDesktop/Sources/JarvisApp/Views/TelegramView.swift",
+      "sha256": "ed507f3dd177693bccc38cead4f3061943a815366c7534f700f745a0dcc96905"
+    },
+    {
+      "path": "src/jarvis_core/__init__.py",
+      "sha256": "f8ef17019cfb5af4b16cb032419a79d6fc9f3969b9ac1d03b5fd3a20548ddab9"
+    },
+    {
+      "path": "src/jarvis_core/activation.py",
+      "sha256": "07f170c1212111c50f9f5d5a9f9f8d909afa8b10d26b9e6269f3453f7d77e361"
+    },
+    {
+      "path": "src/jarvis_core/activation_management.py",
+      "sha256": "f4b4510ae725d0f03eee044a797bed39471fb5fa73d5e812a3f5f46502d8769b"
+    },
+    {
+      "path": "src/jarvis_core/bridge.py",
+      "sha256": "4165742b95ede9fad884d57ca797a690de914275b808555b554babb41ba8eb10"
+    },
+    {
+      "path": "src/jarvis_core/channel_reconciliation.py",
+      "sha256": "030a9632d6105ccd00a22a1354ef465a603cac9f0602cbb7e0932bc9d48dbb44"
+    },
+    {
+      "path": "src/jarvis_core/codex.py",
+      "sha256": "ec0176d4ef54382fad8b5d9ee745ea364bf9a6b760d514bb13f062cffbe1c002"
+    },
+    {
+      "path": "src/jarvis_core/cold_capture_cut.py",
+      "sha256": "b3b9d57c3354604d5c7a8ceb1728f76777b6d8cb7e8f59310685eb97709336e0"
+    },
+    {
+      "path": "src/jarvis_core/cold_journal.py",
+      "sha256": "f174f6161810a94b3edb84c814e88cf694d015897b1ce5acb3c211b63938689d"
+    },
+    {
+      "path": "src/jarvis_core/cold_repair.py",
+      "sha256": "fbf9c76b58c9d5f8706ede4c70f3dbaeb11b19fd92416341cafc8a94ce853a3b"
+    },
+    {
+      "path": "src/jarvis_core/cold_sqlite.py",
+      "sha256": "98ef455784fb0d3767a8c40668ebb4f4e57ccb00d4d62b66c324f7b9bce7917f"
+    },
+    {
+      "path": "src/jarvis_core/cold_wal.py",
+      "sha256": "20b1aa60cf137cd995c4266b75d12302f7b496ea4d8e62f6cb8794ad58722e87"
+    },
+    {
+      "path": "src/jarvis_core/config.py",
+      "sha256": "2a27d244341b1bd155c5c0b36663f6aa92074c7a580af748af911bf2ac6a958f"
+    },
+    {
+      "path": "src/jarvis_core/doctor.py",
+      "sha256": "b16e08c789524529deaeb0aac6364cf81148633bd714d46e0e09e8e321e81e6d"
+    },
+    {
+      "path": "src/jarvis_core/host_profile.py",
+      "sha256": "caa35025296db1369d865b3003ac59f8f06fddc7fce360f211203fbd1ae0d601"
+    },
+    {
+      "path": "src/jarvis_core/local_release_launch.py",
+      "sha256": "bef9d59830363e5b56029a7b7b8dfb78f23ae04802ba920cf6ac6253e6f2184e"
+    },
+    {
+      "path": "src/jarvis_core/local_release_package.py",
+      "sha256": "4e14b9ed657541721e57209c88694a2220de4c2339046c1c258910c863e9893b"
+    },
+    {
+      "path": "src/jarvis_core/local_release_update.py",
+      "sha256": "d2ee1ea4dbe66338a426ba844db3489495803af366f91ac177f87db34b88abf4"
+    },
+    {
+      "path": "src/jarvis_core/maintenance.py",
+      "sha256": "d9044416e7274b9dddc934144eedb79cccb2c6e95a2699479e63b6a3dd4b818c"
+    },
+    {
+      "path": "src/jarvis_core/maintenance_journal.py",
+      "sha256": "547faa2447f36954deb9085a12b47618adeeb969ccde4d8fddd58eb292f02238"
+    },
+    {
+      "path": "src/jarvis_core/management.py",
+      "sha256": "772de1dc96c97654dcbb34fa78889a1161d88164cc1e01eef2d714a3bef22400"
+    },
+    {
+      "path": "src/jarvis_core/mcp.py",
+      "sha256": "ab963c97d2b15648ca7bb5538c6ebdd16eaa6f7fedd104c4febaa16edd042884"
+    },
+    {
+      "path": "src/jarvis_core/mcp_registry.py",
+      "sha256": "ccf2318514a639228008805f23bd032c212d3fc1c0d2cbdd29b79dd15770d668"
+    },
+    {
+      "path": "src/jarvis_core/memory.py",
+      "sha256": "6d98490647ed5dc89f0ff785bbb07517fa53384d167cf3dda6a7d65d598b875a"
+    },
+    {
+      "path": "src/jarvis_core/memory_host_cut.py",
+      "sha256": "1db8d3ac0ab62cb2f2b89af36aed379acfa4c374377e4920110db04caaa0a41b"
+    },
+    {
+      "path": "src/jarvis_core/memory_host_read.py",
+      "sha256": "79baa6dddb25760e49fd85e0c8ad79ac5b5d713543ce170ed881cd31eac61fe2"
+    },
+    {
+      "path": "src/jarvis_core/memory_management.py",
+      "sha256": "9d9b6c71a226ea88cbf79c310934ed0a004c3ee4ca30cacf645380bd16afffbd"
+    },
+    {
+      "path": "src/jarvis_core/memory_tools.py",
+      "sha256": "24eeb773b2cfebdbcd0f32fb0d274e253581c94bb4306e4b29ea669b0dc68e2d"
+    },
+    {
+      "path": "src/jarvis_core/private_json.py",
+      "sha256": "d3339975418e8346528b957ab25feee40015fac6b23b9095933356f4525f3499"
+    },
+    {
+      "path": "src/jarvis_core/processes.py",
+      "sha256": "28627a33708b40d69fe80941bea7c03e07a75eaeefd3c5a8d28ddb5549d7a3ac"
+    },
+    {
+      "path": "src/jarvis_core/profiles.py",
+      "sha256": "980251175930810c590a281129f77cef10f282dc52f28df96d653026912ebc27"
+    },
+    {
+      "path": "src/jarvis_core/protocol.py",
+      "sha256": "657a4f760ea182cb3a6d6cf82b0611aab715994622e275f01b7888a198e872f3"
+    },
+    {
+      "path": "src/jarvis_core/provider_choice.py",
+      "sha256": "62348b367b4a6005ca546340626b79872f311a883f53c5eb01dac07aa1fe9e0c"
+    },
+    {
+      "path": "src/jarvis_core/recovery.py",
+      "sha256": "e30590cc9ff35ad03f5ce1af2a922b8f1aef378f0141102c573b9f6020b5247c"
+    },
+    {
+      "path": "src/jarvis_core/recovery_extensions.py",
+      "sha256": "1d97479b9bc7856f1a0f0c9fd6ea7d6dbad76ebe51e2a24618b46c0b1ee8f938"
+    },
+    {
+      "path": "src/jarvis_core/recovery_fs.py",
+      "sha256": "4c9676551d9750c911518725086491e599fc3e848d88aa47e28b39d885bf38ea"
+    },
+    {
+      "path": "src/jarvis_core/recovery_sqlite.py",
+      "sha256": "1631ecf36badd40e0b5cc4788563af588c2c366b9eb04a14f71d918fab0c5043"
+    },
+    {
+      "path": "src/jarvis_core/release_maintenance.py",
+      "sha256": "463dcda7f60df743ee90f5abb63a5b9f2b1a2ce217ac902a7bc86bea56bdfbd1"
+    },
+    {
+      "path": "src/jarvis_core/repair_maintenance.py",
+      "sha256": "0161ba1179de43379be18818d379d21bcf3c3c5df96244d4f23fd59bd55c7aa5"
+    },
+    {
+      "path": "src/jarvis_core/runtime.py",
+      "sha256": "93b3bceeae41e24e70096233bc8ea6095d978c06d77e5ec26f4796b297a64a86"
+    },
+    {
+      "path": "src/jarvis_core/scheduler.py",
+      "sha256": "08e7059ca05b0e7add19fc249db8b25369265b3d002a4d882ef19e93a50e7e06"
+    },
+    {
+      "path": "src/jarvis_core/service.py",
+      "sha256": "6df917e68f461a89d866b8aa5c8d6b71bd8acbadd1dd55e5ce6b52aef6c6e9ab"
+    },
+    {
+      "path": "src/jarvis_core/skills.py",
+      "sha256": "8379ef3afc76e17e03de141024359cf7b6da75bd176100351ee214efb89c4e4b"
+    },
+    {
+      "path": "src/jarvis_core/state.py",
+      "sha256": "463c7732b9e945a56b78d3325e9e46aeb2c4dd772d079188a65650cf9c561d59"
+    },
+    {
+      "path": "src/jarvis_core/telegram.py",
+      "sha256": "d2fc57caed78c79929f58288d943537b0e96bebf0f57da2ccb083fea758a231e"
+    },
+    {
+      "path": "src/jarvis_core/telegram_management.py",
+      "sha256": "abbaa2e9b630905441e3de9feab76b173aec82bf8cb9890f07ee1ca6911af6a7"
+    },
+    {
+      "path": "src/jarvis_core/telegram_pairing.py",
+      "sha256": "a0081981cc22ed943098f6411a282b243b7305b4c868791e7ed29761df2e6576"
+    },
+    {
+      "path": "src/jarvis_core/tools.py",
+      "sha256": "7c161f0721b23a15426151f1a04076f7d33e2c82125ac67123510ccf41fe0591"
+    },
+    {
+      "path": "src/jarvis_core/web.py",
+      "sha256": "fc47dc4fe6c3af90ba638ac3c60a044cc2087893e6c3db7bf03a479c8359a5ae"
+    },
+    {
+      "path": "src/jarvis_core/workspace.py",
+      "sha256": "9d4a5844b069eba86b8685f8b62f4d84ad57a66c0b74960cc24a31a09c4d3c8a"
+    },
+    {
+      "path": "src/jarvis_core/workspace_maintenance.py",
+      "sha256": "8e9b218369282c18db06d25239781641e753b6acf770bd1e10edc2c0ab5095e3"
+    },
+    {
+      "path": "src/jarvis_core/workspace_recovery.py",
+      "sha256": "9f6300327078f25e7eb7a6b81e2220d50777bb0e2abc78f1806d9319f274a57e"
+    }
+  ],
+  "runtime": {
+    "path": "/private/tmp/jarvis-ar-runtime-02/src",
+    "manifest": {
+      "path": "/private/tmp/jarvis-ar-runtime-02/sources.json",
+      "sha256": "494898cebc992c73f5214e9962ffee1f0c3029ab82bc5d9814ce8b939498545b"
+    },
+    "python_sources_identical_to_final_tree": true
+  },
+  "bundles": {
+    "GUI01": {
+      "path": "/private/tmp/jarvis-ar-app-20261026-01/Jarvis.app",
+      "executable_sha256": "92cf710ef9883f8928cabc08d572133863e626752e4edee87ec6b95c9c359256",
+      "build_log": {
+        "path": "/private/tmp/jarvis-ar-build-01.log",
+        "sha256": "6129431dbcc3e177ff01d2c7f5fb1370bd1421248c5009f2e65f3d767765900c"
+      },
+      "ad_hoc_strict_signature_verified": true
+    },
+    "GUI04": {
+      "path": "/private/tmp/jarvis-ar-app-20261026-04/Jarvis.app",
+      "executable_sha256": "83590cb2b487ca108c390ccaaccdb58ce0af4f5c6799518f7ea0905427984567",
+      "build_log": {
+        "path": "/private/tmp/jarvis-ar-build-04.log",
+        "sha256": "1844ef12c1a662a1a65b85fae3196063938eb5c363e844b326aa9d8d31971c50"
+      },
+      "ad_hoc_strict_signature_verified": true
+    },
+    "GUI06": {
+      "path": "/private/tmp/jarvis-ar-app-20261026-06/Jarvis.app",
+      "executable_sha256": "d58c9688b68f9053092e34b8fe3d1b6e88c50311f79cefd79f18e6dc6ebefd73",
+      "build_log": {
+        "path": "/private/tmp/jarvis-ar-build-06.log",
+        "sha256": "1fdedc482a23f57e481752d8ad5b8a0df268431741304c1264a723ee4995316d"
+      },
+      "ad_hoc_strict_signature_verified": true
+    }
+  },
+  "gui04_source_changes_to_final_tree": [
+    "native/JarvisDesktop/Sources/DesktopCore/RecoveryReleaseDetails.swift",
+    "native/JarvisDesktop/Sources/JarvisApp/Views/RestoredMemoryView.swift"
+  ],
+  "gui04_source_relation": "Only the typed release-purpose allowlist and occupied-memory explanation differ; those changes have focused tests/build verification. Final GUI06 opened both persisted profiles and qualified WAL copy.",
+  "native_cases": [
+    {
+      "case": "activation_denied",
+      "approval_actor": "assistant_under_explicit_human_delegation",
+      "bundle": "GUI01",
+      "operation": {
+        "cancellation_requested": false,
+        "cleanup_owner_pending": false,
+        "error_code": null,
+        "kind": "profile.restore.activate",
+        "operation_id": "bc4eb1a855a84cdcbe9289d6546e459f",
+        "phase": "denied",
+        "receipt": null,
+        "receipt_durable": true,
+        "result": null,
+        "review_digest": "1d8d3320eee81b1a988cf6a9bb14a4060f524957aa16ef2e847317ddb42d3bfc",
+        "review_id": "07326498ea9d4d42bda323a58f94230c",
+        "scope": {
+          "generation": 3,
+          "profile_id": "e167ff2784b64b938c08c72f868e7a1d"
+        },
+        "stage": null,
+        "worker_pending": false
+      },
+      "status_evidence": {
+        "path": "/private/tmp/jarvis-ar-native-20261026/activation-denied-status.json",
+        "sha256": "df868e4d31ca6e449c6f8afcd3b71e6782f5c9099693927a40fcf16524c7787e"
+      },
+      "independent_evidence": [
+        {
+          "path": "/private/tmp/jarvis-ar-native-20261026/activation-denied-oracle.json",
+          "sha256": "d2facb46735434ccb5900ee1bb1f612fe60fa347f5d0657aa3905f4ff3f4b4d0"
+        }
+      ],
+      "notes": null
+    },
+    {
+      "case": "activation_cancelled",
+      "approval_actor": "assistant_under_explicit_human_delegation",
+      "bundle": "GUI01",
+      "operation": {
+        "cancellation_requested": true,
+        "cleanup_owner_pending": false,
+        "error_code": null,
+        "kind": "profile.restore.activate",
+        "operation_id": "c310884978d547339f61ee4e64f5ed70",
+        "phase": "cancelled",
+        "receipt": null,
+        "receipt_durable": true,
+        "result": null,
+        "review_digest": "d3d05d39f3516edfd6c6029c14bf227f2e3fa3a1e7b131ac9275a70a2614090e",
+        "review_id": "cb8c92195bc0404484db5d82cf6e6b0a",
+        "scope": {
+          "generation": 3,
+          "profile_id": "e167ff2784b64b938c08c72f868e7a1d"
+        },
+        "stage": null,
+        "worker_pending": false
+      },
+      "status_evidence": {
+        "path": "/private/tmp/jarvis-ar-native-20261026/activation-cancelled-status.json",
+        "sha256": "8f627b10b2ec1246ab2fc9037b01945db450141fdd33ece8886916015cae17e0"
+      },
+      "independent_evidence": [
+        {
+          "path": "/private/tmp/jarvis-ar-native-20261026/activation-cancelled-oracle.json",
+          "sha256": "b5455ef967f9712855e66e1a678ae29139af46a9f27a59a6588585cbb20ef013"
+        }
+      ],
+      "notes": null
+    },
+    {
+      "case": "activation_target_busy",
+      "approval_actor": "assistant_under_explicit_human_delegation",
+      "bundle": "GUI01",
+      "operation": {
+        "cancellation_requested": false,
+        "cleanup_owner_pending": false,
+        "error_code": "activation_profile_busy",
+        "kind": "profile.restore.activate",
+        "operation_id": "7d97a1ade1d948c9bd690b06e358466b",
+        "phase": "failed",
+        "receipt": {
+          "admission_sha256": null,
+          "cleanup_error_code": null,
+          "cleanup_pending": false,
+          "effect_status": "not_activated",
+          "error_code": "activation_profile_busy",
+          "grants_restored": false,
+          "marker_sha256": "55a91b22c2c8406edef8ad38a9015bfb5bd1dcd747876faa060696ee8182ec65",
+          "operation_id": "7d97a1ade1d948c9bd690b06e358466b",
+          "purpose": "profile.restore.activate",
+          "services_started": false,
+          "status": "failed",
+          "target_identity": {
+            "device": "16777230",
+            "inode": "69843279"
+          }
+        },
+        "receipt_durable": true,
+        "result": null,
+        "review_digest": "99be2e729adb35da0bf506fb0d7fb9e9bf3cbafe8bf9e53377b40d102d48b778",
+        "review_id": "90e81206392f499a86c77b2ec324f1bc",
+        "scope": {
+          "generation": 3,
+          "profile_id": "e167ff2784b64b938c08c72f868e7a1d"
+        },
+        "stage": "activation_lock_open",
+        "worker_pending": false
+      },
+      "status_evidence": {
+        "path": "/private/tmp/jarvis-ar-native-20261026/activation-busy-status.json",
+        "sha256": "5e38fa540daeaa94b1ace58d73c4fb96a4e348cb3e1eb2918914d24ccb61962b"
+      },
+      "independent_evidence": [
+        {
+          "path": "/private/tmp/jarvis-ar-native-20261026/activation-busy-oracle.json",
+          "sha256": "aadd0f732be8024cd9ead0dfa65f58f495c697a478c736b9a27deee639e9c715"
+        }
+      ],
+      "notes": "Own second process acquired flock after review; no admission published."
+    },
+    {
+      "case": "activation_reviewed_source_changed",
+      "approval_actor": "assistant_under_explicit_human_delegation",
+      "bundle": "GUI01",
+      "operation": {
+        "cancellation_requested": false,
+        "cleanup_owner_pending": false,
+        "error_code": "activation_review_changed",
+        "kind": "profile.restore.activate",
+        "operation_id": "7dcd74bce33c40dfaaf392681bc7379c",
+        "phase": "failed",
+        "receipt": {
+          "admission_sha256": null,
+          "cleanup_error_code": null,
+          "cleanup_pending": false,
+          "effect_status": "not_activated",
+          "error_code": "activation_review_changed",
+          "grants_restored": false,
+          "marker_sha256": "760497cf76a7ea7496f56a97350c104010959cc57c47def46029f74a606b1cfb",
+          "operation_id": "7dcd74bce33c40dfaaf392681bc7379c",
+          "purpose": "profile.restore.activate",
+          "services_started": false,
+          "status": "failed",
+          "target_identity": {
+            "device": "16777230",
+            "inode": "69843295"
+          }
+        },
+        "receipt_durable": true,
+        "result": null,
+        "review_digest": "bed6e0b0fd449d15296289513002ff65142927a2070c5f4664e72d87701a1deb",
+        "review_id": "e286bc5ce87a473cae1ae2185a6902d9",
+        "scope": {
+          "generation": 3,
+          "profile_id": "e167ff2784b64b938c08c72f868e7a1d"
+        },
+        "stage": "activation_review_complete",
+        "worker_pending": false
+      },
+      "status_evidence": {
+        "path": "/private/tmp/jarvis-ar-native-20261026/activation-changed-status.json",
+        "sha256": "a377dc04144478f55ca85e571582f6d1958f69c49e169c689f4054bed6ba8327"
+      },
+      "independent_evidence": [
+        {
+          "path": "/private/tmp/jarvis-ar-native-20261026/tamper-induced-change.json",
+          "sha256": "2411aa8a5f022bb1813f99c25ad197c99f3f5b6f9273ea50b5ba67f7e2c8010f"
+        },
+        {
+          "path": "/private/tmp/jarvis-ar-native-20261026/activation-changed-oracle.json",
+          "sha256": "f02804921d7098fb2d7399beac873c5cee429023e558065652696dbf85904275"
+        }
+      ],
+      "notes": "Own fixture appended JSON whitespace during the wait; do not claim physical source unchanged in this deliberate mutation case."
+    },
+    {
+      "case": "activation_expired_final_ui",
+      "approval_actor": "assistant_under_explicit_human_delegation",
+      "bundle": "GUI04",
+      "operation": {
+        "cancellation_requested": false,
+        "cleanup_owner_pending": false,
+        "error_code": "maintenance_review_expired",
+        "kind": "profile.restore.activate",
+        "operation_id": "93dc8ce08d50464186649572b9aef27e",
+        "phase": "failed",
+        "receipt": null,
+        "receipt_durable": true,
+        "result": null,
+        "review_digest": "2541df2e5aa6ea5ca538d4f3427c86ddef84c5f68f8f3b5223114ef780b7daeb",
+        "review_id": "fa80d6e43fb84490886b4b963e8cd42d",
+        "scope": {
+          "generation": 3,
+          "profile_id": "c25fe872eec2433dbbf81850100ad1f6"
+        },
+        "stage": null,
+        "worker_pending": false
+      },
+      "status_evidence": {
+        "path": "/private/tmp/jarvis-ar-native-fixed-20261026/activation-expired-status.json",
+        "sha256": "bcce0fba864d67a5ac88817a6f07c74b91d4fd07c6d444c990c27875d1c8ffec"
+      },
+      "independent_evidence": [
+        {
+          "path": "/private/tmp/jarvis-ar-native-fixed-20261026/activation-expired-oracle.json",
+          "sha256": "dc7fc197a584449849a29edee171a12c3694236543144ac358d0ab59974473ee"
+        }
+      ],
+      "notes": "Original TTL, no decision/refresh sent; expiry displayed without authorization controls."
+    },
+    {
+      "case": "activation_admitted_then_explicitly_opened",
+      "approval_actor": "assistant_under_explicit_human_delegation",
+      "bundle": "GUI04",
+      "operation": {
+        "cancellation_requested": false,
+        "cleanup_owner_pending": false,
+        "error_code": null,
+        "kind": "profile.restore.activate",
+        "operation_id": "036d7532266045098dfb7ecd8780701f",
+        "phase": "activated_not_opened",
+        "receipt": {
+          "admission_sha256": "887ef9d010b2775bdb7eeeabaade0015964d2178e39c61f2a42596aaa024feb7",
+          "cleanup_error_code": null,
+          "cleanup_pending": false,
+          "effect_status": "local_admission_published",
+          "error_code": null,
+          "grants_restored": false,
+          "marker_sha256": "92f7dbac83104dde003e6635c2a28e7614aa31fdabd6ae8f01398b1e4d4b8ea2",
+          "operation_id": "036d7532266045098dfb7ecd8780701f",
+          "purpose": "profile.restore.activate",
+          "services_started": false,
+          "status": "completed",
+          "target_identity": {
+            "device": "16777230",
+            "inode": "69897860"
+          }
+        },
+        "receipt_durable": true,
+        "result": null,
+        "review_digest": "b9ca22b6e95a08b03e737e5024f7021180a7562d7a0080daa15913a5c069b424",
+        "review_id": "058cfe4f206e4a6091342d988a1237bd",
+        "scope": {
+          "generation": 3,
+          "profile_id": "c25fe872eec2433dbbf81850100ad1f6"
+        },
+        "stage": "activation_completed",
+        "worker_pending": false
+      },
+      "status_evidence": {
+        "path": "/private/tmp/jarvis-ar-native-fixed-20261026/activation-allowed-status.json",
+        "sha256": "3a1e2e88cba2881db448b96019e30436aa7a033f7979913d9677ca6c6847145b"
+      },
+      "independent_evidence": [
+        {
+          "path": "/private/tmp/jarvis-ar-native-fixed-20261026/activation-allowed-oracle.json",
+          "sha256": "dc694e811cad02bd90375bcd572a5c6ac6eb338bf9c7abb648e0c68cdae82f91"
+        },
+        {
+          "path": "/private/tmp/jarvis-ar-native-fixed-20261026/native-open-status.json",
+          "sha256": "625a4916b2dab00ad098657c09967b5c286a20411faab3300668e43f80c57cd8"
+        }
+      ],
+      "notes": "Native opening was another explicit CUA action. New local service, disconnected account, nonempty catalogs and two disabled routes."
+    },
+    {
+      "case": "memory_delete_denied",
+      "approval_actor": "assistant_under_explicit_human_delegation",
+      "bundle": "GUI04",
+      "operation": {
+        "operation_id": "bf1885860c494bd79e5ed50b419c5f36",
+        "kind": "memory.restore.copy_scope",
+        "scope": {
+          "profile_id": "330d2ab443904c6480a0ae3db29570fa",
+          "generation": 2
+        },
+        "review_id": "39203927ea8b4cd38748948eb3f9462f",
+        "review_digest": "adcb86e888301e86cf09ffac206892cbdd36c7a58c73ef99daec4bb966ced342",
+        "phase": "denied",
+        "stage": null,
+        "result": null,
+        "error_code": null,
+        "receipt": null,
+        "receipt_durable": true,
+        "worker_pending": false,
+        "cancellation_requested": false,
+        "cleanup_owner_pending": false
+      },
+      "status_evidence": {
+        "path": "/private/tmp/jarvis-ar-native-fixed-20261026/memory-denied-status.json",
+        "sha256": "5191d5950c965a4cc7c6ff9d2a383df3729ea66f460db4094153ca4e38eb02d5"
+      },
+      "independent_evidence": [
+        {
+          "path": "/private/tmp/jarvis-ar-native-fixed-20261026/memory-independent-verification.json",
+          "sha256": "d65d63fbedfc074c6001c5f8c1c90ea3afc962161c35fbf9f34e54cdafc7bd1d"
+        }
+      ],
+      "notes": null
+    },
+    {
+      "case": "memory_delete_copy",
+      "approval_actor": "assistant_under_explicit_human_delegation",
+      "bundle": "GUI04",
+      "operation": {
+        "operation_id": "6b35aae2096341cf9946299470c24e27",
+        "kind": "memory.restore.copy_scope",
+        "scope": {
+          "profile_id": "330d2ab443904c6480a0ae3db29570fa",
+          "generation": 2
+        },
+        "review_id": "dd4fda762f274923aaf3680f46a86122",
+        "review_digest": "0fa69c200f3dd6b971d1d00879a0761982b7a25e80f5b8f805a07b083a4fc883",
+        "phase": "complete",
+        "stage": null,
+        "result": null,
+        "error_code": null,
+        "receipt": {
+          "operation_id": "6b35aae2096341cf9946299470c24e27",
+          "purpose": "memory.restore.copy_scope",
+          "request_digest": "0fa69c200f3dd6b971d1d00879a0761982b7a25e80f5b8f805a07b083a4fc883",
+          "core_review_digest": "8bfa61f535d8a1155bd7621bbfb7a4bda17829b9486f3b68c8218eb752e926c5",
+          "status": "completed",
+          "effect_status": "scope_copy_committed",
+          "document_count": 2,
+          "byte_length": 44,
+          "mapping_sha256": "a2b66fabfc819ad45bc219ccee35c0223672f161c48085f76a191edb53d5ac57",
+          "destination_generation_after": "1",
+          "error_code": null,
+          "cleanup_pending": false
+        },
+        "receipt_durable": true,
+        "worker_pending": false,
+        "cancellation_requested": false,
+        "cleanup_owner_pending": false
+      },
+      "status_evidence": {
+        "path": "/private/tmp/jarvis-ar-native-fixed-20261026/memory-completed-oracle.json",
+        "sha256": "92b300bba06dca6c21abb8b51853aab3a9c8c87ca3b21ea5b6a96827337bfddb"
+      },
+      "independent_evidence": [
+        {
+          "path": "/private/tmp/jarvis-ar-native-fixed-20261026/memory-independent-verification.json",
+          "sha256": "d65d63fbedfc074c6001c5f8c1c90ea3afc962161c35fbf9f34e54cdafc7bd1d"
+        }
+      ],
+      "notes": "Two notes, 44 bytes, schema1→2; original rows exact, two new IDs at revision1, one SQL receipt/two mappings."
+    },
+    {
+      "case": "channel_denied",
+      "approval_actor": "assistant_under_explicit_human_delegation",
+      "bundle": "GUI04",
+      "operation": {
+        "cancellation_requested": false,
+        "cleanup_owner_pending": false,
+        "error_code": null,
+        "kind": "telegram.restore.reconcile",
+        "operation_id": "baf96dcc312943b7893285b0b721d2bd",
+        "phase": "denied",
+        "receipt": null,
+        "receipt_durable": true,
+        "result": null,
+        "review_digest": "b6e3ee9ffe0a192c50da6898aa1cfefbd5a9314c13fbb4720c112d5f51e3ba43",
+        "review_id": "36567d9b98fa46e98ef6ae06e239bb3f",
+        "scope": {
+          "generation": 3,
+          "profile_id": "330d2ab443904c6480a0ae3db29570fa"
+        },
+        "stage": null,
+        "worker_pending": false
+      },
+      "status_evidence": {
+        "path": "/private/tmp/jarvis-ar-native-fixed-20261026/channel-denied-status.json",
+        "sha256": "44567c2f14adb47b174ba80e269954b8c5622af7f2bdde153c312e17d3e9a40e"
+      },
+      "independent_evidence": [],
+      "notes": null
+    },
+    {
+      "case": "channel_enabled_locally",
+      "approval_actor": "assistant_under_explicit_human_delegation",
+      "bundle": "GUI04",
+      "operation": {
+        "cancellation_requested": false,
+        "cleanup_owner_pending": false,
+        "error_code": null,
+        "kind": "telegram.restore.reconcile",
+        "operation_id": "0deb19f3c4794b0c82af0d870214a2b5",
+        "phase": "complete",
+        "receipt": {
+          "bot_id": 424242,
+          "chat_id": 42,
+          "cleanup_pending": false,
+          "configuration_hash_after": "cc2b0a6cbee1fb9a41c82f879d2b62fc0620cbb721e6761d29942594e8c1dbc9",
+          "configuration_hash_before": "70837b5abcbbcf4240f25852e1bcfa4a7c8907bf1fde1231ce53c60ec323f163",
+          "effect_status": "route_reconciled",
+          "enabled_after": true,
+          "enabled_before": false,
+          "error_code": null,
+          "grants_restored": false,
+          "historical_events_replayed": false,
+          "network_started": false,
+          "operation_id": "0deb19f3c4794b0c82af0d870214a2b5",
+          "permits_replay": false,
+          "provider_started": false,
+          "purpose": "telegram.restore.reconcile",
+          "request_digest": "b6e3ee9ffe0a192c50da6898aa1cfefbd5a9314c13fbb4720c112d5f51e3ba43",
+          "route_revision_after": 2,
+          "route_revision_before": 1,
+          "status": "completed"
+        },
+        "receipt_durable": true,
+        "result": null,
+        "review_digest": "b6e3ee9ffe0a192c50da6898aa1cfefbd5a9314c13fbb4720c112d5f51e3ba43",
+        "review_id": "a1622165974c4c6e8e6caa65176b3191",
+        "scope": {
+          "generation": 3,
+          "profile_id": "330d2ab443904c6480a0ae3db29570fa"
+        },
+        "stage": "telegram_route_publish",
+        "worker_pending": false
+      },
+      "status_evidence": {
+        "path": "/private/tmp/jarvis-ar-native-fixed-20261026/channel-enabled-status.json",
+        "sha256": "8b1c91254708883f276a151cc5ea741e20e126f72dba57577527124e58a9b7e1"
+      },
+      "independent_evidence": [
+        {
+          "path": "/private/tmp/jarvis-ar-native-fixed-20261026/channel-enabled-independent.json",
+          "sha256": "a1a388234b365283fdcd78a058b1904c6245b1b64dfc08b450f55f26138c2d8e"
+        }
+      ],
+      "notes": "Chat42 only, revision1→2; bot disconnected, reader stopped; fresh pairing required [42]."
+    },
+    {
+      "case": "channel_revoked_locally",
+      "approval_actor": "assistant_under_explicit_human_delegation",
+      "bundle": "GUI04",
+      "operation": {
+        "cancellation_requested": false,
+        "cleanup_owner_pending": false,
+        "error_code": null,
+        "kind": "telegram.restore.reconcile",
+        "operation_id": "36ad1890f3264d23888d841b4a4080f9",
+        "phase": "complete",
+        "receipt": {
+          "bot_id": 424242,
+          "chat_id": 42,
+          "cleanup_pending": false,
+          "configuration_hash_after": "cc4adf1a550cace87ec2b6a2aaaf1ff88d16b128cd6e97c87f2c7d3f6871e6c8",
+          "configuration_hash_before": "cc2b0a6cbee1fb9a41c82f879d2b62fc0620cbb721e6761d29942594e8c1dbc9",
+          "effect_status": "route_reconciled",
+          "enabled_after": false,
+          "enabled_before": true,
+          "error_code": null,
+          "grants_restored": false,
+          "historical_events_replayed": false,
+          "network_started": false,
+          "operation_id": "36ad1890f3264d23888d841b4a4080f9",
+          "permits_replay": false,
+          "provider_started": false,
+          "purpose": "telegram.restore.reconcile",
+          "request_digest": "448cbb576eb249766c8f3a8a4e3e149645975d2eae6763bd920c3377eba2a5be",
+          "route_revision_after": 3,
+          "route_revision_before": 2,
+          "status": "completed"
+        },
+        "receipt_durable": true,
+        "result": null,
+        "review_digest": "448cbb576eb249766c8f3a8a4e3e149645975d2eae6763bd920c3377eba2a5be",
+        "review_id": "6a9a65bd3b19451ebc8fae4fffbdee1f",
+        "scope": {
+          "generation": 4,
+          "profile_id": "330d2ab443904c6480a0ae3db29570fa"
+        },
+        "stage": "telegram_route_publish",
+        "worker_pending": false
+      },
+      "status_evidence": {
+        "path": "/private/tmp/jarvis-ar-native-fixed-20261026/channel-revoked-status.json",
+        "sha256": "d2835b9c65db547d1b96286473560872a94de545f328de37d1b372e9e321f1ca"
+      },
+      "independent_evidence": [
+        {
+          "path": "/private/tmp/jarvis-ar-native-fixed-20261026/channels-independent-verification.json",
+          "sha256": "1a1b5892130902be2f51d8ed67f72477e8c0dc78157e8ef3468abc8b86c7bfc9"
+        }
+      ],
+      "notes": "Chat42 revision2→3 disabled; second route, session history, schedules, events/control/offset/epoch unchanged."
+    },
+    {
+      "case": "memory_wal_expired",
+      "approval_actor": "assistant_under_explicit_human_delegation",
+      "bundle": "GUI06",
+      "operation": {
+        "operation_id": "1a4149fd988b4e16ab92056d809f6a5d",
+        "kind": "memory.restore.copy_scope",
+        "scope": {
+          "profile_id": "a99f0a7659d44426b32a621663757415",
+          "generation": 2
+        },
+        "review_id": "8d8527654d834e5bba43e82aca97af57",
+        "review_digest": "14f8f502e45080cb0dbe574b7c7c729392ad610ce72d3bb88c2166b70b2f8780",
+        "phase": "failed",
+        "stage": null,
+        "result": null,
+        "error_code": "memory_restore_review_expired",
+        "receipt": null,
+        "receipt_durable": true,
+        "worker_pending": false,
+        "cancellation_requested": false,
+        "cleanup_owner_pending": false
+      },
+      "status_evidence": {
+        "path": "/private/tmp/jarvis-memory-jrzndum8/native-expired-status.json",
+        "sha256": "4e8a22559a2bbceb8d4bb06afcf4748771f5c8004e8ffa644ae4a93dfb80b7d3"
+      },
+      "independent_evidence": [
+        {
+          "path": "/private/tmp/jarvis-memory-jrzndum8/native-expired-oracle.json",
+          "sha256": "d1009d0dbfc9655bcbd97fa3461d6a2f8e859a7ef76214e470685c768c0b9c2a"
+        }
+      ],
+      "notes": "Zero copy receipts; physical SQLite family unchanged."
+    },
+    {
+      "case": "memory_wal_cancelled",
+      "approval_actor": "assistant_under_explicit_human_delegation",
+      "bundle": "GUI06",
+      "operation": {
+        "operation_id": "6a1084df9185495298046a5a90030137",
+        "kind": "memory.restore.copy_scope",
+        "scope": {
+          "profile_id": "a99f0a7659d44426b32a621663757415",
+          "generation": 2
+        },
+        "review_id": "9e6d595c84cf4ca9948efeb56452d1ab",
+        "review_digest": "9f0a1e587b54cb19d57c904a2c03c9bd2add2b8e9ad02b6d93aa1dad8d41b967",
+        "phase": "cancelled",
+        "stage": null,
+        "result": null,
+        "error_code": null,
+        "receipt": null,
+        "receipt_durable": true,
+        "worker_pending": false,
+        "cancellation_requested": true,
+        "cleanup_owner_pending": false
+      },
+      "status_evidence": {
+        "path": "/private/tmp/jarvis-memory-jrzndum8/native-cancelled-status.json",
+        "sha256": "81ad01b89681a9ab550cbfbca48ca4c618595662ce25fb16e310eaa587f26ffc"
+      },
+      "independent_evidence": [
+        {
+          "path": "/private/tmp/jarvis-memory-jrzndum8/native-cancelled-oracle.json",
+          "sha256": "d1009d0dbfc9655bcbd97fa3461d6a2f8e859a7ef76214e470685c768c0b9c2a"
+        }
+      ],
+      "notes": "Zero copy receipts; physical SQLite family unchanged."
+    },
+    {
+      "case": "memory_wal_copy",
+      "approval_actor": "assistant_under_explicit_human_delegation",
+      "bundle": "GUI06",
+      "operation": {
+        "operation_id": "08396483c71440378233e29fde7c4891",
+        "kind": "memory.restore.copy_scope",
+        "scope": {
+          "profile_id": "a99f0a7659d44426b32a621663757415",
+          "generation": 2
+        },
+        "review_id": "bc773b3e71b641bd85c2417450f2d014",
+        "review_digest": "fc8a2319bfb7df03cc9fe6c7252a683be038db993b6b5da719a31c3ba0a7f936",
+        "phase": "complete",
+        "stage": null,
+        "result": null,
+        "error_code": null,
+        "receipt": {
+          "operation_id": "08396483c71440378233e29fde7c4891",
+          "purpose": "memory.restore.copy_scope",
+          "request_digest": "fc8a2319bfb7df03cc9fe6c7252a683be038db993b6b5da719a31c3ba0a7f936",
+          "core_review_digest": "3cd5320c6d2e72564a8e7ae1c50d062af6155cc131ffcd4699fd378f51dce910",
+          "status": "completed",
+          "effect_status": "scope_copy_committed",
+          "document_count": 3,
+          "byte_length": 95,
+          "mapping_sha256": "cd38b5ee2d692d28f3c184b01adcd77d1f47855e07cdd65242b9a1fb8236b5d7",
+          "destination_generation_after": "1",
+          "error_code": null,
+          "cleanup_pending": false
+        },
+        "receipt_durable": true,
+        "worker_pending": false,
+        "cancellation_requested": false,
+        "cleanup_owner_pending": false
+      },
+      "status_evidence": {
+        "path": "/private/tmp/jarvis-memory-jrzndum8/native-completed-status.json",
+        "sha256": "f1bbcccb16ef05547f7fdd1969320d48c40446a9927e2e6a46c7b497874991a7"
+      },
+      "independent_evidence": [
+        {
+          "path": "/private/tmp/jarvis-memory-jrzndum8/native-completed-oracle.json",
+          "sha256": "89000284948250153c671566a00c7ba028612e296109c80823f632e64565a04e"
+        }
+      ],
+      "notes": "Three durable notes, 95 bytes, including WAL-only committed note; one session-bound scope excluded. Source logical rows intact, one SQL receipt/three mappings. Physical auxiliaries changed only after authorized SQLite open, as warned."
+    }
+  ],
+  "restart_checks": [
+    {
+      "bundle": "GUI06",
+      "profile": "wal_fixture",
+      "status": {
+        "path": "/private/tmp/jarvis-memory-jrzndum8/native-reopened-status.json",
+        "sha256": "17bcf5616622520491b207efefceb3f0c6637f0bd91356cef058aade5e9bbee2"
+      },
+      "oracle": {
+        "path": "/private/tmp/jarvis-memory-jrzndum8/native-reopened-oracle.json",
+        "sha256": "89000284948250153c671566a00c7ba028612e296109c80823f632e64565a04e"
+      },
+      "observed": {
+        "source_notes_intact": true,
+        "copy_receipts": 1,
+        "mapping_rows": 3,
+        "live_approvals": 0,
+        "provider_selected": false
+      }
+    },
+    {
+      "bundle": "GUI06",
+      "profile": "memory_channels_fixture",
+      "status": {
+        "path": "/private/tmp/jarvis-ar-native-fixed-20261026/native-reopened-status.json",
+        "sha256": "ad85856cc4a0fd9b928a0c755539cfc4b899d47a9b941fbd3707cd15afdadd2d"
+      },
+      "oracle": {
+        "path": "/private/tmp/jarvis-ar-native-fixed-20261026/native-reopened-oracle.json",
+        "sha256": "593c7d4e05b0115ec0e8440d48215edfcd96c97c9f080a38756eb0f75fdf1bb8"
+      },
+      "observed": {
+        "route42_revision": 3,
+        "route42_enabled": false,
+        "route84_unchanged": true,
+        "live_approvals": 0,
+        "provider_selected": false
+      }
+    }
+  ],
+  "independent_verification": {
+    "memory_delete": {
+      "source_rows_exact": true,
+      "new_ids_disjoint": true,
+      "new_revisions_one": true,
+      "local_receipts": 1,
+      "provenance_rows": 2,
+      "schema": 2,
+      "independent_oracle": "private SQLite byte copy",
+      "source_physical_unchanged_on_denial": true
+    },
+    "channels": {
+      "state_history_unchanged": true,
+      "schedules_unchanged": true,
+      "telegram_events_controls_unchanged": true,
+      "second_route_unchanged": true,
+      "route_42_revision": 3,
+      "route_42_enabled": false
+    },
+    "wal": {
+      "source_documents_intact": true,
+      "current_copies_match": true,
+      "copy_receipts": 1,
+      "mapping_rows": 3,
+      "physical_sources_preserved_before_approval": true,
+      "physical_auxiliaries_preserved_after_authorized_open": false
+    }
+  },
+  "tests": {
+    "python_full_final": {
+      "passed": 2402,
+      "failed": 0,
+      "seconds": 374.48,
+      "log": {
+        "path": "/private/tmp/jarvis-ar-python-final.log",
+        "sha256": "1d5e2e820d717a7b563dc43a28a5935f4a6183d3fca72cbb39643ee8aeaf602e"
+      }
+    },
+    "native_full_final": {
+      "executed": 305,
+      "failed": 0,
+      "seconds": 120.832,
+      "log": {
+        "path": "/private/tmp/jarvis-ar-swift-final.log",
+        "sha256": "16ec857c3c16c074fe8832b1d2c372d889e7770b8271c96d86eb88036cabbc23"
+      },
+      "subsequent_change": "Occupied-memory explanation text only, compiled and observed in GUI06; publication gates repeat the suite."
+    },
+    "focal_sets_overlap_full_suites": true,
+    "memory_cold_adversarial": {
+      "passed": 22,
+      "log": {
+        "path": "/private/tmp/jarvis-memory-cold-tests-final.log",
+        "sha256": "e279868427b7be5557c3056cb1b169d7fd7374425ce2082486b14ffb14594124"
+      }
+    },
+    "channel_custody_independent": {
+      "passed": 21,
+      "log": {
+        "path": "/private/tmp/jarvis-channel-audit-ownership-final.log",
+        "sha256": "a024f022a6121fc057db841cf735533bd0be0dff3066b7b9db2903df09198673"
+      }
+    },
+    "channel_final": {
+      "passed": 50,
+      "log": {
+        "path": "/private/tmp/jarvis-channel-reconciliation-ownership-final.log",
+        "sha256": "5952b218382e51f578768c0a348723d5418c12143cc6d5f49d527f1d1b978a79"
+      }
+    },
+    "release_fix": {
+      "passed": 35,
+      "log": {
+        "path": "/private/tmp/jarvis-release-purpose-after-fix.log",
+        "sha256": "6a352f688f058689ab625d02068e067759f4010b64d7f62be2596dbef8c822cd"
+      }
+    },
+    "python_contract_followups": [
+      {
+        "passed": 67,
+        "log": {
+          "path": "/private/tmp/jarvis-channel-host-controls-final.log",
+          "sha256": "e8ca89320215100aa98af0253237bf6f46c62048fbacd0ca2bf547d0f2ee2c58"
+        }
+      },
+      {
+        "passed": 43,
+        "log": {
+          "path": "/private/tmp/jarvis-wal-memory-read-contract-final.log",
+          "sha256": "c9b501ea5e857d5261ccf65ac6aec647a6cde355e47e6e290838fcc265cb9751"
+        }
+      }
+    ],
+    "ruff_compile_clean_base_hooks": "passed",
+    "manual_package_smoke": {
+      "status": "passed_offline",
+      "artifacts": [
+        {
+          "path": "/private/tmp/jarvis-reconciliation-package.wfpkXu/jarvis_core-0.1.0a2-py3-none-any.whl",
+          "sha256": "43ddfa294d0a84d265aa44f2049345ee4ebbd073371a3c0210173c5c1cd0340e"
+        },
+        {
+          "path": "/private/tmp/jarvis-reconciliation-package.wfpkXu/jarvis_core-0.1.0a2.tar.gz",
+          "sha256": "c6e7ecc016f0ccb9a99c8c9a0c08e26329e7650216e41386ce8e36d193532f7b"
+        }
+      ],
+      "scope": "Runtime sources match; this manual sdist predates final evidence documentation. The publication gate builds fresh artifacts from its frozen complete tree."
+    }
+  },
+  "prior_failed_checks": {
+    "gui01": {
+      "path": "/private/tmp/jarvis-ar-native-20261026/gui-activation.json",
+      "sha256": "36b6b2b6705bbf7f47f313f4ee6304a1966ba76da04d3fc7b75a72110d9f8d65"
+    },
+    "bootstrap_fixture_catalog": {
+      "before": {
+        "path": "/private/tmp/jarvis-restored-catalog-before-fix.log",
+        "sha256": "9812f7e53f9be6e120e669c0d3d3684d0efda4925dc94a9a1ada98708b311b5a"
+      },
+      "after": {
+        "path": "/private/tmp/jarvis-restored-catalog-after-fix.log",
+        "sha256": "565afad7467f2e335e1b31a712db29bd60c4bafc3aeb82676910dae26a4cc4ac"
+      },
+      "resolution": "Own synthetic schedule workspace ID corrected to production-format hash; a fresh corpus was created. No validator weakened and prior profiles retained."
+    },
+    "python_full_initial": {
+      "passed": 2400,
+      "failed": 2,
+      "log": {
+        "path": "/private/tmp/jarvis-ar-python-full.log",
+        "sha256": "a91d31de0b4f5e249e1d32cd9175376dcbeef1d0f178fe09dc2f7dd972552db5"
+      },
+      "resolution": "Exact registered control set updated for three new RPCs; the formerly unsupported WAL memory read now verifies a real private read, no mutable opens/copy/approval/provider."
+    },
+    "native_full_initial": {
+      "executed": 304,
+      "failed": 3,
+      "log": {
+        "path": "/private/tmp/jarvis-ar-swift-full.log",
+        "sha256": "eed3472526a3273d73d26e0118e28a7ea0497d08541bebd6b0a219f9990307ae"
+      },
+      "resolution": "Two historical expectations updated for the expanded contract; typed package-purpose allowlist gained exactly the new host purpose, with before/after regression."
+    }
+  },
+  "all_own_gui_test_services_closed_before_publication": true,
+  "publication": {
+    "requires_frozen_tree": true,
+    "required_checks": [
+      "pre-commit Python",
+      "pre-push Python/package/Swift/bundle",
+      "CI macOS and Linux"
+    ],
+    "ci_for_this_increment_not_claimed_before_push": true
+  },
+  "limits": [
+    "Synthetic bots/claims/peers do not establish external Telegram account qualification.",
+    "Admission for the WAL corpus was synthetic fixture construction; its memory-copy decisions were native delegated actions.",
+    "Cold memory review preserves physical sources; authorized SQLite open may recover/checkpoint auxiliaries.",
+    "An observation does not establish a previous acknowledgment or authorize replay.",
+    "Cooperative ownership is not isolation against a malicious process of the same user.",
+    "Development bundle uses external Python and official Codex; it does not qualify Developer ID, notarization or remote signed distribution."
+  ],
+  "independent_audit": {
+    "status": "approved_read_only",
+    "path_sha_pairs_verified": 189,
+    "sources_verified": 137,
+    "operations_verified": 14,
+    "blocking_discrepancies": 0,
+    "source_sha256": "982ce3d80d59e89a62e7c678722d78cf2309bf4fd178ee8d85c65f2ecd8f771c"
+  }
+}

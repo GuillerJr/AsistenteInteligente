@@ -26,7 +26,7 @@ final class TelegramIntegrationTests: XCTestCase {
           return {'connected': connected, 'running': False, 'bot_id': 72501 if connected else None,
                   'username': 'jarvis_prueba' if connected else None, 'routes': [],
                   'configuration_hash': 'b'*64, 'workspace_id': 'c'*64,
-                  'pinned_workspace_id': None, 'error': None}
+                  'pinned_workspace_id': None, 'error': None, 'restored_pairing_required_chat_ids': []}
         async def status(params):
           methods.append('telegram.status'); return snapshot()
         async def history(params):

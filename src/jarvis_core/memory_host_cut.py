@@ -88,8 +88,10 @@ class MemoryMutationCut:
         if not valid:
             raise HostProfileError("profile_memory_review_mismatch")
         row = next((row for row in frozen._sql if row.role == "memory"), None)
-        if row is None or row.fingerprint[0] not in {"owned", "cold_delete"}:
+        if row is None or (row.connection is None
+                           and not (row.cold and row.cold.snapshot_eligible)):
             raise HostProfileError("profile_memory_source_unavailable")
+        self._cold_family = row.cold if row.connection is None else None
         self._identity = FileIdentity(*core_review.database_identity)
         if tuple(row.fingerprint[1:3]) != tuple(core_review.database_identity):
             raise HostProfileError("profile_memory_review_mismatch")
@@ -178,7 +180,8 @@ class MemoryMutationCut:
                 or context.request_digest != expected_digest
                 or context.approved_core_review_digest != self._review.digest):
             raise HostProfileError("profile_memory_review_mismatch")
-        return self._store.copy_scope(self._review, context, copy_limits=copy_limits)
+        return self._store.copy_scope(self._review, context, copy_limits=copy_limits,
+                                      cold_family=self._cold_family)
 
     def retain(self, owner):
         with self._lock:

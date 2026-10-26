@@ -158,7 +158,7 @@ public struct MaintenanceApproval: Identifiable, Sendable {
         try MaintenanceValidation.keys(value, ["approval_id", "scope", "purpose", "operation_id", "arguments_json", "digest", "expires_at_ns"])
         guard let id = value["approval_id"].string, ManagementValidation.identifier(id),
               let operation = value["operation_id"].string, ManagementValidation.identifier(operation),
-              let purpose = value["purpose"].string, Set(["backup.create", "restore.stage", "profile.restore.activate", "memory.restore.copy_scope"]).union(RecoveryExtensionValidation.effects).contains(purpose),
+              let purpose = value["purpose"].string, Set(["backup.create", "restore.stage", "profile.restore.activate", "memory.restore.copy_scope", ChannelReconciliationValidation.effect]).union(RecoveryExtensionValidation.effects).contains(purpose),
               let digest = value["digest"].string, ManagementValidation.hash(digest),
               let arguments = value["arguments_json"].string, arguments.utf8.count <= 16_384,
               let expiry = value["expires_at_ns"].string, expiry.range(of: "^[0-9]{1,20}\\z", options: .regularExpression) != nil,
@@ -227,6 +227,7 @@ public struct MaintenanceOperation: Identifiable, Sendable {
     public let receipt: MaintenanceReceipt?
     public let activationReceipt: RestoreActivationReceipt?
     public let memoryCopyReceipt: MemoryCopyReceipt?
+    public let channelReceipt: ChannelReconciliationReceipt?
     public let cleanupOwnerPending: Bool
     public let errorCode: String?
     public let result: RPCValue
@@ -246,6 +247,7 @@ public struct MaintenanceOperation: Identifiable, Sendable {
     public var resourcesPending: Bool { !settled || cleanupOwnerPending || phase == "cleanup_pending" }
     public var success: Bool {
         guard !cleanupOwnerPending else { return false }
+        if kind == ChannelReconciliationValidation.effect { return settled && phase == "complete" && receiptDurable && channelReceipt?.status == "completed" }
         if kind == RestoredMemoryValidation.effect { return settled && phase == "complete" && receiptDurable && !cleanupOwnerPending && memoryCopyReceipt?.status == "completed" }
         if RestoredMemoryValidation.reads.contains(kind) || RecoveryExtensionValidation.reads.contains(kind) { return settled && phase == "complete" }
         if kind == "profile.restore.activate" { return settled && phase == "activated_not_opened" && receiptDurable && !cleanupOwnerPending && activationReceipt?.status == "completed" }
@@ -258,15 +260,15 @@ public struct MaintenanceOperation: Identifiable, Sendable {
         if keys.contains("cleanup_owner_pending") { guard let pending = value["cleanup_owner_pending"].bool else { throw RPCFailure.invalidResponse }; cleanupOwnerPending = pending }
         else { cleanupOwnerPending = false }
         guard let id = value["operation_id"].string, ManagementValidation.identifier(id),
-              let kind = value["kind"].string, Set(["backup.create", "restore.stage", "backup.verify", "doctor.report", "profile.restore.review", "profile.restore.inspect", "profile.restore.activate"]).union(RestoredMemoryValidation.kinds).union(RecoveryExtensionValidation.kinds).contains(kind),
+              let kind = value["kind"].string, Set(["backup.create", "restore.stage", "backup.verify", "doctor.report", "profile.restore.review", "profile.restore.inspect", "profile.restore.activate"]).union(RestoredMemoryValidation.kinds).union([ChannelReconciliationValidation.effect]).union(RecoveryExtensionValidation.kinds).contains(kind),
               let phase = value["phase"].string, Self.terminal.union(["awaiting_owner", "quiescing", "working"]).contains(phase),
               let pending = value["worker_pending"].bool, let cancelled = value["cancellation_requested"].bool,
               let durable = value["receipt_durable"].bool else { throw RPCFailure.invalidResponse }
-        if (kind.hasPrefix("profile.restore.") || RestoredMemoryValidation.kinds.contains(kind)), !keys.contains("cleanup_owner_pending") { throw RPCFailure.invalidResponse }
+        if (kind.hasPrefix("profile.restore.") || RestoredMemoryValidation.kinds.contains(kind) || kind == ChannelReconciliationValidation.effect), !keys.contains("cleanup_owner_pending") { throw RPCFailure.invalidResponse }
         self.id = id; self.kind = kind; self.phase = phase; workerPending = pending; cancellationRequested = cancelled; receiptDurable = durable
         try MaintenanceValidation.keys(value["scope"], ["profile_id", "generation"])
         scope = try MaintenanceScope(value["scope"])
-        if Set(["backup.create", "restore.stage", "profile.restore.activate", "memory.restore.copy_scope"]).union(RecoveryExtensionValidation.effects).contains(kind) {
+        if Set(["backup.create", "restore.stage", "profile.restore.activate", "memory.restore.copy_scope", ChannelReconciliationValidation.effect]).union(RecoveryExtensionValidation.effects).contains(kind) {
             guard let review = value["review_id"].string, ManagementValidation.identifier(review),
                   let digest = value["review_digest"].string, ManagementValidation.hash(digest) else { throw RPCFailure.invalidResponse }
             reviewID = review; reviewDigest = digest
@@ -275,16 +277,24 @@ public struct MaintenanceOperation: Identifiable, Sendable {
             reviewID = nil; reviewDigest = nil
         }
         stage = try MaintenanceValidation.stage(value["stage"]); errorCode = try MaintenanceValidation.code(value["error_code"])
-        if kind == "profile.restore.activate" {
-            memoryCopyReceipt = nil; receipt = nil; activationReceipt = value["receipt"] == .null ? nil : try RestoreActivationReceipt(value["receipt"], operationID: id)
+        if kind == ChannelReconciliationValidation.effect {
+            receipt = nil; activationReceipt = nil; memoryCopyReceipt = nil
+            channelReceipt = value["receipt"] == .null ? nil : try ChannelReconciliationReceipt(value["receipt"], operationID: id)
+            if let channelReceipt, channelReceipt.requestDigest != reviewDigest { throw RPCFailure.invalidResponse }
+        } else if kind == "profile.restore.activate" {
+            channelReceipt = nil; memoryCopyReceipt = nil; receipt = nil; activationReceipt = value["receipt"] == .null ? nil : try RestoreActivationReceipt(value["receipt"], operationID: id)
         } else if kind == RestoredMemoryValidation.effect {
-            receipt = nil; activationReceipt = nil; memoryCopyReceipt = value["receipt"] == .null ? nil : try MemoryCopyReceipt(value["receipt"], operationID: id)
+            channelReceipt = nil; receipt = nil; activationReceipt = nil; memoryCopyReceipt = value["receipt"] == .null ? nil : try MemoryCopyReceipt(value["receipt"], operationID: id)
             if let memoryCopyReceipt, memoryCopyReceipt.requestDigest != reviewDigest { throw RPCFailure.invalidResponse }
         } else {
-            memoryCopyReceipt = nil; activationReceipt = nil; receipt = value["receipt"] == .null ? nil : try MaintenanceReceipt(value["receipt"], operation: id, kind: kind)
+            channelReceipt = nil; memoryCopyReceipt = nil; activationReceipt = nil; receipt = value["receipt"] == .null ? nil : try MaintenanceReceipt(value["receipt"], operation: id, kind: kind)
         }
         result = value["result"]
         guard result == .null || result.object != nil else { throw RPCFailure.invalidResponse }
+        if kind == ChannelReconciliationValidation.effect {
+            guard result == .null else { throw RPCFailure.invalidResponse }
+            if phase == "complete" { guard durable, channelReceipt?.status == "completed", !cleanupOwnerPending else { throw RPCFailure.invalidResponse } }
+        }
         if RestoredMemoryValidation.kinds.contains(kind) {
             if kind == RestoredMemoryValidation.effect {
                 guard result == .null else { throw RPCFailure.invalidResponse }
@@ -379,8 +389,14 @@ public enum MaintenancePresentation {
             return "No se pudo validar el journal SQLite; el diagnóstico no acredita recuperación. Consulta el resultado, no se repetirá automáticamente."
         }
         switch code {
-        case "maintenance_review_expired", "memory_restore_review_expired", "activation_review_expired", "restore_review_expired":
+        case "maintenance_review_expired", "memory_restore_review_expired", "activation_review_expired", "restore_review_expired", "telegram_reconciliation_expired":
             return "La revisión caducó. Ya no puede autorizarse; consulta el estado y prepara otra cuando termine la espera anterior. No se repetirá la operación automáticamente."
+        case "telegram_restore_profile_required":
+            return "Abre explícitamente un perfil restaurado y admitido para reconciliar sus rutas."
+        case "telegram_reconciliation_changed", "telegram_reconciliation_no_change":
+            return "La ruta, el agente o la carpeta cambiaron desde la revisión. Consulta el estado y prepara otra revisión exacta."
+        case "telegram_restore_bot_required":
+            return "El perfil no conserva la identidad de un bot de Telegram. Añade un enlace nuevo desde el panel Telegram."
         case "profile_cold_wal_cleanup_pending":
             return "La limpieza de la copia privada WAL sigue sin confirmar. Completa sólo esa limpieza antes de continuar."
         case "profile_cold_wal_invalid", "profile_cold_wal_no_commit":

@@ -1,36 +1,53 @@
 import Foundation
 
 @MainActor public final class TelegramPairingClient {
-    private let transport: LocalRPCClient
+    private let request: MaintenanceClient.Request
     private var attemptedChallengeID: String?
-    public init(transport: LocalRPCClient) { self.transport = transport }
+    public init(transport: LocalRPCClient) { request = { try await transport.call($0, params: $1) } }
+    init(request: @escaping MaintenanceClient.Request) { self.request = request }
     public func resetOpenAttempt() { attemptedChallengeID = nil }
-    public func status() async throws -> TelegramPairingStatus { try await TelegramPairingStatus(transport.call("telegram.pairing.status")) }
+    public func status() async throws -> TelegramPairingStatus { try await TelegramPairingStatus(request("telegram.pairing.status", [:])) }
     public func review(agentID: String) async throws -> TelegramPairingReview {
         guard ManagementValidation.identifier(agentID, agent: true) else { throw RPCFailure.configuration }
-        let review = try await TelegramPairingReview(transport.call("telegram.pairing.review", params: ["agent_id": .string(agentID)]))
+        let review = try await TelegramPairingReview(request("telegram.pairing.review", ["agent_id": .string(agentID)]))
         guard review.agentID == agentID else { throw RPCFailure.invalidResponse }
         return review
     }
     public func start(_ review: TelegramPairingReview, acknowledgeUpdateConsumption: Bool, confirmNoOtherConsumer: Bool) async throws -> TelegramPairingStatus {
         guard acknowledgeUpdateConsumption, confirmNoOtherConsumer else { throw RPCFailure.configuration }
-        let result = try await TelegramPairingStatus(transport.call("telegram.pairing.start", params: [
+        let result = try await TelegramPairingStatus(request("telegram.pairing.start", [
             "agent_id": .string(review.agentID), "expected_profile_revision": .number(Double(review.agentRevision)),
             "review_hash": .string(review.reviewHash), "acknowledge_update_consumption": .bool(true), "confirm_no_other_consumer": .bool(true)]))
         guard result.agentID == review.agentID, result.agentRevision == review.agentRevision,
               result.botID == review.botID, result.username == review.username else { throw RPCFailure.invalidResponse }
         return result
     }
-    public func cancel() async throws -> TelegramPairingStatus { try await TelegramPairingStatus(transport.call("telegram.pairing.cancel")) }
+    public func cancel() async throws -> TelegramPairingStatus { try await TelegramPairingStatus(request("telegram.pairing.cancel", [:])) }
     public func confirm(_ claim: TelegramPairingStatus) async throws -> TelegramSnapshot {
         guard claim.state == "claimed", let claimID = claim.claimID, let agent = claim.agentID, let revision = claim.agentRevision else {
             throw RPCFailure.configuration
         }
-        let snapshot = try await TelegramSnapshot(transport.call("telegram.pairing.confirm", params: ["claim_id": .string(claimID),
+        let snapshot = try await TelegramSnapshot(request("telegram.pairing.confirm", ["claim_id": .string(claimID),
             "agent_id": .string(agent), "expected_profile_revision": .number(Double(revision))]))
         guard !snapshot.running, snapshot.botID == claim.botID,
               snapshot.routes.contains(where: { $0.chatID == claim.chatID && $0.agentID == agent }) else { throw RPCFailure.invalidResponse }
         return snapshot
+    }
+
+    public func confirmRestored(_ claim: TelegramPairingStatus, route: TelegramRouteSnapshot, snapshot: TelegramSnapshot) async throws -> TelegramSnapshot {
+        guard claim.state == "claimed", let claimID = claim.claimID, let agent = claim.agentID, let revision = claim.agentRevision,
+              claim.chatID == route.chatID, agent == route.agentID, route.enabled, snapshot.botID == claim.botID,
+              !snapshot.running, snapshot.routes.contains(route),
+              snapshot.restoredPairingRequiredChatIDs.contains(route.chatID),
+              let expires = claim.expiresAt, expires > Date() else { throw RPCFailure.configuration }
+        let result = try await TelegramSnapshot(request("telegram.restore.pairing.confirm", [
+            "claim_id": .string(claimID), "agent_id": .string(agent), "expected_profile_revision": .number(Double(revision)),
+            "chat_id": .number(Double(route.chatID)), "expected_route_revision": .number(Double(route.revision)),
+            "configuration_hash": .string(snapshot.configurationHash)]))
+        guard !result.running, result.botID == snapshot.botID, result.workspaceID == snapshot.workspaceID,
+              result.configurationHash == snapshot.configurationHash, result.routes == snapshot.routes,
+              Set(result.restoredPairingRequiredChatIDs) == Set(snapshot.restoredPairingRequiredChatIDs).subtracting([route.chatID]) else { throw RPCFailure.invalidResponse }
+        return result
     }
 
     /// The sensitive response has no DTO/property accessible to a view. It is
@@ -45,7 +62,7 @@ import Foundation
         do {
             guard !Task.isCancelled, stillAllowed() else { throw CancellationError() }
             guard opener.canOpenTelegram() else { throw TelegramPairingOpenFailure.unavailable }
-            let result = try await transport.call("telegram.pairing.open", params: ["challenge_id": .string(challenge)])
+            let result = try await request("telegram.pairing.open", ["challenge_id": .string(challenge)])
             guard let object = result.object, Set(object.keys) == ["challenge_id", "telegram_uri"],
                   result["challenge_id"].string == challenge, let text = result["telegram_uri"].string,
                   let url = Self.validatedURI(text, username: username) else { throw TelegramPairingOpenFailure.invalidLink }

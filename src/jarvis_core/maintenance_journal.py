@@ -16,6 +16,7 @@ _PHASES = _TERMINAL | {"awaiting_owner", "quiescing", "working"}
 _PURPOSES = {"backup.create", "restore.stage", "profile.restore.activate",
              "memory.restore.copy_scope", "doctor.repair.apply", "workspace.backup.create",
              "workspace.restore.stage", "release.update.apply", "release.rollback.apply"}
+_PURPOSES.add("telegram.restore.reconcile")
 
 
 def wire(value):
@@ -57,6 +58,9 @@ def _valid(value):
             if row["purpose"] == "profile.restore.activate":
                 _activation_receipt(row, receipt)
                 continue
+            if row["purpose"] == "telegram.restore.reconcile":
+                _channel_receipt(row, receipt)
+                continue
             allowed = {"operation_id", "purpose", "status", "effect_status", "target_name",
                        "artifact_id", "manifest_sha256", "target_identity", "new_profile_id",
                        "error_code", "cleanup_error_code", "cleanup_pending"}
@@ -86,6 +90,57 @@ def _valid(value):
                 if item is not None and (type(item) is not str
                         or re.fullmatch(r"[a-z][a-z0-9_]{0,127}", item) is None):
                     raise PrivateJsonError("maintenance_journal_invalid")
+
+
+def _channel_receipt(row, receipt):
+    required = {"operation_id", "purpose", "request_digest", "status", "effect_status",
+                "bot_id", "chat_id", "route_revision_before", "route_revision_after",
+                "enabled_before", "enabled_after", "configuration_hash_before",
+                "configuration_hash_after", "error_code", "cleanup_pending", "network_started",
+                "provider_started", "grants_restored", "historical_events_replayed",
+                "permits_replay"}
+    if (set(receipt) != required or receipt["operation_id"] != row["operation_id"]
+            or receipt["purpose"] != row["purpose"]
+            or receipt["request_digest"] != row["review_digest"]
+            or receipt["status"] not in {"completed", "failed", "cancelled", "unknown"}
+            or receipt["effect_status"] not in {
+                "route_reconciled", "no_route_change_confirmed", "route_change_unknown"}
+            or type(receipt["cleanup_pending"]) is not bool
+            or any(receipt[key] is not False for key in (
+                "network_started", "provider_started", "grants_restored",
+                "historical_events_replayed", "permits_replay"))
+            or type(receipt["enabled_before"]) is not bool
+            or type(receipt["enabled_after"]) is not bool
+            or receipt["enabled_before"] is receipt["enabled_after"]):
+        raise PrivateJsonError("maintenance_journal_invalid")
+    for key in ("bot_id", "chat_id", "route_revision_before"):
+        if type(receipt[key]) is not int or not 1 <= receipt[key] < 1 << 52:
+            raise PrivateJsonError("maintenance_journal_invalid")
+    for key in ("request_digest", "configuration_hash_before", "configuration_hash_after"):
+        item = receipt[key]
+        if item is None and key == "configuration_hash_after":
+            continue
+        if type(item) is not str or _HASH.fullmatch(item) is None:
+            raise PrivateJsonError("maintenance_journal_invalid")
+    after = receipt["route_revision_after"]
+    if after is not None and (
+            type(after) is not int or after != receipt["route_revision_before"] + 1):
+        raise PrivateJsonError("maintenance_journal_invalid")
+    error = receipt["error_code"]
+    if error is not None and (type(error) is not str or re.fullmatch(
+            r"[a-z][a-z0-9_]{0,127}", error) is None):
+        raise PrivateJsonError("maintenance_journal_invalid")
+    if receipt["status"] == "completed" and (
+            receipt["effect_status"] != "route_reconciled" or after is None
+            or receipt["configuration_hash_after"] is None or error is not None
+            or receipt["cleanup_pending"]):
+        raise PrivateJsonError("maintenance_journal_invalid")
+    if receipt["status"] == "unknown" and receipt["effect_status"] != "route_change_unknown":
+        raise PrivateJsonError("maintenance_journal_invalid")
+    if receipt["status"] in {"failed", "cancelled"} and (
+            receipt["effect_status"] != "no_route_change_confirmed" or after is not None
+            or receipt["configuration_hash_after"] is not None or receipt["cleanup_pending"]):
+        raise PrivateJsonError("maintenance_journal_invalid")
 
 
 def _activation_receipt(row, receipt):

@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     func ownerDecisionNotices(for store: ChatStore) -> [OwnerDecisionNotice] {
         return [
+            OwnerDecisionNotice(tab: "channels-restored", operation: store.channelRestoration.operation, reviewID: store.channelRestoration.review?.id, expiresAt: store.channelRestoration.review?.expiresAt, unconfirmed: store.channelRestoration.responseUnconfirmed),
             OwnerDecisionNotice(tab: "recovery", operation: store.recovery.operation, reviewID: store.recovery.effectReview?.id, expiresAt: store.recovery.effectReview?.expiresAt, unconfirmed: store.recovery.responseUnconfirmed),
             OwnerDecisionNotice(tab: "maintenance", operation: store.maintenance.operation, reviewID: store.maintenance.review?.id, expiresAt: store.maintenance.review?.expiresAt, unconfirmed: store.maintenance.responseUnconfirmed),
             OwnerDecisionNotice(tab: "memory-restored", operation: store.memoryRestoration.operation, reviewID: store.memoryRestoration.effectReview?.id, expiresAt: store.memoryRestoration.effectReview?.expiresAt, unconfirmed: store.memoryRestoration.responseUnconfirmed),

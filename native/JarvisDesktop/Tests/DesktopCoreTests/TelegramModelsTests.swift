@@ -12,7 +12,7 @@ final class TelegramModelsTests: XCTestCase {
     private var status: [String: RPCValue] {
         ["connected": .bool(true), "running": .bool(false), "bot_id": .number(72501), "username": .string("jarvis_prueba"),
          "routes": .array([route]), "configuration_hash": .string(String(repeating: "b", count: 64)),
-         "workspace_id": .string(String(repeating: "c", count: 64)), "pinned_workspace_id": .null, "error": .null]
+         "workspace_id": .string(String(repeating: "c", count: 64)), "pinned_workspace_id": .null, "error": .null, "restored_pairing_required_chat_ids": .array([])]
     }
     private var event: [String: RPCValue] {
         ["update_id": .number(1), "epoch": .number(0), "chat_id": .number(4567), "message_id": .number(2),
@@ -30,6 +30,18 @@ final class TelegramModelsTests: XCTestCase {
         XCTAssertEqual(TelegramValidation.chatID("4503599627370495"), TelegramValidation.maximumIdentity)
         for invalid in ["-123", "0", "+12", "1e3", "12.0", "4503599627370496", "999999999999999999999"] {
             XCTAssertNil(TelegramValidation.chatID(invalid))
+        }
+    }
+
+    func testPendingFreshProofPreservesReaderOwnershipAndRejectsInventedRoutes() throws {
+        var value = status
+        value["restored_pairing_required_chat_ids"] = .array([.number(4567)])
+        value["running"] = .bool(true); value["pinned_workspace_id"] = value["workspace_id"]
+        let snapshot = try TelegramSnapshot(.object(value))
+        XCTAssertTrue(snapshot.running); XCTAssertEqual(snapshot.restoredPairingRequiredChatIDs, [4567])
+        for ids: RPCValue in [.array([.number(999)]), .array([.number(4567), .number(4567)]), .array([.bool(true)])] {
+            value["restored_pairing_required_chat_ids"] = ids
+            XCTAssertThrowsError(try TelegramSnapshot(.object(value)))
         }
     }
 

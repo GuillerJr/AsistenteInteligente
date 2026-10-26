@@ -166,10 +166,12 @@ struct RecoveryCenterView: View {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     VStack(alignment: .leading) {
                         Text(min(review.expiresAt, ticket.expiresAt) > context.date ? "Esta decisión caduca en \(max(0, Int(min(review.expiresAt, ticket.expiresAt).timeIntervalSince(context.date)))) segundos." : "La decisión caducó. Consulta el estado antes de continuar.").font(.caption).foregroundStyle(.secondary)
+                        if min(review.expiresAt, ticket.expiresAt) > context.date {
                         HStack {
                             Button("Autorizar esta operación") { Task { await recovery.decide(allow: true, ticket: ticket) } }.buttonStyle(.borderedProminent)
                             Button("No autorizar") { Task { await recovery.decide(allow: false, ticket: ticket) } }
                         }.disabled(!recovery.canDecide || !review.matches(ticket, operation: operation, now: context.date))
+                        }
                     }
                 }
             }

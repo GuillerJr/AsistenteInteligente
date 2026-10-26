@@ -54,11 +54,13 @@ struct RestoreProfileView: View {
                         OwnerDecisionStatusView(notice: notice)
                     }
                     if restored.canDecide, let review = restored.review, let approval = restored.approval, review.matches(approval, operation: operation) {
+                        OwnerDecisionValidityView(expiresAt: min(review.expiresAt, approval.expiresAt)) {
                         Text("Esta aprobación admite localmente sólo el perfil revisado. Todavía no cambia el perfil abierto ni conecta ninguna cuenta.")
                         HStack {
                             Button("Autorizar activación local") { Task { await restored.decide(allow: true) } }.buttonStyle(.borderedProminent)
                             Button("No autorizar") { Task { await restored.decide(allow: false) } }
                         }.disabled(restored.isRequesting)
+                        }
                     }
                     if operation.cleanupOwnerPending {
                         Text("La operación conserva recursos propios pendientes. No se puede abrir el destino mientras su limpieza siga sin confirmar.").foregroundStyle(.orange)

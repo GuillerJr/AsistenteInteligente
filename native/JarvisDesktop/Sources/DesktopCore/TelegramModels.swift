@@ -69,16 +69,23 @@ public struct TelegramSnapshot: Equatable, Sendable {
     public let workspaceID: String
     public let pinnedWorkspaceID: String?
     public let errorCode: String?
+    public let restoredPairingRequiredChatIDs: [Int]
 
     public init(_ value: RPCValue) throws {
         guard let object = value.object, Set(object.keys) == ["connected", "running", "bot_id", "username", "routes",
-                "configuration_hash", "workspace_id", "pinned_workspace_id", "error"],
+                "configuration_hash", "workspace_id", "pinned_workspace_id", "error", "restored_pairing_required_chat_ids"],
               let connected = value["connected"].bool, let running = value["running"].bool,
               let hash = value["configuration_hash"].string, ManagementValidation.hash(hash),
               let workspace = value["workspace_id"].string, ManagementValidation.hash(workspace)
         else { throw RPCFailure.invalidResponse }
         let routes = try ManagementValidation.rows(value["routes"], limit: 32, parse: TelegramRouteSnapshot.init)
         guard Set(routes.map(\.chatID)).count == routes.count else { throw RPCFailure.invalidResponse }
+        guard let requiredRows = value["restored_pairing_required_chat_ids"].array, requiredRows.count <= 32 else { throw RPCFailure.invalidResponse }
+        let required = try requiredRows.map { try ChannelReconciliationValidation.identity($0) }
+        // The reader may still own an in-flight poll when a route loses its
+        // fresh proof. Keep that ownership visible so Stop remains available.
+        guard Set(required).count == required.count, required.allSatisfy({ id in routes.contains { $0.chatID == id && $0.enabled } }) else { throw RPCFailure.invalidResponse }
+        restoredPairingRequiredChatIDs = required
         let pinned = try TelegramValidation.optionalID(value["pinned_workspace_id"])
         let bot: Int?
         let username: String?
@@ -107,7 +114,7 @@ public struct TelegramSnapshot: Equatable, Sendable {
         .object(["bot_id": botID.map { .number(Double($0)) } ?? .null,
                  "username": username.map(RPCValue.string) ?? .null,
                  "routes": .array(routes.map(\.reviewValue)), "workspace_id": .string(workspaceID),
-                 "configuration_hash": .string(configurationHash)])
+                 "configuration_hash": .string(configurationHash), "restored_pairing_required_chat_ids": .array(restoredPairingRequiredChatIDs.map { .number(Double($0)) })])
     }
 }
 

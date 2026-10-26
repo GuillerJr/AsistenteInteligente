@@ -28,6 +28,12 @@ public enum TelegramPresentation {
             return "El canal se detuvo por un fallo interno que no quedó identificado. Revisa su estado antes de volver a activarlo."
         case "telegram_configuration_changed", "telegram_route_revision_conflict":
             return "Las rutas cambiaron desde la revisión. Actualiza y vuelve a revisarlas antes de continuar."
+        case "telegram_restored_pairing_required", "telegram_restore_fresh_pairing_required":
+            return "Verifica de nuevo cada ruta conservada mediante un enlace privado antes de activar el canal. La aprobación local no sustituye ese enlace."
+        case "telegram_reconciliation_changed", "telegram_reconciliation_no_change":
+            return "La ruta o su configuración cambiaron. Actualiza y revisa la operación exacta."
+        case "telegram_restore_profile_required":
+            return "Esta función requiere un perfil restaurado que hayas activado y abierto explícitamente."
         case "telegram_stop_required", "telegram_runner_in_use":
             return "Detén el canal antes de modificar sus rutas o su conexión."
         case "telegram_disconnect_required":

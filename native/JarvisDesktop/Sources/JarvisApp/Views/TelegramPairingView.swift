@@ -22,7 +22,7 @@ struct TelegramPairingView: View {
             Button("Revisar e iniciar enlace…") {
                 Task { review = await store.telegram.pairingReview(agentID: agentID) }
             }.disabled(!editable || store.telegram.snapshot?.connected != true || store.telegram.snapshot?.running == true ||
-                       store.telegram.pairing?.active == true || (store.telegram.snapshot?.routes.count ?? 32) >= 32 ||
+                       store.telegram.pairing?.active == true ||
                        !store.management.agents.contains(where: { $0.id == agentID }))
             if store.telegram.snapshot?.connected != true {
                 Text("Conecta primero el bot.").font(.caption).foregroundStyle(.secondary)
@@ -51,13 +51,18 @@ struct TelegramPairingView: View {
                 .font(.caption).foregroundStyle(.secondary)
             Text("Aún no se creó una ruta ni se envió una respuesta. Revisa esta propuesta antes de confirmarla.")
                 .font(.caption).foregroundStyle(.secondary)
-            Button("Revisar y crear ruta…") { Task { await store.telegram.confirmPairing(status) } }.disabled(!editable)
+            if let route = store.telegram.snapshot?.routes.first(where: { $0.chatID == chat }) {
+                Text("Este chat ya tiene una ruta conservada. La verificación nueva mantendrá su conversación.").font(.caption)
+                Button("Verificar ruta conservada…") { Task { await store.telegram.confirmRestoredPairing(status, route: route) } }.disabled(!editable || !route.enabled)
+            } else {
+                Button("Revisar y crear ruta…") { Task { await store.telegram.confirmPairing(status) } }.disabled(!editable || (store.telegram.snapshot?.routes.count ?? 32) >= 32)
+            }
         } else if status.state == "starting" {
             Text("Preparando el lector privado…").font(.caption).foregroundStyle(.secondary)
         } else if status.state == "confirmed" {
             Text(store.telegram.snapshot?.running == true
-                 ? "Ruta creada. El canal se activó por separado."
-                 : "Ruta creada. El canal sigue detenido hasta que lo actives por separado.")
+                 ? "Enlace confirmado. El canal se activó por separado."
+                 : "Enlace confirmado. El canal sigue detenido hasta que lo actives por separado.")
                 .font(.caption).foregroundStyle(.secondary)
         } else if status.state == "expired" {
             Text("El intento de enlace caducó. Puedes iniciar otro.").font(.caption).foregroundStyle(.secondary)

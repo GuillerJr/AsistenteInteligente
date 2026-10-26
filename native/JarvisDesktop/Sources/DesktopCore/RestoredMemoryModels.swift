@@ -2,6 +2,7 @@ import Foundation
 
 /// Metadata only. Historical scopes and note content never cross this API.
 enum RestoredMemoryValidation {
+    static let sourceKinds = Set(["owned_snapshot", "cold_delete_snapshot", "cold_wal_snapshot", "cold_journal_snapshot"])
     static let effect = "memory.restore.copy_scope"
     static let reads = Set(["memory.restore.inventory", "memory.restore.review", "memory.restore.receipt"])
     static let kinds = reads.union([effect])
@@ -77,7 +78,7 @@ public struct RestoredMemoryInventory: Sendable {
             let version = try MaintenanceValidation.integer(value["schema_version"], max: 2)
             guard version == 1 || version == 2 else { throw RPCFailure.invalidResponse }; schemaVersion = version
         }
-        guard let kind = value["source_kind"].string, ["owned_snapshot", "cold_delete_snapshot", "absent"].contains(kind),
+        guard let kind = value["source_kind"].string, RestoredMemoryValidation.sourceKinds.union(["absent"]).contains(kind),
               value["page_size"] == .number(32), value["provider_used"] == .bool(false), value["source_workspace_resolved"] == .bool(false) else { throw RPCFailure.invalidResponse }
         sourceKind = kind
         let destination = value["destination"]
@@ -119,6 +120,8 @@ public struct RestoredMemoryReview: Identifiable, Sendable {
     public let workspace: MaintenanceFileIdentity
     public let schemaBefore: Int
     public let migrationRequired: Bool
+    public let sourceKind: String
+    public let coldSQLiteRecoveryRequired: Bool
     public let expiresAt: Date
     public let metadata: RPCValue
     public var params: [String: RPCValue] { ["review_id": .string(id), "review_digest": .string(digest)] }
@@ -126,7 +129,7 @@ public struct RestoredMemoryReview: Identifiable, Sendable {
         try MaintenanceValidation.keys(value, ["review_id", "review_digest", "expires_in_seconds", "metadata"])
         id = try RestoredMemoryValidation.id(value["review_id"]); digest = try RestoredMemoryValidation.hash(value["review_digest"])
         let row = value["metadata"]
-        try MaintenanceValidation.keys(row, ["kind", "profile_id", "generation", "root_identity", "database_identity", "agent_id", "agent_revision", "inventory_id", "source_handle", "source_generation", "source_fingerprint", "source_documents", "source_bytes", "largest_document_bytes", "destination_workspace_path", "destination_workspace_identity", "destination_scope_present", "destination_generation", "destination_documents", "core_review_digest", "schema_before", "schema_after", "migration_required", "limits", "policy", "retains_source", "new_document_ids", "new_document_revision", "source_labels_verified", "uri_resources_opened", "provider_used", "grants_restored"])
+        try MaintenanceValidation.keys(row, ["kind", "profile_id", "generation", "root_identity", "database_identity", "agent_id", "agent_revision", "inventory_id", "source_handle", "source_generation", "source_fingerprint", "source_documents", "source_bytes", "largest_document_bytes", "destination_workspace_path", "destination_workspace_identity", "destination_scope_present", "destination_generation", "destination_documents", "core_review_digest", "schema_before", "schema_after", "migration_required", "limits", "policy", "retains_source", "new_document_ids", "new_document_revision", "source_labels_verified", "uri_resources_opened", "provider_used", "grants_restored", "source_kind", "cold_sqlite_recovery_required"])
         guard row["kind"] == .string(RestoredMemoryValidation.effect), row["destination_documents"] == .number(0), row["schema_after"] == .number(2), row["policy"] == .string("same_agent_durable_scope_to_empty_current_workspace"), row["retains_source"] == .bool(true), row["new_document_ids"] == .bool(true), row["new_document_revision"] == .number(1), ["source_labels_verified", "uri_resources_opened", "provider_used", "grants_restored"].allSatisfy({ row[$0] == .bool(false) }), ManagementValidation.digest(try MaintenanceValidation.canonical(row)) == digest else { throw RPCFailure.invalidResponse }
         scope = try MaintenanceScope(row); root = try MaintenanceFileIdentity(row["root_identity"])
         _ = try MaintenanceFileIdentity(row["database_identity"])
@@ -145,6 +148,10 @@ public struct RestoredMemoryReview: Identifiable, Sendable {
         schemaBefore = try MaintenanceValidation.integer(row["schema_before"], max: 2)
         migrationRequired = try RestoredMemoryValidation.bool(row["migration_required"])
         guard [1, 2].contains(schemaBefore), migrationRequired == (schemaBefore == 1) else { throw RPCFailure.invalidResponse }
+        guard let sourceKind = row["source_kind"].string, RestoredMemoryValidation.sourceKinds.contains(sourceKind),
+              let sidecars = row["cold_sqlite_recovery_required"].bool,
+              sidecars == ["cold_wal_snapshot", "cold_journal_snapshot"].contains(sourceKind) else { throw RPCFailure.invalidResponse }
+        self.sourceKind = sourceKind; coldSQLiteRecoveryRequired = sidecars
         let maxima: [String: Int] = ["document_bytes":1_048_576, "scope_documents":100_000, "scope_bytes":268_435_456, "memory_documents":100_000, "memory_scopes":100_000, "memory_text_bytes":268_435_456, "chunk_bytes":32_768, "copy_receipts":256, "copy_mapping_rows":100_000, "copy_metadata_bytes":16_777_216, "copy_vm_steps":20_000_000, "memory_file_bytes":67_108_864, "profile_snapshot_bytes":134_217_728]
         try MaintenanceValidation.keys(row["limits"], Set(maxima.keys))
         for (key, max) in maxima { guard try MaintenanceValidation.integer(row["limits"][key], max: max) > 0 else { throw RPCFailure.invalidResponse } }
@@ -159,7 +166,7 @@ public struct RestoredMemoryReview: Identifiable, Sendable {
         matches(operation) && operation.phase == "awaiting_owner" && ticket.operationID == operation.id && ticket.purpose == RestoredMemoryValidation.effect && ticket.scope == scope && ticket.reviewID == id && ticket.reviewDigest == digest && ticket.reviewMetadata == metadata && expiresAt > now && ticket.expiresAt > now
     }
     public func matches(_ inventory: RestoredMemoryInventory, source: RestoredMemorySource) -> Bool {
-        scope.profileID == inventory.scope.profileID && root == inventory.root && inventoryID == inventory.id && agentID == inventory.agentID && agentRevision == inventory.agentRevision && sourceHandle == source.id && sourceGeneration == source.generation && sourceFingerprint == source.fingerprint && documents == source.documents && bytes == source.bytes && workspacePath == inventory.workspacePath && workspace == inventory.workspace && inventory.destinationEmpty && source.eligible
+        scope.profileID == inventory.scope.profileID && root == inventory.root && inventoryID == inventory.id && agentID == inventory.agentID && agentRevision == inventory.agentRevision && sourceKind == inventory.sourceKind && sourceHandle == source.id && sourceGeneration == source.generation && sourceFingerprint == source.fingerprint && documents == source.documents && bytes == source.bytes && workspacePath == inventory.workspacePath && workspace == inventory.workspace && inventory.destinationEmpty && source.eligible
     }
 }
 

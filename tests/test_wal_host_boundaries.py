@@ -8,6 +8,7 @@ import asyncio
 import copy
 import json
 import os
+import sqlite3
 import threading
 import time
 from uuid import uuid4
@@ -405,14 +406,27 @@ async def test_wal_input_budget_is_checked_before_capture_not_only_main_size(hos
     assert oracle(service.directory) == before and provider.calls == 0
 
 
-async def test_wal_read_support_does_not_enable_mutable_memory_reconciliation(host, monkeypatch):
+async def test_memory_reconciliation_reads_validated_wal_privately_without_copy_or_owned_open(
+    host, monkeypatch,
+):
     service, _parent, _control, provider = host
     before = oracle(service.directory)
+    reader = cold_wal.read_wal_image
+    captures = []
 
-    def forbidden(*_args, **_kwargs):
-        pytest.fail("memory reconciliation borrowed the new WAL reader")
+    def traced(family, *args, **kwargs):
+        assert family.root == service.directory and family.role == "memory"
+        assert family.capture_mode == "cold_wal"
+        captures.append(family)
+        return reader(family, *args, **kwargs)
 
-    monkeypatch.setattr(cold_wal, "read_wal_image", forbidden)
+    def no_owned_open(*_args, **_kwargs):
+        pytest.fail("read-only reconciliation opened a mutable source store")
+
+    monkeypatch.setattr(cold_wal, "read_wal_image", traced)
+    monkeypatch.setattr(MemoryStore, "_open_disk", no_owned_open)
+    monkeypatch.setattr(StateStore, "_open_disk", no_owned_open)
+    monkeypatch.setattr(ScheduleStore, "_open", no_owned_open)
     cancellation = HostCancellation()
     with service.profile_gate.exclusive() as cut:
         frozen = freeze_sources(service, cut)
@@ -421,9 +435,23 @@ async def test_wal_read_support_does_not_enable_mutable_memory_reconciliation(ho
                                   time.monotonic() + 20)
         outcome = await service.profile_gate.run_worker(
             cut, lambda: read_memory_image(frozen, cut, context, for_copy=False), cancellation)
-        assert isinstance(outcome.error, HostProfileError)
-        assert outcome.error.code == "profile_memory_source_unavailable"
-    assert service.memory._disk is None
+        assert outcome.error is None, repr(outcome.error)
+        image = outcome.value
+        assert image.source_kind == "cold_wal_snapshot" and image.schema_version == 1
+        assert image.scopes_total == 1 and len(captures) == 1
+        # Inspect only returned RAM bytes; no SQLite VFS ever opens the original.
+        with sqlite3.connect(":memory:") as connection:
+            connection.deserialize(image.data)
+            assert connection.execute("SELECT key,title,text,source_uri,revision FROM documents"
+                                      ).fetchall() == [(
+                "wal-fixture", "JARVIS WAL COMMIT TRES memory", "PRUEBA WAL LOCAL ÁMBAR",
+                "jarvis://synthetic-wal", 1)]
+            assert connection.execute("SELECT count(*) FROM documents").fetchone()[0] == 1
+            assert connection.execute("SELECT name FROM sqlite_schema WHERE name "
+                                      "LIKE 'memory_scope_cop%'").fetchall() == []
+    assert service.store._disk is service.memory._disk is None
+    assert service.schedule_store._connection is None and service.profile_gate._cut is None
+    assert not (await service.maintenance_coordinator.pending({}))["pending"]
     assert oracle(service.directory) == before and provider.calls == 0
 
 

@@ -160,6 +160,14 @@ final class TelegramStore {
             }
     }
 
+    func confirmRestoredPairing(_ claim: TelegramPairingStatus, route: TelegramRouteSnapshot) async {
+        guard let pairingClient, let snapshot else { return }
+        _ = await pairingChange(title: "Verificar una ruta conservada de Telegram", action: "Verificar esta ruta",
+            detail: "Revisa el chat privado que acaba de responder al enlace nuevo. Se verificará únicamente esta ruta, con el mismo bot, agente, conversación y carpeta. La comprobación se conserva en memoria y desaparece al desconectar o cambiar su configuración. No crea otra conversación ni inicia el canal.\n\n" + ManagementValidation.json(claim.claimReviewValue) + "\n\n" + ManagementValidation.json(route.reviewValue)) {
+                .snapshot(try await pairingClient.confirmRestored(claim, route: route, snapshot: snapshot))
+            }
+    }
+
     private enum PairingChangeResult { case state(TelegramPairingStatus), snapshot(TelegramSnapshot) }
 
     private func pairingChange(title: String, action: String, detail: String, operation: () async throws -> PairingChangeResult) async -> Bool {

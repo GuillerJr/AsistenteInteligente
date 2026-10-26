@@ -42,8 +42,8 @@ def _capture(row, frozen, cut, context, limits):
             data = capture_sqlite_snapshot(source, context, limits, frozen.service.directory)
     elif row.cold is not None and row.cold.members[0] is None:
         return None
-    elif row.cold is not None and row.cold.eligible:
-        data, _ = row.cold.read_image(context, limits, check)
+    elif row.cold is not None and row.cold.snapshot_eligible:
+        data, _ = row.cold.capture_image(context, limits, check)
     else:
         raise HostProfileError("profile_memory_source_unavailable")
     check()
@@ -65,7 +65,7 @@ def read_memory_image(frozen, cut, context, *, recovery_limits=None, copy_limits
     row = next(item for item in frozen._sql if item.role == "memory")
     if row.fingerprint[0] == "absent":
         return MemoryImage(None, None, None, "absent", 0, 0, copy_limits, None, ())
-    if row.fingerprint[0] not in {"owned", "cold_delete"}:
+    if row.connection is None and not (row.cold and row.cold.snapshot_eligible):
         raise HostProfileError("profile_memory_source_unavailable")
     portable = PORTABLE_CONFIG if type(PORTABLE_CONFIG) is bytes else canonical(PORTABLE_CONFIG)
     total = len(portable) + sum(len(item.data) for item in frozen._json if item.data is not None)
@@ -95,8 +95,12 @@ def read_memory_image(frozen, cut, context, *, recovery_limits=None, copy_limits
                                        check_current=lambda: frozen.assert_current(cut),
                                        limits=bound.sqlite())
     frozen.assert_current(cut, full=True)
+    source_kind = ("owned_snapshot" if row.connection is not None else
+                   "cold_wal_snapshot" if row.cold.wal_eligible else
+                   "cold_journal_snapshot" if row.cold.journal_eligible else
+                   "cold_delete_snapshot")
     return MemoryImage(data, FileIdentity(*row.fingerprint[1:3]), inspected.schema_version,
-                       "owned_snapshot" if row.connection is not None else "cold_delete_snapshot",
+                       source_kind,
                        inspected.counts["scopes"], total, effective,
                        hashlib.sha256(data).hexdigest(), inspected.row_counts)
 

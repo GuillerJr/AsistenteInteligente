@@ -633,6 +633,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
             if self.process_tools:
                 await self.process_tools.aclose()
                 self.process_tools = None
+            self._telegram_restored_pairings.clear()
             self._workspace_path = path
             self._configured_workspace = str(path)
             self._volatile_bindings.clear()

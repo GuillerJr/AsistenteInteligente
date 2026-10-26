@@ -67,8 +67,9 @@ Estos recorridos acotados no cierran todas las capacidades del canal, voz o web.
 - [ ] Completar la investigación semántica pendiente: REA 13–20 amplían respaldo,
   snapshots, actualización, cierre, migración de memoria, custodia SQLite y archivos;
   veinte lotes y 80 rutas TS/JS seleccionadas no cierran la matriz ni toda la referencia.
-- [ ] Repetir Python/Swift/paquete/CI tras los últimos ajustes y registrar identidades
-  finales. No sustituir la instalación anterior por un bundle de desarrollo.
+- [x] Ejecutar Python/Swift/paquetes/bundle y CI para el checkpoint `b03ad7a`:
+  2321 pruebas Python y 282 Swift. El [cierre nativo](rebuild/PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md)
+  conserva identidades y límites; los controles de incrementos posteriores se registran aparte.
 
 macOS Apple Silicon sigue como destino inicial e iPhone permanece aplazado por
 petición expresa. Estas implementaciones parciales no equivalen a todos los
@@ -83,11 +84,13 @@ declara completa por los tests sintéticos.
 - [x] Probar el núcleo propio con SQLite real, autoridad central y barrera del host:
   publicación sin sobrescritura, cancelación, recibo incierto, restauración nueva
   desarmada y diagnóstico sin inicializar fuentes ausentes.
-- [ ] Cualificar la interfaz integrada y el recorrido nativo de respaldo,
-  verificación y restauración con las decisiones reales del dueño.
+- [x] Cualificar los recorridos nativos finitos de respaldo, verificación y
+  restauración solicitados en los puntos 1 y 2, con decisiones reales/delegadas
+  separadas de las pruebas IPC sintéticas. [Cierre](rebuild/PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md).
 - [x] Observar una copia, su verificación y la preparación de otro perfil desde
   la app con aprobaciones del dueño, usando únicamente datos sintéticos. Recibos
-  de publicación y perfil desarmado observados; faltan los demás escenarios reales.
+  de publicación y perfil desarmado observados; la ampliación finita posterior
+  está registrada en el cierre nativo y no constituye trabajo nuevo.
 - [x] Implementar captura y diagnóstico de SQLite frías DELETE independientes,
   sin inicializar stores ni modificar las fuentes.
 - [x] Añadir captura WAL compatible en copias privadas para respaldo y diagnóstico:
@@ -118,8 +121,8 @@ declara completa por los tests sintéticos.
   diagnóstico y revisión de respaldo; límites en el registro de activación.
 - [x] Observar otro arranque del mismo perfil sintético admitido, con restricciones
   exactas, sin cuenta ni procesos hijos del proveedor y con controles intactos.
-- [ ] Cualificar escenarios reales negativos de activación y completar
-  reconciliación de memoria y canales sin importar permisos.
+Los negativos de activación y la reconciliación de memoria/canales se siguen
+en la continuación actual de abajo, sin duplicar este hito histórico.
 - [x] Integrar el núcleo de copia atómica de ámbitos de memoria y compatibilidad
   de esquema v1/v2 con respaldo, diagnóstico y restauración de historia.
   [Contrato y pruebas](rebuild/PHASE_A_MEMORY_RECONCILIATION.md).
@@ -168,11 +171,38 @@ declara completa por los tests sintéticos.
   la ventana principal, acceso a la operación exacta y retirada del ticket tras
   desconexión comprobados en la app. No se renuevan permisos ni se repiten
   solicitudes automáticamente. [Cierre de los puntos 1 y 2](rebuild/PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md).
-- [ ] Completar negativos reales de activación y copia de memoria, reconciliación
-  de canales y distribución cualificada. El canal local `development` mantiene
-  Python/Codex externos; no acredita autenticidad del paquete, distribución
-  autocontenida, Developer ID, notarización ni actualización remota firmada.
-  A-71 y la fase A siguen abiertos; la fase B no ha comenzado.
+
+### Activación, copia de memoria y canales — continuación actual
+
+Los tres contratos locales quedaron implementados y verificados. Sus
+observaciones GUI, recibos e identidades se conservan en el [registro de reconciliación](rebuild/PHASE_A_RECONCILIATION_CLOSEOUT.md).
+Las casillas siguientes separan implementación de comprobación nativa final.
+
+- [x] Admitir inventario, revisión y copia explícita sobre familias frías WAL y
+  journals íntegros compatibles. La revisión conserva los archivos; la apertura
+  y recuperación SQLite sólo ocurren después de la aprobación exacta. La copia
+  conserva las notas de origen y su procedencia, sin prometer inmutabilidad física
+  de la base después del efecto autorizado.
+- [x] Conectar habilitación/deshabilitación e inspección local de rutas conservadas
+  a la autoridad central, con recibos durables, incertidumbre y custodia de limpieza
+  sin replay. La decisión local conserva conversación e historial y no inicia el canal.
+- [x] Exigir prueba fresca del chat por nonce y claim antes de activar Telegram:
+  prueba sólo en RAM, ligada a conexión/ruta/agente/workspace, sin restaurar tokens
+  o permisos. El lector descarta mensajes previos al arranque y todo su primer
+  segundo parcial; las fechas no convierten el historial en entrada nueva.
+- [x] Añadir regresiones adversariales de activación y hacer que su validación
+  nativa respete también el vencimiento de la revisión, sin ampliar el TTL.
+- [x] Consolidar los negativos y recorridos GUI finales de activación, copia de
+  memoria y reconciliación local en perfiles sintéticos, incluidos sus límites.
+- [x] Aprobar los controles locales integrados: 2402 pruebas Python y 305 Swift,
+  paquete e instalación aislada, además del bundle y los recorridos GUI. Los hooks
+  repiten los controles sobre el árbol congelado antes de publicar; la CI de cada
+  commit se comprueba por separado.
+- [ ] Completar distribución cualificada. El canal `development` mantiene Python
+  y Codex externos; faltan autenticidad del paquete, distribución autocontenida,
+  Developer ID/notarización y actualización remota firmada.
+
+A-71 y la fase A siguen abiertos; la fase B no ha comenzado.
 
 ## Fase B — después de acreditar A
 
@@ -187,8 +217,10 @@ La conexión elegida sigue siendo Codex con ChatGPT; NVIDIA queda excluido y no 
 respaldo automático entre proveedores. El dueño inicia sesión, escribe contraseñas,
 concede TCC y aprueba acciones reales. Los pendientes anteriores permanecen en el
 historial del commit `c97ed89`; no se han borrado de los inventarios.
+Para este incremento el dueño delegó expresamente las aprobaciones en perfiles
+sintéticos; esa delegación no incluye contraseñas, TCC ni perfiles personales.
 
-Checkpoint local posterior: 1234 pruebas Python y 129 nativas aprobadas. Se verificaron
+Checkpoint histórico `381074d`: 1234 pruebas Python y 129 nativas aprobadas. Se verificaron
 una escritura desde Telegram con aprobación y hash, una lectura HTTPS marcada como
 externa y un dictado local de español añadido al borrador sin enviarse. Son recorridos
 acotados en el perfil sintético, no cierre de las familias ni de la fase A.

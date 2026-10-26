@@ -655,7 +655,15 @@ class TelegramJournal:
     def bot_id(self):
         return self.document.read()["bot_id"]
 
-    def _configuration_update(self, change):
+    def _configuration_update(self, change, *, before_publish=None):
+        if before_publish is not None and not callable(before_publish):
+            raise TelegramError("telegram_reconciliation_invalid")
+        if before_publish is not None:
+            # The reviewed owner acquires both fixed locks itself, before any
+            # fallible descriptor observation. No legacy pre-owner parent/runner
+            # acquisition can strand a lease before custody begins.
+            return self.document.update(change, before_publish=before_publish,
+                                        _runner_lock_name="telegram.runner.lock")
         descriptor = self.acquire_runner()
         try:
             return self.document.update(change)
@@ -761,6 +769,36 @@ class TelegramJournal:
             return value
 
         value = self._configuration_update(change)
+        return _route(value["routes"][str(chat_id)])
+
+    def reconcile_route(self, chat_id, *, expected_revision, enabled,
+                        expected_configuration_hash, before_publish):
+        """Change one existing route; no token, session, reader or message effect.
+
+        Only the host maintenance authority supplies before_publish. The exact
+        configuration is checked inside the locked JSON transaction as well as
+        by the host's frozen profile cut. Event history is never rewritten.
+        """
+        _integer(chat_id, minimum=1)
+        _integer(expected_revision, minimum=1)
+        if (type(enabled) is not bool or not callable(before_publish)
+                or type(expected_configuration_hash) is not str
+                or not _HASH.fullmatch(expected_configuration_hash)):
+            raise TelegramError("telegram_reconciliation_invalid")
+
+        def change(value):
+            actual = hashlib.sha256(json.dumps(
+                [value["bot_id"], value["routes"]], sort_keys=True,
+                separators=(",", ":")).encode()).hexdigest()
+            row = value["routes"].get(str(chat_id))
+            if (actual != expected_configuration_hash or row is None
+                    or row["revision"] != expected_revision or row["enabled"] is enabled):
+                raise TelegramError("telegram_reconciliation_changed")
+            row["enabled"] = enabled
+            row["revision"] += 1
+            return value
+
+        value = self._configuration_update(change, before_publish=before_publish)
         return _route(value["routes"][str(chat_id)])
 
     def remove_route(self, chat_id, *, expected_revision):
@@ -945,6 +983,7 @@ class TelegramChannel:
         clock=time.time,
         dispatch_timeout=1800,
         close_timeout=10,
+        configuration_guard=None,
     ):
         if (
             not callable(dispatch)
@@ -953,6 +992,7 @@ class TelegramChannel:
             or not 1 <= dispatch_timeout <= 3600
             or type(close_timeout) not in {int, float}
             or not 0 < close_timeout <= 30
+            or (configuration_guard is not None and not callable(configuration_guard))
         ):
             raise TelegramError("telegram_limits_invalid")
         self.client, self.journal, self.dispatch = client, journal, dispatch
@@ -967,6 +1007,7 @@ class TelegramChannel:
         self._send_tickets = set()
         self._poll_offset = 0
         self._last_received_at = 0
+        self._host_configuration_guard = configuration_guard
 
     @property
     def running(self):
@@ -997,7 +1038,10 @@ class TelegramChannel:
                 raise TelegramError("telegram_bot_changed")
             self.journal._recover_unfinished()
             self._reviewed_hash = expected_configuration_hash
-            self._started_at = math.floor(self.clock())
+            # Telegram dates have whole-second precision. A message from the
+            # same second may predate the owner's start gesture, so discard
+            # that entire partial second rather than authorize an old inbox.
+            self._started_at = math.floor(self.clock()) + 1
             self._poll_offset = 0
             self._last_received_at = self.clock()
             self._stop, self.error_code = asyncio.Event(), None
@@ -1014,6 +1058,8 @@ class TelegramChannel:
         self.journal._assert_runner(self._lease)
         if self.client.identity is None or self.journal.bot_id != self.client.identity.bot_id:
             raise TelegramError("telegram_bot_changed")
+        if self._host_configuration_guard is not None:
+            self._host_configuration_guard()
 
     def _incoming(self, update):
         message = update.get("message")
