@@ -32,6 +32,7 @@ final class ChatStore {
     let maintenance = MaintenanceStore()
     let restored = RestoreProfileStore()
     let memoryRestoration: RestoredMemoryStore
+    let recovery: RecoveryExtensionStore
     let runtime: ProfileRuntimeGuard
     var localProfileStatus: LocalProfileStatus?
     var handoffPreparing = false
@@ -61,19 +62,19 @@ final class ChatStore {
     var launchOptions: LaunchOptions? { options }
     var serviceOwner: ServiceOwnerIdentity? { service.ownedIdentity }
     var durableDraftSnapshot: SessionDrafts { drafts.durableOnly }
-    var mayHandoff: Bool { ready && !starting && !stopping && !handoffPreparing && !busy && activeRunID == nil && !voice.canStopDictation && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !telegram.isChanging && !maintenance.blocksInteraction && !memoryRestoration.blocksInteraction && !restored.isRequesting && !restored.responseUnconfirmed && restored.operation?.workerPending != true && restored.operation?.cleanupOwnerPending != true }
+    var mayHandoff: Bool { ready && !starting && !stopping && !handoffPreparing && !busy && activeRunID == nil && !voice.canStopDictation && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !telegram.isChanging && !maintenance.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction && !restored.isRequesting && !restored.responseUnconfirmed && restored.operation?.workerPending != true && restored.operation?.cleanupOwnerPending != true }
     var shutdownWarning: String? { service.lastStopReport?.warning }
 
     var selected: ChatSession? { sessions.first { $0.id == selectedID } }
-    var canSend: Bool { ready && connected && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !telegram.isChanging && !maintenance.blocksInteraction && !memoryRestoration.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil && selected != nil
+    var canSend: Bool { ready && connected && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !telegram.isChanging && !maintenance.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil && selected != nil
                        && selected?.archived == false
                        && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    var canChangeSession: Bool { ready && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !telegram.isChanging && !maintenance.blocksInteraction && !memoryRestoration.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil }
+    var canChangeSession: Bool { ready && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !telegram.isChanging && !maintenance.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil }
     var selectedAgentName: String { management.agents.first(where: { $0.id == selected?.agentID })?.name ?? selected?.agentID ?? "Jarvis" }
     var canUseVoice: Bool { canChangeSession && connected && selected?.archived == false && selected != nil }
 
     init(voice: LocalVoiceController? = nil, options: LaunchOptions? = nil, target: ProfileOpenTarget? = nil, runtime: ProfileRuntimeGuard = ProfileRuntimeGuard()) {
-        self.runtime = runtime; memoryRestoration = RestoredMemoryStore(runtime: runtime); suppliedOptions = options; openTarget = target
+        self.runtime = runtime; memoryRestoration = RestoredMemoryStore(runtime: runtime); recovery = RecoveryExtensionStore(runtime: runtime); suppliedOptions = options; openTarget = target
         self.voice = voice ?? LocalVoiceController(driver: MacLocalVoiceDriver())
         self.voice.onTranscript = { [weak self] transcript in self?.acceptDictation(transcript) }
         maintenance.waitForSupervisionIdle = { [weak self] in
@@ -81,6 +82,10 @@ final class ChatStore {
             try await self.waitForMonitorSettlement()
         }
         memoryRestoration.waitForSupervisionIdle = { [weak self] in
+            guard let self else { throw RPCFailure.configuration }
+            try await self.waitForMonitorSettlement()
+        }
+        recovery.waitForSupervisionIdle = { [weak self] in
             guard let self else { throw RPCFailure.configuration }
             try await self.waitForMonitorSettlement()
         }
@@ -133,6 +138,7 @@ final class ChatStore {
             maintenance.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
             restored.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
             memoryRestoration.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+            recovery.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
             try service.start(options)
             try await ServiceBootstrap.waitForHealth(stateDirectory: options.state) { service.isRunning }
             try await refreshStatus()
@@ -162,7 +168,7 @@ final class ChatStore {
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(2)) } catch { return }
                 guard let self else { return }
-                if self.starting || self.maintenance.monitorPaused || self.memoryRestoration.monitorPaused || self.restored.monitorPaused || self.handoffPreparing { continue }
+                if self.starting || self.maintenance.monitorPaused || self.memoryRestoration.monitorPaused || self.recovery.monitorPaused || self.restored.monitorPaused || self.handoffPreparing { continue }
                 do {
                     try await self.refreshMonitoredState()
                 } catch {
@@ -195,28 +201,28 @@ final class ChatStore {
     }
 
     private func refreshMonitoredState() async throws {
-        guard !maintenance.monitorPaused, !memoryRestoration.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
+        guard !maintenance.monitorPaused, !memoryRestoration.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         monitorReadActive = true
         defer { monitorReadActive = false }
         guard service.isRunning else { throw RPCFailure.disconnected }
         if awaitingStartupReadiness, let options = options {
             try await ServiceBootstrap.waitForHealth(stateDirectory: options.state, timeout: 1) { service.isRunning }
-        guard !maintenance.monitorPaused, !memoryRestoration.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
+        guard !maintenance.monitorPaused, !memoryRestoration.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         }
         try await refreshStatus()
-        guard !maintenance.monitorPaused, !memoryRestoration.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
+        guard !maintenance.monitorPaused, !memoryRestoration.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         try await access.refreshCatalog()
-        guard !maintenance.monitorPaused, !memoryRestoration.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
+        guard !maintenance.monitorPaused, !memoryRestoration.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         try await mcp.refresh()
-        guard !maintenance.monitorPaused, !memoryRestoration.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
+        guard !maintenance.monitorPaused, !memoryRestoration.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         try await management.refresh()
-        guard !maintenance.monitorPaused, !memoryRestoration.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
+        guard !maintenance.monitorPaused, !memoryRestoration.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         if canChangeSession { try await refreshSessions() }
-        guard !maintenance.monitorPaused, !memoryRestoration.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
+        guard !maintenance.monitorPaused, !memoryRestoration.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         try await refreshSelectedConversation()
-        guard !maintenance.monitorPaused, !memoryRestoration.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
+        guard !maintenance.monitorPaused, !memoryRestoration.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         if activeRunID == nil { try await access.refreshApprovals(runID: nil) }
-        guard !maintenance.monitorPaused, !memoryRestoration.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
+        guard !maintenance.monitorPaused, !memoryRestoration.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         if runPhase == "disconnected", activeRunID != nil { resumeStatus() }
         // Recovery performs only reads. It never selects/creates a
         // conversation, relaunches a child, or resends an operation.
@@ -531,7 +537,7 @@ final class ChatStore {
     }
 
     func reconnect() async {
-        guard runtime.isActive, !stopping, !starting, !handoffPreparing, !maintenance.blocksInteraction, !memoryRestoration.blocksInteraction, !restored.blocksInteraction, let options else { return }
+        guard runtime.isActive, !stopping, !starting, !handoffPreparing, !maintenance.blocksInteraction, !memoryRestoration.blocksInteraction && !recovery.blocksInteraction, !restored.blocksInteraction, let options else { return }
         conversationRefresh?.setScope(nil)
         voice.cancel(); dictationNotice = nil
         starting = true
@@ -545,8 +551,10 @@ final class ChatStore {
         await maintenance.close()
         await restored.close()
         await memoryRestoration.close()
+        await recovery.close()
         restored.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
         memoryRestoration.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+        recovery.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
         maintenance.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
         guard !stopping else { return }
         do {
@@ -675,7 +683,7 @@ final class ChatStore {
     }
 
     func login() async {
-        guard !handoffPreparing, !maintenance.blocksInteraction, !memoryRestoration.blocksInteraction, runtime.isActive else { return }
+        guard !handoffPreparing, !maintenance.blocksInteraction, !memoryRestoration.blocksInteraction && !recovery.blocksInteraction, runtime.isActive else { return }
         do {
             let result = try await rpc("provider.login")
             guard let raw = result["url"].string, let url = URL(string: raw), url.scheme == "https",
@@ -690,7 +698,7 @@ final class ChatStore {
     }
 
     func logout() async {
-        guard activeRunID == nil, !maintenance.blocksInteraction, !memoryRestoration.blocksInteraction else { return }
+        guard activeRunID == nil, !maintenance.blocksInteraction, !memoryRestoration.blocksInteraction && !recovery.blocksInteraction else { return }
         voice.cancel(); dictationNotice = nil
         do { _ = try await rpc("provider.logout"); try await refreshStatus() }
         catch { report(error) }
@@ -727,6 +735,7 @@ final class ChatStore {
         await maintenance.close()
         await restored.close()
         await memoryRestoration.close()
+        await recovery.close()
         return true
     }
 

@@ -49,6 +49,7 @@ class ColdFamily:
     parent_identity: FileIdentity
     members: tuple
     header: bytes
+    journal_header: bytes = b""
 
     @property
     def eligible(self):
@@ -60,14 +61,44 @@ class ColdFamily:
     def wal_eligible(self):
         # Metadata-only candidate classification. Frames, commits and content
         # are validated in the worker before any native private reader opens.
-        return (self.members[0] is not None and self.members[1] is not None
-                and self.members[1][5] >= 32 and self.members[3] is None
+        return (self.members[0] is not None and self.members[3] is None
                 and len(self.header) == 100 and self.header.startswith(b"SQLite format 3\0")
                 and self.header[18:20] == b"\x02\x02")
 
     @property
+    def journal_eligible(self):
+        return (self.members[0] is not None and self.members[3] is not None
+                and self.members[1] is None and self.members[2] is None
+                and len(self.header) == 100 and self.header.startswith(b"SQLite format 3\0")
+                and self.header[18:20] == b"\x01\x01")
+
+    @property
+    def capture_mode(self):
+        if self.eligible:
+            return "cold_delete"
+        if self.wal_eligible:
+            member = self.members[1]
+            return ("cold_wal_main_only" if member is None else
+                    "cold_wal_empty" if member[5] == 0 else
+                    "cold_wal_header" if member[5] == 32 else "cold_wal")
+        if self.journal_eligible:
+            if self.journal_header.startswith(b"\xd9\xd5\x05\xf9\x20\xa1\x63\xd7"):
+                return "cold_journal_hot"
+            if self.members[3][5] == 0 or self.journal_header == bytes(28):
+                return "cold_journal_inactive"
+            return "cold_journal"
+        return "unavailable"
+
+    @property
+    def fingerprint(self):
+        import json
+        raw = [self.role, [self.parent_identity.device, self.parent_identity.inode],
+               self.members, self.header.hex(), self.journal_header.hex()]
+        return hashlib.sha256(json.dumps(raw, separators=(",", ":")).encode()).hexdigest()
+
+    @property
     def snapshot_eligible(self):
-        return self.eligible or self.wal_eligible
+        return self.eligible or self.wal_eligible or self.journal_eligible
 
     @property
     def physical_bytes(self):
@@ -79,6 +110,9 @@ class ColdFamily:
         if self.wal_eligible:
             from jarvis_core.cold_wal import read_wal_image
             return read_wal_image(self, context, limits, check_current)
+        if self.journal_eligible:
+            from jarvis_core.cold_journal import read_journal_image
+            return read_journal_image(self, context, limits, check_current)
         raise ColdSqliteError("profile_cold_sqlite_unavailable")
 
     def assert_current(self):
@@ -116,7 +150,7 @@ def inspect_cold_family(path: Path, role: str) -> ColdFamily:
         raise ColdSqliteError("profile_sqlite_role_invalid")
     with Directory(path.parent) as parent:
         members = _members(parent, path.name)
-        header = b""
+        header, journal_header = b"", b""
         if members[0] is None:
             if any(members[1:]):
                 raise ColdSqliteError("profile_sqlite_family_incomplete")
@@ -130,5 +164,13 @@ def inspect_cold_family(path: Path, role: str) -> ColdFamily:
                 source.check()
             if _members(parent, path.name) != members:
                 raise ColdSqliteError("profile_sqlite_family_changed")
+            if members[3] is not None:
+                with PinnedFile(parent, path.name + "-journal", (1 << 63) - 1) as journal:
+                    if _metadata(journal.info) != members[3]:
+                        raise ColdSqliteError("profile_sqlite_family_changed")
+                    journal_header = os.pread(journal.fd, 28, 0)
+                    journal.check()
+                if _members(parent, path.name) != members:
+                    raise ColdSqliteError("profile_sqlite_family_changed")
         parent.check()
-        return ColdFamily(path.parent, role, parent.identity, members, header)
+        return ColdFamily(path.parent, role, parent.identity, members, header, journal_header)

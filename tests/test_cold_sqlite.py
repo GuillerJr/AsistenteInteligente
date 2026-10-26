@@ -227,9 +227,15 @@ async def test_even_empty_cold_sidecars_are_unavailable_not_ignored(tmp_path, su
     try:
         with service.profile_gate.exclusive() as cut:
             frozen = freeze_sources(service, cut)
-            assert frozen.metadata[0]["disposition"] == "unavailable"
-            with pytest.raises(HostProfileError, match="profile_lazy_source_unavailable"):
-                await bind(service, cut, frozen)
+            if suffix == "-journal":
+                assert frozen.metadata[0]["disposition"] == "present"
+                bundle = await bind(service, cut, frozen)
+                assert bundle.sqlite[0].data[18:20] == b"\1\1"
+                assert frozen.sqlite_recovery[0]["mode"] == "cold_journal_inactive"
+            else:
+                assert frozen.metadata[0]["disposition"] == "unavailable"
+                with pytest.raises(HostProfileError, match="profile_lazy_source_unavailable"):
+                    await bind(service, cut, frozen)
         assert oracle(root) == before
     finally:
         await service.aclose()
@@ -246,9 +252,11 @@ async def test_wal_header_without_sidecar_is_never_normalized_to_delete(tmp_path
     try:
         with service.profile_gate.exclusive() as cut:
             frozen = freeze_sources(service, cut)
-            assert frozen.metadata[0]["disposition"] == "unavailable"
-            with pytest.raises(HostProfileError, match="profile_lazy_source_unavailable"):
-                await bind(service, cut, frozen)
+            assert frozen.metadata[0]["disposition"] == "present"
+            bundle = await bind(service, cut, frozen)
+            assert bundle.sqlite[0].data[18:20] == b"\1\1"
+            assert frozen.sqlite_recovery[0]["mode"] == "cold_wal_main_only"
+            assert path.read_bytes()[18:20] == b"\2\2"
         assert oracle(root) == before
     finally:
         await service.aclose()

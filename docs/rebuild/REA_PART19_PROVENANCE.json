@@ -1,0 +1,23 @@
+{
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "files": [
+    {
+      "path": "src/infra/sqlite-snapshot-wal-prefix.ts",
+      "git_blob": "d29a25d9f77731cf6aeeb9d750d37188665a9993",
+      "size": 6362,
+      "sha256": "691d5593b0f8056d1176ed84738bd6a7159ac479188ed08b5b60f9e0530b016a"
+    },
+    {
+      "path": "src/infra/backup-tar-walk.ts",
+      "git_blob": "aabb554c90bdd808afe6b7542673f975518ab615",
+      "size": 5811,
+      "sha256": "ee260ea7d4011a99df284a53b92379173a1f67cd755dcedba538bfc9d04745cf"
+    }
+  ],
+  "source_or_runtime_executed": false,
+  "reference_tree": "197c70097790e30087bbef323b0f2cc5148ab9b7",
+  "infra_tree": "1efa84c79d161dcfbe0f3861e6299d99bfb976d3",
+  "acquisition": "Official GitHub blob GET, size + Git blob SHA1 and SHA256 independently validated",
+  "context_files_reused_from_part": 18,
+  "reference_checkout_modified": false
+}

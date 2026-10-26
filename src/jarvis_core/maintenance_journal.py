@@ -14,7 +14,8 @@ _TERMINAL = frozenset({"complete", "staged_disarmed", "activated_not_opened", "c
                        "publication_unknown", "cleanup_pending", "interrupted_unknown"})
 _PHASES = _TERMINAL | {"awaiting_owner", "quiescing", "working"}
 _PURPOSES = {"backup.create", "restore.stage", "profile.restore.activate",
-             "memory.restore.copy_scope"}
+             "memory.restore.copy_scope", "doctor.repair.apply", "workspace.backup.create",
+             "workspace.restore.stage", "release.update.apply", "release.rollback.apply"}
 
 
 def wire(value):

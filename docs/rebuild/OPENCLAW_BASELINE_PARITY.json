@@ -45,7 +45,7 @@
       "Contratos declarados y rutas UI no acreditan disponibilidad ni funcionamiento real.",
       "No se ejecutó OpenClaw ni se leyó configuración/cuenta del dueño."
     ],
-    "current_jarvis_state": "Desarrollo propio con Codex oficial, herramientas/archivos, memoria léxica, MCP, procesos aislados, agentes, skills y programador. Telegram es el primer canal externo implementado parcialmente; voz local y lectura HTTPS por URL añadidas. Mac inicial; iPhone aplazado. Ver PHASE_A_CHANNELS_VOICE_WEB.md: vinculación y suma reales de Telegram observadas, con cualificación integrada y demás recorridos reales pendientes; ninguna familia completa se declara cerrada."
+    "current_jarvis_state": "Desarrollo propio con Codex oficial, herramientas/archivos, memoria léxica, MCP, procesos aislados, agentes, skills y programador. Telegram es el primer canal externo implementado parcialmente; voz local y lectura HTTPS por URL añadidas. Mac inicial; iPhone aplazado. Ver PHASE_A_CHANNELS_VOICE_WEB.md: vinculación y suma reales de Telegram observadas, con cualificación integrada y demás recorridos reales pendientes; ninguna familia completa se declara cerrada. Continuación propia de recuperación implementa los seis bloques descritos en PHASE_A_RECOVERY_COMPLETION.md; motores/host probados sintéticamente, cualificación real del incremento y distribución completa pendientes. Fase A abierta y B no iniciada."
   },
   "status_vocabulary": {
     "no_implementado": "Sin evidencia productiva propia de cierre.",
@@ -1953,7 +1953,7 @@
       "implementation_evidence": [
         {
           "progress_id": "P-RECOVERY",
-          "scope": "Avance contractual parcial; límites y cualificación en PHASE_A_RECOVERY.md."
+          "scope": "Base de respaldo/restauración y seis bloques propios de continuación implementados; contratos/pruebas sintéticos y límites en PHASE_A_RECOVERY_COMPLETION.md. Pendientes cualificación real del incremento, escenarios negativos y distribución; no cierra la familia."
         }
       ],
       "acceptance": {
@@ -13786,8 +13786,8 @@
     ]
   },
   "progress_snapshot": {
-    "date": "2026-10-25",
-    "revision_scope": "Checkpoint b8ce4bc: 1585 pruebas Python y 162 nativas, paquetes y CI Ubuntu/macOS aprobados. Respaldo/verificación/staging reales autorizados sobre perfil sintético, SQLite fría DELETE y guard de arranque restaurado acreditados de forma acotada. REA 16 amplía cierre/custodia. Ninguna familia completa ni fase B iniciada.",
+    "date": "2026-10-26",
+    "revision_scope": "Seis bloques propios de recuperación implementados y probados. 2297 Python y 249 Swift aprobadas; paquetes/bundle comprobados. Ocho publicaciones nativas con decisiones reales del dueño sobre datos sintéticos: archivos, journal caliente, reparación FTS y versiones locales. Arranque real y cierre de v1 recuperada sin cuenta. Variantes y negativos GUI no repetidos conservan límites; no cierra A-71 ni fase A; B no iniciada.",
     "complete_capability_count": 0,
     "complete_reference_parity": false,
     "authenticated_inference_verified": true,
@@ -14212,7 +14212,23 @@
           "native/JarvisDesktop/Sources/DesktopCore/MaintenanceModels.swift",
           "native/JarvisDesktop/Sources/DesktopCore/MaintenanceMonitorPolicy.swift",
           "native/JarvisDesktop/Sources/JarvisApp/Stores/ChatStore.swift",
-          "native/JarvisDesktop/Sources/DesktopCore/MaintenanceReviewSourceRows.swift"
+          "native/JarvisDesktop/Sources/DesktopCore/MaintenanceReviewSourceRows.swift",
+          "src/jarvis_core/cold_journal.py",
+          "src/jarvis_core/cold_repair.py",
+          "src/jarvis_core/workspace_recovery.py",
+          "src/jarvis_core/workspace_maintenance.py",
+          "src/jarvis_core/repair_maintenance.py",
+          "src/jarvis_core/recovery_extensions.py",
+          "src/jarvis_core/local_release_update.py",
+          "src/jarvis_core/local_release_launch.py",
+          "src/jarvis_core/local_release_package.py",
+          "src/jarvis_core/release_maintenance.py",
+          "script/package_local_release.py",
+          "script/launch_local_release.py",
+          "native/JarvisDesktop/Sources/DesktopCore/RecoveryExtensionModels.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/RecoveryExtensionStore.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/RecoveryExtensionClient.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/RecoveryReleaseDetails.swift"
         ],
         "tests": [
           "tests/test_host_authority.py",
@@ -14250,7 +14266,15 @@
           "tests/wal_fixture.py",
           "tests/test_wal_host_boundaries.py",
           "native/JarvisDesktop/Tests/DesktopCoreTests/WalMaintenanceOwnershipTests.swift",
-          "native/JarvisDesktop/Tests/DesktopCoreTests/MaintenanceReviewCompositionTests.swift"
+          "native/JarvisDesktop/Tests/DesktopCoreTests/MaintenanceReviewCompositionTests.swift",
+          "tests/test_cold_journal.py",
+          "tests/test_cold_repair.py",
+          "tests/test_workspace_recovery.py",
+          "tests/test_recovery_extensions.py",
+          "tests/test_local_release_update.py",
+          "tests/test_release_maintenance.py",
+          "tests/test_local_release_package.py",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/RecoveryExtensionTests.swift"
         ],
         "capability_ids": [
           "A-01",
@@ -14260,20 +14284,22 @@
           "A-70",
           "A-71"
         ],
-        "verified_scope": "Checkpoint b8ce4bc con 1585 Python / 162 Swift y CI aprobados; respaldo, verificación y staging sintéticos desde la app con decisiones reales del dueño. Captura/diagnóstico frío DELETE y rechazo de bootstrap restaurado; los tres SQLite de otro recorrido nativo no vacío conservaron bytes/metadatos. Alcances y demora inicial no atribuida registrados por separado. Ampliación local integrada: 1754 Python/175 Swift, admisión contextual y handoff explícito sin SDK inicial; revisión GUI descartada conservando borrador. Checkpoint 1d378a6 con CI macOS/Linux aprobado y activación/apertura reales del perfil sintético elegidas por el dueño. Estado local sin cuenta, diagnóstico y revisión de copia observados; límites y pruebas independientes en PHASE_A_ACTIVATION.md. Copia explícita de memoria conservada integrada con autoridad/corte, límites de perfil y panel nativo; 85 casos nuevos del host, 154 regresiones anteriores y 23 casos Swift focalizados, incluidas dos conexiones IPC reales con SQLite y decisiones sintéticas. Núcleo/compatibilidad f8e5a67 con CI macOS/Linux aprobada; contrato, fallo de custodia corregido y límites en PHASE_A_MEMORY_RECONCILIATION.md. Una incidencia real posterior acabó caducada sin efecto. Se reprodujo y corrigió el descarte de decisiones durante sondeo; 32 casos focalizados y comparación GUI sintética, más prueba de cola IPC serial real. Detalle en PHASE_A_OWNER_CLICK_REGRESSION.json; la copia corregida quedó completada y asentada en la app (2 notas sintéticas, 175 bytes), con originales intactos, IDs nuevos, revisión 1, un recibo y dos mapas verificados independientemente. Consulta nativa coincidente sin replay; identidad y límites en PHASE_A_MEMORY_COPY_LIVE.json. Producto 985b72a con 1914 Python, 207 Swift, gates y CI aprobados; no cierra la familia. OC-18 estudia adquisición privada SQLite y custodia de staging (cinco TS, sin runtime). El contrato PHASE_A_COLD_WAL_CONTRACT.md fija requisitos; la investigación por sí sola no acredita implementación. Primer incremento WAL implementado en código propio: backup/doctor sobre copias privadas, estado confirmado y fuentes intactas, propietario/mismo corte retenidos ante cleanup incierto; 45 casos núcleo y 21 host nuevos, 14 Swift de custodia y dos IPC WAL nuevos. Suites integradas: 1980 Python y 223 Swift aprobadas. Identidad, política estricta y límites en PHASE_A_WAL_RECOVERY_QUALIFICATION.json. Producto 8c7e7bc con 1982 Python, 225 Swift, paquetes, bundle y CI macOS/Linux aprobados. Diagnóstico y respaldo WAL desde la app sobre un perfil sintético (memoria WAL; estado/tareas DELETE), con aprobación real del dueño, publicación y recibo durable. Verificación independiente del último commit, hashes de recursos y los cinco originales intactos; verificación nativa coincidente. Se corrigió y comprobó visualmente la identidad del aviso WAL. Evidencia y límites en PHASE_A_WAL_RECOVERY_LIVE.json; no cierra A-71. Continuación 26-10: restauración del respaldo WAL por la app con aprobación real del dueño a otro perfil sintético desarmado. Verificador independiente conserva datos lógicos, nota del último commit, IDs/ámbitos, cinco originales y seis archivos del respaldo. La revisión muestra origen/hash y distingue las cifras del host activo. El caso IPC WAL existente ahora comprueba los tres destinos restaurados; 225 Swift aprobadas, sin aumentar el número de casos. Evidencia y límites en PHASE_A_WAL_RESTORE_LIVE.json; no activa el destino ni cierra la familia.",
-        "remaining": "Negativos reales de copia de memoria, variantes WAL restantes y journals, workspace/artefactos, otros escenarios negativos reales de activación, reconciliación de canales, reparación, actualización/rollback y distribución. No cierra familias ni inicia B.",
+        "verified_scope": "Checkpoint b8ce4bc con 1585 Python / 162 Swift y CI aprobados; respaldo, verificación y staging sintéticos desde la app con decisiones reales del dueño. Captura/diagnóstico frío DELETE y rechazo de bootstrap restaurado; los tres SQLite de otro recorrido nativo no vacío conservaron bytes/metadatos. Alcances y demora inicial no atribuida registrados por separado. Ampliación local integrada: 1754 Python/175 Swift, admisión contextual y handoff explícito sin SDK inicial; revisión GUI descartada conservando borrador. Checkpoint 1d378a6 con CI macOS/Linux aprobado y activación/apertura reales del perfil sintético elegidas por el dueño. Estado local sin cuenta, diagnóstico y revisión de copia observados; límites y pruebas independientes en PHASE_A_ACTIVATION.md. Copia explícita de memoria conservada integrada con autoridad/corte, límites de perfil y panel nativo; 85 casos nuevos del host, 154 regresiones anteriores y 23 casos Swift focalizados, incluidas dos conexiones IPC reales con SQLite y decisiones sintéticas. Núcleo/compatibilidad f8e5a67 con CI macOS/Linux aprobada; contrato, fallo de custodia corregido y límites en PHASE_A_MEMORY_RECONCILIATION.md. Una incidencia real posterior acabó caducada sin efecto. Se reprodujo y corrigió el descarte de decisiones durante sondeo; 32 casos focalizados y comparación GUI sintética, más prueba de cola IPC serial real. Detalle en PHASE_A_OWNER_CLICK_REGRESSION.json; la copia corregida quedó completada y asentada en la app (2 notas sintéticas, 175 bytes), con originales intactos, IDs nuevos, revisión 1, un recibo y dos mapas verificados independientemente. Consulta nativa coincidente sin replay; identidad y límites en PHASE_A_MEMORY_COPY_LIVE.json. Producto 985b72a con 1914 Python, 207 Swift, gates y CI aprobados; no cierra la familia. OC-18 estudia adquisición privada SQLite y custodia de staging (cinco TS, sin runtime). El contrato PHASE_A_COLD_WAL_CONTRACT.md fija requisitos; la investigación por sí sola no acredita implementación. Primer incremento WAL implementado en código propio: backup/doctor sobre copias privadas, estado confirmado y fuentes intactas, propietario/mismo corte retenidos ante cleanup incierto; 45 casos núcleo y 21 host nuevos, 14 Swift de custodia y dos IPC WAL nuevos. Suites integradas: 1980 Python y 223 Swift aprobadas. Identidad, política estricta y límites en PHASE_A_WAL_RECOVERY_QUALIFICATION.json. Producto 8c7e7bc con 1982 Python, 225 Swift, paquetes, bundle y CI macOS/Linux aprobados. Diagnóstico y respaldo WAL desde la app sobre un perfil sintético (memoria WAL; estado/tareas DELETE), con aprobación real del dueño, publicación y recibo durable. Verificación independiente del último commit, hashes de recursos y los cinco originales intactos; verificación nativa coincidente. Se corrigió y comprobó visualmente la identidad del aviso WAL. Evidencia y límites en PHASE_A_WAL_RECOVERY_LIVE.json; no cierra A-71. Continuación 26-10: restauración del respaldo WAL por la app con aprobación real del dueño a otro perfil sintético desarmado. Verificador independiente conserva datos lógicos, nota del último commit, IDs/ámbitos, cinco originales y seis archivos del respaldo. La revisión muestra origen/hash y distingue las cifras del host activo. El caso IPC WAL existente ahora comprueba los tres destinos restaurados; 225 Swift aprobadas, sin aumentar el número de casos. Evidencia y límites en PHASE_A_WAL_RESTORE_LIVE.json; no activa el destino ni cierra la familia. Continuación de implementación 26-10: seis bloques propios conectados al host: WAL ausente/vacío/cabecera, journals compatibles recuperados en privado, archivo portátil independiente de workspace, reparación FTS y prefijo WAL hacia respaldo nuevo, actualizaciones y rollback locales de una pareja app/Python coherente. Autoridad central, copia actual verificada, pin de perfil/esquemas y custodia ante ACK incierto; lanzamiento explícito comprueba familias frías y mismo CURRENT. Los tests de motor/host y launcher propio son sintéticos; cualificación real del nuevo panel y controles finales se registran aparte. Canal development con Python/Codex externos, sin migración inversa ni activación implícita. Alcance en PHASE_A_RECOVERY_COMPLETION.md; no cierra A-71. Cualificación final del incremento: 2297 pruebas Python, 249 Swift, Ruff, paquetes/smoke y bundle aprobados. Copia/restauración nativas de dos archivos (283 bytes), respaldo con journal caliente (65 notas), reparación FTS/restauración de una nota e instalación v1, actualización v2 y rollback v1 con decisiones del dueño. Todos los recibos durables y hashes verificados independientemente; originales conservados. La v1 seleccionada arrancó realmente con app/Python coherentes y cerró correctamente, sin cuenta. Las dos versiones positivas sólo difieren en marcadores de prueba del código final. Snapshot propio antiguo incompatible rechazado sin ejecutarlo. Registro PHASE_A_RECOVERY_COMPLETION_QUALIFICATION.json.",
+        "remaining": "Ampliar negativos reales de activación/copia de memoria, variantes WAL/journal y reparación de prefijo no repetidas en GUI, y reconciliación de canales. Esas variantes tienen contratos y negativos automatizados. Distribución autocontenida, autenticidad completa, Developer ID/notarización y canal remoto firmado siguen sin acreditar por development. No se afirma reparación forense arbitraria. A-71 y fase A abiertas; B no iniciada.",
         "detail_file": "PHASE_A_RECOVERY.md",
         "qualification_file": "PHASE_A_RECOVERY_QUALIFICATION.json",
         "wal_qualification_file": "PHASE_A_WAL_RECOVERY_QUALIFICATION.json",
         "wal_live_file": "PHASE_A_WAL_RECOVERY_LIVE.json",
-        "wal_restore_live_file": "PHASE_A_WAL_RESTORE_LIVE.json"
+        "wal_restore_live_file": "PHASE_A_WAL_RESTORE_LIVE.json",
+        "completion_increment_file": "PHASE_A_RECOVERY_COMPLETION.md",
+        "completion_qualification_file": "PHASE_A_RECOVERY_COMPLETION_QUALIFICATION.json"
       }
     ],
     "detail_file": "PHASE_A_RECOVERY.md",
     "rea": {
       "source_file": "REA_COVERAGE.json",
-      "static_batches": 18,
-      "unique_typescript_paths_in_completed_batches": 74,
+      "static_batches": 20,
+      "unique_typescript_paths_in_completed_batches": 78,
       "global_status": "partial",
       "runtime_executed": false,
       "semantic_unknowns_remain": true,
@@ -14295,16 +14321,20 @@
         "OC-15",
         "OC-16",
         "OC-17",
-        "OC-18"
+        "OC-18",
+        "OC-19",
+        "OC-20"
       ],
       "limits": "Contar rutas examinadas no significa comprensión semántica ni revisión global. IDs y evidencias completos en REA_COVERAGE.json/provenance.",
-      "unique_ts_js_paths_in_completed_batches": 76,
+      "unique_ts_js_paths_in_completed_batches": 80,
       "source_count_note": "El contador TypeScript conserva su sentido estricto; el total TS/JS incluye también MJS/CJS."
     },
     "previous_detail_file": "PHASE_A_CHANNELS_VOICE_WEB.md",
     "qualification_file": "PHASE_A_RECOVERY_QUALIFICATION.json",
     "latest_qualification_status": "207native_1914python_ci_and_bounded_native_memory_copy_passed_phase_a_open",
-    "latest_qualification_record": "PHASE_A_MEMORY_COPY_LIVE.json"
+    "latest_qualification_record": "PHASE_A_MEMORY_COPY_LIVE.json",
+    "completion_increment_file": "PHASE_A_RECOVERY_COMPLETION.md",
+    "completion_increment_qualification": "implemented_with_focused_synthetic_tests_native_owner_qualification_pending"
   },
   "target_decisions": {
     "date": "2026-10-24",

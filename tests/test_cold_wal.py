@@ -163,14 +163,14 @@ def test_corrupt_or_ambiguous_wal_is_rejected_without_prefix_success(
     assert oracle(root) == before and list(scratch.iterdir()) == []
 
 
-def test_valid_wal_without_any_commit_is_explicitly_rejected(tmp_path, scratch):
+def test_valid_wal_without_any_commit_uses_only_main_state(tmp_path, scratch):
     root = tmp_path / "profile"
-    make_wal(root, ("state",))
+    markers = make_wal(root, ("state",))
     wal = root / (NAMES["state"] + "-wal")
     wal.write_bytes(rewrite_checksums(wal.read_bytes(), commits=False))
     before = oracle(root)
-    with pytest.raises(ColdWalError, match="profile_cold_wal_no_commit"):
-        capture(root, "state")
+    data, _ = capture(root, "state")
+    assert title(data, "state") == markers["state"]["base"]
     assert oracle(root) == before and list(scratch.iterdir()) == []
 
 
@@ -460,3 +460,31 @@ def test_failed_descriptor_stat_cannot_adopt_a_replacement_by_path(
     saved.rename(path)
     owner.cleanup()
     assert owner.closed and oracle(root) == before and list(scratch.iterdir()) == []
+
+
+@pytest.mark.parametrize("variant", ["absent", "empty", "header"])
+@pytest.mark.parametrize("role", NAMES)
+def test_checkpointed_main_without_frames_has_valid_private_image(
+    tmp_path, scratch, role, variant,
+):
+    root = tmp_path / "profile"
+    markers = make_wal(root, (role,))
+    wal = root / (NAMES[role] + "-wal")
+    valid_header = wal.read_bytes()[:32]
+    # Fixture preparation on our synthetic database, before the cold cut.
+    with sqlite3.connect(root / NAMES[role]) as connection:
+        connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    connection.close()
+    for suffix in ("-wal", "-shm"):
+        (root / (NAMES[role] + suffix)).unlink(missing_ok=True)
+    if variant != "absent":
+        wal.write_bytes(b"" if variant == "empty" else valid_header)
+        wal.chmod(0o600)
+    family = inspect_cold_family(root / NAMES[role], role)
+    assert not family.eligible
+    assert family.capture_mode == {"absent": "cold_wal_main_only", "empty": "cold_wal_empty",
+                                   "header": "cold_wal_header"}[variant]
+    before = oracle(root)
+    data, _ = capture(root, role)
+    assert title(data, role) == markers[role]["committed"]
+    assert oracle(root) == before and list(scratch.iterdir()) == []

@@ -262,7 +262,7 @@ class WalCaptureOwner:
             total += info.st_size
             identity = FileIdentity.of(info)
             expected = self.owned_files.get(name)
-            manual = name in {"database.sqlite3", "database.sqlite3-wal"}
+            manual = name == "database.sqlite3" or name in self.file_attempts
             if manual and expected is None:
                 handle = self.stage_handles.get(name)
                 if handle is not None and handle.fd >= 0 and not handle.close_uncertain:
@@ -400,56 +400,85 @@ def _hash_stage(owner, name, checkpoint):
     return sha.digest()
 
 
-def _validate_wal(fd, wal_bytes, main_header, main_bytes, limits, checkpoint):
-    """Validate ALL physical frames; never truncate at a convenient good prefix.
+def _main_page_size(header, size):
+    if len(header) != 100 or header[:16] != b"SQLite format 3\0":
+        raise ColdWalError("profile_cold_wal_invalid")
+    page = int.from_bytes(header[16:18], "big")
+    page = 65536 if page == 1 else page
+    if page < 512 or page > 65536 or page & (page - 1) or size < page or size % page:
+        raise ColdWalError("profile_cold_wal_invalid")
+    return page
 
-    Format/checksum definitions: sqlite.org/fileformat.html#walformat. This is
-    an own strict preflight, not a replacement SQLite recovery implementation.
+
+def scan_wal(fd, wal_bytes, main_header, main_bytes, limits, checkpoint, *, prefix=False):
+    """Validate the format, or describe an explicitly requested committed prefix.
+
+    Strict callers reject every malformed byte. A repair caller may retain only
+    a prefix ending at a checksum-verified commit and must publish its warnings
+    and measured discarded byte/frame ranges. Nothing writes the source.
     """
+    page_size = _main_page_size(main_header, main_bytes)
+    if main_header[18:20] != b"\2\2":
+        raise ColdWalError("profile_cold_wal_invalid")
     header = os.pread(fd, 32, 0)
-    if (len(header) != 32 or wal_bytes < 32 or len(main_header) != 100
-            or main_header[:16] != b"SQLite format 3\0" or main_header[18:20] != b"\2\2"):
+    if len(header) != 32 or wal_bytes < 32:
         raise ColdWalError("profile_cold_wal_invalid")
     words = struct.unpack(">8I", header)
-    magic, version, page_size = words[:3]
-    main_size = int.from_bytes(main_header[16:18], "big")
-    main_size = 65536 if main_size == 1 else main_size
-    if (magic not in {0x377F0682, 0x377F0683} or version != 3_007_000
-            or page_size < 512 or page_size > 65_536 or page_size & (page_size - 1)
-            or page_size != main_size or main_bytes < page_size or main_bytes % page_size
-            or (wal_bytes - 32) % (page_size + 24)):
+    magic, version, wal_page_size = words[:3]
+    if magic not in {0x377F0682, 0x377F0683} or version != 3_007_000 or wal_page_size != page_size:
         raise ColdWalError("profile_cold_wal_invalid")
-    frame_count = (wal_bytes - 32) // (page_size + 24)
-    if (frame_count > limits.max_rows or (wal_bytes + 7) // 8 > limits.max_vm_steps):
+    frame_size = page_size + 24
+    frame_count, tail = divmod(wal_bytes - 32, frame_size)
+    if frame_count > limits.max_rows or (wal_bytes + 7) // 8 > limits.max_vm_steps:
         raise ColdWalError("profile_cold_wal_work_limit")
+    if tail and not prefix:
+        raise ColdWalError("profile_cold_wal_invalid")
     endian = "<" if magic == 0x377F0682 else ">"
     checksum = _checksum(header[:24], (0, 0), endian)
     if checksum != words[6:8]:
         raise ColdWalError("profile_cold_wal_invalid")
-    maximum_pages, committed_pages = limits.max_sqlite_bytes // page_size, 0
-    salts = words[4:6]
+    salts, committed_pages, committed_frames, valid_frames = words[4:6], 0, 0, 0
+    failure = None
     for index in range(frame_count):
         checkpoint("cold_wal_validate")
-        frame = os.pread(fd, page_size + 24, 32 + index * (page_size + 24))
-        if len(frame) != page_size + 24:
-            raise ColdWalError("profile_cold_wal_invalid")
-        page, commit, salt_one, salt_two, check_one, check_two = struct.unpack(">6I", frame[:24])
+        frame = os.pread(fd, frame_size, 32 + index * frame_size)
+        if len(frame) != frame_size:
+            failure = "short_frame"
+            break
+        page, commit, salt_one, salt_two, one, two = struct.unpack(">6I", frame[:24])
         if page == 0 or (salt_one, salt_two) != salts:
-            raise ColdWalError("profile_cold_wal_invalid")
-        if page > maximum_pages or commit > maximum_pages:
+            failure = "page_or_generation"
+            break
+        if (page > limits.max_sqlite_bytes // page_size
+                or commit > limits.max_sqlite_bytes // page_size):
             raise ColdWalError("profile_cold_wal_size_limit")
-        checksum = _checksum(frame[:8], checksum, endian)
-        checksum = _checksum(memoryview(frame)[24:], checksum, endian)
-        if checksum != (check_one, check_two):
-            raise ColdWalError("profile_cold_wal_invalid")
+        next_checksum = _checksum(frame[:8], checksum, endian)
+        next_checksum = _checksum(memoryview(frame)[24:], next_checksum, endian)
+        if next_checksum != (one, two):
+            failure = "checksum"
+            break
+        checksum, valid_frames = next_checksum, index + 1
         if commit:
-            committed_pages = commit
-    if not committed_pages:
-        raise ColdWalError("profile_cold_wal_no_commit")
-    return committed_pages, page_size
+            committed_pages, committed_frames = commit, index + 1
+    if failure is None and tail:
+        failure = "partial_frame"
+    if failure is not None and (not prefix or not committed_frames):
+        raise ColdWalError("profile_cold_wal_invalid")
+    pages = committed_pages or main_bytes // page_size
+    kept = 32 + committed_frames * frame_size if failure else wal_bytes
+    return {"pages": pages, "page_size": page_size, "frames": frame_count,
+            "valid_frames": valid_frames, "committed_frames": committed_frames,
+            "retained_bytes": kept, "discarded_bytes": wal_bytes - kept,
+            "discarded_frame_slots": (wal_bytes - kept + frame_size - 1) // frame_size,
+            "failure": failure, "main_only": not committed_frames}
 
 
-def _capture(owner, context, limits, check_current):
+def _validate_wal(fd, wal_bytes, main_header, main_bytes, limits, checkpoint):
+    result = scan_wal(fd, wal_bytes, main_header, main_bytes, limits, checkpoint)
+    return result["pages"], result["page_size"]
+
+
+def acquire_family(owner, context, limits, check_current, copy_suffixes):
     family = owner.family
 
     def checkpoint(stage):
@@ -458,9 +487,7 @@ def _capture(owner, context, limits, check_current):
         family.assert_current()
 
     checkpoint("cold_wal_preflight")
-    if (family.role not in _NAMES or family.members[0] is None or family.members[1] is None
-            or family.members[3] is not None or family.header[18:20] != b"\2\2"
-            or family.members[1][5] <= 32):
+    if family.role not in _NAMES or family.members[0] is None:
         raise ColdWalError("profile_cold_wal_unavailable")
     family_bytes = sum(row[5] for row in family.members if row is not None)
     if family_bytes > min(limits.max_sqlite_bytes, limits.max_total_bytes):
@@ -469,36 +496,41 @@ def _capture(owner, context, limits, check_current):
     owner.open_profile()
     checkpoint("cold_wal_staging")
     owner.allocate()
-    source_hashes = {}
-    for suffix in ("", "-wal"):
-        target = owner.create_file("database.sqlite3" + suffix)
-        source_hashes[suffix] = _read_and_hash(owner, suffix, checkpoint, target)
-        os.fsync(target)
-    if family.members[2] is not None:
-        source_hashes["-shm"] = _read_and_hash(owner, "-shm", checkpoint)
-    for suffix, expected in source_hashes.items():
+    hashes = {}
+    for suffix in _SUFFIXES:
+        if family.members[_SUFFIXES.index(suffix)] is None:
+            continue
+        target = (owner.create_file("database.sqlite3" + suffix)
+                  if suffix in copy_suffixes else None)
+        hashes[suffix] = _read_and_hash(owner, suffix, checkpoint, target)
+        if target is not None:
+            os.fsync(target)
+    for suffix, expected in hashes.items():
         if _read_and_hash(owner, suffix, checkpoint) != expected:
             raise ColdWalError("profile_cold_wal_changed")
-        if suffix != "-shm" and _hash_stage(
+        if suffix in copy_suffixes and _hash_stage(
             owner, "database.sqlite3" + suffix, checkpoint
         ) != expected:
             raise ColdWalError("profile_cold_wal_changed")
-    wal_fd = owner.stage_handles["database.sqlite3-wal"].fd
-    committed_pages, page_size = _validate_wal(
-        wal_fd, family.members[1][5], family.header, family.members[0][5], limits, checkpoint)
-    logical_bytes = committed_pages * page_size
-    frames = (family.members[1][5] - 32) // (page_size + 24)
-    # A WAL-index region is 32 KiB; the conservative extra region and divisor
-    # leave room for SQLite's header/hash overhead. Validate actual bytes too.
-    shm_reserve = 32_768 * (2 + frames // 4000)
-    if family_bytes + logical_bytes + shm_reserve > limits.max_total_bytes:
+    return checkpoint, hashes
+
+
+def native_image(owner, limits, checkpoint, *, pages, page_size, wal,
+                 writable=False, inspect_image=True, staging_reserve=0):
+    family = owner.family
+    logical_bytes = pages * page_size
+    physical = sum(row[5] for row in family.members if row is not None)
+    growth = max(0, logical_bytes - family.members[0][5]) if writable else 0
+    if (logical_bytes > limits.max_sqlite_bytes
+            or physical + logical_bytes + growth + staging_reserve > limits.max_total_bytes):
         raise ColdWalError("profile_cold_wal_size_limit")
     owner.live_image_bytes = logical_bytes
     owner.note_native()
     checkpoint("cold_wal_open_private")
     owner.root.check()
     owner.native_open_attempted = True
-    source = sqlite3.connect((owner.root_path / "database.sqlite3").as_uri() + "?mode=ro",
+    mode = "rw" if writable else "ro"
+    source = sqlite3.connect((owner.root_path / "database.sqlite3").as_uri() + "?mode=" + mode,
                              uri=True, isolation_level=None, check_same_thread=False, timeout=0)
     owner.connections["source"] = source
     owner.note_native()
@@ -511,9 +543,10 @@ def _capture(owner, context, limits, check_current):
     source.execute("PRAGMA mmap_size=0")
     source.execute("BEGIN")
     source.execute("PRAGMA schema_version").fetchone()
-    if (source.execute("PRAGMA journal_mode").fetchone()[0] != "wal"
+    mode_result = source.execute("PRAGMA journal_mode").fetchone()[0]
+    if (mode_result != ("wal" if wal else "delete")
             or source.execute("PRAGMA page_size").fetchone()[0] != page_size
-            or source.execute("PRAGMA page_count").fetchone()[0] != committed_pages):
+            or source.execute("PRAGMA page_count").fetchone()[0] != pages):
         raise ColdWalError("profile_cold_wal_invalid")
     ram = sqlite3.connect(":memory:", isolation_level=None, check_same_thread=False)
     owner.connections["ram"] = ram
@@ -541,26 +574,28 @@ def _capture(owner, context, limits, check_current):
     owner.note_native()
     _close_connection(owner, "ram")
     _close_connection(owner, "source")
-    # Only SQLite's online-backup output is normalized, never a raw source.
     if data[18:20] == b"\2\2":
         data = data[:18] + b"\1\1" + data[20:]
-    checkpoint("cold_wal_inspect")
-    inspect_sqlite_snapshot(family.role, data,
-                            check_current=lambda: checkpoint("cold_wal_inspect"),
-                            limits=limits.sqlite())
-    for suffix, expected in source_hashes.items():
+    if inspect_image:
+        checkpoint("cold_wal_inspect")
+        inspect_sqlite_snapshot(family.role, data,
+                                check_current=lambda: checkpoint("cold_wal_inspect"),
+                                limits=limits.sqlite())
+    return data
+
+
+def finalize_family(owner, hashes, checkpoint):
+    for suffix, expected in hashes.items():
         if _read_and_hash(owner, suffix, checkpoint) != expected:
             raise ColdWalError("profile_cold_wal_changed")
     checkpoint("cold_wal_complete")
-    return data, hashlib.sha256(data).hexdigest()
 
 
-def read_wal_image(family, context, limits, check_current):
-    """Return a qualified image only after native/staging cleanup has settled."""
-    owner = WalCaptureOwner(family, limits.max_total_bytes)
+def run_owned_capture(owner, callback):
+    """Settle resources, or carry their actual owner through any failure class."""
     result, failure = None, None
     try:
-        result = _capture(owner, context, limits, check_current)
+        result = callback()
     except BaseException as error:
         failure = error
     try:
@@ -575,3 +610,44 @@ def read_wal_image(family, context, limits, check_current):
             raise ColdWalError(getattr(failure, "code", "profile_cold_wal_sqlite_unavailable"))
         raise failure
     return result
+
+
+def capture_wal(family, context, limits, check_current, *, prefix=False, inspect_image=True):
+    owner = WalCaptureOwner(family, limits.max_total_bytes)
+
+    def capture():
+        if not family.wal_eligible:
+            raise ColdWalError("profile_cold_wal_unavailable")
+        checkpoint, hashes = acquire_family(owner, context, limits, check_current, {"", "-wal"})
+        page_size = _main_page_size(family.header, family.members[0][5])
+        wal_member = family.members[1]
+        analysis = {"pages": family.members[0][5] // page_size, "page_size": page_size,
+                    "frames": 0, "committed_frames": 0, "discarded_bytes": 0,
+                    "discarded_frame_slots": 0, "failure": None, "main_only": True}
+        if wal_member is not None and wal_member[5] > 0:
+            analysis = scan_wal(owner.stage_handles["database.sqlite3-wal"].fd,
+                                wal_member[5], family.header, family.members[0][5], limits,
+                                checkpoint, prefix=prefix)
+        if prefix:
+            if not analysis["failure"] or not analysis["committed_frames"]:
+                raise ColdWalError("profile_cold_repair_not_needed")
+            checkpoint("cold_repair_private_wal_prefix")
+            os.ftruncate(owner.stage_handles["database.sqlite3-wal"].fd,
+                         analysis["retained_bytes"])
+        reserve = 32768 * (2 + analysis["frames"] // 4000)
+        data = native_image(owner, limits, checkpoint, pages=analysis["pages"],
+                            page_size=page_size, wal=True, inspect_image=inspect_image,
+                            staging_reserve=reserve)
+        finalize_family(owner, hashes, checkpoint)
+        metadata = {**analysis, "source_fingerprint": family.fingerprint,
+                    "source_member_sha256": {suffix or "main": value.hex()
+                                             for suffix, value in hashes.items()}}
+        return data, hashlib.sha256(data).hexdigest(), metadata
+
+    return run_owned_capture(owner, capture)
+
+
+def read_wal_image(family, context, limits, check_current):
+    """Read every valid present family; absent history is never invented."""
+    data, digest, _ = capture_wal(family, context, limits, check_current)
+    return data, digest

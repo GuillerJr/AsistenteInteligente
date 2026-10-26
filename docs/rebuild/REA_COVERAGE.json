@@ -2652,6 +2652,313 @@
         "The connected generic analyzer labels authority shipped-artifact; the supplied input is explicitly historical source text, not shipped runtime execution.",
         "No source or resources were copied into Jarvis, no OpenClaw runtime executed and no personal data read."
       ]
+    },
+    {
+      "id": "OC-19",
+      "topic": "Cold WAL prefix and selected workspace archives",
+      "parent_evidence_id": "ev_2401ac7ceb376c8a40642f51a25252b7da41b64481ecb8b958ff5ba2ccafc7c1",
+      "summary_evidence_id": "ev_2f5550b4758a490498c3e2eb1df7ce51056176d9efb45d988aa195ac4ad0f952",
+      "partition_sha256": "bf82a1e41396f7b242a734a4786ba8892b89ad9b47184945320100a5f0023fef",
+      "statistics": {
+        "relevant_files": 3,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 12173,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 2,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 1689,
+        "findings": 25,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "partial",
+          "truncated": false,
+          "omitted_count": null,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 65,
+              "omitted_relations": 0,
+              "unknown_count": 106
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 84,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 685,
+              "omitted_relations": 0,
+              "unknown_count": 99
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 93,
+              "omitted_relations": 0,
+              "unknown_count": 121
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 16,
+              "omitted_relations": 0,
+              "unknown_count": 15
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 1,
+        "semantic_unknowns": 341
+      },
+      "runtime_executed": false,
+      "source_paths": [
+        "src/infra/sqlite-snapshot-wal-prefix.ts",
+        "src/infra/backup-tar-walk.ts"
+      ],
+      "full_evidence_path": "/private/tmp/jarvis-openclaw-reference-20261024/part20/rea-evidence-bundle.json",
+      "export_sha256": "04fccec9ab5dbbd3dde5137ec04bb828b53c7a8e72fdd685203855dddaf5336e",
+      "limitations": [
+        "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+        "Caller-selected source analysis leaves 1 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+        "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+        "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+        "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+        "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+        "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+        "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+        "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+        "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ],
+      "summary": "REA_PART19_SUMMARY.json",
+      "provenance": "REA_PART19_PROVENANCE.json",
+      "semantic_unknowns": 341,
+      "residual_unknown_ids": []
+    },
+    {
+      "id": "OC-20",
+      "topic": "Local version pointer, durable intent and coherent launchers",
+      "parent_evidence_id": "ev_d05e1111313f7f571ee6ac4a01e31055e8196673d2882fe2e545f9eb7f4c4687",
+      "summary_evidence_id": "ev_60f5aeb8dc44c69b120e9e21fe907a02776cea9f6dc8ab8aaef757e1ad897eb0",
+      "partition_sha256": "4ad9f7b217c0705440cf87748f80a8917265213a130867389a429867ca397a3f",
+      "statistics": {
+        "relevant_files": 4,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 33797,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 3,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 4031,
+        "findings": 103,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "partial",
+          "truncated": false,
+          "omitted_count": null,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 12,
+              "omitted_relations": 0,
+              "unknown_count": 8
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 203,
+              "omitted_relations": 0,
+              "unknown_count": 299
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 362,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 1996,
+              "omitted_relations": 0,
+              "unknown_count": 265
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 279,
+              "omitted_relations": 0,
+              "unknown_count": 351
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 2,
+              "omitted_relations": 0,
+              "unknown_count": 2
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 1,
+        "semantic_unknowns": 925
+      },
+      "runtime_executed": false,
+      "source_paths": [
+        "src/infra/package-update-activation-immutable-pointer.ts",
+        "src/infra/package-update-activation-journal.ts",
+        "src/infra/package-update-activation-launcher.ts"
+      ],
+      "full_evidence_path": "/private/tmp/jarvis-openclaw-reference-20261024/part20/rea-evidence-bundle.json",
+      "export_sha256": "04fccec9ab5dbbd3dde5137ec04bb828b53c7a8e72fdd685203855dddaf5336e",
+      "limitations": [
+        "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+        "Caller-selected source analysis leaves 1 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+        "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+        "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+        "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+        "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+        "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+        "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+        "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+        "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ],
+      "summary": "REA_PART20_SUMMARY.json",
+      "provenance": "REA_PART20_PROVENANCE.json",
+      "semantic_unknowns": 925,
+      "residual_unknown_ids": []
     }
   ],
   "remaining_parts": [
@@ -2725,9 +3032,11 @@
         "OC-15",
         "OC-16",
         "OC-17",
-        "OC-18"
+        "OC-18",
+        "OC-19",
+        "OC-20"
       ],
-      "remaining_note": "WAL-prefix algorithm, worker/staging/token retirement, native filesystem helpers, global resource limits and real crash behavior remain unreviewed or unqualified. OC-18 is partial source research, not WAL support in Jarvis."
+      "remaining_note": "Static subsets add WAL prefixes, file walking and update intent/pointers/launchers. Remaining helpers and full reference runtime are unqualified; Jarvis implementations and native qualification are tracked separately."
     },
     {
       "id": "SCOPE-11",
@@ -2736,7 +3045,7 @@
       "original_plan_id": "OC-11"
     }
   ],
-  "rea_parsed_unique_source_files": 76,
+  "rea_parsed_unique_source_files": 80,
   "remaining_parts_id_note": "Los scopes restantes usan SCOPE para no confundir etiquetas del plan inicial con lotes OC completados. Un lote estático no cierra un scope.",
   "rea_parsed_unique_source_paths": [
     "cli-parent-lifetime.mjs",
@@ -2788,18 +3097,22 @@
     "src/gateway/server-shutdown.ts",
     "src/gateway/server.ts",
     "src/gateway/session-observer.ts",
+    "src/infra/backup-tar-walk.ts",
     "src/infra/ed25519-signature.ts",
     "src/infra/net/ssrf.pinning.test.ts",
     "src/infra/net/ssrf.ts",
     "src/infra/package-update-activation-immutable-pointer.ts",
     "src/infra/package-update-activation-immutable-recovery.ts",
     "src/infra/package-update-activation-immutable.ts",
+    "src/infra/package-update-activation-journal.ts",
+    "src/infra/package-update-activation-launcher.ts",
     "src/infra/sqlite-backup.ts",
     "src/infra/sqlite-integrity.ts",
     "src/infra/sqlite-private-directory.ts",
     "src/infra/sqlite-readonly-location-cleanup.ts",
     "src/infra/sqlite-readonly-location.ts",
     "src/infra/sqlite-snapshot-source.ts",
+    "src/infra/sqlite-snapshot-wal-prefix.ts",
     "src/infra/sqlite-snapshot.ts",
     "src/mcp/tools-stdio-server.ts",
     "src/plugin-sdk/memory-core-host-engine-schema.ts",

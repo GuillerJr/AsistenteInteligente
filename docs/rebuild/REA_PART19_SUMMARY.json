@@ -1,0 +1,171 @@
+{
+  "partition": "OC-19",
+  "authority": "historical-reference",
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "source_paths": [
+    "src/infra/sqlite-snapshot-wal-prefix.ts",
+    "src/infra/backup-tar-walk.ts"
+  ],
+  "parent_evidence_id": "ev_2401ac7ceb376c8a40642f51a25252b7da41b64481ecb8b958ff5ba2ccafc7c1",
+  "summary_evidence_id": "ev_2f5550b4758a490498c3e2eb1df7ce51056176d9efb45d988aa195ac4ad0f952",
+  "artifact_sha256": "bf82a1e41396f7b242a734a4786ba8892b89ad9b47184945320100a5f0023fef",
+  "analysis_statistics": {
+    "relevant_files": 3,
+    "nested_asar_containers": 0,
+    "text_bytes_read": 12173,
+    "invalid_utf8_files": 0,
+    "parsed_javascript_files": 2,
+    "skipped_javascript_files": 0,
+    "visited_ast_nodes": 1689,
+    "findings": 25,
+    "modules": 0,
+    "parse_failures": 0
+  },
+  "coverage": {
+    "application": {
+      "status": "partial",
+      "truncated": false,
+      "omitted_count": null,
+      "limits": []
+    },
+    "semantic": {
+      "status": "unknown",
+      "truncated": false,
+      "omitted_nodes": 0,
+      "omitted_relations": 0,
+      "limits": [],
+      "families": [
+        {
+          "family": "boundary",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "call-flow",
+          "status": "partial",
+          "retained_relations": 65,
+          "omitted_relations": 0,
+          "unknown_count": 106
+        },
+        {
+          "family": "child-process",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "closure",
+          "status": "partial",
+          "retained_relations": 84,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "configuration",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "data-flow",
+          "status": "partial",
+          "retained_relations": 685,
+          "omitted_relations": 0,
+          "unknown_count": 99
+        },
+        {
+          "family": "event",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "object-flow",
+          "status": "partial",
+          "retained_relations": 93,
+          "omitted_relations": 0,
+          "unknown_count": 121
+        },
+        {
+          "family": "promise-ownership",
+          "status": "partial",
+          "retained_relations": 16,
+          "omitted_relations": 0,
+          "unknown_count": 15
+        },
+        {
+          "family": "request",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "resource-lifecycle",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "timer",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        }
+      ]
+    },
+    "application_unknowns": 1,
+    "semantic_unknowns": 341
+  },
+  "limitations": [
+    "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+    "Caller-selected source analysis leaves 1 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+    "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+    "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+    "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+    "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+    "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+    "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+    "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+    "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+    "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+    "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+    "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+    "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+    "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+    "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+    "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+    "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+  ],
+  "research_runtime_executed": false,
+  "jarvis_code_copied": false,
+  "evidence_bundle": {
+    "path": "/private/tmp/jarvis-openclaw-reference-20261024/part20/rea-evidence-bundle.json",
+    "sha256": "04fccec9ab5dbbd3dde5137ec04bb828b53c7a8e72fdd685203855dddaf5336e"
+  },
+  "observations": [
+    {
+      "source": "src/infra/sqlite-snapshot-wal-prefix.ts",
+      "observation": "La referencia delimita la generación por cabecera/salts/checksums y conserva el último commit verificado en una copia privada; vuelve a comparar el prefijo y la generación."
+    },
+    {
+      "source": "src/infra/backup-tar-walk.ts",
+      "observation": "La referencia distingue directorios, archivos y enlaces, limita lectura por tamaño capturado y comprueba identidad al abrir y al terminar."
+    }
+  ],
+  "unknowns": [
+    "No se ejecutó OpenClaw ni se acreditaron comportamiento concurrente o dependencias fs-safe/checksum fuera de esta partición.",
+    "La lectura de dos módulos no revisa todos los mecanismos de respaldo o reparación de la referencia."
+  ],
+  "jarvis_decisions": [
+    "El respaldo ordinario conserva rechazo estricto ante colas corruptas; la reparación de prefijo se revisa aparte y declara pérdida posible y transacciones perdidas desconocidas.",
+    "Archivos y artefactos seleccionados tienen archivo portátil separado, inventario exacto, hashes y destino nuevo. Las carpetas no implican recursión ni ejecución; enlaces y secretos conocidos se rechazan."
+  ]
+}

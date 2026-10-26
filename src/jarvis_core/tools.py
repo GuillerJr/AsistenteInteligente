@@ -106,6 +106,10 @@ class HostPurpose(StrEnum):
     PROFILE_RESTORE_ACTIVATE = "profile.restore.activate"
     MEMORY_RESTORE_COPY_SCOPE = "memory.restore.copy_scope"
     DOCTOR_REPAIR_APPLY = "doctor.repair.apply"
+    WORKSPACE_BACKUP_CREATE = "workspace.backup.create"
+    WORKSPACE_RESTORE_STAGE = "workspace.restore.stage"
+    RELEASE_UPDATE_APPLY = "release.update.apply"
+    RELEASE_ROLLBACK_APPLY = "release.rollback.apply"
 
 
 @dataclass(frozen=True)

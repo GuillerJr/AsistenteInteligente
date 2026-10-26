@@ -104,12 +104,38 @@ No declaran completa la fase A ni sustituyen la instalación anterior.
 El [bloque de recuperación y diagnóstico](PHASE_A_RECOVERY.md) añade revisiones
 del host, respaldo portátil, preparación de un perfil restaurado desarmado e
 inspección sin reparación. Distingue los contratos y pruebas de la cualificación
-en la app y de la activación, actualización y distribución todavía pendientes.
+en la app y de la distribución todavía pendiente.
 La [partición OC-18](REA_PART18_SUMMARY.json) continúa la lectura de adquisición
 SQLite privada y limpieza retenida. Su [contrato propio WAL](PHASE_A_COLD_WAL_CONTRACT.md)
 tiene un [primer incremento implementado](PHASE_A_WAL_RECOVERY.md) para respaldo y
-diagnóstico de familias compatibles, con fuentes intactas. Journals, variantes
-WAL restantes y cualificación real completa siguen pendientes de la fase A.
+diagnóstico de familias compatibles, con fuentes intactas. Su recorrido acotado
+de respaldo y restauración GUI tiene evidencia independiente separada.
+
+La [continuación de recuperación](PHASE_A_RECOVERY_COMPLETION.md) implementa seis
+bloques: variantes WAL ausente/vacío/cabecera, journals SQLite compatibles,
+archivos/artefactos de workspace, reparación FTS y de prefijo WAL, actualización
+y rollback locales. Los motores y el host tienen pruebas con SQLite, archivos,
+procesos y decisiones sintéticos. El [registro de cualificación](PHASE_A_RECOVERY_COMPLETION_QUALIFICATION.json)
+acredita copia/restauración de archivos, respaldo con journal caliente, reparación
+FTS/restauración e instalación/actualización/rollback con decisiones del dueño,
+datos sintéticos y comprobaciones independientes. La v1 recuperada arrancó con su
+pareja app/Python y cerró correctamente, sin cuenta conectada. Pasaron 2297 pruebas
+Python, 249 Swift y controles de paquetes/bundle; las variantes y negativos no
+repetidos en GUI conservan su límite explícito.
+La reparación publica otra copia; la actualización conserva el perfil y exige
+una copia verificada actual y esquemas compatibles. El arranque explícito valida
+la pareja app/Python de un mismo CURRENT y los esquemas fríos; no admite un
+perfil restaurado ni invierte migraciones de datos.
+
+Este canal `development` utiliza Python y Codex oficial externos. No acredita
+autenticidad completa, distribución autocontenida, Developer ID, notarización o
+canal remoto firmado. La instalación personal anterior permanece independiente.
+La investigación [OC-19](REA_PART19_SUMMARY.json)/[OC-20](REA_PART20_SUMMARY.json)
+eleva el registro a veinte lotes y 80 fuentes TS/JS seleccionadas, con incógnitas
+estáticas y dependencias sin revisar; no es revisión exhaustiva ni ejecución de
+OpenClaw. Las 80 familias mantienen 43 avances parciales y 37 sin implementación;
+no son porcentajes de producto terminado. A-71 y la fase A siguen abiertas y la
+fase B continúa aplazada.
 
 El prototipo prueba serialización por sesión, propuesta/validación/autorización,
 resultado explícito, cancelación y asentamiento. El prototipo aislado no acredita permisos persistentes, cifrado, herramientas

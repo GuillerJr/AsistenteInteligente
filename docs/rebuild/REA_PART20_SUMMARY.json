@@ -1,0 +1,181 @@
+{
+  "partition": "OC-20",
+  "authority": "historical-reference",
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "source_paths": [
+    "src/infra/package-update-activation-immutable-pointer.ts",
+    "src/infra/package-update-activation-journal.ts",
+    "src/infra/package-update-activation-launcher.ts"
+  ],
+  "parent_evidence_id": "ev_d05e1111313f7f571ee6ac4a01e31055e8196673d2882fe2e545f9eb7f4c4687",
+  "summary_evidence_id": "ev_60f5aeb8dc44c69b120e9e21fe907a02776cea9f6dc8ab8aaef757e1ad897eb0",
+  "artifact_sha256": "4ad9f7b217c0705440cf87748f80a8917265213a130867389a429867ca397a3f",
+  "analysis_statistics": {
+    "relevant_files": 4,
+    "nested_asar_containers": 0,
+    "text_bytes_read": 33797,
+    "invalid_utf8_files": 0,
+    "parsed_javascript_files": 3,
+    "skipped_javascript_files": 0,
+    "visited_ast_nodes": 4031,
+    "findings": 103,
+    "modules": 0,
+    "parse_failures": 0
+  },
+  "coverage": {
+    "application": {
+      "status": "partial",
+      "truncated": false,
+      "omitted_count": null,
+      "limits": []
+    },
+    "semantic": {
+      "status": "unknown",
+      "truncated": false,
+      "omitted_nodes": 0,
+      "omitted_relations": 0,
+      "limits": [],
+      "families": [
+        {
+          "family": "boundary",
+          "status": "partial",
+          "retained_relations": 12,
+          "omitted_relations": 0,
+          "unknown_count": 8
+        },
+        {
+          "family": "call-flow",
+          "status": "partial",
+          "retained_relations": 203,
+          "omitted_relations": 0,
+          "unknown_count": 299
+        },
+        {
+          "family": "child-process",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "closure",
+          "status": "partial",
+          "retained_relations": 362,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "configuration",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "data-flow",
+          "status": "partial",
+          "retained_relations": 1996,
+          "omitted_relations": 0,
+          "unknown_count": 265
+        },
+        {
+          "family": "event",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "object-flow",
+          "status": "partial",
+          "retained_relations": 279,
+          "omitted_relations": 0,
+          "unknown_count": 351
+        },
+        {
+          "family": "promise-ownership",
+          "status": "partial",
+          "retained_relations": 2,
+          "omitted_relations": 0,
+          "unknown_count": 2
+        },
+        {
+          "family": "request",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "resource-lifecycle",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "timer",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        }
+      ]
+    },
+    "application_unknowns": 1,
+    "semantic_unknowns": 925
+  },
+  "limitations": [
+    "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+    "Caller-selected source analysis leaves 1 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+    "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+    "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+    "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+    "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+    "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+    "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+    "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+    "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+    "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+    "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+    "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+    "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+    "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+    "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+    "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+    "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+  ],
+  "research_runtime_executed": false,
+  "jarvis_code_copied": false,
+  "evidence_bundle": {
+    "path": "/private/tmp/jarvis-openclaw-reference-20261024/part20/rea-evidence-bundle.json",
+    "sha256": "04fccec9ab5dbbd3dde5137ec04bb828b53c7a8e72fdd685203855dddaf5336e"
+  },
+  "observations": [
+    {
+      "source": "src/infra/package-update-activation-immutable-pointer.ts",
+      "observation": "La referencia conserva intención durable e identidad previa/temporal, comprueba destino y sincroniza el cambio de puntero. La reconciliación se trata de forma explícita."
+    },
+    {
+      "source": "src/infra/package-update-activation-journal.ts",
+      "observation": "La referencia distingue journal de preparación y asentamiento, custodia, recibos durables y estado retenido ante ACK incierto."
+    },
+    {
+      "source": "src/infra/package-update-activation-launcher.ts",
+      "observation": "La referencia describe y compara identidad/contenido de launchers elegidos, sin equiparar un nombre de ruta a una versión verificada."
+    }
+  ],
+  "unknowns": [
+    "No se ejecutó ni importó runtime de OpenClaw. Helpers de inmutabilidad, durabilidad, fs-safe, esquemas y lectores externos a estos tres módulos no quedan acreditados por esta partición.",
+    "La observación de primitivas de root en la referencia no se traslada a un daemon privilegiado de Jarvis."
+  ],
+  "jarvis_decisions": [
+    "Versiones propias locales con app+Python bajo el mismo CURRENT, revisión de copia/perfil/esquemas y rollback al paquete anterior compatible; sin downgrade automático de datos.",
+    "PENDING durable bloquea replay tras incertidumbre. Inspección es lectora; un ACK incierto no se transforma en éxito ni en permiso nuevo.",
+    "Canal development explícito, Python/Codex externos y autenticidad completa no acreditada. No equivale a distribución autocontenida o notarizada."
+  ],
+  "revisited_source_paths": [
+    "src/infra/package-update-activation-immutable-pointer.ts"
+  ],
+  "unique_count_note": "El puntero inmutable ya figuraba en un lote anterior; esta revisión contextual no cuenta como una nueva ruta única."
+}

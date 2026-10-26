@@ -420,8 +420,7 @@ def _sqlite_state(role, store):
         family = inspect_cold_family(path, role)
         if family.members[0] is None:
             return _SqliteState(role, store, None, ("absent", family.members), family)
-        kind = ("cold_delete" if family.eligible else "cold_wal" if family.wal_eligible
-                else "unavailable")
+        kind = family.capture_mode
         return _SqliteState(role, store, None,
                             (kind, *family.members[0], family.members, family.header), family)
     try:
@@ -576,9 +575,13 @@ class FrozenSources:
 
     @property
     def sqlite_recovery(self):
-        return tuple({"role": row.role, "mode": "cold_wal",
-                      "semantics": "confirmed_transactions_only"}
-                     for row in self._sql if row.fingerprint[0] == "cold_wal")
+        return tuple({"role": row.role, "mode": row.cold.capture_mode,
+                      "semantics": ("confirmed_transactions_only"
+                                    if row.cold.capture_mode == "cold_wal" else
+                                    "durable_main_state_missing_transactions_unknown"
+                                    if row.cold.wal_eligible else "journal_recovery_private_copy")}
+                     for row in self._sql if row.cold and row.cold.snapshot_eligible
+                     and not row.cold.eligible)
 
     @property
     def root_identity(self):
@@ -654,7 +657,7 @@ class FrozenSources:
         sizes = [(row.cold.physical_bytes if row.cold is not None
                   else row.fingerprint[6]) if metadata_only
                  else self._image_reservation(row) for row in self._sql
-                 if row.fingerprint[0] in {"owned", "cold_delete", "cold_wal"}]
+                 if row.connection is not None or (row.cold and row.cold.snapshot_eligible)]
         if (any(size > limits.max_sqlite_bytes for size in sizes)
                 or sum(sizes) + sum(len(row.data or b"") for row in self._json)
                 > limits.max_total_bytes):
@@ -681,11 +684,16 @@ class FrozenSources:
         return replace(limits, max_sqlite_bytes=remaining,
                        max_total_bytes=limits.max_total_bytes - used)
 
-    def bind(self, cut: ProfileCut, context=None, limits=None) -> SourceBundle:
+    def bind(self, cut: ProfileCut, context=None, limits=None, *,
+             repaired_images=None) -> SourceBundle:
         if context is not None:
             context.checkpoint("source_bind")
         self._revalidate(cut)
-        if any(row.fingerprint[0] == "unavailable" for row in self._sql):
+        repaired_images = repaired_images or {}
+        if set(repaired_images) - {row.role for row in self._sql if row.cold is not None}:
+            raise HostProfileError("profile_repair_image_invalid")
+        if any(row.fingerprint[0] == "unavailable" and row.role not in repaired_images
+               for row in self._sql):
             raise HostProfileError("profile_lazy_source_unavailable")
 
         limits = limits or RecoveryLimits()
@@ -701,7 +709,17 @@ class FrozenSources:
                 + sum(self._image_reservation(row) for row in self._sql
                       if row.connection is not None))
         for row in self._sql:
-            if row.connection is not None:
+            if row.role in repaired_images:
+                data, digest = repaired_images[row.role]
+                if (type(data) is not bytes or type(digest) is not str
+                        or hashlib.sha256(data).hexdigest() != digest):
+                    raise HostProfileError("profile_repair_image_invalid")
+                used += len(data)
+                if len(data) > limits.max_sqlite_bytes or used > limits.max_total_bytes:
+                    raise HostProfileError("profile_sqlite_image_limit")
+                sources.append(SqliteImageSource(row.role, data,
+                                                FileIdentity(*row.fingerprint[1:3]), digest, check))
+            elif row.connection is not None:
                 sources.append(SqliteSource(row.role, row.connection, check))
             elif row.cold and row.cold.snapshot_eligible:
                 bounded = self._remaining_image_limits(limits, used)
@@ -772,9 +790,11 @@ def freeze_sources(service, cut: ProfileCut) -> FrozenSources:
     metadata = tuple((row.role,
                       "generated_builtin" if row.role == "agents"
                       and row.fingerprint[0] == "absent" else "present"
-                      if row.fingerprint[0] in {"cold_delete", "cold_wal"}
+                      if isinstance(row, _SqliteState) and row.cold
+                      and row.cold.snapshot_eligible
                       else row.fingerprint[0],
-                      row.cold.physical_bytes if row.fingerprint[0] == "cold_wal"
+                      row.cold.physical_bytes if isinstance(row, _SqliteState) and row.cold
+                      and row.cold.snapshot_eligible
                       else row.fingerprint[6] if row.fingerprint[0]
                       in {"owned", "unavailable", "cold_delete"}
                       else (len(row.data) if isinstance(row, _JsonState) and row.data else 0))

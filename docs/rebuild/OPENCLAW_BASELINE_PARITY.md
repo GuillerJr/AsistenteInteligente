@@ -44,15 +44,24 @@ El [bloque de recuperación](PHASE_A_RECOVERY.md) registra el checkpoint `b8ce4b
 | Lectura HTTPS pública y extracción estática por URL | GET HTTPS público con aprobación, IP/DNS fijados y límites; suite Python de 1234 incluye las regresiones de cierre. Un GET real example.com completó HTTP 200 con contenido externo no verificado, sin JS ni seguimiento de enlaces. Pendiente: Buscador/proveedor de búsqueda, JS, navegador, cuentas, cookies y descarga de archivos no implementados. Una URL real no cualifica sitios arbitrarios ni toda la familia. |
 | Cierre incompleto, propiedad retenida y retry explícito | Regresiones MCP/Codex/Telegram y servicio integradas en 1234 Python; supervisor nativo con dueño retenido, stop compartido, 35 s monotónicos y señales tras identidad/propiedad kernel. 129 nativas incluyen 12 lifecycle y teardown acotado de fixtures. Pendiente: No certifica árboles arbitrarios ni descendientes escapados. Identidad kernel inmediata más señal PID no es primitiva atómica de audit-token. Recuperación productiva completa sigue pendiente. |
 
-REA registra trece lotes estáticos con 56 rutas TypeScript/JavaScript únicas. La cobertura global sigue parcial, conserva incógnitas semánticas y no observó ejecución de OpenClaw. Fuentes, hashes y Evidence IDs están en REA_COVERAGE.json.
+La [continuación de recuperación](PHASE_A_RECOVERY_COMPLETION.md) implementa variantes WAL ausente/vacío/cabecera, journals compatibles, archivos/artefactos de workspace, reparaciones FTS/prefijo WAL y actualización/rollback locales. Conserva originales, usa una copia verificada actual y esquemas compatibles para versiones, y publica nuevos destinos para reparación/restauración. Los tests de motor y host son sintéticos; los nuevos recorridos GUI con aprobación real y la distribución completa siguen pendientes de cualificación. A-71 no se declara cerrada.
+
+REA registra veinte lotes estáticos con 80 rutas TypeScript/JavaScript únicas seleccionadas. La cobertura global sigue parcial, conserva incógnitas semánticas y no observó ejecución de OpenClaw. Fuentes, hashes y Evidence IDs están en REA_COVERAGE.json y los registros de [OC-19](REA_PART19_SUMMARY.json)/[OC-20](REA_PART20_SUMMARY.json). El censo sigue en 43 familias con avance parcial y 37 sin implementación; no es un porcentaje de paridad completa.
 
 La [decisión de destinos](PHASE_A_TARGETS.md) fija macOS como entrega inicial, aplaza iPhone y elige Telegram como primer canal externo. No acredita plataformas o conectores pendientes.
 
-Las partes REA 10–13 amplían el registro a trece lotes y 56 rutas TS/JS únicas seleccionadas. Aplicación parcial en las partes 10, 11 y 13; complete sólo dentro del artefacto de la parte 12; semántica unknown en las cuatro. La parte 13 estudia fronteras de respaldo/restauración y propiedad de mantenimiento, sin implementación de esas funciones en Jarvis. No ejecución ni revisión global.
+El checkpoint histórico de las partes REA 10–13 alcanzó trece lotes y 56 rutas TS/JS únicas seleccionadas. Aplicación parcial en las partes 10, 11 y 13; complete sólo dentro del artefacto de la parte 12; semántica unknown en las cuatro. La parte 13 estudió fronteras de respaldo/restauración y propiedad de mantenimiento antes de implementar esas funciones en Jarvis. OC-19/20 añaden lectura de prefijo WAL, archivos y activación de versiones, sin ejecutar ni incorporar el runtime de la referencia. No equivale a revisión global.
 
 ## Matriz funcional
 
 Todas las filas mantienen pendiente la cualificación real propia. «Sintético parcial» sólo identifica parte del contrato probado en kernel. El JSON añade caso de fallo/revocación, dependencias y fuentes por familia.
+
+La [continuación de recuperación](PHASE_A_RECOVERY_COMPLETION.md) ya registra
+ocho publicaciones nativas con decisiones reales del dueño y verificación
+independiente sobre datos sintéticos: archivos, journal caliente, reparación FTS
+y versiones locales, más el arranque real de la v1 recuperada sin cuenta.
+2297 pruebas Python y 249 Swift aprobadas. Son recorridos acotados: no cierran
+todos los negativos o variantes, A-71 ni la distribución completa.
 
 | ID | Capacidad | Estado inicial | Caso observable propio requerido |
 | --- | --- | --- | --- |

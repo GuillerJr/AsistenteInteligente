@@ -1,5 +1,6 @@
 import AppKit
 import Carbon
+import DesktopCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -18,14 +19,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func showMainWindow() {
-        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "jarvis.main" }) {
+        presentWindow(preserveVisibleOnReopen: false)
+    }
+
+    private func presentWindow(preserveVisibleOnReopen: Bool) {
+        let ordered = NSApp.orderedWindows
+        let windows = ordered + NSApp.windows.filter { candidate in !ordered.contains { $0 === candidate } }
+        let pending = OwnerDecisionWindowPolicy.awaitingOwner([
+            store?.recovery.operation?.phase, store?.maintenance.operation?.phase,
+            store?.memoryRestoration.operation?.phase, store?.restored.operation?.phase,
+        ])
+        if let window = OwnerDecisionWindowPolicy.target(windows: windows, modal: NSApp.modalWindow,
+            key: NSApp.keyWindow, awaitingOwner: pending, preserveVisibleOnReopen: preserveVisibleOnReopen) {
             window.makeKeyAndOrderFront(nil)
         } else { openMainWindow?() }
         NSApp.activate(ignoringOtherApps: true)
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        showMainWindow()
+        presentWindow(preserveVisibleOnReopen: flag)
         return true
     }
 

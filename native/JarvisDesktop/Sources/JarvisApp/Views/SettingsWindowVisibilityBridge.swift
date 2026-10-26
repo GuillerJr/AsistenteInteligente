@@ -36,6 +36,7 @@ import SwiftUI
         func attach(_ window: NSWindow?) {
             if !active { delivery.activate(owner); active = true }
             guard let window else { monitor.detach(); return }
+            window.identifier = NSUserInterfaceItemIdentifier(OwnerDecisionWindowPolicy.settingsIdentifier)
             monitor.attach(to: window) { [weak window] in window?.isVisible ?? false }
         }
         func detach() {

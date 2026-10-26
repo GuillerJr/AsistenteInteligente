@@ -1,0 +1,465 @@
+{
+  "schema_version": 2,
+  "date": "2026-10-26",
+  "scope": "Seis bloques de recuperación solicitados; implementación propia de fase A, sin fase B",
+  "status": "implemented_automated_checks_passed_selected_native_owner_workflows_verified",
+  "source_identity": {
+    "algorithm": "sha256 of UTF-8 JSON sorted path/hash objects, sort_keys=True and separators=(comma,colon), without trailing newline",
+    "sha256": "a0100a4ee17c085c8fca6808f0fabbcdb47d4963f77c545c757789f309e38714",
+    "file_count": 127,
+    "python_modules": 50,
+    "swift_source_files": 77
+  },
+  "python_runtime_snapshot": {
+    "path": "/private/tmp/jarvis-recovery-complete-v5foqko9/runtime-qualified/src",
+    "module_count": 50,
+    "matches_current_python_sources": true,
+    "manifest_sha256": "1050713d8acfd0baa0d1f840ce4cacb8b216c427d413188fbeb5fbe8448dac52"
+  },
+  "native_bundle": {
+    "path": "/private/tmp/jarvis-recovery-complete-app-20261026-03/Jarvis.app",
+    "binary_sha256": "c37bde73d3fc51194cb3460d34c48f9b1023b8157164f155a84fcd2ac56b5e49",
+    "architecture": "arm64",
+    "signature": "ad_hoc_verified_strict",
+    "distribution": "development_external_python_and_official_codex"
+  },
+  "checks": {
+    "ruff": "passed",
+    "compileall": "passed",
+    "clean_base": "passed",
+    "git_gates": "active",
+    "diff_check": "passed",
+    "python_full_final": {
+      "status": "passed",
+      "tests": 2297,
+      "failures": 0,
+      "log": "/private/tmp/jarvis-recovery-sealed-python.log"
+    },
+    "swift_full_final": {
+      "status": "passed",
+      "tests": 249,
+      "failures": 0,
+      "log": "/private/tmp/jarvis-recovery-qualified-swift.log"
+    },
+    "desktop_build": "passed",
+    "package_gate": {
+      "status": "passed",
+      "sdist_and_wheel_from_fresh_sdist": true,
+      "smoke": "passed",
+      "log": "/private/tmp/jarvis-recovery-final-package.log",
+      "artifacts": [
+        {
+          "name": "jarvis_core-0.1.0a2-py3-none-any.whl",
+          "sha256": "600f8375c8ad998f36c2cf71dec88322a09e34bd0139a9c42ddfb63583c7a085"
+        },
+        {
+          "name": "jarvis_core-0.1.0a2.tar.gz",
+          "sha256": "ae6bbfa222708be253b3254ed29443320d918c11c437fc65678487c072c70c30"
+        }
+      ]
+    },
+    "publication_gate": "pre-push repeats full Python/package/Swift/build and verifies unchanged clean HEAD; its result belongs to publication, not this pre-commit snapshot",
+    "ci": "not attributed to this pre-commit snapshot"
+  },
+  "focused_evidence": {
+    "sqlite_core_host_and_adversarial": 126,
+    "workspace_engine": 147,
+    "release_engine_host_package_launch_and_control_compatibility": 77,
+    "native_extensions_dto_and_real_ipc": 15,
+    "owner_window_selection": 6,
+    "counting": "Focused sets overlap the full suites; do not add. Automated approval decisions are synthetic."
+  },
+  "native_owner_workflows": {
+    "data": "Own synthetic profiles only in /private/tmp; no personal history, profile or installed personal app accessed",
+    "provider_connected": false,
+    "effects": [
+      {
+        "case": "workspace-copy-live",
+        "operation_id": "0bd47b0802154308bc5208fc9ba3ca42",
+        "kind": "workspace.backup.create",
+        "phase": "complete",
+        "receipt": {
+          "operation_id": "0bd47b0802154308bc5208fc9ba3ca42",
+          "purpose": "workspace.backup.create",
+          "status": "completed",
+          "effect_status": "published_verified_bytes",
+          "target_name": "archivos-portatiles",
+          "artifact_id": "0bd47b0802154308bc5208fc9ba3ca42",
+          "manifest_sha256": "30ebed64dbfc45613d39b613941347305c525f44c8eb312bb9198420eea05eed",
+          "target_identity": {
+            "device": "16777230",
+            "inode": "69348444"
+          },
+          "new_profile_id": null,
+          "error_code": null,
+          "cleanup_error_code": null,
+          "cleanup_pending": false
+        },
+        "receipt_durable": true,
+        "independent_verification": {
+          "passed": true,
+          "summary": {
+            "manifest_sha256": "30ebed64dbfc45613d39b613941347305c525f44c8eb312bb9198420eea05eed",
+            "file_count": 2,
+            "directory_count": 0,
+            "artifact_count": 1,
+            "total_bytes": 283
+          },
+          "file_sha256": {
+            "artefacto-recuperacion.bin": "40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880",
+            "nota-recuperacion.txt": "9a2816f0d59f1a9371e778972b7ec56be109cc4fb9de7e4ef3b1a8e788d32f60"
+          },
+          "original_four_sqlite_members_unchanged": true,
+          "unselected_file_excluded": true
+        },
+        "local_record": "/private/tmp/jarvis-recovery-complete-v5foqko9/workspace-copy-live.json",
+        "record_sha256": "c17f9f0e9b42650090cce0314f2d760eca11fd8a86a6149fe98fa0ba477ffcb7"
+      },
+      {
+        "case": "workspace-restore-live",
+        "operation_id": "e1e97709d9af49db900278f8219ffd2e",
+        "kind": "workspace.restore.stage",
+        "phase": "complete",
+        "receipt": {
+          "operation_id": "e1e97709d9af49db900278f8219ffd2e",
+          "purpose": "workspace.restore.stage",
+          "status": "completed",
+          "effect_status": "published_verified_bytes",
+          "target_name": "archivos-restaurados",
+          "artifact_id": "e1e97709d9af49db900278f8219ffd2e",
+          "manifest_sha256": "30ebed64dbfc45613d39b613941347305c525f44c8eb312bb9198420eea05eed",
+          "target_identity": {
+            "device": "16777230",
+            "inode": "69365075"
+          },
+          "new_profile_id": null,
+          "error_code": null,
+          "cleanup_error_code": null,
+          "cleanup_pending": false
+        },
+        "receipt_durable": true,
+        "independent_verification": {
+          "passed": true,
+          "file_sha256": {
+            "artefacto-recuperacion.bin": "40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880",
+            "nota-recuperacion.txt": "9a2816f0d59f1a9371e778972b7ec56be109cc4fb9de7e4ef3b1a8e788d32f60"
+          },
+          "target_mode": "0700",
+          "file_modes": "0600",
+          "unselected_excluded": true,
+          "archive_reverified": true,
+          "original_four_sqlite_members_unchanged": true,
+          "workspace_association_changed": false
+        },
+        "local_record": "/private/tmp/jarvis-recovery-complete-v5foqko9/workspace-restore-live.json",
+        "record_sha256": "0f62d8ad182fa34a1c98bff8a97f15671346881cfdd28c08cdea1eb208e54193"
+      },
+      {
+        "case": "profile-backup-live",
+        "operation_id": "52df28137eeb472cb00af770d20f8e50",
+        "kind": "backup.create",
+        "phase": "complete",
+        "receipt": {
+          "operation_id": "52df28137eeb472cb00af770d20f8e50",
+          "purpose": "backup.create",
+          "status": "completed",
+          "effect_status": "published_verified_bytes",
+          "target_name": "respaldo-perfil",
+          "artifact_id": "a0820832828d46c38cfc150484b3b3f3",
+          "manifest_sha256": "f9e87bc66d9124a34e63ff4863e5a236d8e7ce3b0641146b041c6fe16c88580c",
+          "target_identity": {
+            "device": "16777230",
+            "inode": "69365797"
+          },
+          "new_profile_id": null,
+          "error_code": null,
+          "cleanup_error_code": null,
+          "cleanup_pending": false
+        },
+        "receipt_durable": true,
+        "independent_verification": {
+          "passed": true,
+          "memory_notes": 65,
+          "memory_title": "JARVIS JOURNAL BASE memory",
+          "original_four_sqlite_members_unchanged": true,
+          "recovered_only_committed_journal_state": true
+        },
+        "local_record": "/private/tmp/jarvis-recovery-complete-v5foqko9/profile-backup-live.json",
+        "record_sha256": "0485a933088b4bc3c5ae8a502aef9cb92fef737a956e0e92e95cc9b2cba1b6a1"
+      },
+      {
+        "case": "release-install-v1-live",
+        "operation_id": "4292b94ee7df434cb36a376e0a113580",
+        "kind": "release.update.apply",
+        "phase": "complete",
+        "receipt": {
+          "operation_id": "4292b94ee7df434cb36a376e0a113580",
+          "purpose": "release.update.apply",
+          "status": "completed",
+          "effect_status": "current_selected",
+          "target_name": "jarvis-v1",
+          "artifact_id": null,
+          "manifest_sha256": "c9568e083a3a8b7b940b1b94cd0340c0b6da57f069ce63c164c98abaedb2e667",
+          "target_identity": {
+            "device": "16777230",
+            "inode": "69262089"
+          },
+          "new_profile_id": null,
+          "error_code": null,
+          "cleanup_error_code": null,
+          "cleanup_pending": false
+        },
+        "receipt_durable": true,
+        "independent_verification": {
+          "passed": true,
+          "payload_files": 53,
+          "exact_inventory": true,
+          "all_payload_sha256_match": true,
+          "pending_absent": true,
+          "version_executed": false,
+          "profile_data_modified": false
+        },
+        "local_record": "/private/tmp/jarvis-recovery-complete-v5foqko9/release-install-v1-live.json",
+        "record_sha256": "3d2ca2181339b728d52b395bfe00e6186925f5badfb1fb1ec881154a144c0407"
+      },
+      {
+        "case": "release-update-v2-live",
+        "operation_id": "bba28b5fa8ff46728214382c0e323038",
+        "kind": "release.update.apply",
+        "phase": "complete",
+        "receipt": {
+          "operation_id": "bba28b5fa8ff46728214382c0e323038",
+          "purpose": "release.update.apply",
+          "status": "completed",
+          "effect_status": "current_selected",
+          "target_name": "jarvis-v2",
+          "artifact_id": null,
+          "manifest_sha256": "e197ed9407f670beb187228ef72fb31cf0b448739300a2a4c5e159ad6e31ddf3",
+          "target_identity": {
+            "device": "16777230",
+            "inode": "69262089"
+          },
+          "new_profile_id": null,
+          "error_code": null,
+          "cleanup_error_code": null,
+          "cleanup_pending": false
+        },
+        "receipt_durable": true,
+        "independent_verification": {
+          "passed": true,
+          "versions": {
+            "jarvis-v1": {
+              "files": 53,
+              "manifest_sha256": "c9568e083a3a8b7b940b1b94cd0340c0b6da57f069ce63c164c98abaedb2e667"
+            },
+            "jarvis-v2": {
+              "files": 53,
+              "manifest_sha256": "e197ed9407f670beb187228ef72fb31cf0b448739300a2a4c5e159ad6e31ddf3"
+            }
+          },
+          "pending_absent": true,
+          "originals_and_backup_intact": true,
+          "version_executed": false
+        },
+        "local_record": "/private/tmp/jarvis-recovery-complete-v5foqko9/release-update-v2-live.json",
+        "record_sha256": "c5142ed0777a2015292f7753f8f9212773d1d3127e07dbbc171ee6c43180e67e"
+      },
+      {
+        "case": "release-rollback-v1-live",
+        "operation_id": "775fb93c029545898ed69961be2844ca",
+        "kind": "release.rollback.apply",
+        "phase": "complete",
+        "receipt": {
+          "operation_id": "775fb93c029545898ed69961be2844ca",
+          "purpose": "release.rollback.apply",
+          "status": "completed",
+          "effect_status": "current_selected",
+          "target_name": "jarvis-v1",
+          "artifact_id": null,
+          "manifest_sha256": "c9568e083a3a8b7b940b1b94cd0340c0b6da57f069ce63c164c98abaedb2e667",
+          "target_identity": {
+            "device": "16777230",
+            "inode": "69262089"
+          },
+          "new_profile_id": null,
+          "error_code": null,
+          "cleanup_error_code": null,
+          "cleanup_pending": false
+        },
+        "receipt_durable": true,
+        "independent_verification": {
+          "passed": true,
+          "versions": {
+            "jarvis-v1": {
+              "files": 53,
+              "manifest_sha256": "c9568e083a3a8b7b940b1b94cd0340c0b6da57f069ce63c164c98abaedb2e667"
+            },
+            "jarvis-v2": {
+              "files": 53,
+              "manifest_sha256": "e197ed9407f670beb187228ef72fb31cf0b448739300a2a4c5e159ad6e31ddf3"
+            }
+          },
+          "pending_absent": true,
+          "originals_and_backup_intact": true,
+          "version_executed": false
+        },
+        "local_record": "/private/tmp/jarvis-recovery-complete-v5foqko9/release-rollback-v1-live.json",
+        "record_sha256": "77885e264a5ed7202e6910ffef5048a9a6cf6c7f718a603b127c6ff3c5b429c8"
+      },
+      {
+        "case": "repair-backup-live",
+        "operation_id": "c191e0a853824d21b9af0763369ac62b",
+        "kind": "doctor.repair.apply",
+        "phase": "complete",
+        "receipt": {
+          "operation_id": "c191e0a853824d21b9af0763369ac62b",
+          "purpose": "doctor.repair.apply",
+          "status": "completed",
+          "effect_status": "published_verified_bytes",
+          "target_name": "respaldo-reparado",
+          "artifact_id": "c3ee23a25620491e91e8c7f5bbd2006d",
+          "manifest_sha256": "51eb4f09bb3c77ed97a0382435c85bc793f139c5512fa67c561acec4326b4c86",
+          "target_identity": {
+            "device": "16777230",
+            "inode": "69442915"
+          },
+          "new_profile_id": null,
+          "error_code": null,
+          "cleanup_error_code": null,
+          "cleanup_pending": false
+        },
+        "receipt_durable": true,
+        "independent_verification": {
+          "passed": true,
+          "backup_manifest_sha256": "51eb4f09bb3c77ed97a0382435c85bc793f139c5512fa67c561acec4326b4c86",
+          "base_note_preserved": true,
+          "fts_rows_before": 0,
+          "fts_rows_after": 1,
+          "original_bytes_and_metadata_intact": true,
+          "profile_activated": false
+        },
+        "local_record": "/private/tmp/jarvis-recovery-complete-v5foqko9/repair-backup-live.json",
+        "record_sha256": "4e3ca836aaa634f4e68f44de91793bec84fa0cd47e3011091ba5d5b5bf8703a7"
+      },
+      {
+        "case": "repair-restore-live",
+        "operation_id": "4852fbbb57314bb3b95ecce7a1d14ebb",
+        "kind": "restore.stage",
+        "phase": "staged_disarmed",
+        "receipt": {
+          "operation_id": "4852fbbb57314bb3b95ecce7a1d14ebb",
+          "purpose": "restore.stage",
+          "status": "completed",
+          "effect_status": "new_disarmed_profile",
+          "target_name": "perfil-reparado",
+          "artifact_id": "c3ee23a25620491e91e8c7f5bbd2006d",
+          "manifest_sha256": "51eb4f09bb3c77ed97a0382435c85bc793f139c5512fa67c561acec4326b4c86",
+          "target_identity": {
+            "device": "16777230",
+            "inode": "69445489"
+          },
+          "new_profile_id": "632b96e8805c44c18684843fce0327a3",
+          "error_code": null,
+          "cleanup_error_code": null,
+          "cleanup_pending": false
+        },
+        "receipt_durable": true,
+        "independent_verification": {
+          "passed": true,
+          "one_base_note_and_fts_row_preserved": true,
+          "backup_and_original_intact": true,
+          "disarms_verified": true,
+          "profile_activated": false,
+          "accounts_connected": false
+        },
+        "local_record": "/private/tmp/jarvis-recovery-complete-v5foqko9/repair-restore-live.json",
+        "record_sha256": "c0bd8c9f5d921fab2dd7947a4175fbcdf1598820ab8958a7a70b06901592c603"
+      }
+    ],
+    "repaired_restore_profile_activated": false
+  },
+  "prepared_own_releases": [
+    {
+      "artifact_path": "/private/tmp/jarvis-recovery-complete-v5foqko9/paquete-compatible-v1",
+      "bytes": 11918411,
+      "channel": "development",
+      "code_executed": false,
+      "external_dependencies": {
+        "codex": "external_official_required",
+        "python": "external_required"
+      },
+      "files": 53,
+      "manifest_sha256": "c9568e083a3a8b7b940b1b94cd0340c0b6da57f069ce63c164c98abaedb2e667",
+      "release_authenticity": "not_established",
+      "signing_performed": false,
+      "version_key": "jarvis-v1",
+      "native_bundle_previously_signed_ad_hoc": true,
+      "qualification_version_marker": "JARVIS-V1"
+    },
+    {
+      "artifact_path": "/private/tmp/jarvis-recovery-complete-v5foqko9/paquete-compatible-v2",
+      "bytes": 11918411,
+      "channel": "development",
+      "code_executed": false,
+      "external_dependencies": {
+        "codex": "external_official_required",
+        "python": "external_required"
+      },
+      "files": 53,
+      "manifest_sha256": "e197ed9407f670beb187228ef72fb31cf0b448739300a2a4c5e159ad6e31ddf3",
+      "release_authenticity": "not_established",
+      "signing_performed": false,
+      "version_key": "jarvis-v2",
+      "native_bundle_previously_signed_ad_hoc": true,
+      "qualification_version_marker": "JARVIS-V2"
+    }
+  ],
+  "release_startup": {
+    "owner_launch_authorized_in_chat": true,
+    "health": {
+      "service": "jarvis",
+      "protocol": "jarvis-local-rpc",
+      "version": 1
+    },
+    "service_peer_pid": 66747,
+    "native_parent_pid": 66735,
+    "native_arguments": "/private/tmp/jarvis-recovery-complete-v5foqko9/instalacion-local/releases/jarvis-v1/app/Jarvis.app/Contents/MacOS/Jarvis --python /opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/bin/python3.11 --source /private/tmp/jarvis-recovery-complete-v5foqko9/instalacion-local/releases/jarvis-v1/python --state /private/tmp/jarvis-recovery-complete-v5foqko9/perfil-journal --codex /opt/homebrew/bin/codex",
+    "same_release_source_and_native": true,
+    "release_key": "jarvis-v1",
+    "current_sha256": "5a361faedb9cc8f10f5223299e0fb013309163ce8769d177687824e5f4ed9720",
+    "chat_visible": "JARVIS RECUPERACIÓN LOCAL",
+    "account": "disconnected",
+    "model_inference_performed": false,
+    "native_binary_sha256": "2010781f227ddebfc0616298185961d2fea199abe740f688c6d2ed26517fa40e",
+    "clean_shutdown_exit_code": 0,
+    "local_record": "/private/tmp/jarvis-recovery-complete-v5foqko9/release-startup-live.json",
+    "record_sha256": "507a7c19fc374aa68a35ebd2991535612dd3fb59da0c9e3728d31606d8d31499"
+  },
+  "legacy_candidate_rejection": {
+    "passed": true,
+    "legacy_runtime_executed": false,
+    "error_code": "release_maintenance_purposes_incompatible",
+    "candidate_preserved": false,
+    "scope": "own previously staged source only; AST contract check"
+  },
+  "coverage_boundaries": {
+    "automated_only_in_this_increment": [
+      "WAL absent/empty/header-only across supported roles",
+      "WAL valid-prefix repair variants and loss accounting",
+      "PERSIST/TRUNCATE variants not individually run through native GUI",
+      "adversarial races, cancellation and unknown publication branches"
+    ],
+    "native_positive_releases": "Both positive release fixtures use the same final functional sources and different explicit test version markers; no arbitrary historic migration claim.",
+    "source_integrity": "Original SQLite family metadata and hashes checked independently; backup hashes and selected workspace content checked. SQLite originals never opened for repair.",
+    "window_observation": "Six selection-policy tests passed; actual new GUI workflow completed. The earlier disappearing-card incident has no established cause and is not claimed fixed by this policy alone."
+  },
+  "limits": [
+    "FTS derived-index rebuild and validated WAL prefix only; no arbitrary B-tree, deleted-file or super-journal recovery.",
+    "Lost WAL committed transactions remain unknown; possible data loss explicitly shown.",
+    "Exact workspace selection; no automatic recursive inclusion, activation or execution.",
+    "Unknown publication is retained and never replayed automatically.",
+    "Development release authenticity not established; external Python and official Codex, no standalone distribution, Developer ID, notarization or remote signed update channel qualified.",
+    "Positive native workflows with owner decisions do not exhaust all production failure/revocation cases.",
+    "A-71 and overall Phase A remain partial; Phase B not started."
+  ]
+}

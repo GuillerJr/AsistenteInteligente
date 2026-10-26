@@ -21,6 +21,10 @@ public enum MaintenanceValidation {
         if value == .null { return nil }
         guard let text = value.string, text.range(of: "^[a-z][a-z0-9_]{0,127}\\z", options: .regularExpression) != nil else { throw RPCFailure.invalidResponse }; return text
     }
+    static func stage(_ value: RPCValue) throws -> String? {
+        if value == .null { return nil }
+        guard let text = value.string, text.range(of: "^[a-z][a-z0-9_.]{0,127}\\z", options: .regularExpression) != nil else { throw RPCFailure.invalidResponse }; return text
+    }
     public static func path(_ path: String) -> Bool {
         path.hasPrefix("/") && path.utf8.count <= 4096 && !path.contains("\0") && !path.split(separator: "/").contains("..")
     }
@@ -68,13 +72,23 @@ public struct MaintenanceSource: Identifiable, Sendable {
 
 public struct MaintenanceSqliteRecovery: Identifiable, Sendable {
     public let role: String
+    public let mode: String
+    public let semantics: String
     public var id: String { "maintenance-recovery:\(role)" }
     init(_ value: RPCValue) throws {
         try MaintenanceValidation.keys(value, ["role", "mode", "semantics"])
         guard let role = value["role"].string, ["state", "memory", "schedules"].contains(role),
-              value["mode"] == .string("cold_wal"),
-              value["semantics"] == .string("confirmed_transactions_only") else { throw RPCFailure.invalidResponse }
-        self.role = role
+              let mode = value["mode"].string,
+              let semantics = value["semantics"].string else { throw RPCFailure.invalidResponse }
+        let expected: String
+        switch mode {
+        case "cold_wal": expected = "confirmed_transactions_only"
+        case "cold_wal_main_only", "cold_wal_empty", "cold_wal_header": expected = "durable_main_state_missing_transactions_unknown"
+        case "cold_journal_hot", "cold_journal_inactive", "cold_journal": expected = "journal_recovery_private_copy"
+        default: throw RPCFailure.invalidResponse
+        }
+        guard semantics == expected else { throw RPCFailure.invalidResponse }
+        self.role = role; self.mode = mode; self.semantics = semantics
     }
 }
 
@@ -144,7 +158,7 @@ public struct MaintenanceApproval: Identifiable, Sendable {
         try MaintenanceValidation.keys(value, ["approval_id", "scope", "purpose", "operation_id", "arguments_json", "digest", "expires_at_ns"])
         guard let id = value["approval_id"].string, ManagementValidation.identifier(id),
               let operation = value["operation_id"].string, ManagementValidation.identifier(operation),
-              let purpose = value["purpose"].string, ["backup.create", "restore.stage", "profile.restore.activate", "memory.restore.copy_scope"].contains(purpose),
+              let purpose = value["purpose"].string, Set(["backup.create", "restore.stage", "profile.restore.activate", "memory.restore.copy_scope"]).union(RecoveryExtensionValidation.effects).contains(purpose),
               let digest = value["digest"].string, ManagementValidation.hash(digest),
               let arguments = value["arguments_json"].string, arguments.utf8.count <= 16_384,
               let expiry = value["expires_at_ns"].string, expiry.range(of: "^[0-9]{1,20}\\z", options: .regularExpression) != nil,
@@ -180,7 +194,7 @@ public struct MaintenanceReceipt: Sendable {
         try MaintenanceValidation.keys(value, ["operation_id", "purpose", "status", "effect_status", "target_name", "artifact_id", "manifest_sha256", "target_identity", "new_profile_id", "error_code", "cleanup_error_code", "cleanup_pending"])
         guard value["operation_id"] == .string(operation), value["purpose"] == .string(kind),
               let status = value["status"].string, ["completed", "cancelled", "failed", "unknown"].contains(status),
-              let effect = value["effect_status"].string, ["published_verified_bytes", "new_disarmed_profile", "no_published_effect", "unknown"].contains(effect),
+              let effect = value["effect_status"].string, ["published_verified_bytes", "new_disarmed_profile", "no_published_effect", "unknown", "current_selected", "publication_unknown", "no_current_change"].contains(effect),
               let name = value["target_name"].string, MaintenanceValidation.name(name),
               let cleanup = value["cleanup_pending"].bool else { throw RPCFailure.invalidResponse }
         for key in ["artifact_id", "new_profile_id"] { if value[key] != .null { guard let id = value[key].string, ManagementValidation.identifier(id) else { throw RPCFailure.invalidResponse } } }
@@ -188,8 +202,11 @@ public struct MaintenanceReceipt: Sendable {
         if value["target_identity"] != .null { _ = try MaintenanceFileIdentity(value["target_identity"]) }
         _ = try MaintenanceValidation.code(value["error_code"]); _ = try MaintenanceValidation.code(value["cleanup_error_code"])
         if status == "completed" {
-            guard !cleanup, value["target_identity"] != .null, value["artifact_id"] != .null, value["manifest_sha256"] != .null,
-                  effect == (kind == "backup.create" ? "published_verified_bytes" : "new_disarmed_profile") else { throw RPCFailure.invalidResponse }
+            let release = ["release.update.apply", "release.rollback.apply"].contains(kind)
+            let expectedEffect = release ? "current_selected" : kind == "restore.stage" ? "new_disarmed_profile" : "published_verified_bytes"
+            guard !cleanup, value["target_identity"] != .null,
+                  release || value["artifact_id"] != .null,
+                  value["manifest_sha256"] != .null, effect == expectedEffect else { throw RPCFailure.invalidResponse }
             if kind == "restore.stage", value["new_profile_id"] == .null { throw RPCFailure.invalidResponse }
         }
         self.status = status; self.effect = effect; targetName = name; artifactID = value["artifact_id"].string; manifestHash = value["manifest_sha256"].string; cleanupPending = cleanup
@@ -220,7 +237,7 @@ public struct MaintenanceOperation: Identifiable, Sendable {
     public func follows(_ previous: MaintenanceOperation) -> Bool {
         guard id == previous.id, kind == previous.kind, scope.profileID == previous.scope.profileID,
               reviewID == previous.reviewID, reviewDigest == previous.reviewDigest else { return false }
-        if ["backup.verify", "doctor.report", "profile.restore.review", "profile.restore.inspect"].contains(kind) || RestoredMemoryValidation.reads.contains(kind) { return scope.generation >= previous.scope.generation }
+        if ["backup.verify", "doctor.report", "profile.restore.review", "profile.restore.inspect"].contains(kind) || RestoredMemoryValidation.reads.contains(kind) || RecoveryExtensionValidation.reads.contains(kind) { return scope.generation >= previous.scope.generation }
         return scope == previous.scope
     }
     public var settled: Bool { Self.terminal.contains(phase) && !workerPending }
@@ -230,7 +247,7 @@ public struct MaintenanceOperation: Identifiable, Sendable {
     public var success: Bool {
         guard !cleanupOwnerPending else { return false }
         if kind == RestoredMemoryValidation.effect { return settled && phase == "complete" && receiptDurable && !cleanupOwnerPending && memoryCopyReceipt?.status == "completed" }
-        if RestoredMemoryValidation.reads.contains(kind) { return settled && phase == "complete" }
+        if RestoredMemoryValidation.reads.contains(kind) || RecoveryExtensionValidation.reads.contains(kind) { return settled && phase == "complete" }
         if kind == "profile.restore.activate" { return settled && phase == "activated_not_opened" && receiptDurable && !cleanupOwnerPending && activationReceipt?.status == "completed" }
         return settled && ["complete", "staged_disarmed"].contains(phase) && (["doctor.report", "backup.verify", "profile.restore.review", "profile.restore.inspect"].contains(kind) || (receiptDurable && receipt?.status == "completed"))
     }
@@ -241,7 +258,7 @@ public struct MaintenanceOperation: Identifiable, Sendable {
         if keys.contains("cleanup_owner_pending") { guard let pending = value["cleanup_owner_pending"].bool else { throw RPCFailure.invalidResponse }; cleanupOwnerPending = pending }
         else { cleanupOwnerPending = false }
         guard let id = value["operation_id"].string, ManagementValidation.identifier(id),
-              let kind = value["kind"].string, Set(["backup.create", "restore.stage", "backup.verify", "doctor.report", "profile.restore.review", "profile.restore.inspect", "profile.restore.activate"]).union(RestoredMemoryValidation.kinds).contains(kind),
+              let kind = value["kind"].string, Set(["backup.create", "restore.stage", "backup.verify", "doctor.report", "profile.restore.review", "profile.restore.inspect", "profile.restore.activate"]).union(RestoredMemoryValidation.kinds).union(RecoveryExtensionValidation.kinds).contains(kind),
               let phase = value["phase"].string, Self.terminal.union(["awaiting_owner", "quiescing", "working"]).contains(phase),
               let pending = value["worker_pending"].bool, let cancelled = value["cancellation_requested"].bool,
               let durable = value["receipt_durable"].bool else { throw RPCFailure.invalidResponse }
@@ -249,7 +266,7 @@ public struct MaintenanceOperation: Identifiable, Sendable {
         self.id = id; self.kind = kind; self.phase = phase; workerPending = pending; cancellationRequested = cancelled; receiptDurable = durable
         try MaintenanceValidation.keys(value["scope"], ["profile_id", "generation"])
         scope = try MaintenanceScope(value["scope"])
-        if ["backup.create", "restore.stage", "profile.restore.activate", "memory.restore.copy_scope"].contains(kind) {
+        if Set(["backup.create", "restore.stage", "profile.restore.activate", "memory.restore.copy_scope"]).union(RecoveryExtensionValidation.effects).contains(kind) {
             guard let review = value["review_id"].string, ManagementValidation.identifier(review),
                   let digest = value["review_digest"].string, ManagementValidation.hash(digest) else { throw RPCFailure.invalidResponse }
             reviewID = review; reviewDigest = digest
@@ -257,7 +274,7 @@ public struct MaintenanceOperation: Identifiable, Sendable {
             guard value["review_id"] == .null, value["review_digest"] == .null else { throw RPCFailure.invalidResponse }
             reviewID = nil; reviewDigest = nil
         }
-        stage = try MaintenanceValidation.code(value["stage"]); errorCode = try MaintenanceValidation.code(value["error_code"])
+        stage = try MaintenanceValidation.stage(value["stage"]); errorCode = try MaintenanceValidation.code(value["error_code"])
         if kind == "profile.restore.activate" {
             memoryCopyReceipt = nil; receipt = nil; activationReceipt = value["receipt"] == .null ? nil : try RestoreActivationReceipt(value["receipt"], operationID: id)
         } else if kind == RestoredMemoryValidation.effect {
@@ -281,12 +298,19 @@ public struct MaintenanceOperation: Identifiable, Sendable {
                 } else if phase == "complete" { throw RPCFailure.invalidResponse }
             }
         }
+        if RecoveryExtensionValidation.kinds.contains(kind) {
+            try RecoveryExtensionValidation.validateResult(kind: kind, result: result, phase: phase, receiptDurable: durable, hasReceipt: value["receipt"] != .null)
+            if let payload = result.object?["review"] {
+                let prepared = try RecoveryExtensionReview(payload)
+                guard prepared.scope == scope else { throw RPCFailure.invalidResponse }
+            }
+        }
         if phase == "complete", kind == "backup.verify" { _ = try MaintenanceVerification(result) }
         if phase == "complete", kind == "doctor.report" { _ = try DoctorSummary(result) }
         if ["complete", "staged_disarmed", "activated_not_opened"].contains(phase), cleanupOwnerPending { throw RPCFailure.invalidResponse }
         if phase == "staged_disarmed", kind != "restore.stage" { throw RPCFailure.invalidResponse }
         if phase == "activated_not_opened" { guard kind == "profile.restore.activate", durable, activationReceipt?.status == "completed", !cleanupOwnerPending else { throw RPCFailure.invalidResponse } }
-        if ["complete", "staged_disarmed"].contains(phase), ["backup.create", "restore.stage"].contains(kind) {
+        if ["complete", "staged_disarmed"].contains(phase), Set(["backup.create", "restore.stage"]).union(RecoveryExtensionValidation.effects).contains(kind) {
             guard durable, receipt?.status == "completed", !cleanupOwnerPending else { throw RPCFailure.invalidResponse }
         }
     }

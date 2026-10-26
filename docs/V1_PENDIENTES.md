@@ -64,9 +64,9 @@ Estos recorridos acotados no cierran todas las capacidades del canal, voz o web.
   HTTP 200; contenido externo no verificado, sin JavaScript ni enlaces adicionales.
 - [ ] Registrar controles finales de cierre Codex/MCP/Telegram/scheduler/RPC,
   reteniendo Stores y propietarios ante incertidumbre y sin reconexión/replay.
-- [ ] Completar la investigación semántica pendiente: REA 13–18 amplían respaldo,
-  snapshots, actualización, cierre, migración de memoria y custodia SQLite;
-  dieciocho lotes y 76 rutas TS/JS no cierran la matriz ni toda la referencia.
+- [ ] Completar la investigación semántica pendiente: REA 13–20 amplían respaldo,
+  snapshots, actualización, cierre, migración de memoria, custodia SQLite y archivos;
+  veinte lotes y 80 rutas TS/JS seleccionadas no cierran la matriz ni toda la referencia.
 - [ ] Repetir Python/Swift/paquete/CI tras los últimos ajustes y registrar identidades
   finales. No sustituir la instalación anterior por un bundle de desarrollo.
 
@@ -96,7 +96,7 @@ declara completa por los tests sintéticos.
 - [x] Comprobar diagnóstico, respaldo y verificación WAL en la app con aprobación
   real del dueño y un perfil sintético: memoria WAL, estado/tareas DELETE; último
   commit, hashes y cinco originales intactos verificados independientemente.
-  [Evidencia y límites](rebuild/PHASE_A_WAL_RECOVERY_LIVE.json). Las demás variantes WAL siguen pendientes.
+  [Evidencia y límites](rebuild/PHASE_A_WAL_RECOVERY_LIVE.json). La cualificación real de las variantes nuevas sigue pendiente.
 - [x] Restaurar ese respaldo WAL desde la app con aprobación del dueño a otro
   perfil sintético desarmado: último commit, IDs/ámbitos y datos conservados;
   cinco originales y seis archivos del respaldo intactos. [Evidencia](rebuild/PHASE_A_WAL_RESTORE_LIVE.json).
@@ -134,11 +134,34 @@ declara completa por los tests sintéticos.
   IPC serial real; [evidencia y límites](rebuild/PHASE_A_OWNER_CLICK_REGRESSION.json).
 - [ ] Investigar la demora inicial observada en el perfil nuevo: se recuperó por
   supervisión lectora, sin reinicio; su causa no quedó establecida.
-- [ ] Completar variantes WAL restantes y journals, archivos/artefactos de workspace, activación y
-  reconciliación, reparaciones, actualización, rollback y distribución.
-  La [investigación OC-18](rebuild/REA_PART18_SUMMARY.json) y el
-  [contrato propio WAL](rebuild/PHASE_A_COLD_WAL_CONTRACT.md) fijan adquisición,
-  presupuestos y custodia; el primer incremento no cierra todas esas familias.
+- [x] Implementar las variantes frías WAL ausente, vacío y sólo cabecera válida,
+  y journals DELETE/PERSIST calientes o PERSIST/TRUNCATE inactivos, mediante
+  recuperación privada y rechazo de familias ambiguas. Los originales se conservan.
+- [x] Implementar archivos/artefactos de workspace con selección exacta, archivo
+  portátil independiente, inventario y destino nuevo, sin selección ni ejecución automática.
+- [x] Implementar reparación explícita del índice FTS desde datos base válidos y
+  del prefijo WAL hasta el último commit verificado, publicando otra copia. La
+  reparación de prefijo declara pérdida posible y transacciones perdidas desconocidas.
+- [x] Implementar actualización y rollback locales de desarrollo: pareja app/Python
+  propia, CURRENT transaccional, copia actual verificada y compatibilidad de esquemas;
+  recibos y propietario retenido ante incertidumbre, sin downgrade de datos ni replay.
+  El launcher comprueba ambos componentes de la misma versión y los esquemas fríos
+  antes del arranque explícito; no activa perfiles restaurados.
+- [x] Comprobar desde la app copia/restauración de archivos, respaldo con journal
+  caliente, reparación FTS/restauración e instalación v1 → v2 → rollback v1, con
+  decisiones del dueño y verificación independiente sobre datos sintéticos.
+  Arranque real de la pareja recuperada app/Python y cierre correctos, sin cuenta.
+  2297 pruebas Python y 249 Swift aprobadas; paquetes y bundle comprobados.
+  [Implementación y límites](rebuild/PHASE_A_RECOVERY_COMPLETION.md), informados por
+  [OC-19](rebuild/REA_PART19_SUMMARY.json) y [OC-20](rebuild/REA_PART20_SUMMARY.json).
+- [ ] Ampliar cualificación nativa de variantes WAL/journal, reparación de prefijo
+  y negativos reales pertinentes. Sus contratos y negativos automatizados están
+  probados; los recorridos GUI anteriores no acreditan todas sus combinaciones.
+- [ ] Completar negativos reales de activación y copia de memoria, reconciliación
+  de canales y distribución cualificada. El canal local `development` mantiene
+  Python/Codex externos; no acredita autenticidad del paquete, distribución
+  autocontenida, Developer ID, notarización ni actualización remota firmada.
+  A-71 y la fase A siguen abiertos; la fase B no ha comenzado.
 
 ## Fase B — después de acreditar A
 

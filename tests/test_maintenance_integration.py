@@ -109,7 +109,10 @@ async def test_unknown_publication_is_not_reported_as_failed(host, monkeypatch):
     await allow_synthetic_owner(coordinator)
     result = await finish(coordinator, operation["operation_id"])
     assert result["receipt"]["status"] == "unknown"
-    assert result["phase"] in {"publication_unknown", "cleanup_pending"}
+    assert result["phase"] == "publication_unknown"
+    assert result["receipt"]["cleanup_pending"] is True  # historical on-disk marker
+    assert result["cleanup_owner_pending"] is False
+    assert coordinator._operations[operation["operation_id"]].capture_cut is None
     assert (parent / "backup" / ".pending").is_file()
 
 

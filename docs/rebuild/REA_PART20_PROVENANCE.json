@@ -1,0 +1,29 @@
+{
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "files": [
+    {
+      "path": "src/infra/package-update-activation-immutable-pointer.ts",
+      "git_blob": "c7adace7b041dac7279229756ca202c4d98a01cb",
+      "size": 5029,
+      "sha256": "7f7019ccc5b75fe53ea0b12893e7fb3d6cdbfe46c6f2dcdd84afb21f5ba28fbc"
+    },
+    {
+      "path": "src/infra/package-update-activation-journal.ts",
+      "git_blob": "58904bcddde8640d86eba6eb46827804d98af0e0",
+      "size": 25825,
+      "sha256": "a96e69d8a85c0d1b379e7da57ddc4cd3a864ad3e5940db04d8e9b978e40b7cc6"
+    },
+    {
+      "path": "src/infra/package-update-activation-launcher.ts",
+      "git_blob": "a368e39d863328752d69644e11cbe8352c6476bc",
+      "size": 2943,
+      "sha256": "7916b850222ae98ad9a9aafd514b9a00d7623dbc6c53d3137b04b790861df50c"
+    }
+  ],
+  "source_or_runtime_executed": false,
+  "reference_tree": "197c70097790e30087bbef323b0f2cc5148ab9b7",
+  "infra_tree": "1efa84c79d161dcfbe0f3861e6299d99bfb976d3",
+  "acquisition": "Official GitHub blob GET, size + Git blob SHA1 and SHA256 independently validated",
+  "context_files_reused_from_part": 18,
+  "reference_checkout_modified": false
+}

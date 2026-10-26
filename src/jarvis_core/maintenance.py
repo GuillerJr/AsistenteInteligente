@@ -37,7 +37,10 @@ from jarvis_core.recovery import (
     restore_new,
     verify_backup,
 )
+from jarvis_core.recovery_extensions import ExtensionPrepared, RecoveryExtensions
 from jarvis_core.recovery_fs import Directory, RecoveryFsError, basename
+from jarvis_core.release_maintenance import ReleaseManagement
+from jarvis_core.repair_maintenance import RepairManagement
 from jarvis_core.tools import (
     HostApprovalRequest,
     HostCancellation,
@@ -45,6 +48,7 @@ from jarvis_core.tools import (
     canonical_host_arguments,
     host_operation_digest,
 )
+from jarvis_core.workspace_maintenance import WorkspaceMaintenance
 
 _ID = re.compile(r"[a-f0-9]{32}\Z")
 _HASH = re.compile(r"[a-f0-9]{64}\Z")
@@ -85,7 +89,7 @@ def _code(error):
     # Never return exception text: it can include a path, SQL or external data.
     code = getattr(error, "code", None)
     if type(code) is str and re.fullmatch(
-        r"(?:memory|activation|recovery|snapshot|doctor|host|profile|maintenance)_[a-z0-9_]{1,100}",
+        r"(?:memory|activation|recovery|snapshot|doctor|host|profile|maintenance|workspace_recovery|release)_[a-z0-9_]{1,100}",
         code
     ):
         return code
@@ -161,7 +165,8 @@ def _receipt_phase(receipt):
     return receipt.status if receipt.status in {"cancelled", "failed"} else "publication_unknown"
 
 
-class MaintenanceCoordinator(MemoryManagement, ActivationManagement):
+class MaintenanceCoordinator(RecoveryExtensions, WorkspaceMaintenance, RepairManagement,
+                             ReleaseManagement, MemoryManagement, ActivationManagement):
     def __init__(self, service, gate, *, clock=time.monotonic):
         self.service, self.gate, self.clock = service, gate, clock
         self.authority = service.authority
@@ -180,6 +185,9 @@ class MaintenanceCoordinator(MemoryManagement, ActivationManagement):
                    "restore.stage": self.restore, "doctor.report": self.doctor}
         methods.update(self.activation_handlers())
         methods.update(self.memory_handlers())
+        methods.update(self.workspace_handlers())
+        methods.update(self.repair_handlers())
+        methods.update(self.release_handlers())
 
         def safe(callback):
             async def invoke(params):
@@ -477,6 +485,12 @@ class MaintenanceCoordinator(MemoryManagement, ActivationManagement):
         try:
             capture.release()
             operation.capture_cut = None
+            if (operation.phase == "cleanup_pending"
+                    and getattr(operation.receipt, "status", None) == "unknown"):
+                # A retained on-disk publication marker is historical evidence,
+                # not a live reader. Keep its receipt unchanged without trapping
+                # the native client behind a cleanup button that has no owner.
+                operation.phase = "publication_unknown"
         except Exception as error:
             operation.cleanup_owner = capture
             operation.phase = "cleanup_pending"
@@ -517,13 +531,14 @@ class MaintenanceCoordinator(MemoryManagement, ActivationManagement):
             # Preserve the original receipt, including its historical cleanup
             # flag. Retiring a private reader does not retry a backup or read.
             status = getattr(operation.receipt, "status", None)
-            operation.phase = (status if status in {"failed", "cancelled"} else
+            operation.phase = ("publication_unknown" if status == "unknown" else
+                               status if status in {"failed", "cancelled"} else
                                "cancelled" if operation.cancellation.is_set() else "failed")
         except Exception as error:
             operation.error_code = _code(error)
             operation.phase = "cleanup_pending"
         finally:
-            if operation.kind in {"backup.create", "restore.stage"}:
+            if operation.review_digest is not None:
                 self._save_effect(operation)
 
     def _read_operation(self, kind, callback, *, allow_cleanup=False):
@@ -550,7 +565,11 @@ class MaintenanceCoordinator(MemoryManagement, ActivationManagement):
                     capture.retain(owner)
                 raise outcome.error
             result = outcome.value
-            if isinstance(result, _MemoryRead):
+            if isinstance(result, ExtensionPrepared):
+                if operation.cancellation.is_set():
+                    raise RecoveryFsError("recovery_cancelled")
+                operation.result = {"review": self._publish_extension_review(result)}
+            elif isinstance(result, _MemoryRead):
                 if operation.cancellation.is_set():
                     raise RecoveryFsError("recovery_cancelled")
                 operation.result = self._publish_memory_result(result)
