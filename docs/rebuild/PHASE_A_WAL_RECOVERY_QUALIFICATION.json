@@ -141,5 +141,17 @@
     "independent_last_committed_marker_and_artifact_hashes": "passed",
     "native_backup_and_verify": "complete",
     "phase_a_complete": false
+  },
+  "native_gui_restore_qualification": {
+    "status": "observed_with_real_owner_decision_and_synthetic_data",
+    "detail_file": "PHASE_A_WAL_RESTORE_LIVE.json",
+    "memory_WAL_only_in_live_source_profile": true,
+    "source_members_unchanged": 5,
+    "backup_files_bytes_and_metadata_unchanged": 6,
+    "destination": "new_disarmed_profile",
+    "last_committed_memory_and_logical_data_preserved": true,
+    "actual_GUI_restore_observed": true,
+    "activation_or_host_open_performed": false,
+    "phase_a_complete": false
   }
 }

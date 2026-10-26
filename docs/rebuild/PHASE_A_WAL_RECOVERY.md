@@ -2,8 +2,8 @@
 
 Primer incremento propio conectado a respaldo y diagnóstico. Su cualificación
 automática usa únicamente datos y autorizaciones sintéticos. Se comprobaron el
-diagnóstico, respaldo y verificación en la app con un perfil sintético y aprobación
-real del dueño. No se sustituye la app anterior ni se declara completa la fase A.
+diagnóstico, respaldo, verificación y restauración en la app con perfiles sintéticos
+y aprobaciones reales del dueño. No se sustituye la app anterior ni se declara completa la fase A.
 La fase B no ha comenzado.
 
 ## Alcance implementado
@@ -135,8 +135,21 @@ la nota conserva el título del tercer y último commit, su cuerpo y procedencia
 sintéticos, con integridad y relaciones correctas. Los cinco miembros originales
 conservan bytes, identidad, permisos, tamaño, mtime y ctime. El perfil de esta
 comprobación tenía sólo memoria WAL; estado y tareas eran DELETE. El recorrido
-acotado no acredita todas las variantes WAL, una restauración GUI WAL ni
-autenticidad del contenido.
+acotado no acredita todas las variantes WAL ni autenticidad del contenido.
+
+El 26-10 se [restauró ese respaldo desde la app](PHASE_A_WAL_RESTORE_LIVE.json),
+con otra aprobación del dueño, a un perfil nuevo y desarmado. El verificador
+independiente leyó únicamente bytes y SQLite RAM: conservó todos los datos lógicos,
+la nota del tercer commit y sus IDs/ámbitos, y comprobó configuración vacía y
+ausencia de tareas, permisos y conexiones activas. Los cinco originales y los seis
+archivos del respaldo conservaron bytes y metadatos. El destino no se activó ni
+se abrió como servicio.
+
+Se aclaró la revisión: muestra el origen y hash del respaldo y etiqueta las cifras
+del perfil activo como comprobaciones para conservarlo, sin presentarlas como
+tamaños del respaldo. El caso IPC WAL existente ahora verifica también el contenido
+de los tres SQLite restaurados y sus controles desarmados; pasó junto a la suite
+de 225 Swift. No añade casos duplicados ni cambia el backend de restauración.
 
 Siguen pendientes los journals de rollback, WAL vacío o sin WAL asociado,
 recuperación de prefijos ante corrupción/reset antiguo, reparaciones, archivos

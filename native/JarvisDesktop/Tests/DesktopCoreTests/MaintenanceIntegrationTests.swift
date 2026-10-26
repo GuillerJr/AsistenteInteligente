@@ -21,6 +21,7 @@ final class MaintenanceIntegrationTests: XCTestCase {
         child.executableURL = URL(fileURLWithPath: python)
         child.arguments = ["-c", """
         import asyncio, hashlib, json, os, signal, sqlite3, sys
+        from contextlib import closing
         from pathlib import Path
         from jarvis_core.service import JarvisService
         from jarvis_core.state import StateStore
@@ -107,11 +108,44 @@ final class MaintenanceIntegrationTests: XCTestCase {
                 assert rows==[(wal_markers[role]['committed'],)]
               result[role]=rows[0][0]
             return result
+          async def wal_restored(params):
+            assert not params and cold_wal
+            restored=parent/'wal-native-restored'
+            titles={}; memory_rows={}; schedules_disabled=False; provider_bindings_cleared=False
+            for role,table in (('state','sessions'),('memory','documents'),('schedules','schedules')):
+              data=(restored/({'state':'jarvis','memory':'memory','schedules':'schedules'}[role]+'.sqlite3')).read_bytes()
+              assert data[18:20]==b'\\1\\1'
+              with closing(sqlite3.connect(':memory:')) as db:
+                db.deserialize(data); db.execute('PRAGMA trusted_schema=OFF'); db.execute('PRAGMA query_only=ON')
+                assert db.execute('PRAGMA quick_check(1)').fetchone()==('ok',)
+                rows=db.execute('SELECT title FROM '+table).fetchall()
+                assert rows==[(wal_markers[role]['committed'],)]
+                titles[role]=rows[0][0]
+                if role=='state':
+                  provider_bindings_cleared=db.execute('SELECT count(*) FROM sessions WHERE provider_thread_id IS NOT NULL').fetchone()[0]==0
+                elif role=='schedules':
+                  schedules_disabled=db.execute('SELECT count(*) FROM schedules WHERE enabled!=0 OR next_at IS NOT NULL').fetchone()[0]==0
+                else:
+                  memory_rows['restored']=db.execute('SELECT * FROM documents ORDER BY document_id').fetchall()
+            with closing(sqlite3.connect(':memory:')) as db:
+              db.deserialize((parent/'wal-native-backup'/'data'/'memory.sqlite3').read_bytes())
+              db.execute('PRAGMA trusted_schema=OFF'); db.execute('PRAGMA query_only=ON')
+              memory_rows['backup']=db.execute('SELECT * FROM documents ORDER BY document_id').fetchall()
+            configuration=json.loads((restored/'configuration.json').read_text())
+            record=json.loads((restored/'restore_record.json').read_text())
+            return {'titles':titles,'memory_payload_matches_backup':memory_rows['restored']==memory_rows['backup'],
+                    'schedules_disabled':schedules_disabled,'provider_bindings_cleared':provider_bindings_cleared,
+                    'configuration_unselected':configuration=={'version':1,'workspace':None,'workspace_identity':None,'bindings':{},'mcp_servers':{}},
+                    'activation_required':record['activation_required'],'replay_allowed':record['replay_allowed'],
+                    'not_activated':not (restored/'restore_admission.json').exists(),
+                    'transport_absent':not (restored/'transport.token').exists() and not (restored/'service.sock').exists(),
+                    'pending_marker_absent':not (restored/'.pending').exists()}
           async def mutate(params):
             service.store.create_session('Cambio sintético posterior a revisión', agent_id='fixture')
             return {'ok':True}
           service.server._handlers.update({'fixture.maintenance.trace':trace,'fixture.maintenance.mutate':mutate,
-            'fixture.maintenance.cleanup_allow':allow_cleanup,'fixture.maintenance.wal_result':wal_result})
+            'fixture.maintenance.cleanup_allow':allow_cleanup,'fixture.maintenance.wal_result':wal_result,
+            'fixture.maintenance.wal_restored':wal_restored})
           done=asyncio.Event(); asyncio.get_running_loop().add_signal_handler(signal.SIGTERM,done.set)
           try:
             await service.start(); await done.wait()
@@ -266,6 +300,16 @@ final class MaintenanceIntegrationTests: XCTestCase {
             let restored = try await self.settled(client, restoring)
             XCTAssertTrue(restored.success)
             XCTAssertEqual(restored.phase, "staged_disarmed")
+            let restoredPayload = try await transport.call("fixture.maintenance.wal_restored")
+            for role in ["state", "memory", "schedules"] {
+                XCTAssertEqual(restoredPayload["titles"][role], .string("JARVIS WAL COMMIT TRES " + role))
+            }
+            for control in ["memory_payload_matches_backup", "schedules_disabled", "provider_bindings_cleared",
+                            "configuration_unselected", "activation_required", "not_activated",
+                            "transport_absent", "pending_marker_absent"] {
+                XCTAssertEqual(restoredPayload[control], .bool(true), control)
+            }
+            XCTAssertEqual(restoredPayload["replay_allowed"], .bool(false))
             let final = try await transport.call("fixture.maintenance.trace")
             XCTAssertEqual(final["sources_sha256"], before["sources_sha256"])
             XCTAssertEqual(final["provider_calls"], .number(0))

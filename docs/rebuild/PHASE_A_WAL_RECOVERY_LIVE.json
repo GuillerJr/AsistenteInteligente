@@ -273,5 +273,6 @@
     "ci_run": 40216908249,
     "ci_conclusion": "success"
   },
-  "independent_backup_verifier_sha256": "f836a2e19405d32870273542f2216f90c11417d16838955869a1c003ab292c5c"
+  "independent_backup_verifier_sha256": "f836a2e19405d32870273542f2216f90c11417d16838955869a1c003ab292c5c",
+  "continuation_restore_file": "PHASE_A_WAL_RESTORE_LIVE.json"
 }

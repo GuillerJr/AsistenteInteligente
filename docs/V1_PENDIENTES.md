@@ -96,7 +96,12 @@ declara completa por los tests sintéticos.
 - [x] Comprobar diagnóstico, respaldo y verificación WAL en la app con aprobación
   real del dueño y un perfil sintético: memoria WAL, estado/tareas DELETE; último
   commit, hashes y cinco originales intactos verificados independientemente.
-  [Evidencia y límites](rebuild/PHASE_A_WAL_RECOVERY_LIVE.json). No acredita todas las variantes ni restauración GUI WAL.
+  [Evidencia y límites](rebuild/PHASE_A_WAL_RECOVERY_LIVE.json). Las demás variantes WAL siguen pendientes.
+- [x] Restaurar ese respaldo WAL desde la app con aprobación del dueño a otro
+  perfil sintético desarmado: último commit, IDs/ámbitos y datos conservados;
+  cinco originales y seis archivos del respaldo intactos. [Evidencia](rebuild/PHASE_A_WAL_RESTORE_LIVE.json).
+  Aclarar origen/hash y cifras del perfil activo en la revisión; ampliar el caso
+  IPC para comprobar los tres SQLite restaurados. El destino permanece sin activar.
 - [x] Comprobar diagnóstico y revisión WAL de sólo lectura en la app de prueba,
   con originales intactos; corregir la colisión que ocultaba el aviso de último
   commit y comprobarlo visualmente. [Evidencia y límites](rebuild/PHASE_A_WAL_RECOVERY_LIVE.json).

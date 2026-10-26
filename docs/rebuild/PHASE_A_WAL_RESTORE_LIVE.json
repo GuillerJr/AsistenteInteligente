@@ -1,0 +1,246 @@
+{
+  "schema_version": 1,
+  "record_kind": "jarvis_phase_a_wal_native_restore_live",
+  "date": "2026-10-26",
+  "base_commit": "4636100f9a516b62a37ba8181d6612b0168298f8",
+  "phase_a_complete": false,
+  "phase_b_started": false,
+  "scope": "native_GUI_restore_of_previously_verified_backup_from_cold_memory_WAL; state_and_schedules_DELETE; own_synthetic_data_only",
+  "source_backup": "/private/tmp/jarvis-wal-live-gw47grp1/respaldo-wal",
+  "destination": "/private/tmp/jarvis-wal-live-gw47grp1/perfil-restaurado-wal",
+  "source_manifest_sha256": "bacdcc564c9c0662cdaa2fd862a9848138efe26505c35cf85b4de995d5a8df87",
+  "source_artifact_id": "104c302b9ade4cfd853d8bad24a19df7",
+  "owner_report": "listo",
+  "owner_approval_simulated": false,
+  "approval_evidence": "Owner handoff followed by native restore.stage staged_disarmed state; not cryptographic authentication of a human gesture.",
+  "native_operation": {
+    "cancellation_requested": false,
+    "cleanup_owner_pending": false,
+    "error_code": null,
+    "kind": "restore.stage",
+    "operation_id": "6b242d638c2341cfb97b9be7d6c63550",
+    "phase": "staged_disarmed",
+    "receipt": {
+      "artifact_id": "104c302b9ade4cfd853d8bad24a19df7",
+      "cleanup_error_code": null,
+      "cleanup_pending": false,
+      "effect_status": "new_disarmed_profile",
+      "error_code": null,
+      "manifest_sha256": "bacdcc564c9c0662cdaa2fd862a9848138efe26505c35cf85b4de995d5a8df87",
+      "new_profile_id": "6d1511a0dc7c402bbb5e0d4a10eeb641",
+      "operation_id": "6b242d638c2341cfb97b9be7d6c63550",
+      "purpose": "restore.stage",
+      "status": "completed",
+      "target_identity": {
+        "device": "16777230",
+        "inode": "69085447"
+      },
+      "target_name": "perfil-restaurado-wal"
+    },
+    "receipt_durable": true,
+    "result": null,
+    "review_digest": "14fd3e4c675338d34e365c992defaf9d962f6f397948c48a4ec356ff838e72db",
+    "review_id": "c141d7f07e3b45bc9e251109567b60af",
+    "scope": {
+      "generation": 2,
+      "profile_id": "f04b9de32dc44618bd53f97cf6010399"
+    },
+    "stage": "restore_verify_complete",
+    "worker_pending": false
+  },
+  "native_GUI_success_observed": true,
+  "native_GUI_success_text": "Perfil preparado y desarmado. La instalación activa no cambió.",
+  "independent_verification": {
+    "verification": "passed",
+    "scope": "own_synthetic_WAL_backup_restore_only",
+    "operation_id": "6b242d638c2341cfb97b9be7d6c63550",
+    "review_digest": "14fd3e4c675338d34e365c992defaf9d962f6f397948c48a4ec356ff838e72db",
+    "new_profile_id": "6d1511a0dc7c402bbb5e0d4a10eeb641",
+    "restored_profile_identity": [
+      16777230,
+      69085447
+    ],
+    "source_manifest_sha256": "bacdcc564c9c0662cdaa2fd862a9848138efe26505c35cf85b4de995d5a8df87",
+    "restore_status_sha256": "c1bd9846508c15e8dd093f57b8a2e6c8c85d30d513a55703b1f1117c307d43ff",
+    "restore_baseline_sha256": "1ff8d7cda7ccace70f700d8968d2666fe695a39b1ee43fd0094fb847b787fdbd",
+    "source_members_checked": 5,
+    "source_members_unchanged": true,
+    "backup_files_checked": 6,
+    "backup_files_bytes_and_metadata_unchanged": true,
+    "restored_files": {
+      "restore_record.json": [
+        16777230,
+        69085455,
+        501,
+        33152,
+        1,
+        1035,
+        1793021200603563727,
+        1793021200603563727,
+        "4ad7b20990d034352135f10b3685f14d0be178d3c86499745debaf9fcdc3ad5b"
+      ],
+      "configuration.json": [
+        16777230,
+        69085454,
+        501,
+        33152,
+        1,
+        87,
+        1793021200596092291,
+        1793021200596092291,
+        "609aa90b07e84ec0901b4f6742de70499c3f0367a3c9243bcbc639c602fd26bd"
+      ],
+      "profiles/agents.json": [
+        16777230,
+        69085453,
+        501,
+        33152,
+        1,
+        112,
+        1793021200592239470,
+        1793021200592239470,
+        "7429314e4c04be4a8cdd291c7c67289ebbe21ee0414c1cfb34ef7912a773b9f2"
+      ],
+      "jarvis.sqlite3": [
+        16777230,
+        69085449,
+        501,
+        33152,
+        1,
+        61440,
+        1793021200575422397,
+        1793021200575422397,
+        "c89a67f7c76034c3e442532838e0a3d5aa82979aac2b5b5ac6b6fe92878ff6e3"
+      ],
+      "memory.sqlite3": [
+        16777230,
+        69085450,
+        501,
+        33152,
+        1,
+        65536,
+        1793021200582151710,
+        1793021200582151710,
+        "1f4b3bd97b463861b0b1dc11fe1ebdadc418123ac323963f44dbae40434f0a40"
+      ],
+      "schedules.sqlite3": [
+        16777230,
+        69085451,
+        501,
+        33152,
+        1,
+        32768,
+        1793021200587876109,
+        1793021200587876109,
+        "02932ecbf88ba4c8bc47b025b0e29c5c09cd4248232dabae4f09cd229431fcdd"
+      ]
+    },
+    "restored_payload_bytes": 160978,
+    "sqlite_table_counts": {
+      "state": {
+        "sessions": 1,
+        "runs": 0,
+        "messages": 0,
+        "events": 0
+      },
+      "memory": {
+        "scopes": 1,
+        "documents": 1,
+        "chunks": 1,
+        "metadata": 1
+      },
+      "schedules": {
+        "schedules": 0,
+        "occurrences": 0
+      }
+    },
+    "memory": {
+      "notes": 1,
+      "committed_marker_matches": true,
+      "payload_sha256": "d5bf8755f58d912f7c59af7181f9ef9dfa6a296460ddf8ea5f0435da1d3d1d40",
+      "schema_version": 1,
+      "sqlite_integrity": "ok",
+      "snapshot_mode": "standalone_delete"
+    },
+    "logical_data_and_memory_scopes_preserved": true,
+    "new_profile_disarmed_and_activation_required": true,
+    "provider_bindings_and_configuration_empty": true,
+    "active_runs_or_schedules": 0,
+    "runtime_tokens_sockets_admission_approvals_absent": true,
+    "sqlite_disk_paths_opened": 0,
+    "profile_host_started_by_verifier": false,
+    "approval_sent_by_verifier": false,
+    "provider_called_by_verifier": false,
+    "historical_human_gesture_independently_authenticated": false,
+    "read_only_source_backup_and_destination": true
+  },
+  "evidence_sha256": {
+    "before-native-restore.json": "1ff8d7cda7ccace70f700d8968d2666fe695a39b1ee43fd0094fb847b787fdbd",
+    "restore-native-freeze.json": "0215b3a8f616e6d8867c3447c8c6059c98cfc487b1263b2b28661a208fcd90a7",
+    "restore-status.json": "c1bd9846508c15e8dd093f57b8a2e6c8c85d30d513a55703b1f1117c307d43ff",
+    "restore-independent-verification.json": "efc36bab093fa8cd1f2dbd2b2019c07428e46c364ee37ce185cb1c09109105b1"
+  },
+  "independent_verifier_sha256": "edb159d3aa77f1fb5566defdda2aca575824d93ff8ec556fd3d5f8bd59c9da57",
+  "native_source_and_bundle": {
+    "base_commit": "4636100f9a516b62a37ba8181d6612b0168298f8",
+    "source_sha256": {
+      "native/JarvisDesktop/Sources/JarvisApp/Views/MaintenanceView.swift": "28d10fb1efa9b0760323fd32a6bf66cd45ca74513a66ec3bbca7b7dd0db25c91",
+      "native/JarvisDesktop/Tests/DesktopCoreTests/MaintenanceIntegrationTests.swift": "dd26fe53d5d30829f9d02a25ac31efe256e7176fff646b854bb31e5876130346"
+    },
+    "bundle_binary_sha256": "3bdbdf825a728df264f805fdf2f3e3c4a2339f1754592e72ba0a7c6cd6d2a004",
+    "restore_verifier_sha256": "edb159d3aa77f1fb5566defdda2aca575824d93ff8ec556fd3d5f8bd59c9da57",
+    "runtime_manifest_sha256": "f2901a3fdffe163e4ff16c504fb177ace7a5a469fdfb84a5da9209d6984ffb0c"
+  },
+  "automated_regression": {
+    "source_file": "native/JarvisDesktop/Tests/DesktopCoreTests/MaintenanceIntegrationTests.swift",
+    "source_sha256": "dd26fe53d5d30829f9d02a25ac31efe256e7176fff646b854bb31e5876130346",
+    "existing_test_expanded": "MaintenanceIntegrationTests.testColdWalServiceDoctorBackupVerifyRestoreKeepAllSourceFamiliesIntact",
+    "focused_cases": 1,
+    "failures": 0,
+    "seconds": 1.656,
+    "log": "/private/tmp/jarvis-wal-restored-payload-test.log",
+    "log_sha256": "380817d4e8a0ed7cbc0d3b4fb370f2e620d44bfe8f2e7a7f0399cea93b8afec7",
+    "reads_restored_sqlite_only_in_memory": true,
+    "fixed_target": "fixture_parent/wal-native-restored",
+    "restored_titles_last_wal_commit": 3,
+    "memory_document_rows_equal_backup": true,
+    "controls_checked": [
+      "schedules_disabled",
+      "provider_bindings_cleared",
+      "configuration_unselected",
+      "activation_required",
+      "replay_allowed_false",
+      "no_restore_admission",
+      "no_transport",
+      "no_pending_marker"
+    ],
+    "provider_calls": 0,
+    "original_families_unchanged": true,
+    "real_owner_approval_or_gui_exercised": false,
+    "product_code_edited_by_this_task": false,
+    "frozen": true
+  },
+  "validation": {
+    "swift_total": 225,
+    "swift_failures": 0,
+    "swift_seconds": 28.184,
+    "swift_log_sha256": "e893652b53a55d2d2a2bd312c99c6de91aca092e9e80032884bf8127e442e44f",
+    "build_and_plist_and_ad_hoc_strict_signature": "passed",
+    "python_product_sources_changed": false,
+    "python_previous_qualified_total": 1982,
+    "python_previous_qualified_commit": "4636100f9a516b62a37ba8181d6612b0168298f8",
+    "final_hooks_and_ci": "required_at_publication_not_recorded_as_passed_here"
+  },
+  "review_clarification": {
+    "problem": "The source rows bind the active host preservation cut; their physical sizes are not the portable backup inventory.",
+    "change": "Restore review now shows the selected backup path and captured manifest hash and labels the active profile figures explicitly. Backend verification and authorization are unchanged.",
+    "actual_accessibility_and_screenshot_observed": true,
+    "review_digest": "14fd3e4c675338d34e365c992defaf9d962f6f397948c48a4ec356ff838e72db"
+  },
+  "limits": [
+    "The live source profile had memory WAL only; three-role WAL restoration is a synthetic IPC regression.",
+    "Restore consumes portable DELETE images from the earlier WAL backup, not the original WAL family directly.",
+    "Destination was only staged, never admitted, activated, opened as a host, logged in or associated with a workspace.",
+    "No complete qualification of WAL variants, journals, arbitrary inputs, distribution, authenticity or the whole Phase A."
+  ]
+}
