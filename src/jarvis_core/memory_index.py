@@ -953,6 +953,7 @@ class MemoryIndex:
         cancellation=None,
         deadline=None,
         assert_current=lambda: None,
+        minimum_similarity=None,
     ):
         return await self._owned(
             lambda: self._search(
@@ -965,6 +966,7 @@ class MemoryIndex:
                 cancellation,
                 deadline,
                 assert_current,
+                minimum_similarity,
             )
         )
 
@@ -979,6 +981,7 @@ class MemoryIndex:
         cancellation,
         deadline,
         assert_current,
+        minimum_similarity,
     ):
         if deadline is None:
             deadline = time.monotonic() + 5
@@ -1033,6 +1036,7 @@ class MemoryIndex:
                 cancellation=cancellation,
                 deadline=deadline,
                 assert_current=current,
+                minimum_similarity=minimum_similarity,
             )
             current()
             return result

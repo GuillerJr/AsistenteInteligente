@@ -113,7 +113,23 @@ def test_policy_model_and_memory_changes_invalidate_epoch(memory):
     memory.delete(scope, "uno", expected_revision=1)
     empty = _lease(scope, memory.search(scope, "TOPACIO"))
     assert empty.fingerprint != original.fingerprint
-    assert empty.text == "" and empty.status["status"] == "empty"
+    assert empty.status["status"] == "empty"
+    assert json.loads(empty.text)["retrieval_state"] == "empty"
+    assert json.loads(empty.text)["notes"] == []
+
+
+@pytest.mark.parametrize("state", ["empty", "unavailable", "disabled"])
+def test_absence_is_explicit_only_when_recall_is_enabled(state):
+    lease = make_recall_lease(
+        scope_key="synthetic", generation=0, policy_digest="a" * 64,
+        model_fingerprint=None, result=None, assert_current=lambda: None,
+        state=state)
+    if state == "disabled":
+        assert lease.text == ""
+    else:
+        body = json.loads(lease.text)
+        assert body["retrieval_state"] == state
+        assert body["notes"] == [] and body["permissions"] is False
 
 
 @pytest.mark.parametrize("mutation", ["hash", "score", "generation"])

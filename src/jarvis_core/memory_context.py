@@ -73,7 +73,7 @@ def make_recall_lease(*, scope_key, generation, policy_digest, model_fingerprint
     fingerprint = hashlib.sha256(_canonical(epoch)).hexdigest()
     body = {"format": "jarvis-memory-context/1", "usage": "untrusted_context_data",
             "permissions": False, "mode": mode, "generation": generation,
-            "query_projected": query_projected, "notes": []}
+            "query_projected": query_projected, "retrieval_state": state, "notes": []}
     if result is not None:
         if result.generation != generation or result.mode != mode:
             raise MemoryError("memory_context_changed")
@@ -100,9 +100,13 @@ def make_recall_lease(*, scope_key, generation, policy_digest, model_fingerprint
             if len(_canonical(body)) > _LIMIT:
                 body["notes"].pop()
                 break
-    text = _canonical(body).decode() if body["notes"] else ""
     if state == "ready" and not body["notes"]:
         state = "empty"
+    # An enabled search which found nothing is a current-turn fact, not an
+    # omitted capsule which could leave earlier provider context unqualified.
+    # Disabled policies still transmit no memory metadata at all.
+    body["retrieval_state"] = state
+    text = _canonical(body).decode() if state != "disabled" else ""
     status = MappingProxyType({"status": state, "mode": mode,
                                "citations": len(body["notes"]),
                                "query_projected": query_projected,

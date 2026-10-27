@@ -819,6 +819,7 @@ class MemoryIntelligence:
         expected_index_fingerprint,
         cancellation,
         deadline,
+        minimum_similarity=None,
     ):
         scope, policy = self._scope(ref, client_id)
         self._model_slots(durable=not ref.temporary)
@@ -880,6 +881,7 @@ class MemoryIntelligence:
                 cancellation=cancellation,
                 deadline=deadline,
                 assert_current=guard,
+                minimum_similarity=minimum_similarity,
             )
             for hit in result.hits:
                 if self.service.memory.resolve_citation(scope, hit.citation) != hit.excerpt:
@@ -921,6 +923,31 @@ class MemoryIntelligence:
         expected_generation=None,
         expected_index_fingerprint=None,
     ):
+        return await self._search_admitted(
+            ref,
+            client_id,
+            query,
+            mode=mode,
+            limit=limit,
+            offset=offset,
+            expected_generation=expected_generation,
+            expected_index_fingerprint=expected_index_fingerprint,
+            minimum_similarity=None,
+        )
+
+    async def _search_admitted(
+        self,
+        ref,
+        client_id,
+        query,
+        *,
+        mode,
+        limit,
+        offset=0,
+        expected_generation=None,
+        expected_index_fingerprint=None,
+        minimum_similarity=None,
+    ):
         admission = self.service.profile_gate.hold("memory.search", mutating=True)
         task = asyncio.current_task()
         self._foreground.add(task)
@@ -936,11 +963,22 @@ class MemoryIntelligence:
                 expected_index_fingerprint=expected_index_fingerprint,
                 cancellation=None,
                 deadline=time.monotonic() + 30,
+                minimum_similarity=minimum_similarity,
             )
             return result
         finally:
             self._foreground.discard(task)
             admission.close()
+
+    async def _recall_search(self, ref, client_id, query, *, mode):
+        return await self._search_admitted(
+            ref,
+            client_id,
+            query,
+            mode=mode,
+            limit=4,
+            minimum_similarity=0.35 if mode != "lexical" else None,
+        )
 
     async def prepare_recall(self, context, ref, client_id):
         scope, policy = self._scope(ref, client_id)
@@ -954,12 +992,12 @@ class MemoryIntelligence:
             query, projected = recall_query(context.message)
             try:
                 try:
-                    result = await self.search(ref, client_id, query, mode=selected_mode, limit=4)
+                    result = await self._recall_search(ref, client_id, query, mode=selected_mode)
                 except EngineError as failure:
                     if failure.code != "capacity" or projected:
                         raise
                     query, projected = recall_query(context.message, force_projection=True)
-                    result = await self.search(ref, client_id, query, mode=selected_mode, limit=4)
+                    result = await self._recall_search(ref, client_id, query, mode=selected_mode)
                 generation = result.generation
                 guard = self._guard(ref, client_id, policy, generation)
                 state = "ready" if result.hits else "empty"

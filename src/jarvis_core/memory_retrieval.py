@@ -176,6 +176,7 @@ async def retrieve(
     cancellation=None,
     deadline=None,
     assert_current=lambda: None,
+    minimum_similarity=None,
 ) -> SearchResult:
     """Scan every admitted span, retaining bounded candidates, without text caches.
 
@@ -184,6 +185,12 @@ async def retrieve(
     scores are cosine or normalized RRF, not source truth or action verification.
     """
     validate_query(query, mode, limit, offset)
+    if minimum_similarity is not None and (
+        type(minimum_similarity) not in {int, float}
+        or not math.isfinite(minimum_similarity)
+        or not -1 <= minimum_similarity <= 1
+    ):
+        raise MemoryIndexError("memory_index_invalid_query")
     query_terms = tuple(dict.fromkeys(tokens(query)))
     query_set = set(query_terms)
     phrase = tokens(query)
@@ -211,7 +218,13 @@ async def retrieve(
             or not byte_boundary(data, span.end_byte)
         ):
             raise MemoryIndexError("memory_index_corrupt")
-        _retain(semantic, _cosine(query_vector, span.vector), ordinal, span)
+        similarity = _cosine(query_vector, span.vector)
+        # RRF preserves ranks, not absolute semantic relevance. The host may
+        # require a conservative raw-cosine floor for automatic context only;
+        # exploratory manual searches do not pass this private criterion.
+        if minimum_similarity is not None and similarity < minimum_similarity:
+            continue
+        _retain(semantic, similarity, ordinal, span)
         if mode == "hybrid_local" and query_set:
             words = tokens(data[span.start_byte : span.end_byte].decode())
             counts = Counter(words)

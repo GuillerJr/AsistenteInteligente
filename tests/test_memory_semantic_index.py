@@ -420,3 +420,39 @@ async def test_hybrid_identifier_prefix_does_not_receive_whole_phrase_bonus(corp
         assert "TOPACIO48260" not in result.hits[0].excerpt
     finally:
         await index.close()
+
+
+@pytest.mark.parametrize("mode", ["semantic_local", "hybrid_local"])
+@pytest.mark.parametrize("similarity", [-0.2, 0.19, 0.34, 0.36, 0.6])
+async def test_automatic_similarity_floor_precedes_rrf_but_manual_candidates_are_preserved(
+    corpus, mode, similarity
+):
+    store, scope, cache = corpus
+
+    class RelevanceEncoder(GeometryEncoder):
+        @staticmethod
+        def vector(text):
+            return (similarity, math.sqrt(1 - similarity**2)) + (0.0,) * 382
+
+        async def embed_query(self, text, **options):
+            return (1.0,) + (0.0,) * 383
+
+    encoder = RelevanceEncoder()
+    index = MemoryIndex(cache, "f" * 64)
+    try:
+        snapshot = snapshot_scope(store, scope)
+        await index.build(snapshot, encoder)
+        manual = await index.search(snapshot, "ALFA", encoder, mode=mode, limit=2)
+        automatic = await index.search(
+            snapshot, "ALFA", encoder, mode=mode, limit=2, minimum_similarity=0.35
+        )
+        assert len(manual.hits) == 2
+        if mode == "hybrid_local":
+            # A rank-only score near one is possible even at negative cosine.
+            assert manual.hits[0].score > 0.9
+        assert bool(automatic.hits) is (similarity >= 0.35)
+        assert automatic.generation == manual.generation
+        for hit in automatic.hits:
+            assert store.resolve_citation(scope, hit.citation) == hit.excerpt
+    finally:
+        await index.close()

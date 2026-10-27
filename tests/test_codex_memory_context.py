@@ -119,6 +119,18 @@ async def test_resumed_owned_thread_receives_current_capsule_after_client_restar
         await replacement.aclose()
 
 
+async def test_empty_current_recall_qualifies_previous_context_without_inventing_notes(client):
+    first = await client.chat("pregunta inicial", memory_context='{"notes":["CITA VIEJA"]}')
+    empty = '{"retrieval_state":"empty","notes":[]}'
+    await client.chat("otra pregunta", thread_id=first["thread_id"], memory_context=empty)
+    turns = [row["params"] for row in memory_wire(client) if row.get("method") == "turn/start"]
+    current = turns[-1]["input"][0]["text"]
+    assert empty in current and "CITA VIEJA" not in current
+    assert "no sustituyas una nota ausente por otra parecida" in current
+    assert "no consta en la memoria" in current
+    assert turns[-1]["input"][-1]["text"] == "otra pregunta"
+
+
 async def test_final_write_guard_rechecks_after_waiting_and_never_sends_revoked_capsule(client):
     first = await client.chat("calentar")
     revoked = False

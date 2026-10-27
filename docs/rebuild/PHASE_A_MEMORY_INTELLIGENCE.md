@@ -40,6 +40,11 @@ visibles; no se presentan como una indexación completa.
 Las búsquedas disponibles son léxica, semántica local y combinada. La combinada
 fusiona rangos independientes de tokens y similitud; la selección limita
 fragmentos redundantes. Una puntuación representa relevancia, no veracidad.
+La búsqueda manual puede mostrar candidatos débiles. La recuperación automática
+semántica/combinada exige además coseno bruto mínimo de 0,35 antes de la fusión;
+un rango RRF alto no sustituye esa condición. Es una regla conservadora de
+abstención, con posibles falsos negativos, no una probabilidad de respuesta
+correcta ni un umbral universal del modelo. La búsqueda léxica sigue explícita.
 Las citas conservan ID, revisión, hash y límites UTF-8 exactos, y se resuelven
 contra la fuente vigente. La paginación semántica liga también consulta, política,
 modelo, generación y fingerprint del índice.
@@ -63,6 +68,11 @@ entrada separada del mensaje, también al reanudar un hilo, y no como instruccio
 de perfil, permisos o historial de Jarvis. La barrera de escritura del proveedor
 revalida política y memoria antes del primer byte. Una corrección, eliminación,
 cambio de cliente o revocación invalida la cápsula anterior.
+Una búsqueda habilitada sin coincidencias aptas entrega una cápsula vacía
+explícita; una política desactivada no envía metadatos de memoria. El adaptador
+advierte que los candidatos pueden no contestar la pregunta y debe indicar
+ausencia de respaldo en vez de sustituir una nota por otra parecida. Esto reduce
+asociaciones incorrectas; no convierte un modelo generativo en un verificador.
 
 El panel permite preparar/verificar el modelo, reconstruir/verificar el índice,
 cancelar trabajos y retirar explícitamente una copia de modelo anterior. Una

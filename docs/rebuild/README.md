@@ -20,6 +20,11 @@ del dueño. Las comprobaciones locales requieren selección y presupuesto; los
 hooks verifican fuentes e identidad sin repetir suites ni builds completos.
 Ver [límites de pruebas y evidencia](TEST_RESOURCE_LIMITS.md).
 
+El [bloque de memoria local](PHASE_A_MEMORY_INTELLIGENCE.md) añade MiniLM CPU,
+búsqueda semántica/combinada, indexación de notas aprobadas y contexto por turno.
+Su [registro de cualificación](PHASE_A_MEMORY_QUALIFICATION.json) conserva
+intentos fallidos, pruebas con pesos reales y el recorrido nativo con ChatGPT.
+
 Se conservan el nombre de producto Jarvis, los identificadores técnicos `jarvis`,
 la interfaz en español y las reglas de privacidad/aprobación. La primera conexión
 de inferencia continúa siendo Codex con ChatGPT; NVIDIA está retirado del producto.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import threading
 from types import SimpleNamespace
 from uuid import uuid4
@@ -218,7 +219,9 @@ async def test_missing_local_model_is_visible_without_download_or_lexical_fallba
         value = await facade.prepare_recall(
             SimpleNamespace(run_id=uuid4().hex, message="TOPACIO"), ref, CLIENT
         )
-        assert value.text == "" and value.status["status"] == "unavailable"
+        assert value.status["status"] == "unavailable"
+        capsule = json.loads(value.text)
+        assert capsule["retrieval_state"] == "unavailable" and capsule["notes"] == []
         assert value.status["error"] == "missing_model"
         assert not facade.cache_directory.exists()
         assert facade._engine is None
@@ -603,5 +606,38 @@ async def test_unpublished_default_model_selector_is_not_a_missing_committed_sel
         assert service.memory.raw._disk is None
         assert not (facade.policy.directory / "models.json").exists()
         assert not facade.model_root.exists()
+    finally:
+        await facade.close()
+
+
+@pytest.mark.parametrize("mode", ["semantic_local", "hybrid_local"])
+async def test_auto_recall_abstains_on_weak_raw_similarity_without_filtering_manual_search(
+    context, mode
+):
+    service, facade, ref, _metadata = context
+    add(service, ref, "note", "ALFA dato de una categoría diferente")
+
+    class WeakEncoder(SyntheticEncoder):
+        async def embed_query(self, text, **options):
+            return (0.19, (1 - 0.19**2) ** 0.5) + (0.0,) * 382
+
+    facade.engine_factory = WeakEncoder
+    try:
+        await policy(facade, ref, recall=True, mode=mode)
+        manual = await facade.search(ref, CLIENT, "ALFA", mode=mode)
+        assert manual.hits
+        if mode == "hybrid_local":
+            assert manual.hits[0].score == 1.0
+        lease = await facade.prepare_recall(
+            SimpleNamespace(run_id=uuid4().hex, message="ALFA"), ref, CLIENT
+        )
+        assert lease.status["status"] == "empty" and lease.status["citations"] == 0
+        capsule = json.loads(lease.text)
+        assert capsule["retrieval_state"] == "empty" and capsule["notes"] == []
+        assert "categoría diferente" not in lease.text
+        lease.assert_current()
+        add(service, ref, "note", "ALFA versión corregida")
+        with pytest.raises(MemoryIntelligenceError, match="memory_generation_changed"):
+            lease.assert_current()
     finally:
         await facade.close()

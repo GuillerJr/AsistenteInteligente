@@ -20,9 +20,10 @@ Adquisición autorizada verificada y publicada exclusivamente en
 más manifiesto. No es una carpeta del dueño ni una instalación del producto.
 El CDN devolvió ETags distintos del SHA256 LFS: se comprobaron los bytes, no el ETag.
 
-Dependencias propuestas: `onnxruntime==1.31.1`, `numpy==2.3.5`, `tokenizers==0.22.1`.
+Dependencias integradas y fijadas: `onnxruntime==1.31.1`, `numpy==2.3.5`, `tokenizers==0.22.1`.
 Los wheels oficiales admiten CPython 3.11 en macOS 14 ARM64 y Linux glibc 2.28.
-No se instalaron durante esta preparación. [ORT](https://pypi.org/project/onnxruntime/1.31.1/#files),
+La adquisición inicial no las instaló; el incremento posterior sí las integra.
+[ORT](https://pypi.org/project/onnxruntime/1.31.1/#files),
 [NumPy](https://pypi.org/project/numpy/2.3.5/#files),
 [tokenizers](https://pypi.org/project/tokenizers/0.22.1/#files).
 
@@ -54,8 +55,11 @@ dañado sólo se admite para retiro si existe el registro propio de preparación
 verificada; un `stat` reciente no constituye esa autoridad. Interrupciones después
 de publicar o retirar archivos conservan recibos de estado indeterminado.
 
-Pasaron Ruff, AST y tres stubs propios diminutos en RAM para UTF-8, espacios y
-límites. No se ejecutó inferencia ni se acredita calidad semántica todavía.
+La preparación inicial sólo comprobó Ruff, AST y tres stubs propios en RAM.
+La cualificación posterior ejecuta inferencia CPU real con los pesos fijados:
+paráfrasis españolas, distractores, identificadores exactos, cobertura posterior
+al token 128, citas UTF-8, revisión, olvido, reinicio y reparación del índice.
+Es un corpus acotado, no una garantía general de precisión.
 La prueba real usa `JARVIS_MINILM_TEST_ASSETS` y
 `JARVIS_MINILM_REQUIRE_REAL=1`; si faltan artefactos en esa cualificación, falla.
 Exige paráfrasis españolas, cobertura más allá del token 128 y cierre real.
@@ -85,4 +89,13 @@ consulta esa variable antes de crear el almacenamiento. El padre la fija y el
 worker la exige antes del primer import nativo. La API permanece como segunda
 barrera. No se borran directorios inesperados para ocultar un fallo de cierre:
 se conservan y se devuelve un diagnóstico acotado de metadatos, sin contenidos ni
-nombres desconocidos. La corrección aún requiere cualificación real en ambos CI.
+nombres desconocidos. La cualificación Python posterior de ambos CI pasó con
+el encoder real obligatorio; los intentos fallidos originales se conservan en
+[el registro de cualificación](PHASE_A_MEMORY_QUALIFICATION.json).
+
+La carpeta temporal de adquisición anterior sólo es evidencia de QA. El producto
+administra `<perfil>.memory-model/initial` y hasta una `copy-<id>` adicional,
+mediante preparación y retirada explícitas. Huella de artefactos:
+`3bfb1dd3106f8061b7247e3ffbad0ea57ddd2d902dfb69362017483a8fbb98a5`.
+Huella de receta/encoder:
+`9ef57354d021086c29b77c895663ed7bcd8e8e77a16ab971b3b3532a6f3651c3`.
