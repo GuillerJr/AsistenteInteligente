@@ -374,17 +374,120 @@ def group_alive(pid):
         return False
 
 
+def volume_used(descriptor):
+    value = os.fstatvfs(descriptor)
+    return (value.f_blocks - value.f_bfree) * value.f_frsize
+
+
+def cleanup_owned_tree(root: Path, expected_identity, *, resources_closed):
+    """Retire a closed synthetic corpus by pinned directory descriptors only.
+
+    Permission fixtures may leave directories at mode 000. Restore only a
+    pinned, owned directory after closure; use O_PATH where supported or a
+    nofollow parent-relative chmod with identity checks before and after it.
+    Files (including hardlinks) are only unlinked, never opened or chmod'ed.
+    """
+    if not resources_closed:
+        raise GuardError("No se modifica un corpus con recursos pendientes.")
+    parent = os.open(root.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    count = 0
+
+    def open_directory(name, directory, identity):
+        flags = os.O_DIRECTORY | os.O_NOFOLLOW
+        try:
+            descriptor = os.open(name, os.O_RDONLY | flags, dir_fd=directory)
+        except PermissionError:
+            metadata = getattr(os, "O_PATH", 0)
+            if metadata:
+                descriptor = os.open(name, metadata | flags, dir_fd=directory)
+            else:
+                before = os.stat(name, dir_fd=directory, follow_symlinks=False)
+                if (not stat.S_ISDIR(before.st_mode) or before.st_uid != os.getuid()
+                        or (before.st_dev, before.st_ino) != identity):
+                    raise GuardError("El directorio protegido cambió antes de retirarlo.") from None
+                os.chmod(name, 0o700, dir_fd=directory, follow_symlinks=False)
+                after = os.stat(name, dir_fd=directory, follow_symlinks=False)
+                if (not stat.S_ISDIR(after.st_mode) or after.st_uid != os.getuid()
+                        or (after.st_dev, after.st_ino) != identity):
+                    raise GuardError("El directorio cambió durante su retirada.") from None
+                descriptor = os.open(name, os.O_RDONLY | flags, dir_fd=directory)
+        info = os.fstat(descriptor)
+        if (not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid()
+                or (info.st_dev, info.st_ino) != identity):
+            os.close(descriptor)
+            raise GuardError("Un directorio cambió antes de su retirada.")
+        try:
+            if info.st_mode & 0o700 != 0o700:
+                try:
+                    os.fchmod(descriptor, 0o700)
+                except OSError as error:
+                    # Linux O_PATH cannot fchmod directly. Its process-owned FD
+                    # namespace still refers to this exact pinned directory.
+                    if not getattr(os, "O_PATH", 0) or error.errno != 9:
+                        raise
+                    os.chmod(f"/proc/self/fd/{descriptor}", 0o700)
+            readable = os.open(".", os.O_RDONLY | flags, dir_fd=descriptor)
+            pinned = os.fstat(readable)
+            if (pinned.st_dev, pinned.st_ino) != identity:
+                os.close(readable)
+                raise GuardError("El directorio dejó de corresponder al descriptor fijado.")
+            return readable
+        finally:
+            os.close(descriptor)
+
+    def retire(name, directory, identity):
+        nonlocal count
+        descriptor = open_directory(name, directory, identity)
+        try:
+            with os.scandir(descriptor) as children:
+                for child in children:
+                    count += 1
+                    if count > 100_000:
+                        raise GuardError("El corpus excede el límite de retirada.")
+                    info = os.stat(child.name, dir_fd=descriptor, follow_symlinks=False)
+                    if info.st_uid != os.getuid() or info.st_dev != expected_identity[0]:
+                        raise GuardError("La retirada encontró un recurso ajeno o montado.")
+                    identity_child = info.st_dev, info.st_ino
+                    if stat.S_ISDIR(info.st_mode):
+                        retire(child.name, descriptor, identity_child)
+                    else:
+                        current = os.stat(child.name, dir_fd=descriptor, follow_symlinks=False)
+                        if (current.st_dev, current.st_ino) != identity_child:
+                            raise GuardError("Una entrada cambió durante la retirada.")
+                        os.unlink(child.name, dir_fd=descriptor)
+            current = os.stat(name, dir_fd=directory, follow_symlinks=False)
+            if (current.st_dev, current.st_ino) != identity:
+                raise GuardError("El directorio fue reemplazado antes de retirarlo.")
+            os.rmdir(name, dir_fd=directory)
+        finally:
+            os.close(descriptor)
+
+    try:
+        retire(root.name, parent, expected_identity)
+    finally:
+        os.close(parent)
+
+
 def supervise(command, *, environment, cwd: Path, budget_root: Path, budget_bytes: int,
               deadline: float, data_root: Path, free_floor=10 * GIB,
-              max_data_drop=GIB, clock=time.monotonic, poll_seconds=0.2, on_dispatch=None):
+              max_data_drop=GIB, clock=time.monotonic, poll_seconds=0.2, on_dispatch=None,
+              measurement_mode="apfs_volume_delta"):
     initial_free = available_bytes(data_root)
     if initial_free < free_floor:
         raise GuardError("No se inició la prueba: quedan menos de 10 GiB libres.")
     root_identity = private_directory(budget_root)
-    initial_used = allocated_bytes(budget_root)
+    if measurement_mode not in {"apfs_volume_used", "apfs_volume_delta", "ci_available_delta"}:
+        raise GuardError("Modo de medición no admitido.")
+    budget_descriptor = os.open(budget_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    initial_volume_used = volume_used(budget_descriptor)
+    initial_used = initial_volume_used if measurement_mode == "apfs_volume_used" else 0
     tail, peak, reason = bytearray(), initial_used, None
-    process = subprocess.Popen(command, cwd=cwd, env=environment, stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
+    try:
+        process = subprocess.Popen(command, cwd=cwd, env=environment, stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
+    except BaseException:
+        os.close(budget_descriptor)
+        raise
     if on_dispatch is not None:
         on_dispatch(process.pid)
     assert process.stdout is not None
@@ -415,11 +518,17 @@ def supervise(command, *, environment, cwd: Path, budget_root: Path, budget_byte
             if now >= next_measure and reason is None:
                 next_measure = now + 0.25
                 try:
-                    if private_directory(budget_root) != root_identity:
+                    root_now = budget_root.lstat()
+                    if (root_now.st_dev, root_now.st_ino) != root_identity:
                         reason = "resource_root_changed"
-                    used = allocated_bytes(budget_root)
-                    peak = max(peak, used)
                     remaining = available_bytes(data_root)
+                    if measurement_mode == "ci_available_delta":
+                        used = max(0, initial_free - remaining)
+                    else:
+                        used = volume_used(budget_descriptor)
+                        if measurement_mode == "apfs_volume_delta":
+                            used = max(0, used - initial_volume_used)
+                    peak = max(peak, used)
                     if used > budget_bytes:
                         reason = "temporary_budget_exceeded"
                     elif remaining < free_floor or initial_free - remaining > max_data_drop:
@@ -452,12 +561,14 @@ def supervise(command, *, environment, cwd: Path, budget_root: Path, budget_byte
                 process.wait(timeout=2)
         raise
     finally:
+        os.close(budget_descriptor)
         for number, handler in previous_handlers.items():
             signal.signal(number, handler)
         selector.close()
         process.stdout.close()
     return {"exit_code": code, "stop_reason": reason,
             "elapsed_seconds": round(clock() - started, 3), "peak_temporary_bytes": peak,
+            "measurement_mode": measurement_mode,
             "process_group_exited": confirmed, "custody_scope": "owned_process_group_only",
             "interrupted": reason is not None}, bytes(tail)
 
@@ -564,6 +675,66 @@ def reject_orphaned_evidence(registry: Path):
             raise GuardError("Una cuota anterior conserva recursos; no se inicia otra ejecución.")
 
 
+def finalize_evidence(*, control, pending_path, pending_identity, options, before, after,
+                      volume, run_root, run_identity, closed, result, tail):
+    """Cleanup failure is evidence, never a replacement for the child's output."""
+    bounded_tail = tail[-LOG_LIMIT:]
+    descriptor = os.open(control / "tail.log",
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, "wb") as output:
+        output.write(bounded_tail)
+    cleanup_error = None
+    if closed:
+        try:
+            if volume is not None:
+                closed = detach_volume(volume)
+                if closed:
+                    volume.image.unlink()
+                else:
+                    cleanup_error = "volume_detach_unconfirmed"
+            elif run_root is not None:
+                cleanup_owned_tree(run_root, run_identity, resources_closed=True)
+            if closed:
+                current = pending_path.lstat()
+                if (current.st_dev, current.st_ino) != (
+                        pending_identity.st_dev, pending_identity.st_ino):
+                    raise GuardError("El registro de custodia cambió; no se retiró.")
+                pending_path.unlink()
+        except (OSError, GuardError, subprocess.SubprocessError) as error:
+            closed = False
+            cleanup_error = type(error).__name__ + ":" + str(getattr(error, "errno", "unknown"))
+    receipt = {"format": FORMAT, "profile": options.profile, "kind": options.kind,
+        "selection": options.selection, "full": options.full, "source_before": before,
+        "source_after": after, "source_unchanged": before == after,
+        "budget_bytes": options.budget_mib * MIB, "deadline_seconds": options.deadline,
+        "quota_mode": "apfs_capacity" if volume is not None else
+            "ci_watchdog_only" if options.profile == "ci" else "not_prepared",
+        "quota_capacity_bytes": volume.total_bytes if volume is not None else None,
+        "measurement_mode": result.get("measurement_mode", "not_dispatched"),
+        "cleanup_status": "confirmed" if closed else "uncertain", "cleanup_error": cleanup_error,
+        "log_sha256": hashlib.sha256(bounded_tail).hexdigest(),
+        "full_qualification": "pending_remote_ci" if options.profile == "local" else
+            "ci_job_result_requires_workflow_completion", "result": result,
+        "created_ns": time.time_ns()}
+    try:
+        write_json(control / "receipt.json", receipt)
+    except OSError:
+        # A storage/write failure cannot manufacture a receipt. The durable
+        # intent or orphan admission blocks another run. CI still gets the tail.
+        print("[jarvis-test-guard] No se escribió el recibo; custodia sin confirmar.",
+              file=sys.stderr)
+        if options.profile == "ci":
+            print(bounded_tail.decode("utf-8", errors="replace"), file=sys.stderr, end="")
+        raise
+    print(json.dumps({"receipt": str(control / "receipt.json"),
+        "cleanup_status": receipt["cleanup_status"], "result": result,
+        "source_unchanged": receipt["source_unchanged"],
+        "full_qualification": receipt["full_qualification"]}))
+    if options.profile == "ci":
+        print(bounded_tail.decode("utf-8", errors="replace"), end="")
+    return closed
+
+
 def run(options):
     root = options.repo_root.resolve(strict=True)
     before = fingerprint(root)
@@ -593,6 +764,7 @@ def run(options):
         volume = None
         closed = False
         dispatched = []
+        run_root, run_identity = None, None
         result = {"exit_code": None, "stop_reason": "preparation_failed"}
         tail = b""
         try:
@@ -604,6 +776,7 @@ def run(options):
                 temporary = "/private/tmp" if sys.platform == "darwin" else "/tmp"
                 run_root = Path(tempfile.mkdtemp(prefix="jq-", dir=temporary))
                 run_root.chmod(0o700)
+            run_identity = private_directory(run_root)
             for name in ("home", "tmp", "uv", "xdg", "work"):
                 (run_root / name).mkdir(mode=0o700)
             admission = {"format": FORMAT, "profile": options.profile, "kind": options.kind,
@@ -623,7 +796,8 @@ def run(options):
                 budget_root=run_root, budget_bytes=options.budget_mib * MIB,
                 deadline=options.deadline, data_root=data_root, free_floor=free_floor,
                 max_data_drop=GIB if options.profile == "local" else options.budget_mib * MIB,
-                on_dispatch=dispatched.append)
+                on_dispatch=dispatched.append, measurement_mode=("apfs_volume_used"
+                    if options.profile == "local" else "ci_available_delta"))
             marker = run_root / "cleanup-uncertain.json"
             closed = result["process_group_exited"] and not marker.exists()
             if closed and result["exit_code"] == 0 and options.export_relative:
@@ -645,47 +819,10 @@ def run(options):
             except (GuardError, OSError, subprocess.SubprocessError):
                 after = {"fingerprint_error": "source_identity_unconfirmed"}
             source_same = before == after
-            if volume is not None and closed:
-                try:
-                    closed = detach_volume(volume)
-                except (OSError, subprocess.SubprocessError):
-                    closed = False
-                if closed:
-                    volume.image.unlink()
-            elif volume is None and closed and "run_root" in locals():
-                shutil.rmtree(run_root)
-            log = control / "tail.log"
-            descriptor = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-            with os.fdopen(descriptor, "wb") as output:
-                output.write(tail[-LOG_LIMIT:])
-            receipt = {"format": FORMAT, "profile": options.profile, "kind": options.kind,
-                "selection": options.selection, "full": options.full, "source_before": before,
-                "source_after": after, "source_unchanged": source_same,
-                "budget_bytes": options.budget_mib * MIB, "deadline_seconds": options.deadline,
-                "quota_mode": "apfs_capacity" if volume is not None else
-                    "ci_watchdog_only" if options.profile == "ci" else "not_prepared",
-                "quota_capacity_bytes": volume.total_bytes if volume is not None else None,
-                "cleanup_status": "confirmed" if closed else "uncertain",
-                "log_sha256": hashlib.sha256(tail[-LOG_LIMIT:]).hexdigest(),
-                "full_qualification": "pending_remote_ci" if options.profile == "local" else
-                    "ci_job_result_requires_workflow_completion", "result": result,
-                "created_ns": time.time_ns()}
-            write_json(control / "receipt.json", receipt)
-            if closed:
-                current = pending_path.lstat()
-                if (current.st_dev, current.st_ino) != (
-                        pending_identity.st_dev, pending_identity.st_ino):
-                    raise GuardError("El registro de custodia cambió; no se retiró.")
-                pending_path.unlink()
-            print(json.dumps({"receipt": str(control / "receipt.json"),
-                "cleanup_status": receipt["cleanup_status"], "result": result,
-                "source_unchanged": source_same,
-                "full_qualification": receipt["full_qualification"]}))
-            if options.profile == "ci":
-                # CI runs only the synthetic corpus in a fresh checkout. Keep
-                # failures diagnosable after its private work directory closes;
-                # never dump local corpus/logs automatically to the terminal.
-                print(tail[-LOG_LIMIT:].decode("utf-8", errors="replace"), end="")
+            closed = finalize_evidence(control=control, pending_path=pending_path,
+                pending_identity=pending_identity, options=options, before=before, after=after,
+                volume=volume, run_root=run_root, run_identity=run_identity, closed=closed,
+                result=result, tail=tail)
         passed = closed and source_same and result["exit_code"] == 0
         return 0 if passed and not result.get("interrupted", False) else 1
     finally:

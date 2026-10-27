@@ -147,7 +147,15 @@ def test_real_small_child_output_is_drained_and_only_finite_tail_retained(tmp_pa
     assert len(log) == guard.LOG_LIMIT and log == b"X" * guard.LOG_LIMIT
 
 
-def test_real_small_budget_cancels_only_owned_job_and_does_not_claim_cleanup(tmp_path):
+def test_real_small_budget_cancels_only_owned_job_and_does_not_claim_cleanup(tmp_path, monkeypatch):
+    # APFS space accounting may batch tiny writes. An independent stat of our
+    # authored payload makes the component watchdog boundary deterministic.
+    def payload_size(descriptor):
+        try:
+            return os.stat("bytes", dir_fd=descriptor, follow_symlinks=False).st_size
+        except FileNotFoundError:
+            return 0
+    monkeypatch.setattr(guard, "volume_used", payload_size)
     code = "import pathlib,time;pathlib.Path('bytes').write_bytes(b'X'*196608);time.sleep(30)"
     result, _ = supervise(tmp_path, code, budget_bytes=128 * 1024)
     assert result["stop_reason"] == "temporary_budget_exceeded"
@@ -284,3 +292,122 @@ def test_wrappers_forward_empty_optional_arrays_on_system_bash(
     assert ("--full" in forwarded) is full
     assert forwarded[forwarded.index("--profile") + 1] == ("ci" if full else "local")
     assert "admitted-exec" in forwarded and "--guard-child" in forwarded
+
+
+@pytest.mark.parametrize("mode", ["apfs_volume_used", "ci_available_delta"])
+def test_resource_measurement_never_traverses_mode_zero_fixtures(tmp_path, monkeypatch, mode):
+    root = tmp_path / "own-resource"
+    root.mkdir(mode=0o700)
+    hidden = root / "before"
+    hidden.mkdir()
+    hidden.chmod(0)
+    identity = root.stat().st_dev, root.stat().st_ino
+    monkeypatch.setattr(guard, "allocated_bytes", lambda *_a, **_k: pytest.fail("fixture walk"))
+    code = ("import os,time;os.mkdir('during');os.chmod('during',0);"
+            "print('OWN MODE ZERO',flush=True);time.sleep(.4)")
+    try:
+        result, tail = guard.supervise([sys.executable, "-I", "-B", "-c", code],
+            environment={"PATH": os.defpath}, cwd=root, budget_root=root,
+            budget_bytes=64 * guard.MIB, deadline=3, data_root=tmp_path,
+            free_floor=0, measurement_mode=mode, poll_seconds=.02)
+        assert result["exit_code"] == 0 and result["stop_reason"] is None
+        assert result["measurement_mode"] == mode and b"OWN MODE ZERO" in tail
+        assert hidden.stat().st_mode & 0o777 == 0
+        assert (root / "during").stat().st_mode & 0o777 == 0
+    finally:
+        guard.cleanup_owned_tree(root, identity, resources_closed=True)
+
+
+def test_closed_cleanup_restores_only_pinned_directories_not_hardlinks_or_symlinks(
+        tmp_path, monkeypatch):
+    root = tmp_path / "corpus"
+    root.mkdir(mode=0o700)
+    protected = root / "Jarvis"
+    protected.mkdir()
+    (protected / "own").write_bytes(b"OWN")
+    outside = tmp_path / "retained-file"
+    outside.write_bytes(b"SYNTHETIC PRESERVE")
+    outside.chmod(0o400)
+    os.link(outside, root / "hardlink")
+    (root / "alias").symlink_to(outside)
+    protected.chmod(0)
+    identity = root.stat().st_dev, root.stat().st_ino
+    chmod = guard.os.fchmod
+    def directories_only(descriptor, mode):
+        assert guard.stat.S_ISDIR(os.fstat(descriptor).st_mode)
+        return chmod(descriptor, mode)
+    monkeypatch.setattr(guard.os, "fchmod", directories_only)
+    with pytest.raises(guard.GuardError, match="recursos pendientes"):
+        guard.cleanup_owned_tree(root, identity, resources_closed=False)
+    assert protected.stat().st_mode & 0o777 == 0
+    guard.cleanup_owned_tree(root, identity, resources_closed=True)
+    assert not root.exists()
+    assert outside.read_bytes() == b"SYNTHETIC PRESERVE"
+    assert outside.stat().st_mode & 0o777 == 0o400
+
+
+def test_closed_cleanup_rejects_replaced_root_before_changing_permissions(tmp_path):
+    root = tmp_path / "corpus"
+    root.mkdir(mode=0o700)
+    identity = root.stat().st_dev, root.stat().st_ino
+    original = tmp_path / "original"
+    root.rename(original)
+    root.mkdir(mode=0o700)
+    (root / "unrelated").write_bytes(b"OWN REPLACEMENT")
+    with pytest.raises(guard.GuardError, match="cambió antes"):
+        guard.cleanup_owned_tree(root, identity, resources_closed=True)
+    assert (root / "unrelated").read_bytes() == b"OWN REPLACEMENT"
+    assert original.is_dir()
+
+
+def outcome_fixture(tmp_path):
+    control = tmp_path / "jarvis-test-evidence-own"
+    control.mkdir(mode=0o700)
+    pending = tmp_path / "cleanup-uncertain.json"
+    guard.write_json(pending, {"format": guard.FORMAT})
+    root = tmp_path / "own-work"
+    root.mkdir(mode=0o700)
+    return dict(control=control, pending_path=pending, pending_identity=pending.stat(),
+        options=options(profile="ci", full=True), before={"own": 1}, after={"own": 1},
+        volume=None, run_root=root, run_identity=(root.stat().st_dev, root.stat().st_ino),
+        closed=True, result={"exit_code": 7, "measurement_mode": "ci_available_delta"},
+        tail=b"OWN ASSERTION DIAGNOSTIC\n")
+
+
+def test_cleanup_error_never_masks_child_tail_receipt_or_pending_intent(tmp_path, monkeypatch):
+    arguments = outcome_fixture(tmp_path)
+    def denied(*_args, **_kwargs):
+        raise PermissionError(13, "OWN synthetic Jarvis")
+    monkeypatch.setattr(guard, "cleanup_owned_tree", denied)
+    assert not guard.finalize_evidence(**arguments)
+    receipt = guard.read_private_json(arguments["control"] / "receipt.json")
+    assert receipt["cleanup_status"] == "uncertain" and receipt["cleanup_error"]
+    assert receipt["result"]["exit_code"] == 7
+    assert (arguments["control"] / "tail.log").read_bytes() == arguments["tail"]
+    assert arguments["pending_path"].is_file() and arguments["run_root"].is_dir()
+
+
+def test_closed_mode_zero_cleanup_has_durable_child_failure_receipt(tmp_path):
+    arguments = outcome_fixture(tmp_path)
+    folder = arguments["run_root"] / "Jarvis"
+    folder.mkdir()
+    (folder / "fixture").write_bytes(b"OWN")
+    folder.chmod(0)
+    assert guard.finalize_evidence(**arguments)
+    receipt = guard.read_private_json(arguments["control"] / "receipt.json")
+    assert receipt["cleanup_status"] == "confirmed" and receipt["result"]["exit_code"] == 7
+    assert not arguments["pending_path"].exists() and not arguments["run_root"].exists()
+
+
+def test_receipt_io_failure_still_emits_ci_tail_and_orphan_blocks_reuse(
+        tmp_path, monkeypatch, capsys):
+    arguments = outcome_fixture(tmp_path)
+    def no_receipt(*_args, **_kwargs):
+        raise OSError(28, "OWN synthetic full diagnostic device")
+    monkeypatch.setattr(guard, "write_json", no_receipt)
+    with pytest.raises(OSError):
+        guard.finalize_evidence(**arguments)
+    assert arguments["tail"].decode() in capsys.readouterr().err
+    assert (arguments["control"] / "tail.log").read_bytes() == arguments["tail"]
+    with pytest.raises(guard.GuardError, match="Cierre sin confirmar"):
+        guard.reject_orphaned_evidence(tmp_path)

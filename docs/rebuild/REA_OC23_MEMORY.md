@@ -3,8 +3,9 @@
 Investigación estática parcial del 27-10-2026. Las propuestas de este documento
 son decisiones propias para Jarvis; no acreditan implementación ni ejecución de
 OpenClaw. No se ejecutó su código ni se importaron sus fuentes al producto.
-La implementación siguiente requiere elegir expresamente el motor de embeddings.
-No se descargaron modelos, instalaron dependencias ni ejecutaron suites locales.
+En el corte de esta investigación faltaba elegir el motor de embeddings. Después,
+el dueño eligió expresamente MiniLM multilingüe local en CPU el 27-10-2026.
+La investigación no descargó modelos, instaló dependencias ni ejecutó suites locales.
 
 ## Identidad y adquisición
 

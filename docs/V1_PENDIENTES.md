@@ -351,8 +351,9 @@ en el registro actual. Estudia búsqueda híbrida, sincronización, recuperació
 activa y mantenimiento con REA, sin ejecutar la referencia ni copiar su código.
 Conserva 2.907 incógnitas semánticas de estos nuevos grafos.
 [Fuentes, Evidence IDs y contratos propuestos](rebuild/REA_OC23_MEMORY.md).
-La nueva implementación semántica/híbrida sigue pendiente de elegir explícitamente
-el motor de embeddings, como exige A-25; no se ha activado uno por defecto.
+El dueño eligió expresamente MiniLM multilingüe local en CPU el 27-10-2026;
+Codex con ChatGPT permanece como proveedor de conversación. La implementación
+semántica/híbrida se prepara con ese único motor, sin fallback externo.
 La indexación léxica de notas aprobadas ya es transaccional; los nuevos recorridos
 semánticos, el índice derivado y la recuperación activa todavía no están acreditados.
 

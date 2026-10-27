@@ -52,6 +52,9 @@ de las credenciales sintéticas.
 El supervisor limita su proceso y recursos propios. No certifica el cierre de
 descendientes que eludan deliberadamente su grupo ni el consumo total de otros
 programas del Mac; el espacio libre del volumen también se vigila por esa razón.
+La medición local usa el volumen APFS completo mediante descriptor, sin recorrer
+ni cambiar permisos de los fixtures mientras corren. En CI se vigila la caída de
+espacio libre del runner: es un presupuesto de vigilancia, no una cuota física.
 
 ## Flujo de validación
 
@@ -97,3 +100,13 @@ registro privado; SHA-256
 `1bc57adf71751c8a8726f0d43b41e0cc5308bd5cd4a530dca2370ad298b7f171`.
 La salida ya acotada del supervisor se publica en el log de CI para poder
 diagnosticar fallos después de limpiar el directorio de trabajo de ese runner.
+
+La primera CI del supervisor detectó fixtures con directorios `000`: el recorrido
+para medirlos y la limpieza podían fallar, ocultando además el diagnóstico. Se
+separó medición de recorrido, y la limpieza sólo restablece permisos de directorios
+propios después de confirmar el cierre, sin cambiar archivos ni seguir enlaces.
+Un error de limpieza conserva diagnóstico, recibo y custodia pendiente.
+Pasaron **ocho regresiones en 1,54 s** (2,102 s bajo supervisor), con 3.600.384 bytes
+de pico del volumen y desmontaje confirmado. Recibo `jarvis-test-evidence-7tedm_1z/receipt.json`
+en el registro privado; SHA-256
+`19c2b412f4b5c3f1be910b26a325a95731c09bfc37b6f512ffd2fe6da1541781`.
