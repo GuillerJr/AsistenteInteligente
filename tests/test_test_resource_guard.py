@@ -164,10 +164,14 @@ def test_real_small_budget_cancels_only_owned_job_and_does_not_claim_cleanup(tmp
     assert result["custody_scope"] == "owned_process_group_only"
 
 
-def test_real_deadline_has_finite_termination_and_failure_retains_exit_code(tmp_path):
-    result, _ = supervise(tmp_path, "import time;time.sleep(30)", deadline=0.08)
+def test_real_deadline_has_finite_termination_and_failure_retains_exit_code(tmp_path, monkeypatch):
+    # This component fixture lives on the CI host volume, not a dedicated APFS
+    # quota. Unrelated writes must not masquerade as the child's deadline.
+    monkeypatch.setattr(guard, "available_bytes", lambda _path: 32 * guard.GIB)
+    result, _ = supervise(tmp_path, "import time;time.sleep(30)", deadline=0.08,
+                          measurement_mode="ci_available_delta")
     assert result["stop_reason"] == "deadline" and result["elapsed_seconds"] < 3
-    failed, _ = supervise(tmp_path, "raise SystemExit(7)")
+    failed, _ = supervise(tmp_path, "raise SystemExit(7)", measurement_mode="ci_available_delta")
     assert failed["exit_code"] == 7 and failed["stop_reason"] is None
 
 
@@ -303,6 +307,17 @@ def test_resource_measurement_never_traverses_mode_zero_fixtures(tmp_path, monke
     hidden.chmod(0)
     identity = root.stat().st_dev, root.stat().st_ino
     monkeypatch.setattr(guard, "allocated_bytes", lambda *_a, **_k: pytest.fail("fixture walk"))
+    # The APFS-used branch needs metadata for a private quota, whereas this
+    # fixture is an ordinary directory on a shared CI host filesystem. Stub
+    # only filesystem metadata; the child, permission failures and reap are real.
+    metadata_reads = []
+    def quota_metadata(descriptor):
+        info = os.fstat(descriptor)
+        assert (info.st_dev, info.st_ino) == identity
+        metadata_reads.append(descriptor)
+        return SimpleNamespace(f_blocks=262144, f_bfree=261888, f_frsize=4096)
+    monkeypatch.setattr(guard.os, "fstatvfs", quota_metadata)
+    monkeypatch.setattr(guard, "available_bytes", lambda _path: 32 * guard.GIB)
     code = ("import os,time;os.mkdir('during');os.chmod('during',0);"
             "print('OWN MODE ZERO',flush=True);time.sleep(.4)")
     try:
@@ -312,6 +327,11 @@ def test_resource_measurement_never_traverses_mode_zero_fixtures(tmp_path, monke
             free_floor=0, measurement_mode=mode, poll_seconds=.02)
         assert result["exit_code"] == 0 and result["stop_reason"] is None
         assert result["measurement_mode"] == mode and b"OWN MODE ZERO" in tail
+        assert metadata_reads
+        if mode == "apfs_volume_used":
+            assert len(metadata_reads) >= 2 and result["peak_temporary_bytes"] == guard.MIB
+        else:
+            assert result["peak_temporary_bytes"] == 0
         assert hidden.stat().st_mode & 0o777 == 0
         assert (root / "during").stat().st_mode & 0o777 == 0
     finally:

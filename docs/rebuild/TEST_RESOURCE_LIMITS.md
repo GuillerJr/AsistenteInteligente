@@ -110,3 +110,13 @@ Pasaron **ocho regresiones en 1,54 s** (2,102 s bajo supervisor), con 3.600.384 
 de pico del volumen y desmontaje confirmado. Recibo `jarvis-test-evidence-7tedm_1z/receipt.json`
 en el registro privado; SHA-256
 `19c2b412f4b5c3f1be910b26a325a95731c09bfc37b6f512ffd2fe6da1541781`.
+
+La siguiente CI completó los 2748 casos Python y conservó correctamente recibos,
+salida y limpieza. Detectó dos fixtures del limitador que confundían el volumen
+general del runner con una cuota aislada. Sus metadatos APFS ahora se simulan
+explícitamente y el caso de plazo usa disponibilidad estable; se mantienen niño
+real, permisos `000`, salida 7, señal y cierre. Las tres variantes focales pasaron
+en 1,60 s, con cuota real de 64 MiB vigilados, volumen APFS y cierre confirmados.
+Recibo `jarvis-test-evidence-a1m5i2fj/receipt.json` del registro privado; SHA-256
+`c2f57a4fe2766546a704bc6d958fe5696924d53e11c4d80ce62544da453d4620`.
+No se elevan los presupuestos ni se omiten los casos para resolver esa diferencia.
