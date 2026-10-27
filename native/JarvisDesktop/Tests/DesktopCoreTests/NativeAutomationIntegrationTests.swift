@@ -8,7 +8,7 @@ import XCTest
 /// HTTP/file oracle. Model and approval decisions are authored synthetic peers.
 final class NativeAutomationIntegrationTests: XCTestCase {
     @MainActor
-    private func start(_ root: String, mode: String) async throws -> FixtureProcess {
+    private func start(_ root: String, mode: String, resolverProbe: String = "normal") async throws -> FixtureProcess {
         let environment = ProcessInfo.processInfo.environment
         guard let python = environment["JARVIS_DESKTOP_PYTHON"],
               let source = environment["JARVIS_DESKTOP_SOURCE"] else {
@@ -16,7 +16,7 @@ final class NativeAutomationIntegrationTests: XCTestCase {
         }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: python)
-        process.arguments = ["-c", Self.script, root, mode]
+        process.arguments = ["-c", LoopbackHTTPFixture.script(Self.script), root, mode, resolverProbe]
         let paths = [source, environment["JARVIS_DESKTOP_DEPENDENCIES"]].compactMap { $0 }.joined(separator: ":")
         process.environment = ["PATH": "/usr/bin:/bin", "PYTHONPATH": paths, "PYTHONNOUSERSITE": "1", "PYTHONDONTWRITEBYTECODE": "1"]
         process.standardOutput = FileHandle.nullDevice
@@ -29,7 +29,23 @@ final class NativeAutomationIntegrationTests: XCTestCase {
         process.standardError = log
         addTeardownBlock { try? log.close() }
         let owner = try startFixtureProcess(process, directory: logs)
-        try await ServiceBootstrap.waitForHealth(stateDirectory: root + "/profile", timeout: 8) { process.isRunning }
+        do {
+            try await ServiceBootstrap.waitForHealth(stateDirectory: root + "/profile", timeout: 8) { process.isRunning }
+        } catch {
+            let stopped = await owner.stop()
+            // Only this authored synthetic child writes here. Preserve useful
+            // setup diagnostics in CI output before teardown retires the file.
+            print("Fallo de arranque del fixture nativo; cierre: \(stopped).")
+            do {
+                let reader = try FileHandle(forReadingFrom: URL(fileURLWithPath: path))
+                defer { try? reader.close() }
+                let end = try reader.seekToEnd()
+                try reader.seek(toOffset: end > 8192 ? end - 8192 : 0)
+                let diagnostic = try reader.read(upToCount: 8192) ?? Data()
+                print(String(decoding: diagnostic, as: UTF8.self))
+            } catch { print("No se pudo leer el diagnóstico sintético de arranque.") }
+            throw error
+        }
         return owner
     }
 
@@ -141,12 +157,51 @@ final class NativeAutomationIntegrationTests: XCTestCase {
         } catch { _ = await host.stop(); await client.close(); _ = await process.stop(); throw error }
     }
 
+    @MainActor
+    private func checkReadinessWithoutReverseDNS(_ probe: String) async throws {
+        let root = "/private/tmp/jr-native-dns-" + UUID().uuidString.prefix(8)
+        try FileManager.default.createDirectory(atPath: root, withIntermediateDirectories: false,
+            attributes: [.posixPermissions: 0o700])
+        addTeardownBlock { try FileManager.default.removeItem(atPath: root) }
+        let process = try await start(root, mode: "normal", resolverProbe: probe)
+        let client = LocalRPCClient(stateDirectory: root + "/profile")
+        do {
+            let info = try await client.call("fixture.native.info")
+            XCTAssertTrue(info["origin"].string?.hasPrefix("http://127.0.0.1:") == true)
+            let trace = try await client.call("fixture.native.trace")
+            XCTAssertEqual(trace["model_calls"].integer, 0)
+            XCTAssertEqual(trace["claims"].integer, 0)
+            XCTAssertEqual(trace["requests"].integer, 0)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: root + "/dns-requested"),
+                "El servidor HTTP de loopback no debe consultar el DNS del Mac.")
+            await client.close()
+            let stopped = await process.stop(); XCTAssertEqual(stopped, .stopped)
+        } catch { await client.close(); _ = await process.stop(); throw error }
+    }
+
+    @MainActor
+    func testFixtureReadinessSurvivesUnavailableReverseDNS() async throws {
+        try await checkReadinessWithoutReverseDNS("unavailable")
+    }
+
+    @MainActor
+    func testFixtureReadinessDoesNotWaitForBlockedReverseDNS() async throws {
+        try await checkReadinessWithoutReverseDNS("blocked")
+    }
+
     private static let script = #"""
-import asyncio,hashlib,http.server,json,pathlib,signal,sys,threading
+import asyncio,hashlib,http.server,json,pathlib,signal,socket,sys,threading,time
 from uuid import uuid4
 from jarvis_core.service import JarvisService
 from jarvis_core.state import SessionRef
 root=pathlib.Path(sys.argv[1]);mode=sys.argv[2]
+resolver_probe=sys.argv[3]
+if resolver_probe!='normal':
+ def forbidden_reverse_dns(*args,**kwargs):
+  (root/'dns-requested').touch()
+  if resolver_probe=='blocked':time.sleep(9)
+  raise OSError('synthetic_reverse_dns_unavailable')
+ socket.getfqdn=forbidden_reverse_dns
 class HTTP(http.server.BaseHTTPRequestHandler):
  def do_GET(self):
   with (root/'requests.jsonl').open('a') as f:f.write(json.dumps(self.path)+'\n')
@@ -158,7 +213,7 @@ class HTTP(http.server.BaseHTTPRequestHandler):
   with (root/'effects.jsonl').open('a') as f:f.write(json.dumps(body.decode())+'\n')
   self.send_response(204);self.send_header('Content-Length','0');self.end_headers()
  def log_message(self,*args):pass
-server=http.server.ThreadingHTTPServer(('127.0.0.1',0),HTTP);server.daemon_threads=True
+server=LoopbackHTTPServer(('127.0.0.1',0),HTTP);server.daemon_threads=True
 threading.Thread(target=server.serve_forever,daemon=True).start();origin='http://127.0.0.1:'+str(server.server_port)
 class Peer:
  def __init__(self):self.calls=0

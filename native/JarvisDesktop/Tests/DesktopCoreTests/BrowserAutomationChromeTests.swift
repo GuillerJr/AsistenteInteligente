@@ -102,7 +102,7 @@ private final class BrowserRealChromeFixture {
             attributes: [.posixPermissions: 0o700])
         let server = Process(), output = Pipe()
         server.executableURL = URL(fileURLWithPath: ProcessInfo.processInfo.environment["JARVIS_DESKTOP_PYTHON"] ?? "/usr/bin/python3")
-        server.arguments = ["-I", "-u", "-c", Self.serverScript, directory.path]
+        server.arguments = ["-I", "-u", "-c", LoopbackHTTPFixture.script(Self.serverScript), directory.path]
         server.environment = ["PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"]
         server.standardOutput = output; server.standardError = FileHandle.nullDevice
         http = FixtureProcess(server); try http.run()
@@ -222,7 +222,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
   with (root/'effects.jsonl').open('a') as f:f.write(json.dumps(text)+'\n')
   payload=b'OK';self.send_response(200);self.send_header('Content-Length',str(len(payload)));self.end_headers();self.wfile.write(payload)
  def log_message(self,*args):pass
-server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Handler);server.daemon_threads=True
+server=LoopbackHTTPServer(('127.0.0.1',0),Handler);server.daemon_threads=True
 print(server.server_port,flush=True);server.serve_forever()
 """#
 }

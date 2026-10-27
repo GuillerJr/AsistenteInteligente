@@ -101,7 +101,7 @@ private final class BrowserCDPFixture {
             attributes: [.posixPermissions: 0o700])
         let process = Process(), output = Pipe()
         process.executableURL = URL(fileURLWithPath: ProcessInfo.processInfo.environment["JARVIS_DESKTOP_PYTHON"] ?? "/usr/bin/python3")
-        process.arguments = ["-I", "-u", "-c", Self.script, directory.path, mode]
+        process.arguments = ["-I", "-u", "-c", LoopbackHTTPFixture.script(Self.script), directory.path, mode]
         process.environment = ["PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"]
         process.standardOutput = output; process.standardError = FileHandle.nullDevice
         fixture = FixtureProcess(process); try fixture.run()
@@ -164,7 +164,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     self.connection.sendall(frame+payload)
   except (ConnectionError,OSError,json.JSONDecodeError):return
  def log_message(self,*args):pass
-server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Handler);server.daemon_threads=True
+server=LoopbackHTTPServer(('127.0.0.1',0),Handler);server.daemon_threads=True
 print(server.server_port,flush=True);server.serve_forever()
 """#
 }

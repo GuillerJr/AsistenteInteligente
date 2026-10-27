@@ -3,6 +3,7 @@ import asyncio
 import fcntl
 import os
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from unittest.mock import patch
 
@@ -274,10 +275,14 @@ async def test_service_shutdown_cleans_retained_owner_without_replaying_publish(
     lease.close()
 
 
+@pytest.mark.parametrize("worker_threads", [None, 1], ids=["default-pool", "single-worker"])
 async def test_cleanup_worker_survives_repeated_awaiter_cancel_without_dropping_host_lease(
-        host, prepared, monkeypatch):
-    import threading
+        host, prepared, monkeypatch, worker_threads):
     _, coordinator = host
+    loop = asyncio.get_running_loop()
+    if worker_threads is not None:
+        # The event loop retains this executor until host teardown is complete.
+        loop.set_default_executor(ThreadPoolExecutor(max_workers=worker_threads))
     def uncertain(review, context):
         def publish(directory, old, new):
             core.no_replace(directory, old, new)
@@ -287,16 +292,22 @@ async def test_cleanup_worker_survives_repeated_awaiter_cancel_without_dropping_
     _, result = await admitted(coordinator, prepared)
     operation = coordinator._operations[result["operation_id"]]
     owner = operation.cleanup_owner
-    entered, release = threading.Event(), threading.Event()
+    entered, release = asyncio.Event(), threading.Event()
+    cleanup_budget = 10
     original_cleanup = owner.cleanup
     def gated():
-        entered.set()
-        assert release.wait(3)
+        loop.call_soon_threadsafe(entered.set)
+        assert release.wait(cleanup_budget), "fixture cleanup gate not released"
         original_cleanup()
     monkeypatch.setattr(owner, "cleanup", gated)
     await coordinator.cleanup({"operation_id": result["operation_id"]})
+    entered_waiter = asyncio.create_task(entered.wait())
     try:
-        assert await asyncio.to_thread(entered.wait, 2)
+        # Receiving the worker's marker must not occupy the executor slot that
+        # owner.cleanup needs in order to emit it.
+        await asyncio.wait({entered_waiter, operation.task}, timeout=cleanup_budget,
+                           return_when=asyncio.FIRST_COMPLETED)
+        assert entered.is_set(), operation.snapshot()
         operation.task.cancel()
         await asyncio.sleep(0)
         operation.task.cancel()
@@ -308,6 +319,8 @@ async def test_cleanup_worker_survives_repeated_awaiter_cancel_without_dropping_
             await coordinator.inspect_activation({"profile_path": str(prepared)})
     finally:
         release.set()
+        entered_waiter.cancel()
+        await asyncio.gather(entered_waiter, return_exceptions=True)
     completed = await finish(coordinator, result["operation_id"])
     assert not completed["cleanup_owner_pending"]
     assert completed["receipt"] == result["receipt"]
@@ -502,19 +515,26 @@ async def test_selected_physical_target_replaced_during_owner_wait_is_not_follow
     assert not (await coordinator.pending({}))["pending"]
 
 
+@pytest.mark.parametrize("worker_threads", [None, 1], ids=["default-pool", "single-worker"])
 async def test_cancelled_activation_awaiter_waits_for_real_worker_and_keeps_unknown_receipt(
-        host, prepared, monkeypatch):
+        host, prepared, monkeypatch, worker_threads):
     """Cancelling after dispatch cannot erase the actual admission publication."""
     _, coordinator = host
-    published, release = threading.Event(), threading.Event()
+    loop = asyncio.get_running_loop()
+    if worker_threads is not None:
+        # This loop owns the executor through the host fixture's teardown. A
+        # blocking notification wait must never consume its only worker.
+        loop.set_default_executor(ThreadPoolExecutor(max_workers=worker_threads))
+    published, release = asyncio.Event(), threading.Event()
+    publication_budget = 10
     calls = []
 
     def injected(review, context):
         def publish(directory, old, new):
             calls.append(context.operation_id)
             core.no_replace(directory, old, new)
-            published.set()
-            assert release.wait(3), "fixture publication gate not released"
+            loop.call_soon_threadsafe(published.set)
+            assert release.wait(publication_budget), "fixture publication gate not released"
         return activate_prepared_profile(review, context, publish=publish)
 
     monkeypatch.setattr(module, "activate_prepared_profile", injected)
@@ -523,8 +543,13 @@ async def test_cancelled_activation_awaiter_waits_for_real_worker_and_keeps_unkn
                                             ("review_id", "review_digest")})
     await allow_synthetic_owner(coordinator)
     row = coordinator._operations[operation["operation_id"]]
+    publication_waiter = asyncio.create_task(published.wait())
     try:
-        assert await asyncio.to_thread(published.wait, 2)
+        # The read-side handshake stays on the event loop. Waiting in to_thread
+        # can occupy the same executor slot the real publisher still needs.
+        await asyncio.wait({publication_waiter, row.task}, timeout=publication_budget,
+                           return_when=asyncio.FIRST_COMPLETED)
+        assert published.is_set(), row.snapshot()
         row.task.cancel()
         await asyncio.sleep(0)
         row.task.cancel()
@@ -533,6 +558,8 @@ async def test_cancelled_activation_awaiter_waits_for_real_worker_and_keeps_unkn
         assert row.cancellation.is_set()
     finally:
         release.set()
+        publication_waiter.cancel()
+        await asyncio.gather(publication_waiter, return_exceptions=True)
     result = await finish(coordinator, operation["operation_id"])
     assert result["phase"] == "cleanup_pending", result
     assert result["receipt"]["status"] == "unknown"

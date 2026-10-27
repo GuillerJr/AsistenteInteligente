@@ -240,7 +240,7 @@ private final class BrowserAutomationFixture {
         let process = Process(), output = Pipe()
         let configured = ProcessInfo.processInfo.environment["JARVIS_DESKTOP_PYTHON"] ?? "/usr/bin/python3"
         process.executableURL = URL(fileURLWithPath: configured)
-        process.arguments = ["-I", "-u", "-c", Self.script, directory.path]
+        process.arguments = ["-I", "-u", "-c", LoopbackHTTPFixture.script(Self.script), directory.path]
         process.environment = ["PATH": "/usr/bin:/bin", "LANG": "C.UTF-8"]
         process.standardOutput = output; process.standardError = FileHandle.nullDevice
         fixture = FixtureProcess(process)
@@ -283,10 +283,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
   try:self.wfile.write(payload)
   except (BrokenPipeError,ConnectionResetError):pass
  def log_message(self,*args):pass
-decoy=http.server.ThreadingHTTPServer(('127.0.0.1',0),Handler)
+decoy=LoopbackHTTPServer(('127.0.0.1',0),Handler)
 decoy.daemon_threads=True
 threading.Thread(target=decoy.serve_forever,daemon=True).start()
-server=http.server.ThreadingHTTPServer(('127.0.0.1',0),Handler)
+server=LoopbackHTTPServer(('127.0.0.1',0),Handler)
 server.daemon_threads=True
 print(server.server_port,flush=True)
 server.serve_forever()

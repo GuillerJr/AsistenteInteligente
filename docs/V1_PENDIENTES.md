@@ -312,10 +312,21 @@ los bloques históricos ni declara completa una familia amplia de la fase A.
   `approval_denied`, cero recibos y sin despacho. Retirar también la regla del
   destino antiguo; revisión 9, cero permisos, acciones pendientes o runs no terminales.
   Las decisiones sólo afectan a perfiles sintéticos nuevos.
-- [ ] Registrar los hooks finales de paquete/smoke, commit y push a `main` y
-  verificar la CI después del push: estado al corte anterior al propio commit.
-  Los resultados se registran en metadatos de hooks/respuesta final. Se usa el
-  commit que contiene el registro, sin SHA futuro ni resultado no observado.
+- [x] Publicar el bloque en `66cafb8` y el presupuesto de CI en `38a27d1`, con
+  hooks locales completos: Python, 397 Swift sin omisiones, Chrome real,
+  paquetes/smoke y bundle. Ubuntu remoto pasó; macOS detectó dos fallos de
+  preparación con `startupUnconfirmed`, sin invalidar los recorridos ya observados.
+- [x] Reproducir la dependencia de DNS inverso del fixture y retirarla mediante
+  un servidor HTTP numérico explícito. Dos regresiones distinguen DNS bloqueado
+  y ausente; la selección focal de 26 casos pasó con Chrome real y el bootstrap.
+  [Diagnóstico y límites](rebuild/PHASE_A_CI_STARTUP.md). Los hooks y la CI del
+  commit que contiene esta corrección registran el resultado global posterior;
+  no se anticipa su resultado en esta fotografía previa al propio commit.
+- [x] Eliminar la espera circular del executor en las dos pruebas Python de
+  cancelación de activación/limpieza: notificación asíncrona, escenarios con pool
+  normal y un solo hilo, sin relajar recibos, custodia o comprobaciones de replay.
+  El archivo focal completo pasó 28 casos; el diagnóstico enlazado conserva
+  las reproducciones anteriores a la corrección.
 
 La lectura pública única de `https://example.com/` pasó por el proxy privado,
 sin excepción sintética, y cerró su binding; conserva contenido externo no
