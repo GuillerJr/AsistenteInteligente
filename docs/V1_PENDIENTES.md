@@ -334,7 +334,8 @@ los bloques históricos ni declara completa una familia amplia de la fase A.
   identidad completa de fuentes y custodia incierta conservada; admisión pytest
   antes de fixtures. Los 65 focales pasaron con cierre físico comprobado.
   [Contrato y evidencia](rebuild/TEST_RESOURCE_LIMITS.md). La cualificación global
-  del nuevo supervisor se comprueba en CI para su commit exacto.
+  del supervisor pasó en Ubuntu y macOS para `c137c57`:
+  [CI aprobada](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40561444150).
 
 La lectura pública única de `https://example.com/` pasó por el proxy privado,
 sin excepción sintética, y cerró su binding; conserva contenido externo no
@@ -352,10 +353,31 @@ activa y mantenimiento con REA, sin ejecutar la referencia ni copiar su código.
 Conserva 2.907 incógnitas semánticas de estos nuevos grafos.
 [Fuentes, Evidence IDs y contratos propuestos](rebuild/REA_OC23_MEMORY.md).
 El dueño eligió expresamente MiniLM multilingüe local en CPU el 27-10-2026;
-Codex con ChatGPT permanece como proveedor de conversación. La implementación
-semántica/híbrida se prepara con ese único motor, sin fallback externo.
-La indexación léxica de notas aprobadas ya es transaccional; los nuevos recorridos
-semánticos, el índice derivado y la recuperación activa todavía no están acreditados.
+Codex con ChatGPT permanece como proveedor de conversación. Los embeddings
+permanecen locales y no existe fallback externo.
+
+### Memoria local — alcance elegido
+
+- [x] Búsqueda léxica, semántica y combinada con citas de bytes/revisión vigentes,
+  encoder CPU real fijado y caché derivada acotada, sin texto en el índice vectorial.
+- [x] Indexación automática de cambios de notas aprobadas, por generaciones y
+  sin releer URI, carpetas personales ni historial.
+- [x] Recuperación fresca por turno con consentimiento local revocable;
+  guardado, corrección y olvido verificados con ChatGPT en el perfil sintético.
+- [x] Abstención ante coincidencias débiles: se conserva el fallo real inicial
+  del distractor y su repetición corregida con cero citas.
+- [x] Preparación/verificación del modelo, reconstrucción/verificación del índice,
+  cancelación, reparación derivada, recibos y custodia ante cierre incierto.
+- [x] Panel nativo estable y valores de accesibilidad actualizados;
+  revocación comprobada mientras la nota permanecía guardada.
+- [ ] Confirmar la CI del ajuste final del lector AX. Python ya pasó en ambos
+  sistemas para `075b9dd`; no se omite la regresión nativa.
+
+[Contrato y límites](rebuild/PHASE_A_MEMORY_INTELLIGENCE.md) ·
+[Registro de cualificación](rebuild/PHASE_A_MEMORY_QUALIFICATION.json).
+Este bloque indexa notas autorizadas. No memoriza conversaciones automáticamente,
+no borra retroactivamente información ya enviada a un proveedor y no incorpora
+wiki, motores alternativos ni datos del Jarvis anterior sin elección explícita.
 
 La distribución autocontenida, Developer ID/notarización y actualización remota
 firmada siguen pendientes. La fase A sigue abierta y la fase B no ha comenzado.

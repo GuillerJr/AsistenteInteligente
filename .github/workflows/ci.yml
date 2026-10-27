@@ -40,6 +40,11 @@ jobs:
           echo "JARVIS_MINILM_TEST_ASSETS=$JARVIS_MODEL_TEST_ROOT/artifacts" >> "$GITHUB_ENV"
           .venv/bin/python -B script/prepare_memory_model.py \
             --directory "$JARVIS_MODEL_TEST_ROOT/artifacts"
+      - name: Pruebas Swift y bundle nativo de desarrollo
+        if: runner.os == 'macOS'
+        run: |
+          ./script/test_desktop.sh --full --budget-mib 6144
+          ./script/build_desktop.sh --full --budget-mib 6144
       - name: Pruebas de contratos propios
         run: >-
           .venv/bin/python -B script/test_resource_guard.py run
@@ -47,11 +52,6 @@ jobs:
           --minilm-test-assets "$JARVIS_MINILM_TEST_ASSETS"
           --budget-mib 12288 --deadline 1800 --
           .venv/bin/python -B -m pytest -o addopts= -q tests
-      - name: Pruebas Swift y bundle nativo de desarrollo
-        if: runner.os == 'macOS'
-        run: |
-          ./script/test_desktop.sh --full --budget-mib 6144
-          ./script/build_desktop.sh --full --budget-mib 6144
       - name: Construir el paquete propio
         shell: bash
         run: |

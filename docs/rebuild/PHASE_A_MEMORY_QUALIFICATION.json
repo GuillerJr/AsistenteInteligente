@@ -1,9 +1,12 @@
 {
   "format": "jarvis-memory-qualification/1",
   "date": "2026-10-27",
-  "status": "in_progress",
+  "status": "native_passed_ax_test_fix_ci_pending",
   "owner_decisions": {
-    "scope": ["test_storage", "memory"],
+    "scope": [
+      "test_storage",
+      "memory"
+    ],
     "embedding": "local_multilingual_minilm_cpu",
     "conversation": "codex_with_chatgpt",
     "full_suites": "remote_ci_only",
@@ -20,8 +23,18 @@
       "run_id": 40568510703,
       "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40568510703",
       "result": "failed",
-      "macos": {"job_id": 122416097215, "passed": 2849, "failed": 5},
-      "ubuntu": {"job_id": 122416097687, "passed": 2807, "skipped": 46, "failed": 1, "errors": 4},
+      "macos": {
+        "job_id": 122416097215,
+        "passed": 2849,
+        "failed": 5
+      },
+      "ubuntu": {
+        "job_id": 122416097687,
+        "passed": 2807,
+        "skipped": 46,
+        "failed": 1,
+        "errors": 4
+      },
       "findings": [
         "macos_real_worker_exited_before_ready",
         "linux_real_retrieval_assertions_passed_but_worker_directory_cleanup_unconfirmed",
@@ -33,10 +46,82 @@
       "run_id": 40571556887,
       "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40571556887",
       "result": "failed_native_layout_case",
-      "macos": {"job_id": 122426799352, "python_passed": 2868, "swift_total": 428, "swift_skipped": 1, "swift_failed": 1},
-      "ubuntu": {"job_id": 122426799009, "passed": 2822, "skipped": 46, "job_result": "success"},
+      "macos": {
+        "job_id": 122426799352,
+        "python_passed": 2868,
+        "swift_total": 428,
+        "swift_skipped": 1,
+        "swift_failed": 1
+      },
+      "ubuntu": {
+        "job_id": 122426799009,
+        "passed": 2822,
+        "skipped": 46,
+        "job_result": "success"
+      },
       "real_encoder_and_retrieval": "passed_both_platforms_no_skip",
-      "findings": ["native_inspector_collapsed_during_resize_regression"]
+      "findings": [
+        "native_inspector_collapsed_during_resize_regression"
+      ]
+    },
+    {
+      "head": "7fef0a1c137dbd5fd55399ca78dd567a9c7136a3",
+      "run_id": 40575352248,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40575352248",
+      "result": "failed_ax_test_reader",
+      "macos": {
+        "job_id": 122440191130,
+        "python_passed": 2868,
+        "swift_total": 429,
+        "swift_skipped": 1,
+        "swift_failed": 7
+      },
+      "ubuntu": {
+        "job_id": 122440190678,
+        "passed": 2822,
+        "skipped": 46,
+        "job_result": "success"
+      },
+      "findings": [
+        "all_seven_ax_metadata_assertions_nil_in_offscreen_fixture",
+        "real_native_policy_ax_revision_2_to_3_already_observed_correctly"
+      ]
+    },
+    {
+      "head": "90e67c5fc608ced813e3ca12aebaaed75cf85c2c",
+      "run_id": 40577607589,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40577607589",
+      "result": "superseded_by_functional_recall_fix",
+      "macos": {
+        "job_id": 122448116489,
+        "job_result": "cancelled_on_next_push"
+      },
+      "ubuntu": {
+        "job_id": 122448117217,
+        "job_result": "success"
+      },
+      "findings": [
+        "test_reader_materializes_public_virtual_ax_tree_no_skip",
+        "not_counted_as_full_native_qualification"
+      ]
+    },
+    {
+      "head": "075b9dd0d411369c90630814ae670e54c31c1e44",
+      "run_id": 40578429672,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40578429672",
+      "result": "failed_native_ax_reader_array_bridge",
+      "macos": {
+        "job_id": 122451684160,
+        "python_passed": 2885,
+        "failure": "NSArray_expected_NSAccessibilityElement_actual_NSSplitViewSplitter_in_test_reader"
+      },
+      "ubuntu": {
+        "job_id": 122451684908,
+        "passed": 2839,
+        "skipped": 46,
+        "job_result": "success"
+      },
+      "real_cpu_assets": "mandatory_no_silent_skip"
     }
   ],
   "native_attempts": [
@@ -68,13 +153,116 @@
       ],
       "accessibility_finding": "LabeledContent_AX_value_retained_revision_1_while_pixels_showed_2; explicit_accessibility_rows_added",
       "external_source_mutation": "refused_memory_in_use_before_effect; source_exclusive_custody_preserved"
+    },
+    {
+      "variant": "explicit_side_panel_and_explicit_ax_metadata",
+      "identity": {
+        "format": "jarvis-memory-native-identity/1",
+        "ui_source_head": "7fef0a1c137dbd5fd55399ca78dd567a9c7136a3",
+        "python_source_head": "075b9dd0d411369c90630814ae670e54c31c1e44",
+        "test_harness_wrapper": true,
+        "python_runtime_external": true,
+        "distribution_qualification": false,
+        "bundle_id": "com.jarvis.desktop.memoryqualification.final.20261027",
+        "sha256": {
+          "Contents/MacOS/Jarvis": "f7f9e9be7f9280e08ab9762f9c7798f8ef3e88c4c22a0a5b89bc96606ad7065c",
+          "Contents/MacOS/JarvisPrueba": "f715514d89f13d2eb874b9b39efa9598516c811f9bdc1ae582851446dc3f4741",
+          "Contents/Info.plist": "17019b6c5ca1b7a079636ee95bef93b751f41e3b3954d9644dd3c58074f9cfc4"
+        }
+      },
+      "account_access": "owner_completed_official_login_in_new_synthetic_profile_no_old_credentials_reused_or_read",
+      "observed_operations": [
+        "native_ax_policy_revision_3_to_4_to_5_updated_without_recreating_panel",
+        "real_chatgpt_memory_store_approved_exact_arguments",
+        "background_index_generation_5_then_6_then_7",
+        "fresh_chat_retrieved_stored_then_corrected_marker_without_value_in_question",
+        "memory_forget_revision_2_removed_document_and_vector",
+        "low_similarity_distractor_wrongly_answered_as_control_marker_before_fix",
+        "after_fix_fresh_chat_empty_recall_zero_citations_and_model_abstained",
+        "after_fix_approved_store_generation_8_fresh_chat_correct_value_one_citation",
+        "after_fix_approved_correction_generation_9_fresh_chat_new_value_one_citation",
+        "policy_revocation_5_while_note_exists_new_chat_disabled_zero_citations",
+        "four_original_note_hashes_unchanged",
+        "graceful_shutdown_profile_lease_free_socket_absent_worker_temporaries_empty"
+      ],
+      "result": "passed_authenticated_finite_synthetic_workflow",
+      "synthetic_profile_root": "/private/tmp/jarvis-memory-native.kb34dz",
+      "verification": {
+        "format": "jarvis-memory-e2e-verification/1",
+        "result": "passed",
+        "assertions": [
+          "approved_store",
+          "automatic_index_generation_5",
+          "corrected_revision_2_generation_6",
+          "forget_generation_7",
+          "fresh_chat_abstention_no_citations",
+          "fresh_chat_valid_recall_after_filter",
+          "fresh_chat_corrected_value_after_filter",
+          "policy_revocation_existing_note_not_recalled",
+          "four_original_note_hashes_unchanged"
+        ],
+        "artifact_sha256": {
+          "saved-auth.json": "ac55edc2fb126b04ed93bb9705faa9b3372e680459d62918591cc97e813fa44b",
+          "corrected-auth.json": "9ba76c6a51995658a433fd3d18ed40441555b2be496cb9a230cd9eb1475e8dce",
+          "forgotten-auth.json": "345d1003669c922528d1ac90c96d535dd9618addb4098bdad5024819d677e952",
+          "e2e-abstention.json": "359fd324bfa645c412473cdaa7cbef09f5e6a25ed0d5585cb5b5fd08fb61ca63",
+          "e2e-positive_filtered.json": "dcfa5bc236b5c601ec1eb3e167dcde7107c3e459545fbe1cfc1e6ba87742cdb0",
+          "e2e-corrected_filtered.json": "5debf9f1d30c87d51cd90254bb39ccf4d6a77c74aa7cc3652931bd2e836c9b8e",
+          "e2e-revoked.json": "9cbf95c16a0e59695e40411f9bd63b309dd8c9194b9ffe33192358f4f8c5925f",
+          "distractor-candidates.json": "e62f4ff4e5f406326d87edf15212339e9e3cc109b5c392cd53eee22af1c61b66"
+        }
+      },
+      "closure": {
+        "format": "jarvis-memory-native-close/1",
+        "profile_lease_free": true,
+        "socket_absent": true,
+        "worker_temporary_directories": 0,
+        "owner_installed_app_untouched": true
+      }
     }
   ],
   "limits": [
-    "No owner app, credentials, history or existing profiles are used.",
-    "Synthetic transports do not qualify authenticated ChatGPT inference.",
+    "The owner installed app, previous profiles, personal history and private documents were not used. Owner completed official SDK login in a new synthetic profile; the agent never read credentials.",
+    "Synthetic transports qualify contracts only; the separately recorded native workflow used authenticated ChatGPT and real selected CPU weights.",
     "Linux qualification does not claim macOS Seatbelt-equivalent network isolation.",
     "Semantic similarity does not establish factual truth or reasoning over negation.",
     "Whole phase A, optional wiki and phase B are not closed by this report."
-  ]
+  ],
+  "recall_abstention": {
+    "finding": "RRF_near_1_can_represent_raw_cosine_0_19_and_a_nonanswer",
+    "automatic_semantic_hybrid_minimum_raw_cosine": 0.35,
+    "filter_stage": "before_both_channel_ranks_and_RRF",
+    "manual_search": "exploratory_unchanged",
+    "absence": "explicit_empty_capsule_when_enabled_no_metadata_when_disabled",
+    "limit": "conservative_finite_heuristic_not_probability_or_general_accuracy_guarantee"
+  },
+  "latest_local_focals": {
+    "passed": 78,
+    "selections": [
+      {
+        "passed": 41,
+        "seconds": 10.23,
+        "guard_seconds": 11.047,
+        "peak_temporary_bytes": 5226496
+      },
+      {
+        "passed": 37,
+        "seconds": 4.69,
+        "guard_seconds": 5.368,
+        "peak_temporary_bytes": 6275072
+      }
+    ],
+    "physical_apfs_capacity_bytes": 1073700864,
+    "monitored_budget_bytes": 268435456,
+    "deadline_seconds": 180,
+    "source_unchanged": true,
+    "cleanup_confirmed": true,
+    "evidence_copies": "/private/tmp/jarvis-memory-native.kb34dz/qualification-evidence"
+  },
+  "native_test_reader_fix": {
+    "typed_navigation_array": "removed_public_untyped_children_bridge_only",
+    "fixture_accessibility": "explicitly_enabled_in_test_root_only",
+    "oracles": "all_seven_values_retained_same_hosting",
+    "ci_order": "native_before_python_on_macos_fail_early_without_repeating_tests"
+  }
 }

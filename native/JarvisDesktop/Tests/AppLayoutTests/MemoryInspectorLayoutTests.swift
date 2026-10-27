@@ -51,11 +51,27 @@ private actor LayoutMetadataWire {
 }
 
 @MainActor
+private struct InspectorLayoutRoot: View {
+    let store: ChatStore
+    let presentation: InspectorPresentation
+    let accessibilityEnabled: Bool
+
+    @ViewBuilder var body: some View {
+        if accessibilityEnabled {
+            // XCTest is not an external assistive client. Request the public
+            // SwiftUI accessibility representation for this fixture only.
+            ContentView(store: store, inspector: presentation)
+                .environment(\.accessibilityEnabled, true)
+        } else { ContentView(store: store, inspector: presentation) }
+    }
+}
+
+@MainActor
 private final class InspectorLayoutFixture {
     let store: ChatStore
     let presentation: InspectorPresentation
     let wire: LayoutMetadataWire
-    let hosting: NSHostingView<ContentView>
+    let hosting: NSHostingView<InspectorLayoutRoot>
     let window: NSWindow
     private let accessibilityWindow: Bool
     private let previousActivationPolicy: NSApplication.ActivationPolicy
@@ -77,7 +93,8 @@ private final class InspectorLayoutFixture {
         currentStore.memoryIntelligence.configure(MemoryIntelligenceClient(runtime: currentStore.runtime,
             request: { try await currentWire.request($0, $1) }))
         currentStore.synchronizeMemoryIntelligenceContext()
-        let currentHosting = NSHostingView(rootView: ContentView(store: currentStore, inspector: currentPresentation))
+        let currentHosting = NSHostingView(rootView: InspectorLayoutRoot(store: currentStore,
+            presentation: currentPresentation, accessibilityEnabled: accessibilityWindow))
         let currentWindow = NSWindow(contentRect: NSRect(x: -20_000, y: -20_000, width: width, height: height),
             styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: true)
         store = currentStore; presentation = currentPresentation; wire = currentWire
@@ -157,7 +174,9 @@ private final class InspectorLayoutFixture {
                 formal += 1
                 record(id: accessible.accessibilityIdentifier(), value: accessible.accessibilityValue())
                 pending.append(contentsOf: accessible.accessibilityChildren() ?? [])
-                pending.append(contentsOf: (accessible.accessibilityChildrenInNavigationOrder() ?? []).map { $0 as Any })
+                // Do not use accessibilityChildrenInNavigationOrder(): its
+                // imported typed array can contain an NSSplitViewSplitter,
+                // trapping during the SDK's NSArray bridge before we inspect it.
             }
             if let legacy = item as? NSObject {
                 // Public AppKit compatibility API, needed for virtual AX

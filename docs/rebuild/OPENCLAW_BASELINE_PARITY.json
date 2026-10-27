@@ -916,6 +916,10 @@
         {
           "progress_id": "P-PROFILES",
           "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-MEMORY-LOCAL",
+          "scope": "Alcance CPU y notas aprobadas implementado con recorrido nativo autenticado; la CI exacta y los límites se registran aparte de la paridad amplia de esta familia."
         }
       ],
       "acceptance": {
@@ -931,7 +935,8 @@
         "E034",
         "E035"
       ],
-      "closure_status": "pendiente_equivalencia_productiva"
+      "closure_status": "pendiente_equivalencia_productiva",
+      "selected_memory_scope_qualification": "native_authenticated_passed_final_ci_pending"
     },
     {
       "id": "A-25",
@@ -943,6 +948,10 @@
         {
           "progress_id": "P-MEMORY",
           "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
+        },
+        {
+          "progress_id": "P-MEMORY-LOCAL",
+          "scope": "Alcance CPU y notas aprobadas implementado con recorrido nativo autenticado; la CI exacta y los límites se registran aparte de la paridad amplia de esta familia."
         }
       ],
       "acceptance": {
@@ -958,7 +967,8 @@
         "E034",
         "E035"
       ],
-      "closure_status": "pendiente_equivalencia_productiva"
+      "closure_status": "pendiente_equivalencia_productiva",
+      "selected_memory_scope_qualification": "native_authenticated_passed_final_ci_pending"
     },
     {
       "id": "A-26",
@@ -970,6 +980,10 @@
         {
           "progress_id": "P-MEMORY",
           "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
+        },
+        {
+          "progress_id": "P-MEMORY-LOCAL",
+          "scope": "Alcance CPU y notas aprobadas implementado con recorrido nativo autenticado; la CI exacta y los límites se registran aparte de la paridad amplia de esta familia."
         }
       ],
       "acceptance": {
@@ -985,7 +999,8 @@
         "E034",
         "E035"
       ],
-      "closure_status": "pendiente_equivalencia_productiva"
+      "closure_status": "pendiente_equivalencia_productiva",
+      "selected_memory_scope_qualification": "native_authenticated_passed_final_ci_pending"
     },
     {
       "id": "A-27",
@@ -14252,7 +14267,7 @@
           "A-28"
         ],
         "verified_scope": "SQLite real propio y temporales RAM, ámbito host por agente/workspace, búsqueda local FTS5 o lexical_scan explícita, revisiones/hashes/citas y generación invalidables; guardar/olvidar pasa por autoridad común. La copia explícita de ámbitos admite ahora imágenes frías WAL/journal compatibles mediante revisión sin efectos y una apertura/reconstrucción SQLite sólo tras la autoridad exacta. Conserva notas originales y procedencia; no promete inmutabilidad física después del efecto autorizado. La evidencia final y los límites adicionales se consolidan en PHASE_A_RECONCILIATION_CLOSEOUT.md.",
-        "remaining": "No embeddings ni híbrida/semántica, indexación automática, flush completo, wiki/motores externos, cifrado integral o migración de datos personales."
+        "remaining": "La búsqueda semántica/híbrida, indexación automática, recuperación y mantenimiento de notas aprobadas se acreditan por separado en P-MEMORY-LOCAL. La familia amplia conserva motores/wiki opcionales, flush conversacional automático, cifrado integral y migración de datos personales fuera del alcance elegido."
       },
       {
         "id": "P-PROCESS",
@@ -14844,6 +14859,41 @@
         "remaining": "Fixtures HTTP locales llevan excepción de prueba explícita y no acreditan navegación pública arbitraria. La red de un navegador externo adjunto pertenece a ese navegador y no adquiere el proxy/sandbox administrado. Cualificación con Chrome real, servicios públicos elegidos y GUI final sigue en cierre separado; no se leen perfiles o historial personales ni se afirma cobertura universal.",
         "detail_file": "PHASE_A_MAC_BROWSER_CLOSEOUT.md",
         "qualification_file": "PHASE_A_MAC_BROWSER_CLOSEOUT.json"
+      },
+      {
+        "id": "P-MEMORY-LOCAL",
+        "component": "Memoria local CPU: semántica/híbrida, indexación automática, recuperación y mantenimiento",
+        "status": "native_authenticated_passed_final_ci_pending",
+        "code": [
+          "src/jarvis_core/local_embeddings.py",
+          "src/jarvis_core/embedding_worker.py",
+          "src/jarvis_core/model_artifacts.py",
+          "src/jarvis_core/memory_policy.py",
+          "src/jarvis_core/memory_snapshot.py",
+          "src/jarvis_core/memory_context.py",
+          "src/jarvis_core/memory_index.py",
+          "src/jarvis_core/memory_retrieval.py",
+          "src/jarvis_core/memory_intelligence.py",
+          "native/JarvisDesktop/Sources/JarvisApp/Views/MemoryIntelligenceView.swift"
+        ],
+        "tests": [
+          "tests/test_real_memory_retrieval.py",
+          "tests/test_local_embeddings.py",
+          "tests/test_memory_semantic_index.py",
+          "tests/test_memory_intelligence.py",
+          "tests/test_memory_snapshot_context.py",
+          "tests/test_codex_memory_context.py",
+          "tests/test_memory_turn_integration.py",
+          "native/JarvisDesktop/Tests/AppLayoutTests/MemoryInspectorLayoutTests.swift"
+        ],
+        "capability_ids": [
+          "A-24",
+          "A-25",
+          "A-26"
+        ],
+        "verified_scope": "MiniLM fijado CPU con pesos reales, notas aprobadas SQLite/temporales RAM, índice derivado sin texto, citas actuales, caché atómica acotada, autoindex por generación, cápsulas nuevas por turno, abstención antes de RRF, revocación, reconstrucción/verificación y cierre retenido. App sintética: guardado/corrección/olvido con ChatGPT real y aprobaciones delegadas; nuevos chats recuperan el valor vigente y se abstienen después del olvido o la revocación. Ver PHASE_A_MEMORY_QUALIFICATION.json para SHA, casos y fallos conservados.",
+        "remaining": "CI final del código en curso. La paridad amplia de referencia sigue abierta: wiki/motores opcionales A-27, captura/flush conversacional automático, cifrado integral, corpus personales o migración anterior y distribución autocontenida no se declaran acreditados. No se habilita ninguna de esas entradas por silencio.",
+        "record": "PHASE_A_MEMORY_QUALIFICATION.json"
       }
     ],
     "detail_file": "PHASE_A_MAC_BROWSER_CLOSEOUT.md",
@@ -14924,7 +14974,10 @@
       "La PTY conserva restricción de un solo proceso sin fork y sin fallback. El navegador adjunto conserva su propia política de red.",
       "Frames sólo RAM y payload acotado; el recibo durable conserva metadatos sin base64.",
       "La investigación REA es estática y mantiene incógnitas; no cierra paridad global."
-    ]
+    ],
+    "memory_increment_file": "PHASE_A_MEMORY_INTELLIGENCE.md",
+    "memory_qualification_file": "PHASE_A_MEMORY_QUALIFICATION.json",
+    "memory_selected_scope_status": "native_authenticated_passed_final_ci_pending"
   },
   "target_decisions": {
     "date": "2026-10-24",

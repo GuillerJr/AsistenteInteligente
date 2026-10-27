@@ -95,17 +95,42 @@ abrir otro perfil sobre esos recursos.
 
 ## Cualificación
 
-Pasaron 91 casos focales Python del bloque (11,27 s), 40 del supervisor (4,11 s)
-y 49 de paquete/dependencias (4,94 s). Cada ejecución confirmó grupo terminado,
-fuentes intactas y desmontaje/retirada de su cuota; sus máximos fueron 7.680.000,
-5.025.792 y 5.742.592 bytes respectivamente. El protocolo del encoder pasó sus
-25 casos locales; la inferencia real requiere el recorrido siguiente.
+Los últimos focales pasaron 78 casos: 41 de contexto/autoridad y 37 de índice/
+entrega, con fuentes intactas y cierre físico confirmado. Sus máximos fueron
+5.226.496 y 6.275.072 bytes; plazos de 180 s, presupuesto vigilado de 256 MiB y
+volumen APFS limitado físicamente a 1 GiB. Los focales anteriores del supervisor,
+paquete y protocolo mantienen su evidencia separada. No se repite la suite
+completa en el Mac del dueño.
 
-En curso: los registros definitivos se añadirán al cerrar el recorrido
-nativo y CI del commit exacto. Los dobles geométricos prueban autoridad y
-transacciones, y no acreditan calidad semántica. Los pesos públicos se preparan
-una sola vez por ejecución de CI; sus pruebas reales son obligatorias, no un skip
-silencioso. Las suites completas permanecen fuera del Mac del dueño.
+El recorrido nativo usó la app separada «Jarvis Memoria Prueba», un perfil nuevo,
+cuatro notas artificiales y el acceso oficial a ChatGPT completado por el dueño.
+Guardado aprobado → índice automático (generación 5), corrección (6) y olvido
+(7) quedaron verificados por fuente y recibos. El primer ensayo de ausencia
+descubrió una asociación incorrecta con un distractor: coseno 0,19 y RRF 0,99.
+No se ocultó como éxito del olvido. Después del ajuste de abstención, un chat
+nuevo recibió cero citas y respondió que el dato no constaba.
+
+El control positivo posterior guardó otra vez la nota (generación 8); otro chat
+recuperó el marcador sin que estuviera en la pregunta. Tras corregirla (9), otro
+chat respondió con el valor nuevo. Al revocar la política (revisión 5), un chat
+nuevo recibió estado «disabled» y cero citas aunque la nota seguía guardada.
+Los hashes de las cuatro notas originales permanecieron iguales. El cierre
+liberó la custodia, retiró el socket y dejó cero temporales del worker.
+
+El panel nativo anterior provocaba un ciclo de restricciones al abrirse. Se
+sustituyó por un panel SwiftUI explícito y se ensayaron apertura, cambios de
+tamaño y contenido. Las filas AX ahora publican sus valores de forma explícita;
+se observó revisión 3→4→5 en el mismo panel. Los intentos fallidos y la distinción
+entre código UI y servicio Python externo quedan en el
+[registro verificable](PHASE_A_MEMORY_QUALIFICATION.json). El bundle de desarrollo
+no constituye una distribución autocontenida ni reemplaza la app del dueño.
+
+La CI de `075b9dd` aprobó Python (2885 casos macOS; 2839 y 46 omisiones
+Ubuntu). El lector AX del test encontró un bridge tipado inválido de AppKit;
+se corrigió sin retirar oráculos. Su CI final sigue pendiente. Los dobles geométricos prueban
+autoridad y transacciones, no calidad semántica. Los pesos públicos se preparan
+una sola vez por ejecución remota y sus casos CPU reales son obligatorios;
+faltar los artefactos provoca fallo, no una omisión silenciosa.
 
 macOS rechaza aplicar el Seatbelt del worker dentro del Seatbelt exterior de los
 focales locales. Esos focales comprueban protocolo y cierre con procesos sintéticos;
