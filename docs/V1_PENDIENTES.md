@@ -370,8 +370,10 @@ permanecen locales y no existe fallback externo.
   cancelación, reparación derivada, recibos y custodia ante cierre incierto.
 - [x] Panel nativo estable y valores de accesibilidad actualizados;
   revocación comprobada mientras la nota permanecía guardada.
-- [ ] Confirmar la CI y el recorrido nativo del elemento AX estable. Python ya
-  pasó en ambos sistemas para `075b9dd`; no se omite la regresión nativa.
+- [x] Cualificar el elemento AX estable: recorrido real 5→6→7, suite Swift
+  completa y bundle aprobados en `10e4d65`; Python completo aprobado en ambos
+  sistemas con el subárbol productivo idéntico de `075b9dd`. El cierre documental
+  inicia otra CI completa, tras un fallo de descarga pública en Ubuntu.
 
 [Contrato y límites](rebuild/PHASE_A_MEMORY_INTELLIGENCE.md) ·
 [Registro de cualificación](rebuild/PHASE_A_MEMORY_QUALIFICATION.json).

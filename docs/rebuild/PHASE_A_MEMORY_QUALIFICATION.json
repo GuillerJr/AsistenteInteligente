@@ -1,7 +1,7 @@
 {
   "format": "jarvis-memory-qualification/1",
   "date": "2026-10-27",
-  "status": "native_stable_bridge_passed_final_ci_pending",
+  "status": "qualified_selected_memory_increment",
   "owner_decisions": {
     "scope": [
       "test_storage",
@@ -158,6 +158,31 @@
         "local_product_build_passed",
         "real_external_ax_policy_revision_5_to_6_to_7_verified",
         "test_promotes_identifier_to_optional_explicitly_for_sdk_compatibility"
+      ]
+    },
+    {
+      "head": "10e4d65b9f4a1b0aee7a8dcde7f89779b3004bb9",
+      "run_id": 40581929694,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40581929694",
+      "result": "native_full_suite_and_bundle_success_ubuntu_public_download_failed",
+      "macos": {
+        "job_id": 122463304756,
+        "native_full_suite_and_bundle": "success",
+        "python_stage": "not_counted_here_full_new_ci_on_documentation_closeout"
+      },
+      "ubuntu": {
+        "job_id": 122463305533,
+        "preparation_error": "download_unavailable",
+        "tests_started": false
+      },
+      "rerun_attempts": [
+        "connector_403_resource_not_accessible_by_integration",
+        "cli_job_cannot_be_rerun_while_workflow_active"
+      ],
+      "findings": [
+        "native_ax_regression_passed_without_omission",
+        "no_software_test_failed_in_ubuntu_attempt_model_preparation_failed_before_tests",
+        "final_documentation_push_will_start_all_jobs_again"
       ]
     }
   ],
@@ -332,5 +357,28 @@
       "cleanup_confirmed": true,
       "development_bundle_only": true
     }
-  }
+  },
+  "qualification_basis": {
+    "kind": "identical_production_source_subtrees_and_real_native_workflow",
+    "python_source_tree": "db451cc3dad7e92a108f782bb13ec6b7c9f1bf1c",
+    "python_full_qualification_head": "075b9dd0d411369c90630814ae670e54c31c1e44",
+    "python_full_qualification": {
+      "macos_passed": 2885,
+      "ubuntu_passed": 2839,
+      "ubuntu_platform_skips": 46
+    },
+    "native_source_tree": "e62f8611bfe61e539d3ab97c1e72da02a5090051",
+    "native_full_suite_and_bundle_success_head": "10e4d65b9f4a1b0aee7a8dcde7f89779b3004bb9",
+    "native_full_suite_and_bundle_success_run": 40581929694,
+    "native_full_suite_and_bundle_success_job": 122463304756,
+    "native_source_same_as_actual_gui_build": true,
+    "whole_phase_a_closed": false,
+    "documentation_closeout_push": "starts_new_full_ci_for_exact_documentation_head; do_not_call_the_earlier_overall_run_successful"
+  },
+  "remaining_outside_selected_scope": [
+    "optional_wiki_and_other_memory_engines_A27_not_chosen",
+    "automatic_conversation_capture_flush_not_enabled",
+    "personal_data_migration_or_full_encryption_not_qualified",
+    "self_contained_distribution_and_whole_phase_A_still_open"
+  ]
 }

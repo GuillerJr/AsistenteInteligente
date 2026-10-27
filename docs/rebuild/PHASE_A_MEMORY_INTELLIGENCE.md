@@ -125,19 +125,20 @@ entre código UI y servicio Python externo quedan en el
 [registro verificable](PHASE_A_MEMORY_QUALIFICATION.json). El bundle de desarrollo
 no constituye una distribución autocontenida ni reemplaza la app del dueño.
 
-La CI de `075b9dd` aprobó Python (2885 casos macOS; 2839 y 46 omisiones
-Ubuntu). El lector AX del test encontró un bridge tipado inválido de AppKit;
-se retiró ese acceso sin retirar oráculos. La lectura virtual siguió sin publicar
-IDs en el fixture. Las filas usan ahora un NSView accesible estable en un overlay
-transparente; SwiftUI conserva el valor y el dibujo. El test consulta el Form
-productivo y comprueba la identidad del mismo NSView al cambiar política y trabajo.
-El puente pasó la compilación acotada y una lectura AX real de revisión 5→6→7
-en el mismo panel, seguida de cierre confirmado. La CI del test ajusta además
-la nulabilidad distinta de accessibilityIdentifier entre interfaces del SDK.
-Falta confirmar su ejecución completa. Los dobles geométricos prueban
-autoridad y transacciones, no calidad semántica. Los pesos públicos se preparan
-una sola vez por ejecución remota y sus casos CPU reales son obligatorios;
-faltar los artefactos provoca fallo, no una omisión silenciosa.
+La cualificación de Python pasó con pesos obligatorios: 2885 casos en macOS y
+2839 más 46 omisiones de plataforma en Ubuntu para `075b9dd`. Ese árbol productivo
+Python es idéntico al de `10e4d65`. La suite Swift completa, incluida la regresión
+AX sin omitirla, y el bundle de `10e4d65` pasaron. Su fuente nativa es idéntica a
+la app del recorrido AX real 5→6→7. Se conserva la diferencia entre cualificación
+por subárboles idénticos y un run global: la preparación pública de Ubuntu falló
+en ese último intento antes de ejecutar tests; el cierre documental inicia otra
+CI completa para su HEAD exacto.
+
+El alcance elegido —búsqueda local, indexación de notas aprobadas, recuperación
+por turno y mantenimiento— queda cualificado. Los dobles geométricos acreditan
+contratos, no calidad semántica. Los pesos públicos se preparan una sola vez por
+job remoto y los casos CPU reales son obligatorios; faltar los artefactos provoca
+fallo, no una omisión silenciosa.
 
 macOS rechaza aplicar el Seatbelt del worker dentro del Seatbelt exterior de los
 focales locales. Esos focales comprueban protocolo y cierre con procesos sintéticos;

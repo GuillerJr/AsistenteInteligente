@@ -45,7 +45,7 @@
       "Contratos declarados y rutas UI no acreditan disponibilidad ni funcionamiento real.",
       "No se ejecutó OpenClaw ni se leyó configuración/cuenta del dueño."
     ],
-    "current_jarvis_state": "Desarrollo propio con Codex oficial y bloques previos de archivos, memoria léxica, MCP, procesos, agentes, skills, programador, Telegram, voz y lectura HTTPS. El bloque finito de núcleo/sesiones añade identidad Ed25519 local y revocación, supervisión de caída sin replay, compactación extractiva, fork/rewind conversacionales, objetivos con hijos, límites, cola y steering. Recorridos nativos de este incremento usan perfiles y peer de inferencia propios sintéticos; se conserva separada la evidencia autenticada anterior. Recuperación/activación/copia de memoria/reconciliación previamente cualificadas no se reabren. macOS inicial, iPhone aplazado; ninguna familia amplia ni fase A completas y fase B no iniciada. El incremento Mac/navegador añade patches/PTY, decisiones recordadas, broker firmado y herramientas nativas AX/WebKit/CDP con pruebas de componentes. La cualificación GUI/TCC y los controles globales están registrados por separado en PHASE_A_MAC_BROWSER_CLOSEOUT; no se presume éxito real por fixtures."
+    "current_jarvis_state": "Desarrollo propio con Codex oficial y bloques previos de archivos, memoria léxica, MCP, procesos, agentes, skills, programador, Telegram, voz y lectura HTTPS. El bloque finito de núcleo/sesiones añade identidad Ed25519 local y revocación, supervisión de caída sin replay, compactación extractiva, fork/rewind conversacionales, objetivos con hijos, límites, cola y steering. Recorridos nativos de este incremento usan perfiles y peer de inferencia propios sintéticos; se conserva separada la evidencia autenticada anterior. Recuperación/activación/copia de memoria/reconciliación previamente cualificadas no se reabren. macOS inicial, iPhone aplazado; ninguna familia amplia ni fase A completas y fase B no iniciada. El incremento Mac/navegador añade patches/PTY, decisiones recordadas, broker firmado y herramientas nativas AX/WebKit/CDP con pruebas de componentes. La cualificación GUI/TCC y los controles globales están registrados por separado en PHASE_A_MAC_BROWSER_CLOSEOUT; no se presume éxito real por fixtures. El incremento elegido de memoria local CPU, semántica/híbrida, indexación de notas aprobadas, recuperación y mantenimiento está cualificado en P-MEMORY-LOCAL. Mantiene pendientes los extras no elegidos y la paridad amplia de referencia."
   },
   "status_vocabulary": {
     "no_implementado": "Sin evidencia productiva propia de cierre.",
@@ -936,7 +936,7 @@
         "E035"
       ],
       "closure_status": "pendiente_equivalencia_productiva",
-      "selected_memory_scope_qualification": "native_authenticated_passed_final_ci_pending"
+      "selected_memory_scope_qualification": "qualified_selected_increment_see_limits"
     },
     {
       "id": "A-25",
@@ -968,7 +968,7 @@
         "E035"
       ],
       "closure_status": "pendiente_equivalencia_productiva",
-      "selected_memory_scope_qualification": "native_authenticated_passed_final_ci_pending"
+      "selected_memory_scope_qualification": "qualified_selected_increment_see_limits"
     },
     {
       "id": "A-26",
@@ -1000,7 +1000,7 @@
         "E035"
       ],
       "closure_status": "pendiente_equivalencia_productiva",
-      "selected_memory_scope_qualification": "native_authenticated_passed_final_ci_pending"
+      "selected_memory_scope_qualification": "qualified_selected_increment_see_limits"
     },
     {
       "id": "A-27",
@@ -14863,7 +14863,7 @@
       {
         "id": "P-MEMORY-LOCAL",
         "component": "Memoria local CPU: semántica/híbrida, indexación automática, recuperación y mantenimiento",
-        "status": "native_authenticated_passed_final_ci_pending",
+        "status": "qualified_selected_increment",
         "code": [
           "src/jarvis_core/local_embeddings.py",
           "src/jarvis_core/embedding_worker.py",
@@ -14892,7 +14892,7 @@
           "A-26"
         ],
         "verified_scope": "MiniLM fijado CPU con pesos reales, notas aprobadas SQLite/temporales RAM, índice derivado sin texto, citas actuales, caché atómica acotada, autoindex por generación, cápsulas nuevas por turno, abstención antes de RRF, revocación, reconstrucción/verificación y cierre retenido. App sintética: guardado/corrección/olvido con ChatGPT real y aprobaciones delegadas; nuevos chats recuperan el valor vigente y se abstienen después del olvido o la revocación. Ver PHASE_A_MEMORY_QUALIFICATION.json para SHA, casos y fallos conservados.",
-        "remaining": "CI final del código en curso. La paridad amplia de referencia sigue abierta: wiki/motores opcionales A-27, captura/flush conversacional automático, cifrado integral, corpus personales o migración anterior y distribución autocontenida no se declaran acreditados. No se habilita ninguna de esas entradas por silencio.",
+        "remaining": "La paridad amplia de referencia sigue abierta: wiki/motores opcionales A-27, captura/flush conversacional automático, cifrado integral, corpus personales o migración anterior y distribución autocontenida no se declaran acreditados. No se habilita ninguna de esas entradas por silencio.",
         "record": "PHASE_A_MEMORY_QUALIFICATION.json"
       }
     ],
@@ -14977,7 +14977,8 @@
     ],
     "memory_increment_file": "PHASE_A_MEMORY_INTELLIGENCE.md",
     "memory_qualification_file": "PHASE_A_MEMORY_QUALIFICATION.json",
-    "memory_selected_scope_status": "native_authenticated_passed_final_ci_pending"
+    "memory_selected_scope_status": "qualified_selected_increment",
+    "memory_qualification_basis": "Subárbol Python idéntico al cualificado en 075b9dd (macOS/Ubuntu); suite Swift/bundle aprobados 10e4d65 y fuente nativa idéntica al recorrido GUI real; detalles y fallo de adquisición pública separados en el registro."
   },
   "target_decisions": {
     "date": "2026-10-24",
