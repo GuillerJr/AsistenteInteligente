@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 import tempfile
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from test_codex_memory_context import memory_wire, write_memory_peer
 
 from jarvis_core.client_identity import ClientIdentity
 from jarvis_core.codex import CodexClient
-from jarvis_core.protocol import LocalRpcClient
+from jarvis_core.memory import MemoryError
+from jarvis_core.protocol import LocalRpcClient, RpcError
 from jarvis_core.service import JarvisService
 from jarvis_core.state import SessionRef
 
@@ -23,7 +26,9 @@ async def connected():
         prefix="jmm-", dir=Path(tempfile.gettempdir()).resolve()
     ) as name:
         root = Path(name).resolve()
-        provider = CodexClient(write_memory_peer(root / "peer"), root / "p/provider", timeout=2)
+        # Own Python peer first-spawn can take >2s under macOS process pressure;
+        # this is fixture grace, not an SDK/model inference timeout change.
+        provider = CodexClient(write_memory_peer(root / "peer"), root / "p/provider", timeout=8)
         owner = ClientIdentity.generate()
         service = JarvisService(root / "p", provider, bootstrap_public_key=owner.public_key)
         await service.start()
@@ -38,8 +43,12 @@ async def connected():
             await service.aclose()
 
 
-async def create_session(client):
-    session = (await client.call("sessions.create", {"title": "Prueba memoria propia"}))["session"]
+async def create_session(client, *, temporary=False):
+    session = (
+        await client.call(
+            "sessions.create", {"title": "Prueba memoria propia", "temporary": temporary}
+        )
+    )["session"]
     return {key: session[key] for key in ("session_id", "temporary")}
 
 
@@ -237,3 +246,139 @@ async def test_cancel_before_provider_write_settles_without_replaying_capsule(co
     assert not service._handles and not service._memory_leases
     assert not service.memory_intelligence.blockers
     assert not provider._pending and not provider._events
+
+
+async def test_temporary_delete_excludes_new_runs_until_memory_lane_and_source_retire(
+    connected, monkeypatch
+):
+    service, client, _provider, owner = connected
+    ref = await create_session(client, temporary=True)
+    record = note(service, ref)
+    entered = asyncio.Event()
+    original = service.memory_intelligence.forget_temporary
+
+    async def observe(selected):
+        entered.set()
+        return await original(selected)
+
+    monkeypatch.setattr(service.memory_intelligence, "forget_temporary", observe)
+    await service.memory_intelligence._lane.acquire()
+    async with LocalRpcClient(service.directory, identity=owner) as deleter:
+        task = asyncio.create_task(deleter.call("sessions.delete", ref))
+        try:
+            await asyncio.wait_for(entered.wait(), 2)
+            assert SessionRef(**ref) in service._retiring_sessions
+            assert not task.done()
+            with pytest.raises(RpcError) as blocked:
+                await client.call("runs.start", {**ref, "message": "no iniciar mientras se borra"})
+            assert blocked.value.code == -32011
+            with pytest.raises(RpcError) as queued:
+                await client.call(
+                    "runs.enqueue",
+                    {**ref, "request_id": uuid4().hex, "message": "no encolar durante borrado"},
+                )
+            assert queued.value.code == -32011
+            assert (
+                service.memory.list_documents(memory_scope(service, ref))[0].document_id
+                == record.document_id
+            )
+            assert not service._handles
+        finally:
+            service.memory_intelligence._lane.release()
+        assert await task == {"deleted": True}
+    assert SessionRef(**ref) not in service._retiring_sessions
+    with pytest.raises(RpcError):
+        await client.call("sessions.messages", ref)
+
+
+async def test_cancelled_temporary_delete_keeps_scope_blocked_and_source_intact(
+    connected, monkeypatch
+):
+    service, client, _provider, _owner = connected
+    ref = await create_session(client, temporary=True)
+    record = note(service, ref)
+    entered = asyncio.Event()
+    original = service.memory_intelligence.forget_temporary
+
+    async def observe(selected):
+        entered.set()
+        return await original(selected)
+
+    monkeypatch.setattr(service.memory_intelligence, "forget_temporary", observe)
+    await service.memory_intelligence._lane.acquire()
+    task = asyncio.create_task(service.delete_session(ref))
+    try:
+        await asyncio.wait_for(entered.wait(), 2)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert SessionRef(**ref) in service._retiring_sessions
+        assert (
+            service.memory.list_documents(memory_scope(service, ref))[0].document_id
+            == record.document_id
+        )
+        assert service.store.get_session(SessionRef(**ref)).ref.session_id == ref["session_id"]
+        with pytest.raises(RpcError) as blocked:
+            await client.call("runs.start", {**ref, "message": "no reutilizar cierre incierto"})
+        assert blocked.value.code == -32011
+        with pytest.raises(RpcError, match="session_cleanup_pending"):
+            await client.call("sessions.delete", ref)
+        assert not service._handles
+    finally:
+        service.memory_intelligence._lane.release()
+
+
+async def test_known_pre_effect_temporary_delete_failure_releases_scope_for_explicit_retry(
+    connected, monkeypatch
+):
+    service, client, _provider, _owner = connected
+    ref = await create_session(client, temporary=True)
+    record = note(service, ref)
+    original = service.memory_intelligence.forget_temporary
+
+    async def fail_before_effect(selected):
+        raise MemoryError("invalid_scope")
+
+    monkeypatch.setattr(service.memory_intelligence, "forget_temporary", fail_before_effect)
+    with pytest.raises(RpcError):
+        await client.call("sessions.delete", ref)
+    assert SessionRef(**ref) not in service._retiring_sessions
+    assert (
+        service.memory.list_documents(memory_scope(service, ref))[0].document_id
+        == record.document_id
+    )
+    monkeypatch.setattr(service.memory_intelligence, "forget_temporary", original)
+    assert await client.call("sessions.delete", ref) == {"deleted": True}
+
+
+async def test_unavailable_selected_codex_launcher_keeps_service_and_local_memory_usable():
+    with tempfile.TemporaryDirectory(
+        prefix="jmm-", dir=Path(tempfile.gettempdir()).resolve()
+    ) as name:
+        root = Path(name).resolve()
+        launcher = root / "own-failing-peer"
+        launcher.write_text(f"#!{sys.executable}\nraise SystemExit(7)\n")
+        launcher.chmod(0o700)
+        owner = ClientIdentity.generate()
+        provider = CodexClient(launcher, root / "p/provider", timeout=8)
+        service = JarvisService(root / "p", provider, bootstrap_public_key=owner.public_key)
+        await service.start()
+        try:
+            async with LocalRpcClient(service.directory, identity=owner) as client:
+                epoch = service.provider_choice.epoch()
+                status = await client.call("service.status")
+                assert status["ready"] is True
+                assert status["provider"]["connected"] is False
+                assert status["provider"]["mode"] is None
+                assert status["provider"]["error_code"].startswith("codex_")
+                service.provider_choice.assert_current(epoch)
+                ref = await create_session(client)
+                record = note(service, ref, "TOPACIO MEMORIA LOCAL SIN CUENTA")
+                found = await client.call("memory.search", {**ref, "query": "TOPACIO"})
+                assert found["matches"][0]["document"]["document_id"] == record.document_id
+                assert "SIN CUENTA" in found["matches"][0]["excerpt"]
+                value = (await client.call("memory.intelligence.status", ref))["intelligence"]
+                assert value["policy"]["settings"]["auto_recall_enabled"] is False
+                assert service.memory_intelligence._engine is None
+        finally:
+            await service.aclose()

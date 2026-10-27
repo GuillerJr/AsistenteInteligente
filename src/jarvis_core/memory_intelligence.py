@@ -37,6 +37,7 @@ from jarvis_core.model_artifacts import (
 )
 from jarvis_core.private_json import PrivateJsonDocument
 from jarvis_core.protocol import authenticated_client
+from jarvis_core.recovery_fs import Directory, FileIdentity, PinnedFile, RecoveryFsError
 from jarvis_core.state import ensure_private_directory
 
 _HASH = re.compile(r"[a-f0-9]{64}\Z")
@@ -158,6 +159,7 @@ class MemoryIntelligence:
         self._journal_snapshot = None
         self._model_control = None
         self._model_control_data = None
+        self._model_control_seen = False
         self._initial_model_directory = self.model_directory
         self._external_model = model_directory is not None
         self._pending_owners = []
@@ -481,8 +483,13 @@ class MemoryIntelligence:
             raise MemoryIntelligenceError("memory_model_control_invalid")
 
     def _model_slots(self, *, durable=True):
-        if self._external_model or not durable:
+        if self._external_model:
             return self._model_control_data
+        if not durable:
+            try:
+                return self._read_public_model_slots()
+            except (OSError, RecoveryFsError):
+                raise MemoryIntelligenceError("memory_model_control_changed") from None
         if self._model_control is None:
             self._model_control = PrivateJsonDocument(
                 self.policy.directory,
@@ -507,8 +514,64 @@ class MemoryIntelligence:
             if [pinned.st_dev, pinned.st_ino] != data["current"]["identity"]:
                 raise MemoryIntelligenceError("memory_model_changed")
         self._model_control_data = data
+        self._model_control_seen = self._model_control_seen or self._model_control._has_seen_file
         self.model_directory = self._slot_path(data["current"])
         return data
+
+    def _read_public_model_slots(self):
+        """Read only a pre-existing public-assets selector; never initialize it."""
+
+        def absent():
+            self._cleanup_guard()
+            if self._model_control_seen:
+                raise MemoryIntelligenceError("memory_model_control_changed")
+            self._model_control_data = None
+            self.model_directory = self._initial_model_directory
+            return None
+
+        def unique(pairs):
+            value = {}
+            for key, item in pairs:
+                if key in value:
+                    raise MemoryIntelligenceError("memory_model_control_invalid")
+                value[key] = item
+            return value
+
+        self._cleanup_guard()
+        try:
+            parent = Directory(self.policy.directory)
+        except FileNotFoundError:
+            return absent()
+        except RecoveryFsError:
+            raise MemoryIntelligenceError("memory_model_control_changed") from None
+        with parent:
+            try:
+                pinned = PinnedFile(parent, "models.json", 4096)
+            except FileNotFoundError:
+                return absent()
+            with pinned:
+                raw = pinned.read(self._cleanup_guard)
+                try:
+                    data = json.loads(raw, object_pairs_hook=unique)
+                except (ValueError, UnicodeError):
+                    raise MemoryIntelligenceError("memory_model_control_invalid") from None
+                self._validate_model_control(data)
+                if _canonical(data) != raw:
+                    raise MemoryIntelligenceError("memory_model_control_invalid")
+                if data["current"] is not None:
+                    with Directory(
+                        self._slot_path(data["current"]),
+                        expected=FileIdentity(*data["current"]["identity"]),
+                    ) as selected:
+                        selected.check()
+                        pinned.check()
+                        self._cleanup_guard()
+                pinned.check()
+                self._cleanup_guard()
+                self._model_control_seen = True
+                self._model_control_data = data
+                self.model_directory = self._slot_path(data["current"])
+                return data
 
     def _slot_path(self, slot):
         return (
@@ -531,6 +594,7 @@ class MemoryIntelligence:
                 self._pending_owners.append(owner)
             raise
         self._model_control_data = after
+        self._model_control_seen = True
         self.model_directory = self._slot_path(after["current"])
 
     def _cleanup_guard(self):
@@ -614,6 +678,8 @@ class MemoryIntelligence:
         if not ref.temporary:
             self._journal()
             self._model_slots()
+        else:
+            self._model_slots(durable=False)
         self._start_background()
         not_opened = (
             not ref.temporary
@@ -1201,13 +1267,20 @@ class MemoryIntelligence:
         return after
 
     def _ownership(self, identifier, pinned):
+        # os.stat_result is also a tuple; its ten fields are not an inode pin.
+        if hasattr(pinned, "st_dev") and hasattr(pinned, "st_ino"):
+            identity = [pinned.st_dev, pinned.st_ino]
+        elif isinstance(pinned, (tuple, list)) and len(pinned) == 2:
+            identity = list(pinned)
+        else:
+            raise MemoryIntelligenceError("memory_model_control_invalid")
+        if any(type(value) is not int or value < 0 for value in identity):
+            raise MemoryIntelligenceError("memory_model_control_invalid")
         return {
             "format": "jarvis-model-copy-ownership/1",
             "profile_binding": self.binding,
             "slot_id": identifier,
-            "root_identity": list(pinned)
-            if isinstance(pinned, (tuple, list))
-            else [pinned.st_dev, pinned.st_ino],
+            "root_identity": identity,
             "asset_fingerprint": MODEL_FINGERPRINT,
             "source": "managed_preparation",
         }

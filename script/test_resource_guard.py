@@ -203,6 +203,9 @@ def validate_options(options, environment, identity, root):
         budget = 16 * 1024
     if not 1 <= options.budget_mib <= budget or not 0 < options.deadline <= maximum:
         raise GuardError("El presupuesto o plazo supera el máximo del perfil.")
+    destination = getattr(options, "export_destination", None)
+    if destination is not None:
+        validate_export_destination(destination)
 
 
 def allocated_bytes(root: Path, maximum_entries=100_000):
@@ -627,10 +630,14 @@ def supervise(command, *, environment, cwd: Path, budget_root: Path, budget_byte
             "interrupted": reason is not None}, bytes(tail)
 
 
-def export_artifact(source: Path, destination: Path):
+def validate_export_destination(destination: Path):
     if (not destination.is_absolute() or destination.parent != Path("/private/tmp")
             or destination.exists() or destination.is_symlink()):
         raise GuardError("La exportación exige un directorio nuevo directamente en /private/tmp.")
+
+
+def export_artifact(source: Path, destination: Path):
+    validate_export_destination(destination)
     total, entries = 0, []
     pending = [source]
     while pending:

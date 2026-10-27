@@ -9,6 +9,7 @@ let package = Package(
     targets: [
         .target(name: "DesktopCore"),
         .executableTarget(name: "JarvisApp", dependencies: ["DesktopCore"]),
-        .testTarget(name: "DesktopCoreTests", dependencies: ["DesktopCore"])
+        .testTarget(name: "DesktopCoreTests", dependencies: ["DesktopCore"]),
+        .testTarget(name: "AppLayoutTests", dependencies: ["JarvisApp", "DesktopCore"])
     ]
 )

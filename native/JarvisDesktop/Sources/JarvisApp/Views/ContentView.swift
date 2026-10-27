@@ -1,10 +1,14 @@
 import AppKit
 import SwiftUI
 
-struct ContentView: View {
+@MainActor struct ContentView: View {
     @Bindable var store: ChatStore
-    @State private var showInspector = false
-    @State private var inspectorTab = "tools"
+    @State private var inspector: InspectorPresentation
+
+    init(store: ChatStore, inspector: InspectorPresentation? = nil) {
+        _store = Bindable(wrappedValue: store)
+        _inspector = State(initialValue: inspector ?? InspectorPresentation())
+    }
 
     var body: some View {
         Group {
@@ -50,7 +54,7 @@ struct ContentView: View {
                         Image(systemName: "exclamationmark.bubble")
                         Text(notice)
                         Spacer(minLength: 8)
-                        Button("Ver memoria") { inspectorTab = "memory"; showInspector = true }
+                        Button("Ver memoria") { inspector.selection = "memory"; inspector.isPresented = true }
                     }
                     .font(.caption).foregroundStyle(.secondary)
                     .padding(.horizontal, 24).padding(.vertical, 8)
@@ -67,7 +71,7 @@ struct ContentView: View {
                     HStack {
                         Text("Objetivo: \(goal.objective)").lineLimit(1).font(.caption)
                         Spacer()
-                        Button("Ver tareas delegadas") { inspectorTab = "delegation"; showInspector = true }
+                        Button("Ver tareas delegadas") { inspector.selection = "delegation"; inspector.isPresented = true }
                     }.padding(.horizontal, 24).padding(.vertical, 8)
                 }
                 if !store.receipts.isEmpty {
@@ -110,25 +114,25 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItemGroup {
                     Button("Herramientas", systemImage: "wrench.and.screwdriver") {
-                        inspectorTab = "tools"; showInspector = true
+                        inspector.selection = "tools"; inspector.isPresented = true
                     }.disabled(!store.ready)
                     Button("MCP", systemImage: "puzzlepiece.extension") {
-                        inspectorTab = "mcp"; showInspector = true
+                        inspector.selection = "mcp"; inspector.isPresented = true
                     }.disabled(!store.ready)
                     Button("Memoria", systemImage: "tray") {
-                        inspectorTab = "memory"; showInspector = true
+                        inspector.selection = "memory"; inspector.isPresented = true
                     }.disabled(!store.ready || store.selected == nil)
                     Menu("Gestionar", systemImage: "slider.horizontal.3") {
-                        Button("Mac y navegador") { inspectorTab = "automation"; showInspector = true }
-                        Button("Contexto y ramas") { inspectorTab = "sessionCore"; showInspector = true }
-                        Button("Clientes locales") { inspectorTab = "clients"; showInspector = true }
-                        Button("Delegación y objetivos") { inspectorTab = "delegation"; showInspector = true }
-                        Button("Turno y cola") { inspectorTab = "runInput"; showInspector = true }
-                        Button("Agentes") { inspectorTab = "agents"; showInspector = true }
-                        Button("Skills") { inspectorTab = "skills"; showInspector = true }
-                        Button("Programador") { inspectorTab = "schedules"; showInspector = true }
-                        Button("Procesos") { inspectorTab = "processes"; showInspector = true }
-                        Button("Telegram") { inspectorTab = "telegram"; showInspector = true }
+                        Button("Mac y navegador") { inspector.selection = "automation"; inspector.isPresented = true }
+                        Button("Contexto y ramas") { inspector.selection = "sessionCore"; inspector.isPresented = true }
+                        Button("Clientes locales") { inspector.selection = "clients"; inspector.isPresented = true }
+                        Button("Delegación y objetivos") { inspector.selection = "delegation"; inspector.isPresented = true }
+                        Button("Turno y cola") { inspector.selection = "runInput"; inspector.isPresented = true }
+                        Button("Agentes") { inspector.selection = "agents"; inspector.isPresented = true }
+                        Button("Skills") { inspector.selection = "skills"; inspector.isPresented = true }
+                        Button("Programador") { inspector.selection = "schedules"; inspector.isPresented = true }
+                        Button("Procesos") { inspector.selection = "processes"; inspector.isPresented = true }
+                        Button("Telegram") { inspector.selection = "telegram"; inspector.isPresented = true }
                     }.disabled(!store.ready)
                 }
                 ToolbarItem {
@@ -136,9 +140,10 @@ struct ContentView: View {
                 }
             }
         }
-        .inspector(isPresented: $showInspector) {
+        .inspector(isPresented: $inspector.isPresented) {
+            InspectorViewport {
             VStack(spacing: 0) {
-                Picker("Panel", selection: $inspectorTab) {
+                Picker("Panel", selection: $inspector.selection) {
                     Text("Mac y navegador").tag("automation")
                     Text("Contexto y ramas").tag("sessionCore")
                     Text("Clientes locales").tag("clients")
@@ -153,19 +158,20 @@ struct ContentView: View {
                     Text("Procesos").tag("processes")
                     Text("Telegram").tag("telegram")
                 }.pickerStyle(.menu).padding()
-                if inspectorTab == "automation" { AutomationControlView(store: store) }
-                else if inspectorTab == "mcp" { MCPView(store: store) }
-                else if inspectorTab == "sessionCore" { SessionCoreView(store: store) }
-                else if inspectorTab == "clients" { ClientIdentityView(store: store) }
-                else if inspectorTab == "delegation" { DelegationView(store: store) }
-                else if inspectorTab == "runInput" { RunInputView(store: store) }
-                else if inspectorTab == "memory" { MemoryView(store: store) }
-                else if inspectorTab == "agents" { AgentsView(store: store) }
-                else if inspectorTab == "skills" { SkillsView(store: store) }
-                else if inspectorTab == "schedules" { SchedulesView(store: store) }
-                else if inspectorTab == "processes" { ProcessesView(store: store) }
-                else if inspectorTab == "telegram" { TelegramView(store: store) }
+                if inspector.selection == "automation" { AutomationControlView(store: store) }
+                else if inspector.selection == "mcp" { MCPView(store: store) }
+                else if inspector.selection == "sessionCore" { SessionCoreView(store: store) }
+                else if inspector.selection == "clients" { ClientIdentityView(store: store) }
+                else if inspector.selection == "delegation" { DelegationView(store: store) }
+                else if inspector.selection == "runInput" { RunInputView(store: store) }
+                else if inspector.selection == "memory" { MemoryView(store: store, page: $inspector.memoryPage) }
+                else if inspector.selection == "agents" { AgentsView(store: store) }
+                else if inspector.selection == "skills" { SkillsView(store: store) }
+                else if inspector.selection == "schedules" { SchedulesView(store: store) }
+                else if inspector.selection == "processes" { ProcessesView(store: store) }
+                else if inspector.selection == "telegram" { TelegramView(store: store) }
                 else { CapabilitiesView(store: store) }
+            }
             }
             .inspectorColumnWidth(min: 360, ideal: 420, max: 560)
         }

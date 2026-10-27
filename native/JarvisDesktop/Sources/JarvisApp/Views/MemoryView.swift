@@ -4,8 +4,7 @@ import SwiftUI
 struct MemoryView: View {
     let store: ChatStore
     @Bindable var access: AccessStore
-    @State private var page = Page.notes
-    private enum Page: Hashable { case notes, intelligence }
+    @Binding var page: MemoryPanelPage
     private var semanticAvailable: Bool {
         guard let status = store.memoryIntelligence.status else { return false }
         return status.scope == store.selected?.scope && status.model.available && status.model.runtimeAvailable
@@ -15,16 +14,17 @@ struct MemoryView: View {
             && access.memoryQuery.utf8.count <= 512 && (access.memoryQueryMode == .lexical || semanticAvailable)
     }
 
-    init(store: ChatStore) {
+    init(store: ChatStore, page: Binding<MemoryPanelPage>) {
         self.store = store
         _access = Bindable(wrappedValue: store.access)
+        _page = page
     }
 
     var body: some View {
         VStack(spacing: 0) {
             Picker("Panel de memoria", selection: $page) {
-                Text("Notas").tag(Page.notes)
-                Text("Uso automático").tag(Page.intelligence)
+                Text("Notas").tag(MemoryPanelPage.notes)
+                Text("Uso automático").tag(MemoryPanelPage.intelligence)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -33,7 +33,7 @@ struct MemoryView: View {
             if page == .notes { notes }
             else { MemoryIntelligenceView(store: store.memoryIntelligence) }
         }
-        .frame(minWidth: 380, idealWidth: 460)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .task(id: store.memoryIntelligenceSelectionKey) {
             store.synchronizeMemoryIntelligenceContext()
             await store.memoryIntelligence.refresh()

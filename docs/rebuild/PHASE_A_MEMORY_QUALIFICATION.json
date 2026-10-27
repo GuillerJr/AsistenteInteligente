@@ -1,0 +1,49 @@
+{
+  "format": "jarvis-memory-qualification/1",
+  "date": "2026-10-27",
+  "status": "in_progress",
+  "owner_decisions": {
+    "scope": ["test_storage", "memory"],
+    "embedding": "local_multilingual_minilm_cpu",
+    "conversation": "codex_with_chatgpt",
+    "full_suites": "remote_ci_only",
+    "approvals": "delegated_synthetic_profiles_only"
+  },
+  "reference": {
+    "report": "REA_OC23_MEMORY.md",
+    "implementation": "own_code",
+    "coverage": "partial_four_partitions_not_entire_openclaw"
+  },
+  "ci_attempts": [
+    {
+      "head": "01072316abe926363fd30ba60fc0a581a57f166f",
+      "run_id": 40568510703,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40568510703",
+      "result": "failed",
+      "macos": {"job_id": 122416097215, "passed": 2849, "failed": 5},
+      "ubuntu": {"job_id": 122416097687, "passed": 2807, "skipped": 46, "failed": 1, "errors": 4},
+      "findings": [
+        "macos_real_worker_exited_before_ready",
+        "linux_real_retrieval_assertions_passed_but_worker_directory_cleanup_unconfirmed",
+        "late_onnx_api_did_not_prevent_initialization_telemetry_storage"
+      ]
+    }
+  ],
+  "native_attempts": [
+    {
+      "binary_sha256": "c68287e2fcee19eff24a720934b83ac26a8b79349878e5d28b8a7274dc9a00f6",
+      "bundle_id": "com.jarvis.desktop.memoryqualification.20261027",
+      "profile_kind": "fresh_synthetic_four_notes_no_accounts",
+      "result": "crashed_opening_memory_inspector",
+      "observed": "NSGenericException repeated_update_constraints",
+      "service_cleanup": "exact_socket_process_identified_sigterm_then_lease_free_and_socket_absent"
+    }
+  ],
+  "limits": [
+    "No owner app, credentials, history or existing profiles are used.",
+    "Synthetic transports do not qualify authenticated ChatGPT inference.",
+    "Linux qualification does not claim macOS Seatbelt-equivalent network isolation.",
+    "Semantic similarity does not establish factual truth or reasoning over negation.",
+    "Whole phase A, optional wiki and phase B are not closed by this report."
+  ]
+}

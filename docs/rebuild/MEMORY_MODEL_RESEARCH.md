@@ -64,3 +64,25 @@ Para la interfaz: mostrar modelo, CPU, licencia, tamaño y estado verificable;
 `missing_model`, `invalid_model`, `unavailable_runtime`, `capacity`, `timeout`,
 `cancelled` y `cleanup_pending` se traducen al español. No presentar un skip,
 fixture o índice sólo léxico como acreditación del motor semántico real.
+
+La revisión de los fallos de CI detectó dos límites distintos. El worker nuevo no
+heredaba las rutas explícitas del servicio: ahora arranca con `-I -S -B -u`, añade
+sólo la raíz física de Jarvis y las distribuciones seleccionadas, sin `PYTHONPATH`
+ni ejecución de `.pth`. La receta y su fingerprint incluyen las versiones de los
+tres SDK, CPU de un hilo y la política de telemetría.
+
+El Python oficial de macOS puede ser un launcher que usa `posix_spawn` con
+`SETEXEC` hacia el intérprete del mismo `Python.app` ([CPython 3.11.9](https://github.com/python/cpython/blob/v3.11.9/Mac/Tools/pythonw.c)).
+Cuando existe dentro del framework físico seleccionado, Jarvis inicia directamente
+ese archivo. No descubre otro Python ni autoriza fork o ejecución del framework
+entero; sin ese archivo conserva el ejecutable seleccionado originalmente.
+
+En ORT 1.31.1, `disable_telemetry_events()` llega después de la inicialización
+nativa. La [documentación oficial de esa versión](https://github.com/microsoft/onnxruntime/blob/v1.31.1/docs/Privacy.md)
+indica que `ORT_DISABLE_TELEMETRY=1` debe preceder al import para impedir incluso
+el identificador persistente y las colas. Su [inicialización 1DS](https://github.com/microsoft/onnxruntime/blob/v1.31.1/onnxruntime/core/platform/telemetry_1ds.cc)
+consulta esa variable antes de crear el almacenamiento. El padre la fija y el
+worker la exige antes del primer import nativo. La API permanece como segunda
+barrera. No se borran directorios inesperados para ocultar un fallo de cierre:
+se conservan y se devuelve un diagnóstico acotado de metadatos, sin contenidos ni
+nombres desconocidos. La corrección aún requiere cualificación real en ambos CI.

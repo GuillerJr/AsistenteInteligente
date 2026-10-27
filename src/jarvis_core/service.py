@@ -12,6 +12,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 import signal
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager, contextmanager
@@ -653,6 +654,22 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             except ProviderChoiceError:
                 # A late account/read may not revive a locally revoked choice.
                 provider = {"connected": False, "mode": None}
+            except CodexError as error:
+                # A disconnected selected SDK must not disable local memory.
+                # Recheck authority after its await; never choose another SDK.
+                self.profile_lease.assert_current()
+                owner = authenticated_client.get()
+                if owner is not None:
+                    self.client_authority.lookup(owner, scope="owner")
+                provider = {"connected": False, "mode": None}
+                try:
+                    self.provider_choice.assert_current(epoch)
+                except ProviderChoiceError:
+                    pass
+                else:
+                    code = str(error)
+                    provider["error_code"] = (code if re.fullmatch(r"codex_[a-z0-9_]{1,80}", code)
+                                              else "codex_unavailable")
             finally:
                 self._provider_context.reset(token)
         return {
@@ -1138,6 +1155,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
     async def delete_session(self, params: dict) -> dict:
         _params(params, _BASE, {"session_id"})
         ref = self._ref(params)
+        if ref in self._retiring_sessions:
+            raise RpcError(-32038, "session_cleanup_pending")
         if self._busy(ref):
             raise RpcError(-32011, "Cancela y espera al cierre de la ejecución antes de borrar.")
         if self.telegram_uses_session(ref):
@@ -1146,21 +1165,36 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         self.native_broker.assert_settled(ref.session_id)
         self.automation_permissions.clear_session(ref.session_id)
         self._retiring_sessions.add(ref)
+        cleanup_uncertain = False
         try:
             if self.process_tools:
                 await self.process_tools.close_scope(ref.session_id)
+            if ref.temporary:
+                await self.memory_intelligence.forget_temporary(ref)
+                self._memory_scope(ref)
+                for scope in self._temporary_memory_scopes.get(ref.session_id, ()):
+                    self.memory.clear_scope(scope)
+                self._temporary_memory_scopes.pop(ref.session_id, None)
+                self._volatile_bindings.pop(ref.session_id, None)
+            else:
+                self.config.forget(ref.session_id)
+            self.store.delete_session(ref)
+        except BaseException as error:
+            code = getattr(error, "code", "")
+            cleanup_uncertain = (
+                isinstance(error, asyncio.CancelledError)
+                or (isinstance(code, str) and ("cleanup" in code or "unknown" in code))
+                or getattr(error, "owner", None) is not None
+            )
+            if cleanup_uncertain and not isinstance(error, asyncio.CancelledError):
+                raise RpcError(-32038, "session_cleanup_pending") from None
+            raise
         finally:
-            self._retiring_sessions.discard(ref)
-        if ref.temporary:
-            await self.memory_intelligence.forget_temporary(ref)
-            self._memory_scope(ref)
-            for scope in self._temporary_memory_scopes.get(ref.session_id, ()):
-                self.memory.clear_scope(scope)
-            self._temporary_memory_scopes.pop(ref.session_id, None)
-            self._volatile_bindings.pop(ref.session_id, None)
-        else:
-            self.config.forget(ref.session_id)
-        self.store.delete_session(ref)
+            # A cancelled wait is not proof that an owned cleanup completed.
+            # Retain admission for this exact session until service shutdown;
+            # a fresh service never replays the interrupted deletion.
+            if not cleanup_uncertain:
+                self._retiring_sessions.discard(ref)
         return {"deleted": True}
 
     async def messages(self, params: dict) -> dict:
@@ -1201,6 +1235,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 )
             self._refresh_mcp_catalog()
         ref = self._ref(params)
+        if ref in self._retiring_sessions:
+            raise RpcError(-32011, "session_cleanup_pending")
         message = params["message"]
         if not isinstance(message, str) or not message.strip() or len(message.encode()) > 32000:
             raise RpcError(-32602, "El mensaje debe tener entre 1 y 32000 bytes.")

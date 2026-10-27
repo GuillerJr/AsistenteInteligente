@@ -543,3 +543,65 @@ async def test_recall_status_is_local_to_session_and_authenticated_client(contex
         ] == second_run
     finally:
         await facade.close()
+
+
+async def test_first_temporary_search_after_restart_reads_only_existing_public_model_selector(
+    context, monkeypatch
+):
+    service, facade, _durable_ref, _metadata = context
+    before = facade._model_slots()
+    facade.model_root.mkdir(mode=0o700)
+    copy_id = uuid4().hex
+    selected = facade.model_root / ("copy-" + copy_id)
+    selected.mkdir(mode=0o700)
+    pin = selected.stat()
+    slot = {
+        "id": copy_id,
+        "identity": [pin.st_dev, pin.st_ino],
+        "bytes": 42,
+        "ownership": facade._ownership(copy_id, pin),
+    }
+    facade._write_slots(
+        before, {**before, "revision": before["revision"] + 1, "current": slot}, lambda: None
+    )
+    temp = SessionRef(uuid4().hex, True)
+    service.sessions[temp] = SimpleNamespace(agent_id="jarvis")
+    add(service, temp, "temporary", "ALFA nota temporal autorizada")
+    assert service.memory.raw._disk is None
+    fresh = MemoryIntelligence(service, engine_factory=SyntheticEncoder)
+    monkeypatch.setattr(fresh, "_model_files_signature", lambda: ((1, 2, 3, 4, 5),))
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("temporary search initialized durable policy, model control or journal")
+
+    monkeypatch.setattr(intelligence_module, "PrivateJsonDocument", forbidden)
+    try:
+        result = await fresh.search(temp, CLIENT, "consulta", mode="semantic_local")
+        assert result.hits[0].document.key == "temporary"
+        assert fresh.model_directory == selected
+        assert fresh._model_control is None and fresh._journal_document is None
+        assert fresh.policy._durable_document is None
+        assert service.memory.raw._disk is None
+        assert not fresh.jobs_directory.exists()
+        assert not (facade.policy.directory / "policy.json").exists()
+        assert not fresh.cache_directory.exists()
+    finally:
+        await fresh.close()
+        await facade.close()
+
+
+async def test_unpublished_default_model_selector_is_not_a_missing_committed_selector(context):
+    service, facade, ref, _metadata = context
+    try:
+        await facade.status(base(ref))
+        assert not (facade.policy.directory / "models.json").exists()
+        assert not facade._model_control_seen
+        temp = SessionRef(uuid4().hex, True)
+        service.sessions[temp] = SimpleNamespace(agent_id="jarvis")
+        value = (await facade.status(base(temp)))["intelligence"]
+        assert value["model"]["available"] is False
+        assert service.memory.raw._disk is None
+        assert not (facade.policy.directory / "models.json").exists()
+        assert not facade.model_root.exists()
+    finally:
+        await facade.close()

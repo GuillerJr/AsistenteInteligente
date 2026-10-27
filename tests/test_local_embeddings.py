@@ -4,6 +4,7 @@ import asyncio
 import base64
 import hashlib
 import io
+import json
 import math
 import os
 import struct
@@ -16,14 +17,21 @@ from types import SimpleNamespace
 import pytest
 
 from jarvis_core import model_artifacts as artifacts
-from jarvis_core.embedding_worker import _spans
+from jarvis_core.embedding_worker import _failure_metadata, _spans
 from jarvis_core.local_embeddings import (
+    _WORKER_BOOTSTRAP,
     ENGINE_FINGERPRINT,
+    ENGINE_SPEC,
+    RUNTIME_VERSIONS,
     EncodedSpan,
     EngineError,
     LocalEmbeddingClient,
     _policy,
+    _temporary_metadata,
     _vector,
+    _worker_environment,
+    _worker_import_roots,
+    _worker_interpreter,
 )
 from jarvis_core.model_artifacts import ArtifactError, _copy_response, _public_url, inspect_model
 
@@ -275,6 +283,114 @@ def test_startup_diagnostics_never_contain_exception_text_or_raw_stderr(tmp_path
     diagnostic = client._diagnostic(PermissionError(1, "SYNTHETIC_PRIVATE_TEXT"), "temporary")
     assert diagnostic["errno"] == 1 and diagnostic["exception_type"] == "PermissionError"
     assert diagnostic["stderr_flags"] == ["os_permission_denied"]
+    assert "SYNTHETIC_PRIVATE_TEXT" not in str(diagnostic)
+
+
+def test_environment_disables_native_telemetry_before_import(tmp_path, monkeypatch):
+    monkeypatch.setenv("ORT_DISABLE_TELEMETRY", "0")
+    monkeypatch.setenv("PYTHONPATH", "SYNTHETIC_UNTRUSTED_PATH")
+    environment = _worker_environment(tmp_path)
+    assert environment["ORT_DISABLE_TELEMETRY"] == "1"
+    assert environment["HF_HUB_DISABLE_TELEMETRY"] == "1"
+    assert "PYTHONPATH" not in environment
+    assert ENGINE_SPEC["runtime_versions"] == RUNTIME_VERSIONS
+    assert ENGINE_SPEC["intra_op_threads"] == ENGINE_SPEC["inter_op_threads"] == 1
+    assert ENGINE_SPEC["provider"] == "CPUExecutionProvider"
+    assert ENGINE_SPEC["telemetry"] == "ORT_DISABLE_TELEMETRY=1-before-import"
+
+
+def test_worker_bootstrap_uses_explicit_roots_without_executing_pth(tmp_path, monkeypatch):
+    source, dependencies = tmp_path / "fuente propia", tmp_path / "dependencias"
+    source.mkdir()
+    dependencies.mkdir()
+    (dependencies / "hostile.pth").write_text("raise AssertionError('site hook executed')")
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    monkeypatch.setattr(sys, "argv", ["-c", json.dumps([str(source), str(dependencies)]),
+                                     "--model", "fixture"])
+    calls = []
+    monkeypatch.setattr("runpy.run_module", lambda *args, **kwargs: calls.append((
+        args, kwargs, sys.path[:2], sys.argv[1:])))
+    exec(_WORKER_BOOTSTRAP, {})
+    assert calls == [(("jarvis_core.embedding_worker",),
+                      {"run_name": "__main__", "alter_sys": True},
+                      [str(source), str(dependencies)], ["--model", "fixture"])]
+
+
+def test_import_roots_resolve_installed_distributions_without_importing_sdk(tmp_path, monkeypatch):
+    root = tmp_path / "physical-dependencies"
+    root.mkdir()
+    for name in RUNTIME_VERSIONS:
+        (root / name).mkdir()
+        (root / name / "__init__.py").write_text("raise AssertionError('SDK imported in parent')")
+
+    def distribution(name):
+        return SimpleNamespace(version=RUNTIME_VERSIONS[name],
+                               locate_file=lambda relative: root / relative)
+
+    monkeypatch.setattr("importlib.metadata.distribution", distribution)
+    roots = _worker_import_roots()
+    assert roots[-1] == root.resolve() and len(roots) == 2
+    assert roots[0].name == "src"
+    monkeypatch.setattr("importlib.metadata.distribution", lambda name: SimpleNamespace(
+        version="0.0.0", locate_file=lambda relative: root / relative))
+    with pytest.raises(EngineError, match="unavailable_runtime"):
+        _worker_import_roots()
+
+
+def test_framework_interpreter_bypasses_only_its_own_launcher(tmp_path, monkeypatch):
+    base = tmp_path / "Python.framework/Versions/3.11"
+    base.mkdir(parents=True)
+    launcher = base / "bin/python3.11"
+    launcher.parent.mkdir()
+    launcher.write_text("owned launcher fixture; never executed")
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(sys, "base_prefix", str(base))
+    monkeypatch.setattr(sys, "executable", str(launcher))
+    # A missing app does not discover an unrelated Python or relax exec rules.
+    assert _worker_interpreter() == launcher.resolve()
+    actual = base / "Resources/Python.app/Contents/MacOS/Python"
+    actual.parent.mkdir(parents=True)
+    actual.write_text("owned interpreter fixture; never executed")
+    actual.chmod(0o700)
+    assert _worker_interpreter() == actual.resolve()
+    policy = _policy(tmp_path, tmp_path, _worker_interpreter())
+    exec_rule = next(row for row in policy.splitlines() if "(allow process-exec" in row)
+    assert str(actual.resolve()) in exec_rule and str(launcher.resolve()) not in exec_rule
+    assert "(deny process-fork)" in policy
+    monkeypatch.setattr(sys, "platform", "linux")
+    assert _worker_interpreter() == launcher.resolve()
+
+
+def test_framework_interpreter_rejects_app_symlink_outside_framework(tmp_path, monkeypatch):
+    base = tmp_path / "Python.framework/Versions/3.11"
+    actual = base / "Resources/Python.app/Contents/MacOS/Python"
+    actual.parent.mkdir(parents=True)
+    unrelated = tmp_path / "unrelated-python"
+    unrelated.write_text("owned fixture; never executed")
+    unrelated.chmod(0o700)
+    actual.symlink_to(unrelated)
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(sys, "base_prefix", str(base))
+    monkeypatch.setattr(sys, "executable", str(unrelated))
+    with pytest.raises(EngineError, match="unavailable_runtime"):
+        _worker_interpreter()
+
+
+def test_cleanup_metadata_is_bounded_and_never_reads_bodies_or_exposes_names(tmp_path):
+    for number in range(20):
+        (tmp_path / f"SYNTHETIC_PRIVATE_NAME_{number}").mkdir()
+    info = tmp_path.lstat()
+    diagnostic = _temporary_metadata(tmp_path, (info.st_dev, info.st_ino))
+    assert diagnostic["truncated"] and len(diagnostic["entries"]) == 16
+    assert all(row["kind"] == "directory" for row in diagnostic["entries"])
+    assert "SYNTHETIC_PRIVATE_NAME" not in str(diagnostic)
+    assert len(list(tmp_path.iterdir())) == 20
+
+
+def test_worker_error_metadata_excludes_exception_messages():
+    diagnostic = _failure_metadata(PermissionError(13, "SYNTHETIC_PRIVATE_TEXT"), "native_import")
+    assert diagnostic == {"stage": "native_import", "exception_type": "PermissionError",
+                          "errno": 13}
     assert "SYNTHETIC_PRIVATE_TEXT" not in str(diagnostic)
 
 

@@ -6,6 +6,7 @@ import asyncio
 import base64
 import contextlib
 import hashlib
+import importlib.metadata
 import json
 import math
 import os
@@ -25,16 +26,109 @@ FRAME_LIMIT = 1024 * 1024
 MAX_TEXT_BYTES = 65536
 MAX_CHUNKS = 256
 MAX_SPAN_BYTES = 768
+RUNTIME_VERSIONS = {"numpy": "2.3.5", "onnxruntime": "1.31.1", "tokenizers": "0.22.1"}
 ENGINE_SPEC = {"format": "jarvis-minilm-encoder/1", "assets": MODEL_FINGERPRINT,
                "chunking": "complete-utf8-token-offsets-128-overlap16-max768bytes-v1",
                "query_reduction": "complete-single-query-max512bytes-128tokens-v1",
                "max_text_bytes": MAX_TEXT_BYTES, "max_chunks": MAX_CHUNKS,
                "pooling": "float32-attention-masked-mean-including-specials-l2",
-               "graph_optimization": "ORT_ENABLE_BASIC", "batch_size": 8}
+               "graph_optimization": "ORT_ENABLE_BASIC", "batch_size": 8,
+               "runtime_versions": RUNTIME_VERSIONS, "provider": "CPUExecutionProvider",
+               "intra_op_threads": 1, "inter_op_threads": 1,
+               "telemetry": "ORT_DISABLE_TELEMETRY=1-before-import"}
 ENGINE_FINGERPRINT = hashlib.sha256(json.dumps(
     ENGINE_SPEC, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 _ERRORS = {"missing_model", "invalid_model", "unavailable_runtime", "capacity",
            "timeout", "cancelled", "cleanup_pending"}
+_WORKER_BOOTSTRAP = """import json, runpy, sys
+roots = json.loads(sys.argv.pop(1))
+sys.path[:0] = roots
+runpy.run_module('jarvis_core.embedding_worker', run_name='__main__', alter_sys=True)
+"""
+_WORKER_STAGES = {"asset_verification", "dependency_versions", "native_import",
+                  "tokenizer_initialization", "session_initialization", "ready", "encode"}
+
+
+def _worker_import_roots():
+    """Use the running product's installed distributions, without site/.pth hooks."""
+    package = Path(__file__).resolve(strict=True).parent
+    source = package.parent
+    if package.name != "jarvis_core" or not (package / "embedding_worker.py").is_file():
+        raise EngineError("unavailable_runtime")
+    roots = [source]
+    for name, expected in RUNTIME_VERSIONS.items():
+        distribution = importlib.metadata.distribution(name)
+        if distribution.version != expected:
+            raise EngineError("unavailable_runtime")
+        origin = Path(distribution.locate_file(name + "/__init__.py")).resolve(strict=True)
+        if (not origin.is_file() or origin.parent.name != name
+                or not origin.parent.parent.is_absolute()):
+            raise EngineError("unavailable_runtime")
+        root = origin.parent.parent
+        if root not in roots:
+            roots.append(root)
+    return tuple(roots)
+
+
+def _worker_interpreter():
+    selected = Path(sys.executable).resolve(strict=True)
+    base = Path(sys.base_prefix).resolve(strict=True)
+    if (sys.platform == "darwin" and sys.implementation.name == "cpython"
+            and base.parent.name == "Versions"
+            and base.parent.parent.name == "Python.framework"):
+        # Framework python3 is a launcher which posix_spawns Python.app with
+        # SETEXEC. Select that same framework's real interpreter before Seatbelt;
+        # neither fork nor a second arbitrary executable needs to be authorized.
+        candidate = base / "Resources/Python.app/Contents/MacOS/Python"
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            physical = candidate.resolve(strict=True)
+            if not physical.is_relative_to(base):
+                raise EngineError("unavailable_runtime")
+            return physical
+    return selected
+
+
+def _worker_environment(temporary):
+    # ORT's API disables events after native initialization. This environment
+    # switch must precede import to prevent even its persistent device ID/queue.
+    environment = {"PATH": os.defpath, "LANG": "C.UTF-8", "HOME": str(temporary),
+                   "TMPDIR": str(temporary) + "/", "PYTHONDONTWRITEBYTECODE": "1",
+                   "PYTHONNOUSERSITE": "1", "HF_HUB_OFFLINE": "1",
+                   "TRANSFORMERS_OFFLINE": "1", "TOKENIZERS_PARALLELISM": "false",
+                   "ORT_DISABLE_TELEMETRY": "1", "HF_HUB_DISABLE_TELEMETRY": "1"}
+    environment.update(dict.fromkeys(("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+                                      "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS",
+                                      "NUMEXPR_NUM_THREADS"), "1"))
+    return environment
+
+
+def _temporary_metadata(directory, identity):
+    """Bounded metadata of our reaped child's directory; no bodies or raw names."""
+    result = {"entries": [], "truncated": False}
+    known = {".cache", "Microsoft", "DeveloperTools", ".onnxruntime", ".ses"}
+    descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(descriptor)
+        if (info.st_dev, info.st_ino) != identity:
+            return {"identity_changed": True}
+        with os.scandir(descriptor) as entries:
+            for index, entry in enumerate(entries):
+                if index == 16:
+                    result["truncated"] = True
+                    break
+                row = entry.stat(follow_symlinks=False)
+                kind = ("directory" if stat.S_ISDIR(row.st_mode) else
+                        "file" if stat.S_ISREG(row.st_mode) else
+                        "symlink" if stat.S_ISLNK(row.st_mode) else "other")
+                result["entries"].append({
+                    "name_class": entry.name if entry.name in known else "unknown",
+                    "kind": kind, "bytes": min(max(row.st_size, 0), 2**40),
+                    "mode": stat.S_IMODE(row.st_mode), "links": min(row.st_nlink, 65536),
+                    "same_owner": row.st_uid == os.getuid(),
+                })
+    finally:
+        os.close(descriptor)
+    return result
 
 
 class EngineError(Exception):
@@ -82,7 +176,7 @@ def _vector(value):
         raise EngineError("invalid_model") from None
 
 
-def _policy(model, temporary, python):
+def _policy(model, temporary, python, import_roots=()):
     package = Path(__file__).resolve().parent
     # Editable installs need PathFinder to list the source parent before it can
     # enter jarvis_core. Never derive a blanket /private/tmp grant from staging.
@@ -92,6 +186,7 @@ def _policy(model, temporary, python):
              Path("/System"), Path("/usr"), Path("/bin"), Path("/sbin"),
              Path("/opt/homebrew"), Path("/Library/Frameworks/Python.framework"),
              Path("/private/var/db/dyld"), Path("/private/etc")}
+    roots.update(import_roots)
     reads = " ".join(f"(subpath {json.dumps(str(root))})" for root in sorted(roots))
     programs = {str(python), str(python.resolve())}
     executables = " ".join(f"(literal {json.dumps(path)})" for path in programs)
@@ -193,10 +288,24 @@ class LocalEmbeddingClient:
             raise EngineError("invalid_model") from None
         if not isinstance(value, dict) or value.get("nonce") != self._nonce:
             raise EngineError("invalid_model")
-        if value.get("error") is not None:
-            raise EngineError(value["error"])
         if value.get("model_fingerprint") != ENGINE_FINGERPRINT:
             raise EngineError("invalid_model")
+        if value.get("error") is not None:
+            diagnostic = value.get("diagnostic")
+            if diagnostic is not None and (
+                not isinstance(diagnostic, dict)
+                or set(diagnostic) != {"stage", "exception_type", "errno"}
+                or diagnostic["stage"] not in _WORKER_STAGES
+                or not isinstance(diagnostic["exception_type"], str)
+                or not diagnostic["exception_type"].isascii()
+                or not diagnostic["exception_type"].isidentifier()
+                or len(diagnostic["exception_type"]) > 64
+                or (diagnostic["errno"] is not None and (
+                    type(diagnostic["errno"]) is not int
+                    or not 0 < diagnostic["errno"] < 4096))
+            ):
+                raise EngineError("invalid_model")
+            raise EngineError(value["error"], diagnostic=diagnostic)
         return value
 
     async def _drain_stderr(self, process):
@@ -222,28 +331,24 @@ class LocalEmbeddingClient:
         self._last_returncode = None
         self._stage = "control_pipe"
         self._cancel_read, self._cancel_write = os.pipe()
-        python = Path(sys.executable)
+        python = _worker_interpreter()
+        import_roots = _worker_import_roots() if self._worker_command is None else ()
         command = (list(self._worker_command) if self._worker_command else
-                   [str(python), "-I", "-B", "-m", "jarvis_core.embedding_worker"])
+                   [str(python), "-I", "-S", "-B", "-u", "-c", _WORKER_BOOTSTRAP,
+                    json.dumps([str(root) for root in import_roots])])
         isolation = "ci_resource_only"
         if self._platform == "darwin":
             if not Path("/usr/bin/sandbox-exec").is_file():
                 raise EngineError("unavailable_runtime")
             isolation = "seatbelt_readonly"
             command = ["/usr/bin/sandbox-exec", "-p",
-                       _policy(self.directory, self._temporary, python), *command]
+                       _policy(self.directory, self._temporary, python, import_roots), *command]
         elif os.environ.get("GITHUB_ACTIONS") != "true" and self._worker_command is None:
             # Linux is a remote qualification target, not a claimed desktop sandbox.
             raise EngineError("unavailable_runtime")
         command += ["--model", str(self.directory), "--nonce", self._nonce,
                     "--cancel-fd", str(self._cancel_read), "--isolation", isolation]
-        environment = {"PATH": os.defpath, "LANG": "C.UTF-8", "HOME": str(self._temporary),
-                       "TMPDIR": str(self._temporary) + "/", "PYTHONDONTWRITEBYTECODE": "1",
-                       "PYTHONNOUSERSITE": "1", "HF_HUB_OFFLINE": "1",
-                       "TRANSFORMERS_OFFLINE": "1", "TOKENIZERS_PARALLELISM": "false"}
-        environment.update(dict.fromkeys(("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS",
-                                          "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS",
-                                          "NUMEXPR_NUM_THREADS"), "1"))
+        environment = _worker_environment(self._temporary)
         custody = tuple(self._custody())
         if any(type(fd) is not int or fd < 3 for fd in custody):
             raise EngineError("unavailable_runtime")
@@ -324,9 +429,15 @@ class LocalEmbeddingClient:
                 raise EngineError("cleanup_pending")
             try:
                 self._temporary.rmdir()  # Zero writes: never recursively delete unexpected files.
-            except OSError:
+            except OSError as error:
                 self._cleanup_pending = True
-                raise EngineError("cleanup_pending") from None
+                diagnostic = self._diagnostic(error, "temporary_cleanup")
+                try:
+                    diagnostic["temporary_metadata"] = _temporary_metadata(
+                        self._temporary, self._temporary_identity)
+                except OSError as metadata_error:
+                    diagnostic["metadata_error"] = type(metadata_error).__name__[:64]
+                raise EngineError("cleanup_pending", diagnostic=diagnostic) from None
         self._process = self._launch_task = self._stderr_task = None
         self._temporary = self._temporary_identity = None
         self._cleanup_pending = False
@@ -397,6 +508,8 @@ class LocalEmbeddingClient:
                 await self._settle_cleanup()
             except EngineError as cleanup:
                 diagnostic = self._diagnostic(error, stage)
+                if cleanup.diagnostic is not None:
+                    diagnostic["cleanup"] = cleanup.diagnostic
                 raise EngineError(cleanup.code, diagnostic=diagnostic) from None
             if isinstance(error, (EngineError, asyncio.CancelledError)):
                 if isinstance(error, EngineError) and error.diagnostic is None:

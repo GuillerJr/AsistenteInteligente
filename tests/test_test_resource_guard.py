@@ -24,6 +24,11 @@ def options(**changes):
     return SimpleNamespace(**(values | changes))
 
 
+def test_invalid_export_is_rejected_before_volume_preparation(tmp_path):
+    with pytest.raises(guard.GuardError, match="directamente"):
+        guard.validate_options(options(export_destination=tmp_path / "nested"), {}, {}, tmp_path)
+
+
 @pytest.fixture
 def source(tmp_path):
     root = tmp_path / "repo"

@@ -21,6 +21,7 @@ from jarvis_core.local_embeddings import (
     MAX_CHUNKS,
     MAX_SPAN_BYTES,
     MAX_TEXT_BYTES,
+    RUNTIME_VERSIONS,
 )
 from jarvis_core.model_artifacts import ArtifactError, inspect_model, read_model_asset
 
@@ -87,15 +88,21 @@ def _spans(text, tokenizer, checkpoint):
 
 
 class _Engine:
-    def __init__(self, directory, cancelled):
+    def __init__(self, directory, cancelled, phase=lambda value: None):
         self.cancelled = cancelled
         self._run_options = None
         self._options_lock = threading.Lock()
+        phase("asset_verification")
         inspect_model(directory, cancellation=cancelled)
-        expected = {"numpy": "2.3.5", "onnxruntime": "1.31.1", "tokenizers": "0.22.1"}
-        if any(importlib.metadata.version(name) != version for name, version in expected.items()):
+        phase("dependency_versions")
+        if any(importlib.metadata.version(name) != version
+               for name, version in RUNTIME_VERSIONS.items()):
             raise _WorkerError("unavailable_runtime")
         # Only this isolated child imports the selected native dependencies.
+        # The API below runs too late to suppress ORT's initialization telemetry.
+        if os.environ.get("ORT_DISABLE_TELEMETRY") != "1":
+            raise _WorkerError("unavailable_runtime")
+        phase("native_import")
         import numpy as np
         import onnxruntime as ort
         from tokenizers import Tokenizer
@@ -108,6 +115,7 @@ class _Engine:
         options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
         options.enable_profiling = False
         options.optimized_model_filepath = ""
+        phase("tokenizer_initialization")
         tokenizer_bytes = read_model_asset(directory, "tokenizer.json", cancellation=cancelled)
         self.tokenizer = Tokenizer.from_str(tokenizer_bytes.decode())
         del tokenizer_bytes
@@ -116,6 +124,7 @@ class _Engine:
         self.pad = self.tokenizer.token_to_id("<pad>")
         if type(self.pad) is not int or self.pad < 0:
             raise _WorkerError("invalid_model")
+        phase("session_initialization")
         model_bytes = read_model_asset(directory, "onnx/model_qint8_arm64.onnx",
                                        cancellation=cancelled)
         self.session = ort.InferenceSession(model_bytes, sess_options=options,
@@ -228,6 +237,14 @@ def _emit(value, nonce):
     sys.stdout.buffer.flush()
 
 
+def _failure_metadata(error, stage):
+    name = "".join(char for char in type(error).__name__
+                   if char.isascii() and (char.isalnum() or char == "_"))[:64]
+    number = getattr(error, "errno", None)
+    return {"stage": stage, "exception_type": name,
+            "errno": number if type(number) is int and 0 < number < 4096 else None}
+
+
 def main():
     from pathlib import Path
 
@@ -243,6 +260,11 @@ def main():
     resource.setrlimit(resource.RLIMIT_CPU, (60, 61))
     cancelled = threading.Event()
     engine = None
+    stage = "asset_verification"
+
+    def phase(value):
+        nonlocal stage
+        stage = value
 
     def control():
         try:
@@ -255,8 +277,9 @@ def main():
     listener = threading.Thread(target=control, daemon=True)
     listener.start()
     try:
-        engine = _Engine(args.model, cancelled)
+        engine = _Engine(args.model, cancelled, phase)
         engine.checkpoint()
+        phase("ready")
         _emit({"id": 0, "ready": True, "dimension": 384, "provider": "CPUExecutionProvider",
                "isolation": args.isolation, "disk_write_quota_bytes": 0}, args.nonce)
         previous = 0
@@ -275,6 +298,7 @@ def main():
                     != request["text_sha256"]):
                 raise _WorkerError("invalid_model")
             previous = request["id"]
+            phase("encode")
             result = engine.encode(request["text"], request["operation"])
             usage = resource.getrusage(resource.RUSAGE_SELF)
             retiring = usage.ru_utime + usage.ru_stime >= 25
@@ -286,14 +310,16 @@ def main():
                 return 0
         return 0
     except (ArtifactError, _WorkerError) as error:
-        _emit({"error": error.code}, args.nonce)
+        _emit({"error": error.code, "diagnostic": _failure_metadata(error, stage)}, args.nonce)
         return 1
-    except (ImportError, importlib.metadata.PackageNotFoundError):
-        _emit({"error": "unavailable_runtime"}, args.nonce)
+    except (ImportError, importlib.metadata.PackageNotFoundError) as error:
+        _emit({"error": "unavailable_runtime",
+               "diagnostic": _failure_metadata(error, stage)}, args.nonce)
         return 1
-    except Exception:
+    except Exception as error:
         # Never print a traceback, source text, paths or native environment values.
-        _emit({"error": "cancelled" if cancelled.is_set() else "invalid_model"}, args.nonce)
+        _emit({"error": "cancelled" if cancelled.is_set() else "invalid_model",
+               "diagnostic": _failure_metadata(error, stage)}, args.nonce)
         return 1
     finally:
         cancelled.set()

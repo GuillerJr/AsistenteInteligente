@@ -62,7 +62,11 @@ def memory_wire(client):
 @pytest.fixture
 async def client(tmp_path):
     value = CodexClient(
-        write_memory_peer(tmp_path / "memory-peer"), tmp_path.resolve() / "provider", timeout=2
+        # Local protocol fixture gets first-spawn grace under macOS load; no
+        # product transport, inference timeout or quality assertion changes.
+        write_memory_peer(tmp_path / "memory-peer"),
+        tmp_path.resolve() / "provider",
+        timeout=8,
     )
     try:
         yield value
@@ -98,7 +102,7 @@ async def test_memory_is_fresh_turn_input_on_same_thread_not_profile_or_skill_hi
 async def test_resumed_owned_thread_receives_current_capsule_after_client_restart(client):
     first = await client.chat("turno anterior", memory_context="CITA VIEJA")
     await client.aclose()
-    replacement = CodexClient(client.executable, client.directory, timeout=2)
+    replacement = CodexClient(client.executable, client.directory, timeout=8)
     try:
         await replacement.chat(
             "turno actual", thread_id=first["thread_id"], memory_context="CITA ACTUAL"
