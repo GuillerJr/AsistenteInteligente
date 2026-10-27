@@ -21,9 +21,9 @@ struct MemoryIntelligenceView: View {
                 index(status)
                 if let recall = status.lastRecall {
                     Section("Última recuperación") {
-                        LabeledContent("Estado", value: stateTitle(recall.status))
-                        LabeledContent("Modo", value: recall.mode.title)
-                        LabeledContent("Citas", value: recall.citations.formatted())
+                        MemoryMetadataRow("Estado", value: stateTitle(recall.status), id: "jarvis.memory.recall.state")
+                        MemoryMetadataRow("Modo", value: recall.mode.title, id: "jarvis.memory.recall.mode")
+                        MemoryMetadataRow("Citas", value: recall.citations.formatted(), id: "jarvis.memory.recall.citations")
                         Text("Este resumen no conserva el texto recuperado.").font(.caption).foregroundStyle(.secondary)
                     }
                 }
@@ -57,17 +57,17 @@ struct MemoryIntelligenceView: View {
     }
     private func engine(_ status: MemoryIntelligenceStatus) -> some View {
         Section("Motor local") {
-            LabeledContent("Modelo", value: status.model.id)
-            LabeledContent("Estado", value: stateTitle(status.model.state))
-            LabeledContent("Archivos verificados", value: status.model.available ? "Disponibles" : "No disponibles")
-            LabeledContent("Runtime CPU", value: status.model.runtimeAvailable ? "Disponible" : "No disponible")
-            LabeledContent("Archivos del modelo", value: status.model.available
-                ? ByteCountFormatter.string(fromByteCount: Int64(status.model.bytes), countStyle: .file) : "Sin verificación")
+            MemoryMetadataRow("Modelo", value: status.model.id, id: "jarvis.memory.model.id")
+            MemoryMetadataRow("Estado", value: stateTitle(status.model.state), id: "jarvis.memory.model.state")
+            MemoryMetadataRow("Archivos verificados", value: status.model.available ? "Disponibles" : "No disponibles", id: "jarvis.memory.model.verified")
+            MemoryMetadataRow("Runtime CPU", value: status.model.runtimeAvailable ? "Disponible" : "No disponible", id: "jarvis.memory.model.runtime")
+            MemoryMetadataRow("Archivos del modelo", value: status.model.available
+                ? ByteCountFormatter.string(fromByteCount: Int64(status.model.bytes), countStyle: .file) : "Sin verificación", id: "jarvis.memory.model.bytes")
             Button(modelNeedsRepair(status.model) ? "Preparar copia nueva…"
                 : status.model.state == "unverified" ? "Verificar/preparar copia…" : "Preparar modelo local…") { store.requestModelPreparation() }
                 .disabled(!store.mayStartJob || status.scope.temporary || (!status.model.available && status.model.previousCopy != nil))
             if let previous = status.model.previousCopy {
-                LabeledContent("Copia anterior en desuso", value: ByteCountFormatter.string(fromByteCount: Int64(previous.bytes), countStyle: .file))
+                MemoryMetadataRow("Copia anterior en desuso", value: ByteCountFormatter.string(fromByteCount: Int64(previous.bytes), countStyle: .file), id: "jarvis.memory.model.previous_copy_bytes")
                 Button("Retirar copia anterior…") { store.requestPreviousModelCopyRetirement() }.disabled(!store.mayStartJob || status.scope.temporary)
                 if !status.model.available {
                     Text("Ya se conservan dos copias. Retira explícitamente la anterior antes de preparar otra; tus notas no se modifican.")
@@ -96,19 +96,19 @@ struct MemoryIntelligenceView: View {
                 Button("Desactivar uso automático…") { Task { await store.revokeAutomation() } }
                     .disabled(!store.mayReview || (!status.policy.settings.autoRecallEnabled && !status.policy.settings.autoIndexEnabled))
             }
-            LabeledContent("Revisión de política", value: status.policy.revision.formatted())
+            MemoryMetadataRow("Revisión de política", value: status.policy.revision.formatted(), id: "jarvis.memory.policy.revision")
             Text("Revocar evita nuevas recuperaciones. No retira información que ya recibió el proveedor ni borra mensajes anteriores.")
                 .font(.caption).foregroundStyle(.secondary)
         }.disabled(store.isBusy || store.responseUnconfirmed)
     }
     private func index(_ status: MemoryIntelligenceStatus) -> some View {
         Section("Índice de notas aprobadas") {
-            LabeledContent("Estado", value: stateTitle(status.index.state))
+            MemoryMetadataRow("Estado", value: stateTitle(status.index.state), id: "jarvis.memory.index.state")
             if status.index.isOpened {
-                LabeledContent("Generación de notas", value: status.index.sourceGeneration.formatted())
-                LabeledContent("Generación indexada", value: status.index.generation.map { $0.formatted() } ?? "Sin índice")
-                LabeledContent("Documentos / fragmentos", value: "\(status.index.documentCount) / \(status.index.chunkCount)")
-                LabeledContent("Espacio usado", value: ByteCountFormatter.string(fromByteCount: Int64(status.index.bytes), countStyle: .file))
+                MemoryMetadataRow("Generación de notas", value: status.index.sourceGeneration.formatted(), id: "jarvis.memory.index.source_generation")
+                MemoryMetadataRow("Generación indexada", value: status.index.generation.map { $0.formatted() } ?? "Sin índice", id: "jarvis.memory.index.generation")
+                MemoryMetadataRow("Documentos / fragmentos", value: "\(status.index.documentCount) / \(status.index.chunkCount)", id: "jarvis.memory.index.counts")
+                MemoryMetadataRow("Espacio usado", value: ByteCountFormatter.string(fromByteCount: Int64(status.index.bytes), countStyle: .file), id: "jarvis.memory.index.bytes")
             } else {
                 Text("Abre Notas para consultar explícitamente la memoria de este ámbito. Los recuentos y la generación aún no se han leído.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -130,7 +130,7 @@ struct MemoryIntelligenceView: View {
     }
     private func jobSection(_ job: MemoryIntelligenceJob) -> some View {
         Section("Trabajo local") {
-            LabeledContent("Estado", value: stateTitle(job.phase.rawValue))
+            MemoryMetadataRow("Estado", value: stateTitle(job.phase.rawValue), id: "jarvis.memory.job.phase")
             if job.documentsTotal > 0 {
                 ProgressView(value: Double(job.documentsDone), total: Double(job.documentsTotal))
                 Text("\(job.documentsDone) de \(job.documentsTotal) documentos · \(job.chunks) fragmentos").font(.caption)

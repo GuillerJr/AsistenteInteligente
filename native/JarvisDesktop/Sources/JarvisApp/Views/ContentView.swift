@@ -25,7 +25,7 @@ import SwiftUI
         }
     }
 
-    private var chatBody: some View {
+    private var navigation: some View {
         NavigationSplitView {
             SidebarView(store: store)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 245, max: 320)
@@ -140,24 +140,51 @@ import SwiftUI
                 }
             }
         }
-        .inspector(isPresented: $inspector.isPresented) {
-            InspectorViewport {
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+    }
+
+    private var chatBody: some View {
+        HStack(spacing: 0) {
+            navigation
+            if inspector.isPresented {
+                InspectorResizeHandle(presentation: inspector)
+                inspectorPanel.frame(width: inspector.width)
+            }
+        }
+        .coordinateSpace(name: "jarvis.chat.layout")
+        .frame(minWidth: 720, minHeight: 520)
+        .onDisappear { store.stopVoice() }
+        .onChange(of: store.selected?.scope) { _, _ in store.stopVoice() }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
+            if (notification.object as? NSWindow)?.identifier?.rawValue == "jarvis.main" {
+                store.stopVoice(); store.telegram.clearSecretInput()
+            }
+        }
+    }
+
+    private var inspectorPanel: some View {
+        InspectorViewport {
             VStack(spacing: 0) {
-                Picker("Panel", selection: $inspector.selection) {
-                    Text("Mac y navegador").tag("automation")
-                    Text("Contexto y ramas").tag("sessionCore")
-                    Text("Clientes locales").tag("clients")
-                    Text("Delegación y objetivos").tag("delegation")
-                    Text("Turno y cola").tag("runInput")
-                    Text("Herramientas").tag("tools")
-                    Text("Memoria").tag("memory")
-                    Text("MCP").tag("mcp")
-                    Text("Agentes").tag("agents")
-                    Text("Skills").tag("skills")
-                    Text("Programador").tag("schedules")
-                    Text("Procesos").tag("processes")
-                    Text("Telegram").tag("telegram")
-                }.pickerStyle(.menu).padding()
+                HStack {
+                    Picker("Panel", selection: $inspector.selection) {
+                        Text("Mac y navegador").tag("automation")
+                        Text("Contexto y ramas").tag("sessionCore")
+                        Text("Clientes locales").tag("clients")
+                        Text("Delegación y objetivos").tag("delegation")
+                        Text("Turno y cola").tag("runInput")
+                        Text("Herramientas").tag("tools")
+                        Text("Memoria").tag("memory")
+                        Text("MCP").tag("mcp")
+                        Text("Agentes").tag("agents")
+                        Text("Skills").tag("skills")
+                        Text("Programador").tag("schedules")
+                        Text("Procesos").tag("processes")
+                        Text("Telegram").tag("telegram")
+                    }.pickerStyle(.menu)
+                    Button { inspector.isPresented = false } label: { Image(systemName: "xmark") }
+                        .buttonStyle(.plain).help("Cerrar panel").accessibilityLabel("Cerrar panel")
+                }.padding()
+                Divider()
                 if inspector.selection == "automation" { AutomationControlView(store: store) }
                 else if inspector.selection == "mcp" { MCPView(store: store) }
                 else if inspector.selection == "sessionCore" { SessionCoreView(store: store) }
@@ -172,16 +199,7 @@ import SwiftUI
                 else if inspector.selection == "telegram" { TelegramView(store: store) }
                 else { CapabilitiesView(store: store) }
             }
-            }
-            .inspectorColumnWidth(min: 360, ideal: 420, max: 560)
-        }
-        .frame(minWidth: 720, minHeight: 520)
-        .onDisappear { store.stopVoice() }
-        .onChange(of: store.selected?.scope) { _, _ in store.stopVoice() }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { notification in
-            if (notification.object as? NSWindow)?.identifier?.rawValue == "jarvis.main" {
-                store.stopVoice(); store.telegram.clearSecretInput()
-            }
         }
     }
+
 }

@@ -27,6 +27,16 @@
         "linux_real_retrieval_assertions_passed_but_worker_directory_cleanup_unconfirmed",
         "late_onnx_api_did_not_prevent_initialization_telemetry_storage"
       ]
+    },
+    {
+      "head": "77423a98fd0cc01dc009c8f6ae266260da064e3a",
+      "run_id": 40571556887,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40571556887",
+      "result": "failed_native_layout_case",
+      "macos": {"job_id": 122426799352, "python_passed": 2868, "swift_total": 428, "swift_skipped": 1, "swift_failed": 1},
+      "ubuntu": {"job_id": 122426799009, "passed": 2822, "skipped": 46, "job_result": "success"},
+      "real_encoder_and_retrieval": "passed_both_platforms_no_skip",
+      "findings": ["native_inspector_collapsed_during_resize_regression"]
     }
   ],
   "native_attempts": [
@@ -37,6 +47,27 @@
       "result": "crashed_opening_memory_inspector",
       "observed": "NSGenericException repeated_update_constraints",
       "service_cleanup": "exact_socket_process_identified_sigterm_then_lease_free_and_socket_absent"
+    },
+    {
+      "binary_sha256_before_test_resigning": "e2476a4ec67aabe0d391dffe545d47d12f9b67f3dcfbd0eeeeb5bed1995f68fc",
+      "result": "viewport_alone_did_not_resolve_native_inspector_crash",
+      "observed": "NSGenericException repeated_update_constraints"
+    },
+    {
+      "variant": "explicit_swiftui_side_panel_without_native_inspector",
+      "profile_kind": "same_synthetic_four_notes_no_accounts",
+      "result": "panel_open_notes_and_automatic_controls_stable",
+      "observed_operations": [
+        "model_preparation_two_native_decisions_then_durable_complete_receipt",
+        "semantic_query_hotel_top1",
+        "hybrid_exact_identifier_top1_distinct_from_prefix",
+        "native_citation_verified_against_current_note",
+        "local_index_integrity_check",
+        "explicit_index_rebuild_two_native_decisions",
+        "owner_policy_revision_2_auto_index_on_recall_off"
+      ],
+      "accessibility_finding": "LabeledContent_AX_value_retained_revision_1_while_pixels_showed_2; explicit_accessibility_rows_added",
+      "external_source_mutation": "refused_memory_in_use_before_effect; source_exclusive_custody_preserved"
     }
   ],
   "limits": [
