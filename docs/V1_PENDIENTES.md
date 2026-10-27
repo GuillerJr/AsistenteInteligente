@@ -68,8 +68,9 @@ Estos recorridos acotados no cierran todas las capacidades del canal, voz o web.
   reteniendo Stores y propietarios ante incertidumbre y sin reconexión/replay.
 - [ ] Completar la investigación semántica pendiente: REA 13–20 amplían respaldo,
   snapshots, actualización, cierre, migración de memoria, custodia SQLite y archivos;
-  los lotes OC-21A/B/C añaden núcleo y sesiones; 23 lotes y 90 rutas TS/JS
-  seleccionadas no cierran la matriz ni toda la referencia.
+  los lotes OC-21A/B/C añadieron núcleo y sesiones: su checkpoint tenía 23 lotes
+  y 90 rutas TS/JS. El bloque actual de Mac/navegador amplía el registro a 27
+  lotes y 105 rutas; ninguna de esas cifras cierra la matriz ni toda la referencia.
 - [x] Ejecutar Python/Swift/paquetes/bundle y CI para el checkpoint `b03ad7a`:
   2321 pruebas Python y 282 Swift. El [cierre nativo](rebuild/PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md)
   conserva identidades y límites; los controles de incrementos posteriores se registran aparte.
@@ -244,6 +245,91 @@ la orquestación distribuida, todos los harnesses, agrupación de sesiones,
 acceso remoto o atestación Apple. Esos ámbitos conservan sus estados en la
 matriz; no se trasladan a B ni se vuelven a abrir los cierres anteriores.
 
+### Herramientas del Mac y navegador — implementación y cualificación actual
+
+El [cierre del incremento](rebuild/PHASE_A_MAC_BROWSER_CLOSEOUT.md) y su
+[registro de evidencia](rebuild/PHASE_A_MAC_BROWSER_CLOSEOUT.json) distinguen
+implementación, focales aprobados y controles pendientes. Esta lista no reabre
+los bloques históricos ni declara completa una familia amplia de la fase A.
+
+- [x] Implementar diff UTF-8 multiarchivo con altas, ediciones, bajas y movimientos,
+  contexto/hashes exactos y preflight de todas las rutas. Publicación atómica por
+  archivo; fallo parcial con recibo incierto, sin rollback sobre cambios ajenos.
+- [x] Implementar PTY real con stdin/EOF, salida, resize, señales y cancelación,
+  custodia de descriptores y Seatbelt sin fallback. Programas admitidos de un solo
+  proceso; no shell arbitrario con fork o pipelines.
+- [x] Conectar observación y acciones AX del Mac a destino/ventana/observación
+  exactos y autoridad central. Frame opcional de ventana en RAM, redacción de
+  controles protegidos y canal efímero de imágenes, sin base64 durable.
+- [x] Implementar navegador WebKit propio no persistente y conexión CDP a una
+  pestaña elegida explícitamente; refs DOM/origen exactos, navegación, historia,
+  entrada y cierre. Proxy y reglas de contenido del navegador administrado;
+  no se atribuye esa política de red al navegador externo adjunto.
+- [x] Conectar búsqueda a plantilla elegida por el dueño y descarga explícita de
+  hasta 64 KiB a una ruta nueva del workspace, con lease original y hash comprobado.
+- [x] Integrar permisos de conversación/«Siempre», temporales, revisión CAS y
+  revocación en broker/UI; invalidar permisos de búsqueda al cambiar su destino.
+  La cancelación conserva el lane mientras falte una callback real: `stopLoading`
+  no demuestra terminar JavaScript ya despachado ni actividad autónoma del sitio.
+- [x] Aprobar los focales disponibles: 151 Python de patch/PTY/custodia, 52 de
+  broker/permisos y una selección integrada de 108; 39 nativos de Mac/navegador/
+  auditoría. Los conjuntos se solapan y no se suman como total de pruebas únicas.
+  Después pasaron nueve de host/lifecycle, 31 de CAS AX y 91 Python del indicador
+  de descarga, incluidos cinco + cinco + dos casos nuevos respectivamente.
+- [x] Cualificar Chrome 155.0.8059.85 real con un perfil nuevo propio: un caso
+  opt-in aprobado, sin enumerar perfiles ni pestañas personales. Verificar también
+  55 operaciones de la app en ejecución por RPC firmado: WebKit, CDP real, patch,
+  descarga, PTY y una apertura HTTPS pública, con oráculos independientes.
+  SDK y decisiones sintéticos;
+  dos denegaciones y una ref obsoleta son negativos esperados, no éxitos.
+- [x] Registrar la ejecución completa Python actual: 2672 aprobadas en 488,93 s,
+  sin cambios Python posteriores. Conservar el checkpoint previo de 2670.
+- [x] Registrar Swift completo: 392 casos, una omisión Chrome opt-in y cero
+  fallos en 154,796 s. Después cambió sólo la separación ACK/postcondición AX:
+  tres archivos Swift y cinco tests nuevos, focal de 33 aprobado. No se afirma
+  que los 392 anteriores cubrieran esa corrección ni se anticipa el próximo total.
+- [x] Compilar y firmar el bundle de desarrollo 03; conservar el manifiesto
+  histórico Python de 173 rutas, el checkpoint de 355 y el actual de 356 fuentes/
+  scripts/tests, comparado con el árbol congelado. No se cambia la app personal.
+- [x] Corregir autoaprobación mediante ventanas propias, custodia WebKit falsa,
+  carreras de lifecycle, CAS por grupos AX vacíos e indicador de descarga publicada.
+  El positivo AX del build 02 falló de forma controlada; no se cuenta como escritura.
+- [x] Cualificar AX entre procesos: set_value Unicode/salto de línea y type_text
+  con selección UTF-16, oráculo AppKit externo y longitud final de 41 unidades.
+  Cualificar frame real de 14.300 bytes sólo en memoria, con controles protegidos
+  retirados y sin portador en SQL/log ni archivos de captura de control.
+- [x] Confirmar descarga nueva con archivo/hash y `written_to_workspace=true`.
+  Conservar el press anterior incierto aunque el contador externo sea 1: sin replay.
+- [x] Elegir «Siempre» en la tarjeta nativa por CUA y comprobar en otro chat el
+  mismo permiso `approval.remembered`, sin tarjeta ni decisión RPC del observador.
+- [x] Verificar el bundle 04: el fixture anterior había salido; el destino nuevo
+  exigió aprobación y no heredó su regla. Una operación nueva 0→1 pasó con
+  postcondición/ACK separados; frame real de 12.352 bytes sin portador durable.
+- [x] Confirmar «Siempre» por UI para el destino nuevo y persistencia tras
+  reiniciar los mismos bytes de la app. Resolver/ventana revalidaron los handles
+  RAM explícitamente; luego la misma observación pasó sin tarjeta ni decisión RPC.
+- [x] Revocar la regla nueva por UI y rechazar la aprobación renovada: SQL durable
+  `approval_denied`, cero recibos y sin despacho. Retirar también la regla del
+  destino antiguo; revisión 9, cero permisos, acciones pendientes o runs no terminales.
+  Las decisiones sólo afectan a perfiles sintéticos nuevos.
+- [ ] Registrar los hooks finales de paquete/smoke, commit y push a `main` y
+  verificar la CI después del push: estado al corte anterior al propio commit.
+  Los resultados se registran en metadatos de hooks/respuesta final. Se usa el
+  commit que contiene el registro, sin SHA futuro ni resultado no observado.
+
+La lectura pública única de `https://example.com/` pasó por el proxy privado,
+sin excepción sintética, y cerró su binding; conserva contenido externo no
+verificado. TCC efectivo se comprobó con la identidad dedicada nueva y la
+excepción explícita del dueño; Touch ID lo completó el dueño. El intento denegado
+previo se conserva. Los fixtures y el SDK propio no acreditan inferencia
+autenticada; las credenciales y perfiles personales siguen fuera de la delegación.
+
+REA OC-22A/B1/B2/C mantiene manifiestos, blobs, hashes e incógnitas. La cobertura
+acumulada es parcial: **27 lotes, 105 rutas TS/JS únicas**, 47 familias con avance
+parcial y 33 sin implementación. No son porcentajes de producto terminado.
+La distribución autocontenida, Developer ID/notarización y actualización remota
+firmada siguen pendientes. La fase A sigue abierta y la fase B no ha comenzado.
+
 ## Fase B — después de acreditar A
 
 - [ ] Mejoras propias y herramientas adicionales del
@@ -258,7 +344,9 @@ respaldo automático entre proveedores. El dueño inicia sesión, escribe contra
 concede TCC y aprueba acciones reales. Los pendientes anteriores permanecen en el
 historial del commit `c97ed89`; no se han borrado de los inventarios.
 Para este incremento el dueño delegó expresamente las aprobaciones en perfiles
-sintéticos; esa delegación no incluye contraseñas, TCC ni perfiles personales.
+sintéticos; no incluye contraseñas ni perfiles personales. La excepción TCC
+puntual actual se registra arriba; no cambia la regla general de concesión por
+el dueño ni delega credenciales.
 
 Checkpoint histórico `381074d`: 1234 pruebas Python y 129 nativas aprobadas. Se verificaron
 una escritura desde Telegram con aprobación y hash, una lectura HTTPS marcada como

@@ -1,0 +1,22 @@
+{
+  "format": "jarvis-own-rejection-sql-oracle/1",
+  "read_only_memory_deserialized": true,
+  "run_id": "e10bd27c17be4b988ddc4c05de38b00b",
+  "session_id": "c1a7690a375a45489abac9a2d17e1e7f",
+  "status": "failed",
+  "outcome_preserved": "unknown",
+  "receipt": {
+    "action_receipts": [],
+    "answer": null,
+    "answer_source": null,
+    "error": "approval_denied"
+  },
+  "event_kind_counts": {
+    "run_queued": 1,
+    "run_settled": 1,
+    "run_status": 3,
+    "tool.requested": 1
+  },
+  "state_snapshot_sha256": "5d7df248cb30a21df1d68c0c3ee349d65e4a9a22b139f5b164d104934d768bd7",
+  "no_image_carrier_in_sqlite": true
+}

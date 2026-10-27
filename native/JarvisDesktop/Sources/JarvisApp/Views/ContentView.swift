@@ -108,6 +108,7 @@ struct ContentView: View {
                         inspectorTab = "memory"; showInspector = true
                     }.disabled(!store.ready || store.selected == nil)
                     Menu("Gestionar", systemImage: "slider.horizontal.3") {
+                        Button("Mac y navegador") { inspectorTab = "automation"; showInspector = true }
                         Button("Contexto y ramas") { inspectorTab = "sessionCore"; showInspector = true }
                         Button("Clientes locales") { inspectorTab = "clients"; showInspector = true }
                         Button("Delegación y objetivos") { inspectorTab = "delegation"; showInspector = true }
@@ -127,6 +128,7 @@ struct ContentView: View {
         .inspector(isPresented: $showInspector) {
             VStack(spacing: 0) {
                 Picker("Panel", selection: $inspectorTab) {
+                    Text("Mac y navegador").tag("automation")
                     Text("Contexto y ramas").tag("sessionCore")
                     Text("Clientes locales").tag("clients")
                     Text("Delegación y objetivos").tag("delegation")
@@ -140,7 +142,8 @@ struct ContentView: View {
                     Text("Procesos").tag("processes")
                     Text("Telegram").tag("telegram")
                 }.pickerStyle(.menu).padding()
-                if inspectorTab == "mcp" { MCPView(store: store) }
+                if inspectorTab == "automation" { AutomationControlView(store: store) }
+                else if inspectorTab == "mcp" { MCPView(store: store) }
                 else if inspectorTab == "sessionCore" { SessionCoreView(store: store) }
                 else if inspectorTab == "clients" { ClientIdentityView(store: store) }
                 else if inspectorTab == "delegation" { DelegationView(store: store) }

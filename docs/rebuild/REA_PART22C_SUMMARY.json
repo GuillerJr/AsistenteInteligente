@@ -1,0 +1,271 @@
+{
+  "schema_version": 1,
+  "part": "OC-22C",
+  "title": "Browser binding, snapshots, exact targets and action lifecycle",
+  "decision_date": "2026-10-26",
+  "reference": {
+    "root": "/Users/guillerjr/Documents/Proyectos/Jarvis-Base-OpenClaw",
+    "commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac"
+  },
+  "acquisition": {
+    "method": "git show exact immutable committed blobs to a private readonly selected partition",
+    "partition": "/private/tmp/jarvis-rea-22c-_qbcmssy",
+    "reference_modified": false,
+    "target_executed": false,
+    "integrity_policy": "fail"
+  },
+  "sources": [
+    {
+      "path": "package.json",
+      "bytes": 153025,
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "git_blob_sha1": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d"
+    },
+    {
+      "path": "extensions/browser/src/browser-tool-binding.ts",
+      "bytes": 3425,
+      "sha256": "ac989683e8c9740a58219afd4d01946036b61c5f88da0c0ad35e534ff46103ce",
+      "git_blob_sha1": "8aaa1c4e9c6ccddef194957065a3fdde6083c941"
+    },
+    {
+      "path": "extensions/browser/src/browser-tool.snapshot.ts",
+      "bytes": 16685,
+      "sha256": "e03ce145f366854232bd012f8718832ede70290d19bab5204d33bfb230652aa5",
+      "git_blob_sha1": "4a65089f35d863eb5eaf0a95eb935bcf07282c7a"
+    },
+    {
+      "path": "extensions/browser/src/browser/cdp-target-filter.ts",
+      "bytes": 927,
+      "sha256": "e4ae0fe1eacb8717d106b0695b521150bd5fe212afe6097cfd6e9fab3796747d",
+      "git_blob_sha1": "b284356b53205f7a0fe786d83086d64262362963"
+    },
+    {
+      "path": "extensions/browser/src/browser/client-actions.ts",
+      "bytes": 8291,
+      "sha256": "5fcb00b49dd6e9ef462c84270c6504cbfbbfecc4452ee14c4362749c9d7faf6b",
+      "git_blob_sha1": "593b8d63d0344550860755de29de780b7168a859"
+    }
+  ],
+  "rea": {
+    "parent_evidence_id": "ev_3c7e85f98d2003f2c62bf8ddd2c7391d57822db6e0cfa4b98c74ac78a1cc2355",
+    "summary_evidence_id": "ev_54b251888f13120cddb4952931268256a959114a52b00fa81095901620c012cb",
+    "artifact_sha256": "a378eaa6441e917f4d6176a613c6eb15d1bc33304f43ec078b0c3cbbb2d8fab4",
+    "evidence_bundle": {
+      "path": "/private/tmp/jarvis-rea-22c-evidence.json",
+      "sha256": "fe5463ddda6a2e8212d4850bb4fe25f3705b0cc456d6fd52b675fff11c0664c9",
+      "bytes": 4262804
+    },
+    "coverage": {
+      "application": "complete within the five-file partition only",
+      "whole_reference_complete": false,
+      "parsed_javascript_files": 4,
+      "text_bytes_read": 182353,
+      "semantic_status": "unknown",
+      "semantic_unknowns": 631
+    }
+  },
+  "observations": [
+    {
+      "source": "extensions/browser/src/browser-tool-binding.ts",
+      "kind": "static",
+      "finding": "Target/profile route binding is checked before a browser action is routed; nested requests cannot replace a bound target."
+    },
+    {
+      "source": "extensions/browser/src/browser-tool.snapshot.ts",
+      "kind": "static",
+      "finding": "Snapshot and page-controlled payloads have bounded output and explicit untrusted-content wrapping."
+    },
+    {
+      "source": "extensions/browser/src/browser/cdp-target-filter.ts",
+      "kind": "static",
+      "finding": "Selectable page targets exclude browser-internal URL schemes."
+    },
+    {
+      "source": "extensions/browser/src/browser/client-actions.ts",
+      "kind": "static",
+      "finding": "Action transports carry an explicit target, cancellation signal and distinct operation/transport timeout budgets."
+    }
+  ],
+  "own_design": [
+    "Private nonpersistent native WebKit pages behind an authenticated no-failover CONNECT proxy with screened DNS and numeric-address tunnels.",
+    "Exact attached target WebSocket only; no target enumeration, browser-wide attachment or cookie API.",
+    "Fixed own scripts in isolated worlds, JSON data parameters, origin preconditions and snapshot/element CAS adjacent to the effect.",
+    "Downloads return bounded in-memory bytes/hash to the central host; no automatic disk writes or WebKit downloads.",
+    "One operation ID is consumed before dispatch. Managed cancellation/reset retain evaluation custody until the actual WebKit reply or process-termination evidence; transport cancellation cannot replay uncertain actions or undo site effects."
+  ],
+  "limits": [
+    "Static source and graph candidates do not establish execution or full OpenClaw behavior.",
+    "All source dependencies and unselected reference files remain outside this partition.",
+    "631 semantic unknowns remain; complete partition inventory is not complete semantic understanding.",
+    "No implementation, generated resources, original scripts or runtime from OpenClaw was imported into Jarvis.",
+    "Existing browser network policy remains owned by its browser; attachment does not apply the managed WebKit proxy to an external profile.",
+    "Disconnecting an attached CDP page closes only Jarvis transport, not previously dispatched site code or the external target. A managed evaluation that never returns retains custody instead of fabricating cleanup."
+  ],
+  "own_validation": {
+    "status": "passed",
+    "tests": 21,
+    "passed": 21,
+    "failed": 0,
+    "count_basis": "Disjoint relevant cases: 13 browser component/transport + 3 window/cancellation audit + 4 signed host/DTO + 1 actual Chrome. The 39-case regression log also includes 23 Mac backend tests; those are not added to this browser count.",
+    "suites": [
+      {
+        "id": "browser_components_and_cancellation",
+        "related_tests": 16,
+        "all_logged_tests": 39,
+        "passed": 39,
+        "failed": 0,
+        "seconds": 20.268,
+        "log": {
+          "path": "/private/tmp/jarvis-mac-browser-audit-fixed-tests.log",
+          "bytes": 17597,
+          "sha256": "ee1d4b917d0c2aa775d0dc8c196dcb753bf67ea2b5cd81c62a52a5a87a35f125"
+        }
+      },
+      {
+        "id": "signed_native_host",
+        "tests": 4,
+        "passed": 4,
+        "failed": 0,
+        "seconds": 3.931,
+        "log": {
+          "path": "/private/tmp/jarvis-native-automation-integration-second.log",
+          "bytes": 2127,
+          "sha256": "2314e880c931f7d28763f3f9795d25fd9a755cafe2c73de8cdf514fcc955cd75"
+        }
+      },
+      {
+        "id": "actual_chrome",
+        "tests": 1,
+        "passed": 1,
+        "failed": 0,
+        "seconds": 2.945,
+        "opt_in_environment": "JARVIS_REAL_CHROME=1",
+        "default_suite": "explicitly skipped without opt-in",
+        "log": {
+          "path": "/private/tmp/jarvis-real-chrome-tests-final-2.log",
+          "bytes": 1440,
+          "sha256": "5b728e60e69dc976a2ffe2c72c63a40d3d637165102680f2187db80bec74dd1a"
+        }
+      }
+    ],
+    "implementation_identities": [
+      {
+        "path": "native/JarvisDesktop/Sources/DesktopCore/BrowserAutomationCDP.swift",
+        "bytes": 5422,
+        "sha256": "8421d5b73d8236a132e8085359ebc3253ad5390c8810b68a9db0543bc35c2402"
+      },
+      {
+        "path": "native/JarvisDesktop/Sources/DesktopCore/BrowserAutomationExecutor.swift",
+        "bytes": 38357,
+        "sha256": "104d53ac01370056ca02c564e659c6e28e42f741edf1596a48202fb71521b334"
+      },
+      {
+        "path": "native/JarvisDesktop/Sources/DesktopCore/BrowserAutomationPolicy.swift",
+        "bytes": 7171,
+        "sha256": "a0bfaac333528de0ce482f1c8869bad69287c7fe627b81cbce0e89e75507087d"
+      },
+      {
+        "path": "native/JarvisDesktop/Sources/DesktopCore/BrowserAutomationProxy.swift",
+        "bytes": 11851,
+        "sha256": "5c86242074317611684d09720d5a7f7a9d270d3cf2665a67c1a2a6ac2cd2cad1"
+      },
+      {
+        "path": "native/JarvisDesktop/Sources/DesktopCore/BrowserAutomationScripts.swift",
+        "bytes": 5773,
+        "sha256": "8de3aeeffcd776bb52158b11637b70fbbf02e2a0fc49d7a348d4ee794e85ee49"
+      }
+    ],
+    "test_identities": [
+      {
+        "path": "native/JarvisDesktop/Tests/DesktopCoreTests/BrowserAutomationCDPTests.swift",
+        "bytes": 10661,
+        "sha256": "c6ca7fe868a2a1e79a0ca0f11a43fc5330e8a44f3e0936e6ddba56a56cb9fa7f"
+      },
+      {
+        "path": "native/JarvisDesktop/Tests/DesktopCoreTests/BrowserAutomationChromeTests.swift",
+        "bytes": 13923,
+        "sha256": "466405e2bff4b96675af1365ee76a225be4e1fb7e53f0511515ffa1f4a1c1e7d"
+      },
+      {
+        "path": "native/JarvisDesktop/Tests/DesktopCoreTests/BrowserAutomationTests.swift",
+        "bytes": 19666,
+        "sha256": "2f8044297347df55fac04067fad4a0d161870698279d1577242016ac4fe52301"
+      },
+      {
+        "path": "native/JarvisDesktop/Tests/DesktopCoreTests/MacBrowserAuditTests.swift",
+        "bytes": 9137,
+        "sha256": "ca738eb8de416a76c9f363a9bf5f1a0c4f46bae669f26fcbcab63af0ffc851d2"
+      },
+      {
+        "path": "native/JarvisDesktop/Tests/DesktopCoreTests/NativeAutomationHostTests.swift",
+        "bytes": 3571,
+        "sha256": "1018a6fff3faae3a12fb52cd8df9915fc54417b13eaafcd5509f4ef8763e86b8"
+      },
+      {
+        "path": "native/JarvisDesktop/Tests/DesktopCoreTests/NativeAutomationIntegrationTests.swift",
+        "bytes": 13555,
+        "sha256": "540fd94c734399df244b3c5560b423401fcf9b16ff5aab98954e8536dd3f18d2"
+      }
+    ],
+    "actual_chrome_identity": {
+      "path": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      "version": "155.0.8059.85",
+      "launcher": {
+        "path": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "bytes": 367696,
+        "sha256": "6e156f2271cef44afce9db36a5b920e94518857b94a4160f082696f8c3bd1c9d"
+      },
+      "profile": "new private /private/tmp user-data-dir per test",
+      "target_acquisition": "PUT /json/new only in the explicitly spawned own Chrome process; no target enumeration"
+    },
+    "real_components": [
+      "WKWebView",
+      "private loopback HTTP fixtures",
+      "Network CONNECT proxy",
+      "isolated JavaScript world",
+      "DOM value read-back",
+      "native window close",
+      "signed LocalRPCClient and JarvisService broker",
+      "Google Chrome 155.0.8059.85 exact target CDP"
+    ],
+    "synthetic_components": [
+      "fault-injecting CDP WebSocket peer",
+      "host lease revocation callback",
+      "test origin allowance",
+      "model SDK peer",
+      "approval decisions on fresh synthetic profiles"
+    ],
+    "not_claimed": [
+      "fresh authenticated Codex inference",
+      "whole reference browser coverage",
+      "owner personal history or profiles",
+      "universal site support or external site-effect rollback"
+    ],
+    "initial_failures_preserved": [
+      "CDP test HTTP/1.0 handshake",
+      "WKContentWorld recreated and snapshot lost",
+      "loopback HTTP proxy bypass uncovered by decoy oracle",
+      "unsupported disjunction syntax in WebKit content filters",
+      "audit proved stopLoading/continuation retirement falsely acknowledged JS cleanup; now retained until real reply/process termination",
+      "actual Chrome first harness could not bind own HTTP fixture under restricted sandbox",
+      "actual Chrome initial/follow-up close harness interrupted asynchronous Browser.close shutdown before waitpid; own process shutdown grace and bounded ACK handling corrected"
+    ],
+    "preserved_chrome_failure_logs": [
+      {
+        "path": "/private/tmp/jarvis-real-chrome-tests-first.log",
+        "bytes": 7735,
+        "sha256": "3060647023e981a86435954460d9f032f95f603e9053738030bfde648bfe21f1"
+      },
+      {
+        "path": "/private/tmp/jarvis-real-chrome-tests-second.log",
+        "bytes": 1587,
+        "sha256": "c79dc1ea8286af987937fb3438649725894e7be00ce2ccf7958d2a1c7bf9e862"
+      },
+      {
+        "path": "/private/tmp/jarvis-real-chrome-tests-final.log",
+        "bytes": 1552,
+        "sha256": "48e61af2f52ff8cb3dc4103b5dab9a03f6606c3b91150e50d46df4aa4ad2fbf0"
+      }
+    ]
+  }
+}

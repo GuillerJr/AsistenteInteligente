@@ -1,0 +1,28 @@
+{
+  "format": "jarvis-external-closed-preflight/1",
+  "synthetic_only": true,
+  "recording_method": "Semantic fields captured from the earlier private preflight read; the authorized new launch later replaced state.json. Not a byte-identical source-file copy.",
+  "observed_ns": 1793105801881934000,
+  "source_mtime_ns": 1793079434267620084,
+  "signal_zero_alive": false,
+  "signal_zero_errno": 3,
+  "state": {
+    "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+    "counter": 1,
+    "counter_value": "CONTADOR 1",
+    "editor_utf16_length": 41,
+    "editor_value": "INICIO 🧪\nSEGUNDA LÍNEA + AÑADIDO\nTERCERA",
+    "format": "jarvis-mac-external-fixture/1",
+    "pid": 27924,
+    "revision": 5213,
+    "secure_value_recorded": false,
+    "selected_range": [
+      41,
+      0
+    ],
+    "source": "independent_AppKit_objects_not_Jarvis_receipt",
+    "state_status": "closed",
+    "synthetic_only": true,
+    "window_number": 18864
+  }
+}

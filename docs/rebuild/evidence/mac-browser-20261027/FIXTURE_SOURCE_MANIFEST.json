@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "kind": "independently_authored_external_test_fixture_source",
+  "source": {
+    "path": "/private/tmp/jarvis-mac-external-fixture-20261027/JarvisMacExternalFixture.swift",
+    "bytes": 6978,
+    "sha256": "568669cdd793d45cad1627f97c7c0f6297c713a75e7beb4d703c5c24c0e5d713"
+  },
+  "preserved_copy": {
+    "path": "docs/rebuild/evidence/mac-browser-20261027/JarvisMacExternalFixture.swift",
+    "bytes": 6978,
+    "sha256": "568669cdd793d45cad1627f97c7c0f6297c713a75e7beb4d703c5c24c0e5d713"
+  },
+  "purpose": "Reproduce the independent AppKit state oracle. Documentary evidence only; no runtime/product import and no increase to the 356-source manifest.",
+  "uses_owner_data": false,
+  "secure_field_value_recorded": false,
+  "uses_network": false,
+  "grants_TCC": false
+}

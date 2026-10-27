@@ -1,0 +1,1540 @@
+{
+  "format": "jarvis-mac-browser-live-rpc/1",
+  "synthetic_only": true,
+  "route": "running native app via signed RPC",
+  "phase": "build02 before AX stale fix and download-flag fix",
+  "limitations": [
+    "Running native app driven through signed RPC, not GUI gestures.",
+    "The fixed page confirms clicks by GET /confirm, not HTTP POST.",
+    "Real AX on the own synthetic fixture only; no frame capture or owner apps.",
+    "Positive AX write deferred to build03 after causal stale fix.",
+    "This is API-driven native-app QA; no GUI click on an approval button is claimed."
+  ],
+  "step_count": 55,
+  "steps": [
+    {
+      "label": "browser_open",
+      "tool": "browser_open",
+      "run_id": "dc8c6397e47c44ebb6250534eed62354",
+      "approvals": [
+        {
+          "id": "fd0e2febb0a54bdd9638373384ab2350",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "not_found": 0,
+        "page": 1
+      },
+      "recovered_without_effect_replay": true,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "0369a7ffd22449493f1c38da7f93b83fdd5fe0e32318f65b235bad6c7ef5cb63",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "observe_initial",
+      "tool": "browser_observe",
+      "run_id": "bd41a9e36c494195be2c9edb90350a0b",
+      "approvals": [
+        {
+          "id": "309af4fd51c144968188ab42f6437aa6",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "not_found": 0,
+        "page": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "0337a4fe5744c31ef21648d3bfd7442f1aad65cb12c1ac8a199f4c54731cfd6a",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "observe_before_session_fill",
+      "tool": "browser_observe",
+      "run_id": "2efd05a0d4394583981768aff37fbee4",
+      "approvals": [
+        {
+          "id": "f4b31f0c3aff46feae25f2fdb84354d7",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "page": 0,
+        "not_found": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "20bf48fe1364df3980dd0fa5dc54512cd8bc0159595e5ff2bf08e587d0dff311",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "fill_remember_session",
+      "tool": "browser_action",
+      "run_id": "f8c4570b1d734ffb8cc70e6c38a4c4ae",
+      "approvals": [
+        {
+          "id": "191fd41009eb4f1eaa2bbdc4f2d2433d",
+          "allow": true,
+          "remember": "session"
+        }
+      ],
+      "http_delta": {
+        "page": 0,
+        "not_found": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": true,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "16aa5639450a6f212553507a86db57370c7108586cab7de82fe16db2d9ade0c2",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "observe_after_session_fill",
+      "tool": "browser_observe",
+      "run_id": "6a27edbc28164979b9c1b185719dd4af",
+      "approvals": [
+        {
+          "id": "b772c96728f447f8b2f7c3688480df3c",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "page": 0,
+        "not_found": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "7303f7f426104f6bfb21ab9e20663f2dc008744c9660100fc6943261648de2b0",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "fill_remembered_session_no_prompt",
+      "tool": "browser_action",
+      "run_id": "36c84a33feb64f9cb2be53232d9bd3b2",
+      "approvals": [],
+      "http_delta": {
+        "page": 0,
+        "not_found": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": true,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "dd214ae9bfbc9fa9940288a04e98a125700c41c222a35c4c87b396fe14b861d0",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "observe_other_session",
+      "tool": "browser_observe",
+      "run_id": "cb21700fa6ec43cb90425920bb68a837",
+      "approvals": [
+        {
+          "id": "ffa72fd14a2a419497bdd00f976f9f48",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "page": 0,
+        "not_found": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "9ae8283758f15573d6442e00f4ae06cbc8ac492c24c888a0bca73ee0ccdbebc7",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "session_rule_does_not_cross_chat",
+      "tool": "browser_action",
+      "run_id": "0266a8fdd14b4bbb96e279eabc10502d",
+      "approvals": [
+        {
+          "id": "85db025da11a4fdfbeac888f3b888dae",
+          "allow": false,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": null,
+      "recovered_without_effect_replay": true,
+      "status": "failed",
+      "run_error": "approval_denied",
+      "succeeded": null,
+      "verified": null,
+      "effect_status": null,
+      "tool_error": null,
+      "output_sha256": null,
+      "denied_before_native_dispatch": true
+    },
+    {
+      "label": "observe_after_denied_cross_chat",
+      "tool": "browser_observe",
+      "run_id": "325665a69c004b8da80782c212a85907",
+      "approvals": [
+        {
+          "id": "7b398d66dbca4e62a432fa4647681c86",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "not_found": 0,
+        "page": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "961d88ca4efca5257f87a70c645fa97e2a5e32e5e54559792e5bec8b62823ef8",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "observe_before_always_fill",
+      "tool": "browser_observe",
+      "run_id": "1424d0837fda438aa4766b1e1645247f",
+      "approvals": [
+        {
+          "id": "d833546ca96448feb3ffb610c700131f",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "not_found": 0,
+        "page": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "a372ad37bb04d69602fb43dc33273a710ee785711ff4712802c7de103d1d6d3f",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "fill_remember_always",
+      "tool": "browser_action",
+      "run_id": "20d95bcce3c14ec2b945b15b36696e10",
+      "approvals": [
+        {
+          "id": "9e28c6d31d044d8d86936ef8c9a74e1c",
+          "allow": true,
+          "remember": "always"
+        }
+      ],
+      "http_delta": {
+        "not_found": 0,
+        "page": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": true,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "cb3b793839dd789b703747c24309772c045ec12903197e22ad941a4d2efae115",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "observe_other_before_always",
+      "tool": "browser_observe",
+      "run_id": "ec7bc39c4e794405b4112bc43931ed0a",
+      "approvals": [
+        {
+          "id": "32d909a794b240a48de00882955640f0",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "not_found": 0,
+        "page": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "e63690b217b12b4bb3d605ef2b04e91f6d900aa057d49991934be5e88647db74",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "always_rule_cross_chat_no_prompt",
+      "tool": "browser_action",
+      "run_id": "0dd426cb27804da1af21494d5ea5ccaf",
+      "approvals": [],
+      "http_delta": {
+        "not_found": 0,
+        "page": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": true,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "25b27beeb6b01337a6fba688beedd7d460ea141ab63e1cf6a0228b36b6a09a2b",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "observe_after_always_revoke",
+      "tool": "browser_observe",
+      "run_id": "b022c1e5ad75491b96de313e684a26de",
+      "approvals": [
+        {
+          "id": "ed86f9cc857746f69a5ddc804344e539",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "not_found": 0,
+        "page": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "26dbd385641b6b5b99589947698c3103dad2b3b50185fe96ed71fd6a3f7438b6",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "revoked_always_requests_approval_denied",
+      "tool": "browser_action",
+      "run_id": "0ebc3f4956dc4864ac0c0fce4c694810",
+      "approvals": [
+        {
+          "id": "6dab8687532149ab901c539473eacd38",
+          "allow": false,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": null,
+      "recovered_without_effect_replay": null,
+      "status": "failed",
+      "run_error": "approval_denied",
+      "succeeded": null,
+      "verified": null,
+      "effect_status": null,
+      "tool_error": null,
+      "output_sha256": null,
+      "denied_before_native_dispatch": true
+    },
+    {
+      "label": "observe_value_after_revoke_denial",
+      "tool": "browser_observe",
+      "run_id": "4012b351d62c4d6c944f3dad58126c09",
+      "approvals": [
+        {
+          "id": "b8940d941b07402e9a3ceec4ada498c0",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "not_found": 0,
+        "page": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "2e4e1fa4b77059616e013fed49ab897c07307db16314efc43f74ccdb61155121",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "select_second_option",
+      "tool": "browser_action",
+      "run_id": "1f73b76c053541f0b3e93fb9fa55532c",
+      "approvals": [
+        {
+          "id": "81b09327130b471f941b0d634f8014fe",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "not_found": 0,
+        "page": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": true,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "8c335f2b3908a328ac91d6cd56a5b6b9236abfe1f6e2f3eae0e3fa86d5eb9922",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "observe_before_click",
+      "tool": "browser_observe",
+      "run_id": "5106e8db4c6543b4838695058dd3ec1e",
+      "approvals": [
+        {
+          "id": "5389b07698ed4ccfb1441b306a8c9049",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "not_found": 0,
+        "page": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "9b9dc7409b6dc547431f58989c3a40d26942e5545977fb8c43ee326f86b87682",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "click_once_independent_confirm",
+      "tool": "browser_action",
+      "run_id": "d7039cd334504b5fb6a5869f66c550b3",
+      "approvals": [
+        {
+          "id": "5d4691b2aff142e6be57656600c3845e",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "page": 0,
+        "not_found": 0,
+        "confirm": 1
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "2f889556c5ae2246e57cac53308865d2035e09f98b29d0b7df51970d05771c4e",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "observe_confirmed_marker",
+      "tool": "browser_observe",
+      "run_id": "4013a7462b9b4b64be628df22b65d2bf",
+      "approvals": [
+        {
+          "id": "a967613fc9544ea197f7b9d59597d721",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "page": 0,
+        "not_found": 0,
+        "confirm": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "47fce62dde26c390739ba7d935cc3a96f032f2540952d0295834e45eab68f8c5",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "stale_snapshot_rejected_no_second_click",
+      "tool": "browser_action",
+      "run_id": "8ca9c33d4f8d4f08839babd8f30fe234",
+      "approvals": [
+        {
+          "id": "719917ae51e84b0695db1bee8c10d2b6",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "page": 0,
+        "not_found": 0,
+        "confirm": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "failed",
+      "run_error": "tool_outcome_unknown",
+      "succeeded": false,
+      "verified": false,
+      "effect_status": "unknown",
+      "tool_error": "native_operation_unconfirmed",
+      "output_sha256": "dfa78cc4300d57be03691cc4cfd91312845403b8bd7af6b577232faf75e50f77",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "download_exact_new_file",
+      "tool": "browser_download",
+      "run_id": "cc57d30ae74443ab8ba8d8865e3d52d9",
+      "approvals": [
+        {
+          "id": "00a8d17176534966ae5eadb1a201a9a6",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "confirm": 0,
+        "page": 0,
+        "not_found": 0,
+        "download": 1
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": true,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "56cf1bf7afad8f7b43c14fe6422f27d8959d814be030bc1ac7f6fc8bf0be5455",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "workspace_multi_patch_once",
+      "tool": "workspace_patch",
+      "run_id": "a3f0c249b4794452b3ffb5beb9f1c2fe",
+      "approvals": [
+        {
+          "id": "4bc95ea349b7410e918411fb3d7d8f90",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "confirm": 0,
+        "page": 0,
+        "not_found": 0,
+        "download": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": true,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "ffbfb60ae67ccaca4f9632bef7177b3c75c357698e4627064128d23445a29d15",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "pty_run",
+      "tool": "process_run",
+      "run_id": "6a6b9acf9e0c4053b5dc803eb53bf06a",
+      "approvals": [
+        {
+          "id": "ab670b9fd9f34d19a0915518561c489f",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": null,
+      "recovered_without_effect_replay": true,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "9cd8b14dfccc77ca5635acf12a6bd05adbac2dc75bc75bf075b8c6ff0c996650",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "pty_stdin_repl_sum",
+      "tool": "process_send",
+      "run_id": "8fe5ea8036e1480990963d7499a9b3e3",
+      "approvals": [
+        {
+          "id": "427a64d21dc14845abf567e68c922b15",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "confirm": 0,
+        "not_found": 0,
+        "page": 0,
+        "download": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "9cd8b14dfccc77ca5635acf12a6bd05adbac2dc75bc75bf075b8c6ff0c996650",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "pty_resize",
+      "tool": "process_resize",
+      "run_id": "0e56417a41f645c1b86ceb53db49db2f",
+      "approvals": [
+        {
+          "id": "9af8ebbf81d8490183012cf93ac315f3",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "confirm": 0,
+        "not_found": 0,
+        "page": 0,
+        "download": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "977f0a5f997864efdb09d89d2bb61c9ac97b1b931f0956aa0a912aee0c099096",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "pty_interrupt",
+      "tool": "process_signal",
+      "run_id": "853393f72d2d4eacbc0ea11403d5f3a6",
+      "approvals": [
+        {
+          "id": "feaa0860412f4475afd88a62bf8c00fd",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "confirm": 0,
+        "not_found": 0,
+        "page": 0,
+        "download": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "73522c1a2fa983f9e68bc4167742f2611c149ef7b216da7f2ff6fd6218cdfc90",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "pty_poll_sum_and_signal",
+      "tool": "process_poll",
+      "run_id": "85f4bb2898da4c57b5103519536c3c81",
+      "approvals": [],
+      "http_delta": {
+        "confirm": 0,
+        "not_found": 0,
+        "page": 0,
+        "download": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "5a2cae9cda39112cf3cdf0bbda3e31db5ed16176c67764f28b1002b3a444c2b3",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "pty_eof",
+      "tool": "process_send",
+      "run_id": "a249a7bd99654038ab4f8755f2bcaa32",
+      "approvals": [
+        {
+          "id": "16edb3cdc31b4e8ea5f6261f5cad5dfb",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "confirm": 0,
+        "not_found": 0,
+        "page": 0,
+        "download": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "9d45b0a1e603055cefa06a4cbc4d6174a819bf259ee1ffbb04af268fd3cbe1d6",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "pty_poll_reaped",
+      "tool": "process_poll",
+      "run_id": "94dadbf45d6049e789cd80037cd61399",
+      "approvals": [],
+      "http_delta": {
+        "confirm": 0,
+        "not_found": 0,
+        "page": 0,
+        "download": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "436ba163c6274d844c44f96789e45ee8143fed982f59fd98d52bf696f6910fdb",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "desktop_resolve_own_fixture",
+      "tool": "desktop_resolve",
+      "run_id": "9b47f012f3cc45428e0d9c644c46c8ac",
+      "approvals": [
+        {
+          "id": "0f2f09cd7f504e5b8ec6afc527574901",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "download": 0,
+        "not_found": 0,
+        "page": 0,
+        "confirm": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": true,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "524f4f823e2936944176cbfc3888abdd73090753569588fa1773caad2dfaa01b",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "desktop_windows_own_fixture",
+      "tool": "desktop_windows",
+      "run_id": "d8c18cc7fd1d48adbcac2638bc031b57",
+      "approvals": [
+        {
+          "id": "0795c5b905934331a15029ea7a93f3f5",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "download": 0,
+        "not_found": 0,
+        "page": 0,
+        "confirm": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": true,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "eae64c2466036040cd67c1884447ae417eee71b307f620f4f57e583c294d2bc6",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "desktop_observe_fixture_no_frame",
+      "tool": "desktop_observe",
+      "run_id": "6275ef0b3af449f8a9d82a10368e9751",
+      "approvals": [
+        {
+          "id": "b58a240cd4034445afab84eb0dfd4e96",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "download": 0,
+        "not_found": 0,
+        "page": 0,
+        "confirm": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": true,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "56f4582239257815566188bd0122ef811f9e8b105ed431875ac42e84d28106a2",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "desktop_observe_before_unicode",
+      "tool": "desktop_observe",
+      "run_id": "7f7b8cb8a1744c7b803eb7444e069d09",
+      "approvals": [
+        {
+          "id": "d8564041fb014ad18231ceeb4bd28e67",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "download": 0,
+        "page": 0,
+        "not_found": 0,
+        "confirm": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": true,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "79eda2580e466b4c427947d77f8752bb3a04e09a64bbdec11e340095262afe95",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "desktop_set_value_unicode_newline",
+      "tool": "desktop_action",
+      "run_id": "14d9a501af2b4733a3a503b40ff2aa51",
+      "approvals": [
+        {
+          "id": "e113d8344e9a4e518d8c93c580fc787b",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "download": 0,
+        "page": 0,
+        "not_found": 0,
+        "confirm": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": false,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": "La ventana cambió o la observación caducó. Observa de nuevo antes de actuar.",
+      "output_sha256": "8fe18214a13e2fd14a1012f149845b8f5e41172fae6666414e58ac41e8e7e892",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "desktop_compare_first",
+      "tool": "desktop_observe",
+      "run_id": "b63851cddcf4454eafa8ae64bad21912",
+      "approvals": [
+        {
+          "id": "b60cd96953ea401d81fd723899554421",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "download": 0,
+        "page": 0,
+        "confirm": 0,
+        "not_found": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": true,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "49f7cfd9802834979bf7eb7cd675e8e2fe54d9cda67516e3f08b7c50ad5bb489",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "desktop_compare_second",
+      "tool": "desktop_observe",
+      "run_id": "05b305e12a4a4a27925bb6df387852b8",
+      "approvals": [
+        {
+          "id": "5834e822e7f84448b3f20e67bae59d6d",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "download": 0,
+        "page": 0,
+        "confirm": 0,
+        "not_found": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": true,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "cde5bcf4a3a3814556c809e83a00067e90ab91d3db945086ca549d2341a86dda",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "browser_search_explicit_own_template",
+      "tool": "browser_search",
+      "run_id": "905309cc6c074876a62d6ac8abd610ec",
+      "approvals": [
+        {
+          "id": "7f6cbbcf2ff8489396c4bd432172b610",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "confirm": 0,
+        "page": 0,
+        "download": 0,
+        "search": 1,
+        "not_found": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "3e0a4632d2560109b826d435a27c0cdc42797c79da97e32285ed1a19d8349327",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "browser_search_tab_close",
+      "tool": "browser_close",
+      "run_id": "60068cb3fa7444d982b01d8c3efdbf8a",
+      "approvals": [
+        {
+          "id": "22976581250a4b4c89f5814f38f18326",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "confirm": 0,
+        "page": 0,
+        "download": 0,
+        "search": 0,
+        "not_found": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": true,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "406dd3816ec159f5a1825c24edc1bca29d8b8d3fbfd57141d5a26d8d475edc48",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "browser_navigate_document",
+      "tool": "browser_navigate",
+      "run_id": "815ae47703a147c58e47ac632b925844",
+      "approvals": [
+        {
+          "id": "fa90d5e5c68141e181d8feb36ca5af57",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "confirm": 0,
+        "page": 0,
+        "document": 1,
+        "download": 0,
+        "search": 0,
+        "not_found": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "a7fae5d276701e2c5e3c52074d44bd2e900937f911a5bc3d5d88fe87c56b939d",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "browser_history_back",
+      "tool": "browser_history",
+      "run_id": "653a1b289285433c9c1d65e2f7ec8db8",
+      "approvals": [
+        {
+          "id": "00f7acab5e1545ca8f6eace34131063b",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "confirm": 0,
+        "page": 0,
+        "document": 0,
+        "download": 0,
+        "search": 0,
+        "not_found": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "299423a2199ea3e53c68213970dedc568043f2e278905df40da5d09a444c307f",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "browser_history_forward",
+      "tool": "browser_history",
+      "run_id": "8f5e5ea3b8494da28c06a41c99cab50c",
+      "approvals": [
+        {
+          "id": "7b8414f629d948ee80c7972b695d5be9",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "confirm": 0,
+        "page": 0,
+        "document": 0,
+        "download": 0,
+        "search": 0,
+        "not_found": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "eed1a60879d222ff5d46f9a10434351090b4690f54e604203ca58d266eb2e6ca",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "browser_attach_explicit_own_chrome",
+      "tool": "browser_attach",
+      "run_id": "fef39e56447241b4879dcc349347013e",
+      "approvals": [
+        {
+          "id": "69ada28d4f9a4e6f9f61cff465401ffd",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "download": 0,
+        "document": 0,
+        "confirm": 0,
+        "search": 0,
+        "page": 0,
+        "not_found": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "0a4517350636fd92d648834baf26dccd005af0732d4fc631a30fb4adc4d87c3c",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "cdp_observe_own_page",
+      "tool": "browser_observe",
+      "run_id": "a008ca71dabc41b0bcdd660f414fe019",
+      "approvals": [
+        {
+          "id": "ecc2e79608b84392b1469176ab4b7901",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "download": 0,
+        "document": 0,
+        "confirm": 0,
+        "search": 0,
+        "page": 0,
+        "not_found": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "51c334061224dc521f8a64c4bd6b88cd9b9a8d951fcb7b35ee1f5f093cc31441",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "cdp_fill_literal",
+      "tool": "browser_action",
+      "run_id": "2824adad4cb749858188fe4f732718aa",
+      "approvals": [
+        {
+          "id": "6565a5d4fbf44eb0aabedefbf1a379cb",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "download": 0,
+        "document": 0,
+        "confirm": 0,
+        "search": 0,
+        "page": 0,
+        "not_found": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": true,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "3f95a91d60f4b2cb255254bb033a8d3e4090958d37204efe4bc54bbfece823f2",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "cdp_observe_before_select",
+      "tool": "browser_observe",
+      "run_id": "bbe7090d82b04df2bbea29d34d190792",
+      "approvals": [
+        {
+          "id": "dd86271d64114f2f8608480f650d9cde",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "download": 0,
+        "document": 0,
+        "confirm": 0,
+        "search": 0,
+        "page": 0,
+        "not_found": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "19487fa7b5deec55a5ff3c714f3f26b3db91ce790d615e4ffc031ba425b5e96a",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "cdp_select_second_option",
+      "tool": "browser_action",
+      "run_id": "d8ec099a9181433aa6999dda3626e6ea",
+      "approvals": [
+        {
+          "id": "fe481af964b9423082d4e671c052d074",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "download": 0,
+        "document": 0,
+        "confirm": 0,
+        "search": 0,
+        "page": 0,
+        "not_found": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": true,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "7abab06ca2f7715988b448f5714e22afedbd315d6ac9d612b7a9573a778975b6",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "cdp_observe_before_click",
+      "tool": "browser_observe",
+      "run_id": "ddc00754aac94cb98d69dc701d6610bd",
+      "approvals": [
+        {
+          "id": "2c11baa3300b4b80a1c97b9cdfb796ad",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "download": 0,
+        "document": 0,
+        "confirm": 0,
+        "search": 0,
+        "page": 0,
+        "not_found": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "348deb05572969bc9507d20a2f81ac0ad7519dbbad84f830fab61b99ba880d81",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "cdp_click_once_independent_confirm",
+      "tool": "browser_action",
+      "run_id": "4818abbf8acf42baab887a1cdf8ebbbd",
+      "approvals": [
+        {
+          "id": "8bed8cc006154561a3b8cf41ce1486bf",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "download": 0,
+        "document": 0,
+        "confirm": 1,
+        "search": 0,
+        "page": 0,
+        "not_found": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "ee1d5a03507a8d77973dfa5807b3d763c1dae9d51d0447a540159d6a26a7c7cc",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "cdp_detach_only",
+      "tool": "browser_close",
+      "run_id": "79ac3cafb6cd4468b63cce197e49e5e9",
+      "approvals": [
+        {
+          "id": "4e985d0934c148eb8a5dfd03c40ebf9f",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "download": 0,
+        "document": 0,
+        "confirm": 0,
+        "search": 0,
+        "page": 0,
+        "not_found": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": true,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "5a38da65e6a2556d01eb38d9b5030939da1a54586dbdaa3edd5d8ec97fe0a76f",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "cdp_reattach_proves_target_survived",
+      "tool": "browser_attach",
+      "run_id": "c8b3ab92e12c44ea970340524f2c2459",
+      "approvals": [
+        {
+          "id": "2aa12159394e4120931d502d4cfd589f",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "search": 0,
+        "not_found": 0,
+        "confirm": 0,
+        "page": 0,
+        "document": 0,
+        "download": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "cd36950f518f8acbf32460ef7d9872f50673bf90e81af9263483f41bfb1ac5a5",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "cdp_second_detach_only",
+      "tool": "browser_close",
+      "run_id": "768a124e764c4b08a59749c001562caf",
+      "approvals": [
+        {
+          "id": "ebf02fed959b45c5bbbffe4ab332d04d",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "search": 0,
+        "not_found": 0,
+        "confirm": 0,
+        "page": 0,
+        "document": 0,
+        "download": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": true,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "3fd96a3bd28fe4eeac2fede3b8b871bae1a9b59805ac2deea3adb9e9d15ba740",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "managed_tab_close",
+      "tool": "browser_close",
+      "run_id": "e632f6efa8764d68aeb228ae873b3f19",
+      "approvals": [
+        {
+          "id": "d7a3ca3a0e3345efa51da6cad1e5f449",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "search": 0,
+        "not_found": 0,
+        "confirm": 0,
+        "page": 0,
+        "document": 0,
+        "download": 0
+      },
+      "recovered_without_effect_replay": null,
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": true,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "dbfc0f026846cc3c53bc0eadc38335e21f7bd95edbf875ea078a382432174404",
+      "denied_before_native_dispatch": false
+    },
+    {
+      "label": "public_https_example_open_once",
+      "tool": "browser_open",
+      "run_id": "e02f127fefd443d0b522f058f62d4e23",
+      "approvals": [
+        {
+          "id": "2a1b078c2adc41909e3073b5736db29b",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "not_found": 0,
+        "search": 0,
+        "page": 0,
+        "confirm": 0,
+        "download": 0,
+        "document": 0
+      },
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": false,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "b8239f3c5004a2ee94bcf07e843c1a76ec644aa3167a5ddc2fcdc94b7ef1e9e5"
+    },
+    {
+      "label": "public_https_binding_close",
+      "tool": "browser_close",
+      "run_id": "d30a895d95a74906898ba5e67ba0231c",
+      "approvals": [
+        {
+          "id": "79a6096893a4485788e243a7be611442",
+          "allow": true,
+          "remember": "operation"
+        }
+      ],
+      "http_delta": {
+        "not_found": 0,
+        "page": 0,
+        "download": 0,
+        "search": 0,
+        "document": 0,
+        "confirm": 0
+      },
+      "status": "completed",
+      "run_error": null,
+      "succeeded": true,
+      "verified": true,
+      "effect_status": "known",
+      "tool_error": null,
+      "output_sha256": "75bc479863554cf1b715c4daa3618a47fc4087150fd689af21257fee71804f47"
+    }
+  ],
+  "sdk_proposals": 55,
+  "sdk_replies": 55,
+  "one_proposal_per_turn": true,
+  "unique_request_ids": true,
+  "managed_click": {
+    "at_ns": 1793076272356141000,
+    "route": "confirm",
+    "text": "JARVIS SIEMPRE OTRO CHAT 7319",
+    "choice": "dos",
+    "count": "1"
+  },
+  "cdp_click": {
+    "at_ns": 1793076761634615000,
+    "route": "confirm",
+    "text": "JARVIS CDP APP 7319",
+    "choice": "dos",
+    "count": "1"
+  },
+  "http_counts": {
+    "page": 2,
+    "not_found": 1,
+    "confirm": 2,
+    "download": 1,
+    "search": 1,
+    "document": 1
+  },
+  "forbidden_requests": 0,
+  "workspace_files": {
+    "editar.txt": {
+      "exists": true,
+      "bytes": 8,
+      "sha256": "bedd3a947d60ac57d3b861594e12b0d0faff2cdb4425931e0bd3984399a2c7b2"
+    },
+    "mover.txt": {
+      "exists": false,
+      "bytes": null,
+      "sha256": null
+    },
+    "movido.txt": {
+      "exists": true,
+      "bytes": 6,
+      "sha256": "b78acbb8ba73269a6737459ed4921595678dae0712fc521ef770f24cd7b3717a"
+    },
+    "nuevo.txt": {
+      "exists": true,
+      "bytes": 13,
+      "sha256": "593a0ed512e1d3ee23a126932e7f29f482538cef1c92f282b2eac888effaef62"
+    },
+    "descarga-fase-a.txt": {
+      "exists": true,
+      "bytes": 21,
+      "sha256": "4489856eac131fad85590be941894cb3738aed5caf8d641e6045798bcaef8688"
+    }
+  },
+  "download_matches": true,
+  "no_image_carrier_in_sqlite": true,
+  "capture_files_present": [],
+  "pty_reaped": true,
+  "permissions_cleared": true,
+  "browser_bindings_closed_or_detached": true,
+  "desktop_observe_comparison_equal": false,
+  "detailed_report": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa-report.json",
+  "detailed_report_sha256": "7083f8efdc7edb16a8be495b04a398b877940782b3edbfd317e6a01a6de436a4",
+  "public_https": {
+    "request_url": "https://example.com",
+    "run_id": "e02f127fefd443d0b522f058f62d4e23",
+    "succeeded": true,
+    "verified": false,
+    "effect_status": "known",
+    "error": null,
+    "open_attempts": 1,
+    "retried": false,
+    "url": "https://example.com/",
+    "origin": "https://example.com",
+    "title": "Example Domain",
+    "network_scope": "private_pinned_proxy",
+    "synthetic_origin_exception": false,
+    "external_unverified": true,
+    "text_excerpt": "Este dominio está destinado al uso en ejemplos de documentación sin necesidad de permiso. Esto no es un servicio; evitar utilizarlo para realizar pruebas o monitoreos.\n\nThis domain is for use in documentation examples without needing permission. This is not a service; avoid relying on it for testing and monitoring purposes.\n\nهذا النطاق مُخصص للاستخدام في أمثلة التوثيق دون الحاجة إلى إذن. هذه ليست خدمة، يُرجى تجنب الاعتماد عليها لأغراض الاختبار والمراقبة.\n\n该域名仅用于文档示例，无需获得许可。这并非一项服务，请勿将其用于测试和监控目的。\n\nL’usage de",
+    "text_bytes": 1301,
+    "text_sha256": "fc560c3a0aed90ded84d7a1fa2be2ef4367f41ffe683e823bd60ec42acd16c45",
+    "binding_closed": true
+  }
+}

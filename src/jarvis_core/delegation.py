@@ -733,3 +733,4 @@ class DelegationAPI:
                         record.receipt_json.encode()).hexdigest() if record and record.receipt_json
                         else None, "permits_replay": False})
                 raise StateError(reason)
+        self.native_broker.assert_settled(ref.session_id)

@@ -31,6 +31,7 @@ final class ChatStore {
     let sessionCore = SessionCoreStore()
     let clientIdentities = ClientIdentityStore()
     let delegation = DelegationStore()
+    let automation = NativeAutomationHost()
     let telegram = TelegramStore()
     let maintenance = MaintenanceStore()
     let restored = RestoreProfileStore()
@@ -59,6 +60,7 @@ final class ChatStore {
     @ObservationIgnored private var pendingQueue: PendingSubmission?
     @ObservationIgnored private var activeSession: ChatSession?
     @ObservationIgnored private var stopping = false
+    private var nativeCleanupPending = false
     @ObservationIgnored private var awaitingStartupReadiness = false
     @ObservationIgnored private var startupErrorMessage: String?
     @ObservationIgnored private var conversationRefresh: ConversationRefresh?
@@ -69,9 +71,12 @@ final class ChatStore {
     @ObservationIgnored private var nextCrashAttempt = ContinuousClock.now
 
     var isShuttingDown: Bool { stopping }
+    private var lifecycleBlocksInteraction: Bool {
+        starting || stopping || recoveringCrash || nativeCleanupPending || automation.lifecycleBusy
+    }
     var coreBlocksHost: Bool { sessionCore.blocksInteraction || clientIdentities.blocksInteraction || delegation.blocksInteraction || hasUnconfirmedQueue }
     var hasUnconfirmedQueue: Bool { pendingQueue != nil }
-    var canSupplyRunInput: Bool { ready && connected && !busy && !stopping && !handoffPreparing && !coldRecovery
+    var canSupplyRunInput: Bool { !lifecycleBlocksInteraction && ready && connected && !busy && !handoffPreparing && !coldRecovery
         && activeRunID != nil && selected?.scope == activeSession?.scope && !coreBlocksHost && !lostTemporaryRun
         && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction
         && !recovery.blocksInteraction && !restored.blocksInteraction }
@@ -79,14 +84,18 @@ final class ChatStore {
     var isRecoveryOnly: Bool { (options ?? suppliedOptions)?.recoveryOnly == true }
     var serviceOwner: ServiceOwnerIdentity? { service.ownedIdentity }
     var durableDraftSnapshot: SessionDrafts { drafts.durableOnly }
-    var mayHandoff: Bool { !isRecoveryOnly && ready && !starting && !stopping && !handoffPreparing && !busy && activeRunID == nil && !voice.canStopDictation && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction && !restored.isRequesting && !restored.responseUnconfirmed && restored.operation?.workerPending != true && restored.operation?.cleanupOwnerPending != true }
+    var mayHandoff: Bool { !lifecycleBlocksInteraction && !isRecoveryOnly && ready && !handoffPreparing && !busy && activeRunID == nil && !voice.canStopDictation && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction && !restored.isRequesting && !restored.responseUnconfirmed && restored.operation?.workerPending != true && restored.operation?.cleanupOwnerPending != true }
     var shutdownWarning: String? { service.lastStopReport?.warning }
 
     var selected: ChatSession? { sessions.first { $0.id == selectedID } }
-    var canSend: Bool { !isRecoveryOnly && ready && connected && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil && selected != nil
+    var canSend: Bool { !lifecycleBlocksInteraction && !isRecoveryOnly && ready && connected && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil && selected != nil
                        && selected?.archived == false
                        && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    var canChangeSession: Bool { !isRecoveryOnly && ready && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil }
+    private var sessionChangeEligible: Bool { !isRecoveryOnly && ready && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil }
+    var canChangeSession: Bool { !lifecycleBlocksInteraction && sessionChangeEligible }
+    private var canInitializeSession: Bool {
+        starting && !stopping && !recoveringCrash && !nativeCleanupPending && !automation.lifecycleBusy && sessionChangeEligible
+    }
     var selectedAgentName: String { management.agents.first(where: { $0.id == selected?.agentID })?.name ?? selected?.agentID ?? "Jarvis" }
     var canUseVoice: Bool { canChangeSession && connected && selected?.archived == false && selected != nil }
 
@@ -129,7 +138,7 @@ final class ChatStore {
     func stopVoice() { voice.cancel() }
 
     private func acceptDictation(_ transcript: LocalVoiceTranscript) {
-        let mayAcceptDraft = ready && connected && !stopping && !handoffPreparing && selected?.archived == false && selected != nil
+        let mayAcceptDraft = !lifecycleBlocksInteraction && ready && connected && !handoffPreparing && selected?.archived == false && selected != nil
         guard let value = LocalVoiceDraftBridge.append(transcript, scope: selected?.scope, existing: draft, eligible: mayAcceptDraft, runtimeID: runtime.id) else {
             dictationNotice = "El dictado no se añadió: la conversación cambió o se alcanzó el límite del borrador."
             return
@@ -153,6 +162,7 @@ final class ChatStore {
             try service.start(options)
             try await ServiceBootstrap.waitForHealth(stateDirectory: options.state) { service.isRunning }
             try service.confirmReadyProfile(options)
+            if !isRecoveryOnly { await automation.start() }
             if isRecoveryOnly {
                 try await refreshRecoveryStatus()
                 startMonitor()
@@ -163,8 +173,8 @@ final class ChatStore {
             try await management.refresh()
             startupRead = "las conversaciones conservadas"
             try await refreshSessions()
-            if sessions.isEmpty, options.expectedRestore == nil { await createSession(temporary: false) }
-            else if let first = sessions.first { await selectSession(first.id) }
+            if sessions.isEmpty, options.expectedRestore == nil { await createSession(temporary: false, duringStartup: true) }
+            else if let first = sessions.first { await selectSession(first.id, duringStartup: true) }
             startupRead = "el catálogo de herramientas"
             try await access.refreshCatalog()
             startupRead = "las conexiones MCP"
@@ -185,6 +195,8 @@ final class ChatStore {
     private func configureConnections(_ options: LaunchOptions) {
         let connection = LocalRPCClient(stateDirectory: options.state, runtime: runtime)
         client = connection
+        automation.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime),
+            testOrigins: Set(options.automationTestOrigin.map { [$0] } ?? []))
         conversationRefresh = ConversationRefresh(reader: ConversationReader(transport: connection))
         access.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
         mcp.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
@@ -208,7 +220,7 @@ final class ChatStore {
                 do { try await Task.sleep(for: .seconds(2)) } catch { return }
                 guard let self else { return }
                 let supervision = ServiceSupervisionPolicy.decision(childRunning: self.service.isRunning,
-                    lifecycleChanging: self.starting || self.stopping || self.handoffPreparing,
+                    lifecycleChanging: self.lifecycleBlocksInteraction || self.handoffPreparing,
                     recoveryBlocked: self.crashRecoveryBlocked,
                     readersPaused: self.maintenance.monitorPaused || self.channelRestoration.monitorPaused
                         || self.memoryRestoration.monitorPaused || self.recovery.monitorPaused || self.restored.monitorPaused)
@@ -258,6 +270,7 @@ final class ChatStore {
         if awaitingStartupReadiness, let options = options {
             try await ServiceBootstrap.waitForHealth(stateDirectory: options.state, timeout: 1) { service.isRunning }
             try service.confirmReadyProfile(options)
+            if !isRecoveryOnly { await automation.start() }
         guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         }
         if isRecoveryOnly {
@@ -305,10 +318,15 @@ final class ChatStore {
               runtime.isActive, let options, !service.isRunning, ContinuousClock.now >= nextCrashAttempt else { return false }
         recoveringCrash = true
         defer { recoveringCrash = false }
+        ready = false; connected = false
+        voice.cancel(); dictationNotice = nil
         nextCrashAttempt = ContinuousClock.now.advanced(by: .seconds(3))
         do {
             access.setContext(nil); management.setContext(nil)
             let previous = try service.prepareCrashRecovery(options)
+            nativeCleanupPending = true
+            guard await automation.stop(handshake: false) else { throw ServiceProcessFailure.cleanupUnconfirmed }
+            nativeCleanupPending = false
             polling?.cancel(); conversationRefresh?.setScope(nil)
             await client?.close(); await access.close(); await mcp.close(); await management.close()
             await sessionCore.close(); await clientIdentities.close(); await delegation.close(); await telegram.close()
@@ -319,6 +337,7 @@ final class ChatStore {
             try service.start(options)
             try await ServiceBootstrap.waitForHealth(stateDirectory: options.state) { service.isRunning }
             try service.confirmReadyProfile(options)
+            if !isRecoveryOnly { await automation.start() }
             coldRecovery = true; ready = true; connected = false
             if pendingQueue != nil { runInputNotice = "El envío previo quedó en el registro local. No se reenviará tras recuperar el servicio." }
             pendingQueue = nil
@@ -413,7 +432,11 @@ final class ChatStore {
     }
 
     func createSession(temporary: Bool) async {
-        guard canChangeSession else { return }
+        await createSession(temporary: temporary, duringStartup: false)
+    }
+
+    private func createSession(temporary: Bool, duringStartup: Bool) async {
+        guard duringStartup ? canInitializeSession : canChangeSession else { return }
         voice.cancel(); dictationNotice = nil
         guard management.agents.contains(where: { $0.id == newAgentID }) else {
             errorMessage = "Selecciona un agente disponible para la conversación nueva."; return
@@ -438,7 +461,12 @@ final class ChatStore {
     }
 
     func selectSession(_ id: String) async {
-        guard canChangeSession, let session = sessions.first(where: { $0.id == id }) else { return }
+        await selectSession(id, duringStartup: false)
+    }
+
+    private func selectSession(_ id: String, duringStartup: Bool) async {
+        guard duringStartup ? canInitializeSession : canChangeSession,
+              let session = sessions.first(where: { $0.id == id }) else { return }
         conversationRefresh?.setScope(nil)
         voice.cancel(); dictationNotice = nil
         busy = true
@@ -677,15 +705,25 @@ final class ChatStore {
     }
 
     func reconnect() async {
-        if runtime.isActive, !stopping, !starting, !handoffPreparing, !service.isRunning, service.ownedIdentity != nil {
+        if runtime.isActive, !stopping, !starting, !automation.lifecycleBusy, !handoffPreparing, !service.isRunning, service.ownedIdentity != nil {
             crashRecoveryBlocked = false; nextCrashAttempt = .now
             _ = await recoverCrashedService(); startMonitor(); return
         }
-        guard runtime.isActive, !stopping, !starting, !handoffPreparing, !maintenance.blocksInteraction, !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction, !restored.blocksInteraction, !sessionCore.blocksInteraction, !clientIdentities.blocksInteraction, !delegation.blocksInteraction, !hasUnconfirmedQueue, let options else { return }
+        guard runtime.isActive, !stopping, !starting, !automation.lifecycleBusy, !handoffPreparing, !maintenance.blocksInteraction, !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction, !restored.blocksInteraction, !sessionCore.blocksInteraction, !clientIdentities.blocksInteraction, !delegation.blocksInteraction, !hasUnconfirmedQueue, let options else { return }
+        starting = true
+        ready = false; connected = false
+        nativeCleanupPending = true
+        statusText = "Reconectando y esperando la limpieza de las herramientas…"
+        defer { starting = false; startMonitor() }
         conversationRefresh?.setScope(nil)
         voice.cancel(); dictationNotice = nil
-        starting = true
-        defer { starting = false; startMonitor() }
+        guard await automation.stop(handshake: service.isRunning) else {
+            statusText = "Reconexión pendiente: cierre nativo sin confirmar"
+            errorMessage = "El cierre de las herramientas nativas no está confirmado. Reintenta la conexión para comprobarlo."
+            return
+        }
+        nativeCleanupPending = false
+        guard !stopping, runtime.isActive else { return }
         polling?.cancel()
         await client?.close()
         await access.close()
@@ -700,6 +738,7 @@ final class ChatStore {
         await channelRestoration.close()
         await memoryRestoration.close()
         await recovery.close()
+        guard !stopping, runtime.isActive else { return }
         configureConnections(options)
         sessionCore.setScope(selected?.scope)
         delegation.setScope(selected?.scope)
@@ -723,6 +762,7 @@ final class ChatStore {
             }
             try await ServiceBootstrap.waitForHealth(stateDirectory: options.state) { service.isRunning }
             try service.confirmReadyProfile(options)
+            if !isRecoveryOnly { await automation.start() }
             if isRecoveryOnly {
                 try await refreshRecoveryStatus()
                 finishStartupRecovery()
@@ -752,9 +792,9 @@ final class ChatStore {
                 runPhase = "disconnected"
                 resumeStatus()
             }
-            else if let id = selectedID, sessions.contains(where: { $0.id == id }) { await selectSession(id) }
-            else if let first = sessions.first { await selectSession(first.id) }
-            else { await createSession(temporary: false) }
+            else if let id = selectedID, sessions.contains(where: { $0.id == id }) { await selectSession(id, duringStartup: true) }
+            else if let first = sessions.first { await selectSession(first.id, duringStartup: true) }
+            else { await createSession(temporary: false, duringStartup: true) }
         } catch { _ = recordStartupFailure(error) }
     }
 
@@ -869,16 +909,26 @@ final class ChatStore {
     }
 
     func stopForHandoff() async -> ServiceStopReport? {
-        _ = await shutdown()
+        guard await shutdown() else { return nil }
         return service.lastStopReport
     }
 
     func shutdown() async -> Bool {
-        runtime.retire()
+        stopping = true
+        ready = false; connected = false
+        nativeCleanupPending = true
+        statusText = "Cerrando las herramientas y esperando su limpieza…"
         conversationRefresh?.setScope(nil)
         voice.cancel(); dictationNotice = nil
-        stopping = true
-        ready = false
+        guard await automation.stop(handshake: service.isRunning) else {
+            statusText = "Cierre nativo sin confirmar"
+            errorMessage = "El cierre de las herramientas nativas no está confirmado."
+            return false
+        }
+        nativeCleanupPending = false
+        // Runtime ownership is retired only after native cleanup is confirmed.
+        // A failed attempt leaves the same runtime alive for a shutdown retry.
+        runtime.retire()
         statusText = "Cerrando el servicio y asentando las ejecuciones…"
         monitor?.cancel(); polling?.cancel()
         access.setContext(nil)

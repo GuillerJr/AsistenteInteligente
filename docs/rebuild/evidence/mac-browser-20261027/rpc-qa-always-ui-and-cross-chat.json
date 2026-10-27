@@ -1,0 +1,2689 @@
+{
+  "format": "jarvis-mac-browser-live-rpc-final/1",
+  "synthetic_only": true,
+  "sut_bundle_declared_by_parent": "com.jarvis.desktop.macbrowserqualification.final.20261027",
+  "sut_path_declared_by_parent": "/private/tmp/jarvis-mac-browser-qualified-20261027/Jarvis.app",
+  "sut_cdhash_declared_by_parent": "bc7101b3af701d2841416321ff2c9b3b4a4b70ad",
+  "profile": "/private/tmp/jarvis-mac-browser-live-20261026/profile",
+  "session": "c1a7690a375a45489abac9a2d17e1e7f",
+  "source": "/private/tmp/jarvis-mac-browser-source-final-20261026/src",
+  "dependencies": "/private/tmp/jarvis-mac-browser-runtime-20261027/site-packages",
+  "sdk_peer": "own_synthetic_no_login",
+  "authorization": "delegated_only_synthetic_profile",
+  "steps": [
+    {
+      "label": "03_resolve_own_fixture",
+      "tool": "desktop_resolve",
+      "arguments": {
+        "bundle_id": "com.jarvis.fixture.macexternal.20261027"
+      },
+      "request_id": "df9441219e854dcfbfdd26cb6eca5bb8",
+      "started_ns": 1793078716481207000,
+      "approvals": [
+        {
+          "id": "53e6656fd1da4b74b47a172db06f300d",
+          "remember": "operation"
+        }
+      ],
+      "run_id": "df9441219e854dcfbfdd26cb6eca5bb8",
+      "run": {
+        "run_id": "df9441219e854dcfbfdd26cb6eca5bb8",
+        "status": "completed",
+        "outcome": "known",
+        "answer": "{\"fixture\":true,\"independent_verification_required\":true,\"transport_success\":true,\"receipt\":{\"tool_name\":\"desktop_resolve\",\"succeeded\":true,\"verified\":true,\"error\":null,\"effect_status\":\"known\",\"operation_id\":\"6ab6f1b529104fc196d15f206420e4a1\",\"error_type\":null},\"output\":{\"schema\":\"jarvis.desktop.v1\",\"verified\":true,\"effect_status\":\"known\",\"dispatched\":false,\"targets\":[{\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\",\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\",\"pid\":27924}],\"succeeded\":true,\"permits_replay\":false},\"frames\":[]}",
+        "error": null,
+        "answer_source": "model",
+        "action_receipts": [
+          {
+            "effect_status": "known",
+            "error": null,
+            "error_type": null,
+            "operation_id": "6ab6f1b529104fc196d15f206420e4a1",
+            "output": "{\"schema\":\"jarvis.desktop.v1\",\"verified\":true,\"effect_status\":\"known\",\"dispatched\":false,\"targets\":[{\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\",\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\",\"pid\":27924}],\"succeeded\":true,\"permits_replay\":false}",
+            "output_bytes": 288,
+            "output_sha256": "920780581c9a63bc78b6f5e3b58f4032174d3ab375f0e2649d935568b2ab4d24",
+            "output_truncated": false,
+            "succeeded": true,
+            "tool_name": "desktop_resolve",
+            "verified": true
+          }
+        ]
+      },
+      "receipt": {
+        "effect_status": "known",
+        "error": null,
+        "error_type": null,
+        "operation_id": "6ab6f1b529104fc196d15f206420e4a1",
+        "output": "{\"schema\":\"jarvis.desktop.v1\",\"verified\":true,\"effect_status\":\"known\",\"dispatched\":false,\"targets\":[{\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\",\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\",\"pid\":27924}],\"succeeded\":true,\"permits_replay\":false}",
+        "output_bytes": 288,
+        "output_sha256": "920780581c9a63bc78b6f5e3b58f4032174d3ab375f0e2649d935568b2ab4d24",
+        "output_truncated": false,
+        "succeeded": true,
+        "tool_name": "desktop_resolve",
+        "verified": true
+      },
+      "output": {
+        "schema": "jarvis.desktop.v1",
+        "verified": true,
+        "effect_status": "known",
+        "dispatched": false,
+        "targets": [
+          {
+            "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b",
+            "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+            "pid": 27924
+          }
+        ],
+        "succeeded": true,
+        "permits_replay": false
+      },
+      "finished_ns": 1793078716685169000,
+      "sdk_proposal_delta": 1,
+      "sdk_reply_delta": 1,
+      "http_delta": {
+        "page": 0,
+        "confirm": 0,
+        "download": 0,
+        "search": 0,
+        "document": 0,
+        "forbidden": 0
+      }
+    },
+    {
+      "label": "03_windows_own_fixture",
+      "tool": "desktop_windows",
+      "arguments": {
+        "target": {
+          "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b",
+          "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+          "pid": 27924
+        }
+      },
+      "request_id": "82572a9ec8044c87ad40da5582ccb149",
+      "started_ns": 1793078716705664000,
+      "approvals": [
+        {
+          "id": "3dfde196773846b5a3cfbdce69fc756e",
+          "remember": "operation"
+        }
+      ],
+      "run_id": "82572a9ec8044c87ad40da5582ccb149",
+      "run": {
+        "run_id": "82572a9ec8044c87ad40da5582ccb149",
+        "status": "completed",
+        "outcome": "known",
+        "answer": "{\"fixture\":true,\"independent_verification_required\":true,\"transport_success\":true,\"receipt\":{\"tool_name\":\"desktop_windows\",\"succeeded\":true,\"verified\":true,\"error\":null,\"effect_status\":\"known\",\"operation_id\":\"b6b75c233cb849afac6380a4754ea8ac\",\"error_type\":null},\"output\":{\"verified\":true,\"permits_replay\":false,\"effect_status\":\"known\",\"schema\":\"jarvis.desktop.v1\",\"windows\":[{\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"title\":\"Documento externo sintético Jarvis\"}],\"succeeded\":true,\"dispatched\":false,\"target\":{\"pid\":27924,\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\",\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\"}},\"frames\":[]}",
+        "error": null,
+        "answer_source": "model",
+        "action_receipts": [
+          {
+            "effect_status": "known",
+            "error": null,
+            "error_type": null,
+            "operation_id": "b6b75c233cb849afac6380a4754ea8ac",
+            "output": "{\"verified\":true,\"permits_replay\":false,\"effect_status\":\"known\",\"schema\":\"jarvis.desktop.v1\",\"windows\":[{\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"title\":\"Documento externo sintético Jarvis\"}],\"succeeded\":true,\"dispatched\":false,\"target\":{\"pid\":27924,\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\",\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\"}}",
+            "output_bytes": 425,
+            "output_sha256": "c141ae0008372498ff254f2326710ad745bae97f585f88da5d77e804851adb8d",
+            "output_truncated": false,
+            "succeeded": true,
+            "tool_name": "desktop_windows",
+            "verified": true
+          }
+        ]
+      },
+      "receipt": {
+        "effect_status": "known",
+        "error": null,
+        "error_type": null,
+        "operation_id": "b6b75c233cb849afac6380a4754ea8ac",
+        "output": "{\"verified\":true,\"permits_replay\":false,\"effect_status\":\"known\",\"schema\":\"jarvis.desktop.v1\",\"windows\":[{\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"title\":\"Documento externo sintético Jarvis\"}],\"succeeded\":true,\"dispatched\":false,\"target\":{\"pid\":27924,\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\",\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\"}}",
+        "output_bytes": 425,
+        "output_sha256": "c141ae0008372498ff254f2326710ad745bae97f585f88da5d77e804851adb8d",
+        "output_truncated": false,
+        "succeeded": true,
+        "tool_name": "desktop_windows",
+        "verified": true
+      },
+      "output": {
+        "verified": true,
+        "permits_replay": false,
+        "effect_status": "known",
+        "schema": "jarvis.desktop.v1",
+        "windows": [
+          {
+            "window_ref": "beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30",
+            "title": "Documento externo sintético Jarvis"
+          }
+        ],
+        "succeeded": true,
+        "dispatched": false,
+        "target": {
+          "pid": 27924,
+          "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+          "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b"
+        }
+      },
+      "finished_ns": 1793078716912095000,
+      "sdk_proposal_delta": 1,
+      "sdk_reply_delta": 1,
+      "http_delta": {
+        "page": 0,
+        "confirm": 0,
+        "download": 0,
+        "search": 0,
+        "document": 0,
+        "forbidden": 0
+      }
+    },
+    {
+      "label": "03_observe_before_unicode",
+      "tool": "desktop_observe",
+      "arguments": {
+        "target": {
+          "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b",
+          "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+          "pid": 27924
+        },
+        "window_ref": "beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30",
+        "include_frame": false
+      },
+      "request_id": "3e7cc98eb843403895f7d25babafaa55",
+      "started_ns": 1793078716939539000,
+      "approvals": [
+        {
+          "id": "d090e61ba8d94b94a46c22fbf704bcb4",
+          "remember": "operation"
+        }
+      ],
+      "run_id": "3e7cc98eb843403895f7d25babafaa55",
+      "run": {
+        "run_id": "3e7cc98eb843403895f7d25babafaa55",
+        "status": "completed",
+        "outcome": "known",
+        "answer": "{\"fixture\":true,\"independent_verification_required\":true,\"transport_success\":true,\"receipt\":{\"tool_name\":\"desktop_observe\",\"succeeded\":true,\"verified\":true,\"error\":null,\"effect_status\":\"known\",\"operation_id\":\"7caa1dd8e5654cd587a61c1b78d35a7c\",\"error_type\":null},\"output\":{\"dispatched\":false,\"verified\":true,\"bounds\":[180,344,560,412],\"target\":{\"pid\":27924,\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\",\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\"},\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"elements\":[{\"ref\":\"9513f24a867a4e238d84d13b1057afad\",\"enabled\":true,\"actions\":[\"click_at\",\"drag\",\"key\"],\"label\":\"Documento externo sintético Jarvis\",\"parent\":null,\"value\":null,\"role\":\"AXWindow\",\"secure\":false,\"selected_range\":null,\"value_truncated\":false},{\"enabled\":true,\"ref\":\"45b12edc0ee54fe9b2a5ee56ef9cb200\",\"actions\":[\"focus\",\"set_value\",\"type_text\"],\"label\":\"Editor externo Jarvis\",\"parent\":\"9513f24a867a4e238d84d13b1057afad\",\"role\":\"AXTextArea\",\"value\":\"JARVIS EXTERNO BASE\",\"secure\":false,\"value_truncated\":false,\"selected_range\":[19,0]},{\"ref\":\"9629b4b90cee44cfb0568d333a6d6b1e\",\"enabled\":true,\"actions\":[],\"label\":\"\",\"parent\":\"9513f24a867a4e238d84d13b1057afad\",\"role\":\"AXStaticText\",\"value\":\"CONTADOR 0\",\"secure\":false,\"value_truncated\":false,\"selected_range\":[0,0]},{\"enabled\":true,\"ref\":\"ef083847888a4e30a25540dfb513365d\",\"actions\":[\"focus\",\"press\"],\"label\":\"Sumar marcador externo\",\"parent\":\"9513f24a867a4e238d84d13b1057afad\",\"value\":null,\"role\":\"AXButton\",\"selected_range\":null,\"secure\":false,\"value_truncated\":false},{\"ref\":\"c6005dc8a23147caa67ef1960860c72e\",\"enabled\":true,\"actions\":[],\"label\":\"Campo protegido\",\"parent\":\"9513f24a867a4e238d84d13b1057afad\",\"value\":null,\"role\":\"AXTextField\",\"secure\":true,\"value_truncated\":false,\"selected_range\":null},{\"ref\":\"8ffdb38ea6ed41d9945ef67277f7d407\",\"enabled\":true,\"actions\":[\"press\"],\"label\":\"\",\"parent\":\"9513f24a867a4e238d84d13b1057afad\",\"role\":\"AXButton\",\"value\":null,\"selected_range\":null,\"value_truncated\":false,\"secure\":false},{\"ref\":\"8ee4b41e123e453f8c7cdd7c4bfc6b3d\",\"enabled\":true,\"actions\":[\"press\"],\"label\":\"\",\"parent\":\"9513f24a867a4e238d84d13b1057afad\",\"role\":\"AXButton\",\"value\":null,\"selected_range\":null,\"secure\":false,\"value_truncated\":false},{\"enabled\":true,\"ref\":\"36c5974f2dde4ce9b9c11752b779c9bd\",\"actions\":[\"press\"],\"label\":\"\",\"parent\":\"9513f24a867a4e238d84d13b1057afad\",\"role\":\"AXButton\",\"value\":null,\"secure\":false,\"selected_range\":null,\"value_truncated\":false},{\"ref\":\"2bc21e6b939b4e9ca98642c941e3ae44\",\"enabled\":true,\"actions\":[],\"label\":\"\",\"parent\":\"9513f24a867a4e238d84d13b1057afad\",\"value\":\"Documento externo sintético Jarvis\",\"role\":\"AXStaticText\",\"selected_range\":[0,0],\"value_truncated\":false,\"secure\":false},{\"ref\":\"5912c12a03a9496b8f3fcdae81f60c01\",\"enabled\":true,\"actions\":[],\"label\":\"\",\"parent\":\"8ee4b41e123e453f8c7cdd7c4bfc6b3d\",\"value\":null,\"role\":\"AXGroup\",\"selected_range\":null,\"secure\":false,\"value_truncated\":false}],\"schema\":\"jarvis.desktop.v1\",\"succeeded\":true,\"source\":\"native_accessibility_observation\",\"snapshot_id\":\"d2f26d66dc8a4b00bb9986e04bf5f416\",\"expires_in_seconds\":120,\"truncated\":false,\"effect_status\":\"known\",\"permits_replay\":false},\"frames\":[]}",
+        "error": null,
+        "answer_source": "model",
+        "action_receipts": [
+          {
+            "effect_status": "known",
+            "error": null,
+            "error_type": null,
+            "operation_id": "7caa1dd8e5654cd587a61c1b78d35a7c",
+            "output": "{\"dispatched\":false,\"verified\":true,\"bounds\":[180,344,560,412],\"target\":{\"pid\":27924,\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\",\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\"},\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"elements\":[{\"ref\":\"9513f24a867a4e238d84d13b1057afad\",\"enabled\":true,\"actions\":[\"click_at\",\"drag\",\"key\"],\"label\":\"Documento externo sintético Jarvis\",\"parent\":null,\"value\":null,\"role\":\"AXWindow\",\"secure\":false,\"s",
+            "output_bytes": 2947,
+            "output_sha256": "eaaa9da8c4975f9d086a30dfcc4a533eeefb4e022380dc80b2607e6e0e30d141",
+            "output_truncated": true,
+            "succeeded": true,
+            "tool_name": "desktop_observe",
+            "verified": true
+          }
+        ]
+      },
+      "receipt": {
+        "effect_status": "known",
+        "error": null,
+        "error_type": null,
+        "operation_id": "7caa1dd8e5654cd587a61c1b78d35a7c",
+        "output": "{\"dispatched\":false,\"verified\":true,\"bounds\":[180,344,560,412],\"target\":{\"pid\":27924,\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\",\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\"},\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"elements\":[{\"ref\":\"9513f24a867a4e238d84d13b1057afad\",\"enabled\":true,\"actions\":[\"click_at\",\"drag\",\"key\"],\"label\":\"Documento externo sintético Jarvis\",\"parent\":null,\"value\":null,\"role\":\"AXWindow\",\"secure\":false,\"s",
+        "output_bytes": 2947,
+        "output_sha256": "eaaa9da8c4975f9d086a30dfcc4a533eeefb4e022380dc80b2607e6e0e30d141",
+        "output_truncated": true,
+        "succeeded": true,
+        "tool_name": "desktop_observe",
+        "verified": true
+      },
+      "output": {
+        "dispatched": false,
+        "verified": true,
+        "bounds": [
+          180,
+          344,
+          560,
+          412
+        ],
+        "target": {
+          "pid": 27924,
+          "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b",
+          "bundle_id": "com.jarvis.fixture.macexternal.20261027"
+        },
+        "window_ref": "beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30",
+        "elements": [
+          {
+            "ref": "9513f24a867a4e238d84d13b1057afad",
+            "enabled": true,
+            "actions": [
+              "click_at",
+              "drag",
+              "key"
+            ],
+            "label": "Documento externo sintético Jarvis",
+            "parent": null,
+            "value": null,
+            "role": "AXWindow",
+            "secure": false,
+            "selected_range": null,
+            "value_truncated": false
+          },
+          {
+            "enabled": true,
+            "ref": "45b12edc0ee54fe9b2a5ee56ef9cb200",
+            "actions": [
+              "focus",
+              "set_value",
+              "type_text"
+            ],
+            "label": "Editor externo Jarvis",
+            "parent": "9513f24a867a4e238d84d13b1057afad",
+            "role": "AXTextArea",
+            "value": "JARVIS EXTERNO BASE",
+            "secure": false,
+            "value_truncated": false,
+            "selected_range": [
+              19,
+              0
+            ]
+          },
+          {
+            "ref": "9629b4b90cee44cfb0568d333a6d6b1e",
+            "enabled": true,
+            "actions": [],
+            "label": "",
+            "parent": "9513f24a867a4e238d84d13b1057afad",
+            "role": "AXStaticText",
+            "value": "CONTADOR 0",
+            "secure": false,
+            "value_truncated": false,
+            "selected_range": [
+              0,
+              0
+            ]
+          },
+          {
+            "enabled": true,
+            "ref": "ef083847888a4e30a25540dfb513365d",
+            "actions": [
+              "focus",
+              "press"
+            ],
+            "label": "Sumar marcador externo",
+            "parent": "9513f24a867a4e238d84d13b1057afad",
+            "value": null,
+            "role": "AXButton",
+            "selected_range": null,
+            "secure": false,
+            "value_truncated": false
+          },
+          {
+            "ref": "c6005dc8a23147caa67ef1960860c72e",
+            "enabled": true,
+            "actions": [],
+            "label": "Campo protegido",
+            "parent": "9513f24a867a4e238d84d13b1057afad",
+            "value": null,
+            "role": "AXTextField",
+            "secure": true,
+            "value_truncated": false,
+            "selected_range": null
+          },
+          {
+            "ref": "8ffdb38ea6ed41d9945ef67277f7d407",
+            "enabled": true,
+            "actions": [
+              "press"
+            ],
+            "label": "",
+            "parent": "9513f24a867a4e238d84d13b1057afad",
+            "role": "AXButton",
+            "value": null,
+            "selected_range": null,
+            "value_truncated": false,
+            "secure": false
+          },
+          {
+            "ref": "8ee4b41e123e453f8c7cdd7c4bfc6b3d",
+            "enabled": true,
+            "actions": [
+              "press"
+            ],
+            "label": "",
+            "parent": "9513f24a867a4e238d84d13b1057afad",
+            "role": "AXButton",
+            "value": null,
+            "selected_range": null,
+            "secure": false,
+            "value_truncated": false
+          },
+          {
+            "enabled": true,
+            "ref": "36c5974f2dde4ce9b9c11752b779c9bd",
+            "actions": [
+              "press"
+            ],
+            "label": "",
+            "parent": "9513f24a867a4e238d84d13b1057afad",
+            "role": "AXButton",
+            "value": null,
+            "secure": false,
+            "selected_range": null,
+            "value_truncated": false
+          },
+          {
+            "ref": "2bc21e6b939b4e9ca98642c941e3ae44",
+            "enabled": true,
+            "actions": [],
+            "label": "",
+            "parent": "9513f24a867a4e238d84d13b1057afad",
+            "value": "Documento externo sintético Jarvis",
+            "role": "AXStaticText",
+            "selected_range": [
+              0,
+              0
+            ],
+            "value_truncated": false,
+            "secure": false
+          },
+          {
+            "ref": "5912c12a03a9496b8f3fcdae81f60c01",
+            "enabled": true,
+            "actions": [],
+            "label": "",
+            "parent": "8ee4b41e123e453f8c7cdd7c4bfc6b3d",
+            "value": null,
+            "role": "AXGroup",
+            "selected_range": null,
+            "secure": false,
+            "value_truncated": false
+          }
+        ],
+        "schema": "jarvis.desktop.v1",
+        "succeeded": true,
+        "source": "native_accessibility_observation",
+        "snapshot_id": "d2f26d66dc8a4b00bb9986e04bf5f416",
+        "expires_in_seconds": 120,
+        "truncated": false,
+        "effect_status": "known",
+        "permits_replay": false
+      },
+      "finished_ns": 1793078717321446000,
+      "sdk_proposal_delta": 1,
+      "sdk_reply_delta": 1,
+      "http_delta": {
+        "page": 0,
+        "confirm": 0,
+        "download": 0,
+        "search": 0,
+        "document": 0,
+        "forbidden": 0
+      }
+    },
+    {
+      "label": "03_set_value_unicode_newline",
+      "tool": "desktop_action",
+      "arguments": {
+        "target": {
+          "pid": 27924,
+          "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b",
+          "bundle_id": "com.jarvis.fixture.macexternal.20261027"
+        },
+        "window_ref": "beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30",
+        "snapshot_id": "d2f26d66dc8a4b00bb9986e04bf5f416",
+        "ref": "45b12edc0ee54fe9b2a5ee56ef9cb200",
+        "action": "set_value",
+        "value": "INICIO 🧪\nSEGUNDA LÍNEA"
+      },
+      "request_id": "42db0b3904394021a5c43acd80325616",
+      "started_ns": 1793078717351633000,
+      "approvals": [
+        {
+          "id": "1c3ff635d3d046989ec758c424439973",
+          "remember": "operation"
+        }
+      ],
+      "run_id": "42db0b3904394021a5c43acd80325616",
+      "run": {
+        "run_id": "42db0b3904394021a5c43acd80325616",
+        "status": "completed",
+        "outcome": "known",
+        "answer": "{\"fixture\":true,\"independent_verification_required\":true,\"transport_success\":true,\"receipt\":{\"tool_name\":\"desktop_action\",\"succeeded\":true,\"verified\":true,\"error\":null,\"effect_status\":\"known\",\"operation_id\":\"3a89d2130c1746279bfe90a6ac10d768\",\"error_type\":null},\"output\":{\"dispatched\":true,\"verified\":true,\"bounds\":[180,344,560,412],\"target\":{\"pid\":27924,\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\",\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\"},\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"schema\":\"jarvis.desktop.v1\",\"elements\":[{\"selected_range\":null,\"enabled\":true,\"label\":\"Documento externo sintético Jarvis\",\"value\":null,\"value_truncated\":false,\"secure\":false,\"actions\":[\"click_at\",\"drag\",\"key\"],\"parent\":null,\"role\":\"AXWindow\",\"ref\":\"5b718b16d8444799bd8dde9c5ca81f4c\"},{\"selected_range\":[23,0],\"enabled\":true,\"label\":\"Editor externo Jarvis\",\"value_truncated\":false,\"secure\":false,\"value\":\"INICIO 🧪\\nSEGUNDA LÍNEA\",\"actions\":[\"focus\",\"set_value\",\"type_text\"],\"role\":\"AXTextArea\",\"parent\":\"5b718b16d8444799bd8dde9c5ca81f4c\",\"ref\":\"c33e9a1eccd64be8af5e9cac47df51a1\"},{\"selected_range\":[0,0],\"enabled\":true,\"label\":\"\",\"value_truncated\":false,\"secure\":false,\"value\":\"CONTADOR 0\",\"actions\":[],\"role\":\"AXStaticText\",\"parent\":\"5b718b16d8444799bd8dde9c5ca81f4c\",\"ref\":\"53997706541644ff9518a8f17df3f8eb\"},{\"selected_range\":null,\"enabled\":true,\"label\":\"Sumar marcador externo\",\"value_truncated\":false,\"secure\":false,\"value\":null,\"actions\":[\"focus\",\"press\"],\"role\":\"AXButton\",\"parent\":\"5b718b16d8444799bd8dde9c5ca81f4c\",\"ref\":\"fa350d0c7f3c44d781c6cb43acfbe323\"},{\"selected_range\":null,\"enabled\":true,\"label\":\"Campo protegido\",\"value\":null,\"secure\":true,\"value_truncated\":false,\"actions\":[],\"role\":\"AXTextField\",\"parent\":\"5b718b16d8444799bd8dde9c5ca81f4c\",\"ref\":\"131ae13a76964dc18dfa40849e9c4c13\"},{\"selected_range\":null,\"enabled\":true,\"label\":\"\",\"value\":null,\"secure\":false,\"value_truncated\":false,\"actions\":[\"press\"],\"parent\":\"5b718b16d8444799bd8dde9c5ca81f4c\",\"role\":\"AXButton\",\"ref\":\"17d87d161a6c433f8ff309306b296b76\"},{\"selected_range\":null,\"enabled\":true,\"label\":\"\",\"value\":null,\"secure\":false,\"value_truncated\":false,\"actions\":[\"press\"],\"role\":\"AXButton\",\"parent\":\"5b718b16d8444799bd8dde9c5ca81f4c\",\"ref\":\"1eb9c4793474447ab4ae895d8f6e4641\"},{\"selected_range\":null,\"enabled\":true,\"label\":\"\",\"value_truncated\":false,\"secure\":false,\"value\":null,\"actions\":[\"press\"],\"role\":\"AXButton\",\"parent\":\"5b718b16d8444799bd8dde9c5ca81f4c\",\"ref\":\"e468a726b3d64ed7bc1b5a601b5487c1\"},{\"selected_range\":[0,0],\"enabled\":true,\"label\":\"\",\"value_truncated\":false,\"secure\":false,\"value\":\"Documento externo sintético Jarvis\",\"actions\":[],\"role\":\"AXStaticText\",\"parent\":\"5b718b16d8444799bd8dde9c5ca81f4c\",\"ref\":\"01f489d869e148a39a4237adb5017319\"},{\"selected_range\":null,\"enabled\":true,\"label\":\"\",\"value_truncated\":false,\"secure\":false,\"value\":null,\"actions\":[],\"parent\":\"1eb9c4793474447ab4ae895d8f6e4641\",\"role\":\"AXGroup\",\"ref\":\"77a6b23725634c9281d448375b3397ed\"},{\"selected_range\":null,\"enabled\":true,\"label\":\"\",\"value_truncated\":false,\"secure\":false,\"value\":null,\"actions\":[],\"role\":\"AXGroup\",\"parent\":\"77a6b23725634c9281d448375b3397ed\",\"ref\":\"25230b2fc06a4aa1a41a9ac10d74c45a\"}],\"succeeded\":true,\"snapshot_id\":\"56fe420e58d740ed8c4095775d63ef23\",\"source\":\"native_accessibility_observation\",\"expires_in_seconds\":120,\"truncated\":false,\"verification\":\"valor_releido_coincide\",\"effect_status\":\"known\",\"permits_replay\":false},\"frames\":[]}",
+        "error": null,
+        "answer_source": "model",
+        "action_receipts": [
+          {
+            "effect_status": "known",
+            "error": null,
+            "error_type": null,
+            "operation_id": "3a89d2130c1746279bfe90a6ac10d768",
+            "output": "{\"dispatched\":true,\"verified\":true,\"bounds\":[180,344,560,412],\"target\":{\"pid\":27924,\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\",\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\"},\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"schema\":\"jarvis.desktop.v1\",\"elements\":[{\"selected_range\":null,\"enabled\":true,\"label\":\"Documento externo sintético Jarvis\",\"value\":null,\"value_truncated\":false,\"secure\":false,\"actions\":[\"click_at\",\"drag\",\"key\"],\"",
+            "output_bytes": 3211,
+            "output_sha256": "8b68b039b9aecc75f6c6cd02038f5865db8c54ac3ce6dcdabf1b1d3efc1630ee",
+            "output_truncated": true,
+            "succeeded": true,
+            "tool_name": "desktop_action",
+            "verified": true
+          }
+        ]
+      },
+      "receipt": {
+        "effect_status": "known",
+        "error": null,
+        "error_type": null,
+        "operation_id": "3a89d2130c1746279bfe90a6ac10d768",
+        "output": "{\"dispatched\":true,\"verified\":true,\"bounds\":[180,344,560,412],\"target\":{\"pid\":27924,\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\",\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\"},\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"schema\":\"jarvis.desktop.v1\",\"elements\":[{\"selected_range\":null,\"enabled\":true,\"label\":\"Documento externo sintético Jarvis\",\"value\":null,\"value_truncated\":false,\"secure\":false,\"actions\":[\"click_at\",\"drag\",\"key\"],\"",
+        "output_bytes": 3211,
+        "output_sha256": "8b68b039b9aecc75f6c6cd02038f5865db8c54ac3ce6dcdabf1b1d3efc1630ee",
+        "output_truncated": true,
+        "succeeded": true,
+        "tool_name": "desktop_action",
+        "verified": true
+      },
+      "output": {
+        "dispatched": true,
+        "verified": true,
+        "bounds": [
+          180,
+          344,
+          560,
+          412
+        ],
+        "target": {
+          "pid": 27924,
+          "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b",
+          "bundle_id": "com.jarvis.fixture.macexternal.20261027"
+        },
+        "window_ref": "beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30",
+        "schema": "jarvis.desktop.v1",
+        "elements": [
+          {
+            "selected_range": null,
+            "enabled": true,
+            "label": "Documento externo sintético Jarvis",
+            "value": null,
+            "value_truncated": false,
+            "secure": false,
+            "actions": [
+              "click_at",
+              "drag",
+              "key"
+            ],
+            "parent": null,
+            "role": "AXWindow",
+            "ref": "5b718b16d8444799bd8dde9c5ca81f4c"
+          },
+          {
+            "selected_range": [
+              23,
+              0
+            ],
+            "enabled": true,
+            "label": "Editor externo Jarvis",
+            "value_truncated": false,
+            "secure": false,
+            "value": "INICIO 🧪\nSEGUNDA LÍNEA",
+            "actions": [
+              "focus",
+              "set_value",
+              "type_text"
+            ],
+            "role": "AXTextArea",
+            "parent": "5b718b16d8444799bd8dde9c5ca81f4c",
+            "ref": "c33e9a1eccd64be8af5e9cac47df51a1"
+          },
+          {
+            "selected_range": [
+              0,
+              0
+            ],
+            "enabled": true,
+            "label": "",
+            "value_truncated": false,
+            "secure": false,
+            "value": "CONTADOR 0",
+            "actions": [],
+            "role": "AXStaticText",
+            "parent": "5b718b16d8444799bd8dde9c5ca81f4c",
+            "ref": "53997706541644ff9518a8f17df3f8eb"
+          },
+          {
+            "selected_range": null,
+            "enabled": true,
+            "label": "Sumar marcador externo",
+            "value_truncated": false,
+            "secure": false,
+            "value": null,
+            "actions": [
+              "focus",
+              "press"
+            ],
+            "role": "AXButton",
+            "parent": "5b718b16d8444799bd8dde9c5ca81f4c",
+            "ref": "fa350d0c7f3c44d781c6cb43acfbe323"
+          },
+          {
+            "selected_range": null,
+            "enabled": true,
+            "label": "Campo protegido",
+            "value": null,
+            "secure": true,
+            "value_truncated": false,
+            "actions": [],
+            "role": "AXTextField",
+            "parent": "5b718b16d8444799bd8dde9c5ca81f4c",
+            "ref": "131ae13a76964dc18dfa40849e9c4c13"
+          },
+          {
+            "selected_range": null,
+            "enabled": true,
+            "label": "",
+            "value": null,
+            "secure": false,
+            "value_truncated": false,
+            "actions": [
+              "press"
+            ],
+            "parent": "5b718b16d8444799bd8dde9c5ca81f4c",
+            "role": "AXButton",
+            "ref": "17d87d161a6c433f8ff309306b296b76"
+          },
+          {
+            "selected_range": null,
+            "enabled": true,
+            "label": "",
+            "value": null,
+            "secure": false,
+            "value_truncated": false,
+            "actions": [
+              "press"
+            ],
+            "role": "AXButton",
+            "parent": "5b718b16d8444799bd8dde9c5ca81f4c",
+            "ref": "1eb9c4793474447ab4ae895d8f6e4641"
+          },
+          {
+            "selected_range": null,
+            "enabled": true,
+            "label": "",
+            "value_truncated": false,
+            "secure": false,
+            "value": null,
+            "actions": [
+              "press"
+            ],
+            "role": "AXButton",
+            "parent": "5b718b16d8444799bd8dde9c5ca81f4c",
+            "ref": "e468a726b3d64ed7bc1b5a601b5487c1"
+          },
+          {
+            "selected_range": [
+              0,
+              0
+            ],
+            "enabled": true,
+            "label": "",
+            "value_truncated": false,
+            "secure": false,
+            "value": "Documento externo sintético Jarvis",
+            "actions": [],
+            "role": "AXStaticText",
+            "parent": "5b718b16d8444799bd8dde9c5ca81f4c",
+            "ref": "01f489d869e148a39a4237adb5017319"
+          },
+          {
+            "selected_range": null,
+            "enabled": true,
+            "label": "",
+            "value_truncated": false,
+            "secure": false,
+            "value": null,
+            "actions": [],
+            "parent": "1eb9c4793474447ab4ae895d8f6e4641",
+            "role": "AXGroup",
+            "ref": "77a6b23725634c9281d448375b3397ed"
+          },
+          {
+            "selected_range": null,
+            "enabled": true,
+            "label": "",
+            "value_truncated": false,
+            "secure": false,
+            "value": null,
+            "actions": [],
+            "role": "AXGroup",
+            "parent": "77a6b23725634c9281d448375b3397ed",
+            "ref": "25230b2fc06a4aa1a41a9ac10d74c45a"
+          }
+        ],
+        "succeeded": true,
+        "snapshot_id": "56fe420e58d740ed8c4095775d63ef23",
+        "source": "native_accessibility_observation",
+        "expires_in_seconds": 120,
+        "truncated": false,
+        "verification": "valor_releido_coincide",
+        "effect_status": "known",
+        "permits_replay": false
+      },
+      "finished_ns": 1793078717747944000,
+      "sdk_proposal_delta": 1,
+      "sdk_reply_delta": 1,
+      "http_delta": {
+        "page": 0,
+        "confirm": 0,
+        "download": 0,
+        "search": 0,
+        "document": 0,
+        "forbidden": 0
+      }
+    },
+    {
+      "label": "03_readback_set_value",
+      "tool": "desktop_observe",
+      "arguments": {
+        "target": {
+          "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b",
+          "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+          "pid": 27924
+        },
+        "window_ref": "beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30",
+        "include_frame": false
+      },
+      "request_id": "cd2ef2249cab481b9198495a07b1a90c",
+      "started_ns": 1793078717776836000,
+      "approvals": [
+        {
+          "id": "add7131323584e3b9bb1105f4f1731c7",
+          "remember": "operation"
+        }
+      ],
+      "run_id": "cd2ef2249cab481b9198495a07b1a90c",
+      "run": {
+        "run_id": "cd2ef2249cab481b9198495a07b1a90c",
+        "status": "completed",
+        "outcome": "known",
+        "answer": "{\"fixture\":true,\"independent_verification_required\":true,\"transport_success\":true,\"receipt\":{\"tool_name\":\"desktop_observe\",\"succeeded\":true,\"verified\":true,\"error\":null,\"effect_status\":\"known\",\"operation_id\":\"ff26a20aae60400198381839f7d9692a\",\"error_type\":null},\"output\":{\"dispatched\":false,\"verified\":true,\"bounds\":[180,344,560,412],\"target\":{\"pid\":27924,\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\",\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\"},\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"elements\":[{\"ref\":\"7ce86eb042cd43c7a42bbde296fc65dd\",\"enabled\":true,\"selected_range\":null,\"value\":null,\"role\":\"AXWindow\",\"actions\":[\"click_at\",\"drag\",\"key\"],\"label\":\"Documento externo sintético Jarvis\",\"parent\":null,\"secure\":false,\"value_truncated\":false},{\"ref\":\"2841e468df2c4eda9cba521d5140eae8\",\"enabled\":true,\"selected_range\":[23,0],\"value\":\"INICIO 🧪\\nSEGUNDA LÍNEA\",\"role\":\"AXTextArea\",\"actions\":[\"focus\",\"set_value\",\"type_text\"],\"parent\":\"7ce86eb042cd43c7a42bbde296fc65dd\",\"secure\":false,\"value_truncated\":false,\"label\":\"Editor externo Jarvis\"},{\"ref\":\"36b50084f9014fc8925ac12ee9c1138c\",\"enabled\":true,\"selected_range\":[0,0],\"value\":\"CONTADOR 0\",\"role\":\"AXStaticText\",\"actions\":[],\"label\":\"\",\"value_truncated\":false,\"parent\":\"7ce86eb042cd43c7a42bbde296fc65dd\",\"secure\":false},{\"ref\":\"67fcc823285f41feace140b571e60ae3\",\"enabled\":true,\"selected_range\":null,\"value\":null,\"role\":\"AXButton\",\"actions\":[\"focus\",\"press\"],\"label\":\"Sumar marcador externo\",\"value_truncated\":false,\"secure\":false,\"parent\":\"7ce86eb042cd43c7a42bbde296fc65dd\"},{\"ref\":\"9e4ae605f2e0448bbf639c03c015eb17\",\"enabled\":true,\"selected_range\":null,\"value\":null,\"role\":\"AXTextField\",\"actions\":[],\"label\":\"Campo protegido\",\"value_truncated\":false,\"parent\":\"7ce86eb042cd43c7a42bbde296fc65dd\",\"secure\":true},{\"ref\":\"6a22acc9821644778a6c1533a5ac8b55\",\"enabled\":true,\"selected_range\":null,\"value\":null,\"role\":\"AXButton\",\"actions\":[\"press\"],\"label\":\"\",\"secure\":false,\"parent\":\"7ce86eb042cd43c7a42bbde296fc65dd\",\"value_truncated\":false},{\"ref\":\"ca6c081396554f888018c00457b8cac9\",\"enabled\":true,\"selected_range\":null,\"value\":null,\"role\":\"AXButton\",\"actions\":[\"press\"],\"parent\":\"7ce86eb042cd43c7a42bbde296fc65dd\",\"secure\":false,\"value_truncated\":false,\"label\":\"\"},{\"ref\":\"a17e9fba0a454f69abd064bbdd033f50\",\"enabled\":true,\"selected_range\":null,\"value\":null,\"role\":\"AXButton\",\"actions\":[\"press\"],\"label\":\"\",\"secure\":false,\"value_truncated\":false,\"parent\":\"7ce86eb042cd43c7a42bbde296fc65dd\"},{\"ref\":\"201c0ceef62048a7a83670bfa69ce293\",\"enabled\":true,\"selected_range\":[0,0],\"value\":\"Documento externo sintético Jarvis\",\"role\":\"AXStaticText\",\"actions\":[],\"label\":\"\",\"secure\":false,\"value_truncated\":false,\"parent\":\"7ce86eb042cd43c7a42bbde296fc65dd\"},{\"ref\":\"c0e95a5c6d35436cab376cec2434cba3\",\"enabled\":true,\"selected_range\":null,\"value\":null,\"role\":\"AXGroup\",\"actions\":[],\"label\":\"\",\"parent\":\"ca6c081396554f888018c00457b8cac9\",\"secure\":false,\"value_truncated\":false},{\"ref\":\"989e0322d26841938d21f36b28422f0e\",\"enabled\":true,\"selected_range\":null,\"value\":null,\"role\":\"AXGroup\",\"actions\":[],\"label\":\"\",\"parent\":\"c0e95a5c6d35436cab376cec2434cba3\",\"value_truncated\":false,\"secure\":false}],\"schema\":\"jarvis.desktop.v1\",\"succeeded\":true,\"source\":\"native_accessibility_observation\",\"snapshot_id\":\"d8e7bd0b48a24df7ab59ac057b21340a\",\"expires_in_seconds\":120,\"truncated\":false,\"effect_status\":\"known\",\"permits_replay\":false},\"frames\":[]}",
+        "error": null,
+        "answer_source": "model",
+        "action_receipts": [
+          {
+            "effect_status": "known",
+            "error": null,
+            "error_type": null,
+            "operation_id": "ff26a20aae60400198381839f7d9692a",
+            "output": "{\"dispatched\":false,\"verified\":true,\"bounds\":[180,344,560,412],\"target\":{\"pid\":27924,\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\",\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\"},\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"elements\":[{\"ref\":\"7ce86eb042cd43c7a42bbde296fc65dd\",\"enabled\":true,\"selected_range\":null,\"value\":null,\"role\":\"AXWindow\",\"actions\":[\"click_at\",\"drag\",\"key\"],\"label\":\"Documento externo sintético Jarvis\",\"parent\":",
+            "output_bytes": 3172,
+            "output_sha256": "129c324be9f69c719f2fed8d1b087c022a66045aee6c8338f6142b7227f0e21b",
+            "output_truncated": true,
+            "succeeded": true,
+            "tool_name": "desktop_observe",
+            "verified": true
+          }
+        ]
+      },
+      "receipt": {
+        "effect_status": "known",
+        "error": null,
+        "error_type": null,
+        "operation_id": "ff26a20aae60400198381839f7d9692a",
+        "output": "{\"dispatched\":false,\"verified\":true,\"bounds\":[180,344,560,412],\"target\":{\"pid\":27924,\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\",\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\"},\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"elements\":[{\"ref\":\"7ce86eb042cd43c7a42bbde296fc65dd\",\"enabled\":true,\"selected_range\":null,\"value\":null,\"role\":\"AXWindow\",\"actions\":[\"click_at\",\"drag\",\"key\"],\"label\":\"Documento externo sintético Jarvis\",\"parent\":",
+        "output_bytes": 3172,
+        "output_sha256": "129c324be9f69c719f2fed8d1b087c022a66045aee6c8338f6142b7227f0e21b",
+        "output_truncated": true,
+        "succeeded": true,
+        "tool_name": "desktop_observe",
+        "verified": true
+      },
+      "output": {
+        "dispatched": false,
+        "verified": true,
+        "bounds": [
+          180,
+          344,
+          560,
+          412
+        ],
+        "target": {
+          "pid": 27924,
+          "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b",
+          "bundle_id": "com.jarvis.fixture.macexternal.20261027"
+        },
+        "window_ref": "beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30",
+        "elements": [
+          {
+            "ref": "7ce86eb042cd43c7a42bbde296fc65dd",
+            "enabled": true,
+            "selected_range": null,
+            "value": null,
+            "role": "AXWindow",
+            "actions": [
+              "click_at",
+              "drag",
+              "key"
+            ],
+            "label": "Documento externo sintético Jarvis",
+            "parent": null,
+            "secure": false,
+            "value_truncated": false
+          },
+          {
+            "ref": "2841e468df2c4eda9cba521d5140eae8",
+            "enabled": true,
+            "selected_range": [
+              23,
+              0
+            ],
+            "value": "INICIO 🧪\nSEGUNDA LÍNEA",
+            "role": "AXTextArea",
+            "actions": [
+              "focus",
+              "set_value",
+              "type_text"
+            ],
+            "parent": "7ce86eb042cd43c7a42bbde296fc65dd",
+            "secure": false,
+            "value_truncated": false,
+            "label": "Editor externo Jarvis"
+          },
+          {
+            "ref": "36b50084f9014fc8925ac12ee9c1138c",
+            "enabled": true,
+            "selected_range": [
+              0,
+              0
+            ],
+            "value": "CONTADOR 0",
+            "role": "AXStaticText",
+            "actions": [],
+            "label": "",
+            "value_truncated": false,
+            "parent": "7ce86eb042cd43c7a42bbde296fc65dd",
+            "secure": false
+          },
+          {
+            "ref": "67fcc823285f41feace140b571e60ae3",
+            "enabled": true,
+            "selected_range": null,
+            "value": null,
+            "role": "AXButton",
+            "actions": [
+              "focus",
+              "press"
+            ],
+            "label": "Sumar marcador externo",
+            "value_truncated": false,
+            "secure": false,
+            "parent": "7ce86eb042cd43c7a42bbde296fc65dd"
+          },
+          {
+            "ref": "9e4ae605f2e0448bbf639c03c015eb17",
+            "enabled": true,
+            "selected_range": null,
+            "value": null,
+            "role": "AXTextField",
+            "actions": [],
+            "label": "Campo protegido",
+            "value_truncated": false,
+            "parent": "7ce86eb042cd43c7a42bbde296fc65dd",
+            "secure": true
+          },
+          {
+            "ref": "6a22acc9821644778a6c1533a5ac8b55",
+            "enabled": true,
+            "selected_range": null,
+            "value": null,
+            "role": "AXButton",
+            "actions": [
+              "press"
+            ],
+            "label": "",
+            "secure": false,
+            "parent": "7ce86eb042cd43c7a42bbde296fc65dd",
+            "value_truncated": false
+          },
+          {
+            "ref": "ca6c081396554f888018c00457b8cac9",
+            "enabled": true,
+            "selected_range": null,
+            "value": null,
+            "role": "AXButton",
+            "actions": [
+              "press"
+            ],
+            "parent": "7ce86eb042cd43c7a42bbde296fc65dd",
+            "secure": false,
+            "value_truncated": false,
+            "label": ""
+          },
+          {
+            "ref": "a17e9fba0a454f69abd064bbdd033f50",
+            "enabled": true,
+            "selected_range": null,
+            "value": null,
+            "role": "AXButton",
+            "actions": [
+              "press"
+            ],
+            "label": "",
+            "secure": false,
+            "value_truncated": false,
+            "parent": "7ce86eb042cd43c7a42bbde296fc65dd"
+          },
+          {
+            "ref": "201c0ceef62048a7a83670bfa69ce293",
+            "enabled": true,
+            "selected_range": [
+              0,
+              0
+            ],
+            "value": "Documento externo sintético Jarvis",
+            "role": "AXStaticText",
+            "actions": [],
+            "label": "",
+            "secure": false,
+            "value_truncated": false,
+            "parent": "7ce86eb042cd43c7a42bbde296fc65dd"
+          },
+          {
+            "ref": "c0e95a5c6d35436cab376cec2434cba3",
+            "enabled": true,
+            "selected_range": null,
+            "value": null,
+            "role": "AXGroup",
+            "actions": [],
+            "label": "",
+            "parent": "ca6c081396554f888018c00457b8cac9",
+            "secure": false,
+            "value_truncated": false
+          },
+          {
+            "ref": "989e0322d26841938d21f36b28422f0e",
+            "enabled": true,
+            "selected_range": null,
+            "value": null,
+            "role": "AXGroup",
+            "actions": [],
+            "label": "",
+            "parent": "c0e95a5c6d35436cab376cec2434cba3",
+            "value_truncated": false,
+            "secure": false
+          }
+        ],
+        "schema": "jarvis.desktop.v1",
+        "succeeded": true,
+        "source": "native_accessibility_observation",
+        "snapshot_id": "d8e7bd0b48a24df7ab59ac057b21340a",
+        "expires_in_seconds": 120,
+        "truncated": false,
+        "effect_status": "known",
+        "permits_replay": false
+      },
+      "finished_ns": 1793078718075600000,
+      "sdk_proposal_delta": 1,
+      "sdk_reply_delta": 1,
+      "http_delta": {
+        "page": 0,
+        "confirm": 0,
+        "download": 0,
+        "search": 0,
+        "document": 0,
+        "forbidden": 0
+      }
+    },
+    {
+      "label": "03_type_text_unicode_selection",
+      "tool": "desktop_action",
+      "arguments": {
+        "target": {
+          "pid": 27924,
+          "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b",
+          "bundle_id": "com.jarvis.fixture.macexternal.20261027"
+        },
+        "window_ref": "beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30",
+        "snapshot_id": "d8e7bd0b48a24df7ab59ac057b21340a",
+        "ref": "2841e468df2c4eda9cba521d5140eae8",
+        "action": "type_text",
+        "value": " + AÑADIDO\nTERCERA"
+      },
+      "request_id": "1e278a101ba6429191e6a0c42498f30b",
+      "started_ns": 1793078718109650000,
+      "approvals": [
+        {
+          "id": "9363eb8161ac4c8eab452da54091cb6b",
+          "remember": "operation"
+        }
+      ],
+      "run_id": "1e278a101ba6429191e6a0c42498f30b",
+      "run": {
+        "run_id": "1e278a101ba6429191e6a0c42498f30b",
+        "status": "completed",
+        "outcome": "known",
+        "answer": "{\"fixture\":true,\"independent_verification_required\":true,\"transport_success\":true,\"receipt\":{\"tool_name\":\"desktop_action\",\"succeeded\":true,\"verified\":true,\"error\":null,\"effect_status\":\"known\",\"operation_id\":\"97b4661429ee4dfb8e64f08512e9777c\",\"error_type\":null},\"output\":{\"dispatched\":true,\"verified\":true,\"bounds\":[180,344,560,412],\"target\":{\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\",\"pid\":27924,\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\"},\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"elements\":[{\"ref\":\"25af9b7a0e5b4d9dad4037ae516926ac\",\"enabled\":true,\"actions\":[\"click_at\",\"drag\",\"key\"],\"label\":\"Documento externo sintético Jarvis\",\"parent\":null,\"value\":null,\"role\":\"AXWindow\",\"secure\":false,\"selected_range\":null,\"value_truncated\":false},{\"enabled\":true,\"ref\":\"b299ba340ed54e4cac0c74051e1c3caa\",\"actions\":[\"focus\",\"set_value\",\"type_text\"],\"label\":\"Editor externo Jarvis\",\"parent\":\"25af9b7a0e5b4d9dad4037ae516926ac\",\"value\":\"INICIO 🧪\\nSEGUNDA LÍNEA + AÑADIDO\\nTERCERA\",\"role\":\"AXTextArea\",\"selected_range\":[41,0],\"secure\":false,\"value_truncated\":false},{\"enabled\":true,\"ref\":\"48c506339b6f4ba18fb2b45a1808fb7c\",\"actions\":[],\"label\":\"\",\"parent\":\"25af9b7a0e5b4d9dad4037ae516926ac\",\"role\":\"AXStaticText\",\"value\":\"CONTADOR 0\",\"selected_range\":[0,0],\"value_truncated\":false,\"secure\":false},{\"enabled\":true,\"ref\":\"a54f9b9a2dcf401d94bcfb3ea3806ab7\",\"actions\":[\"focus\",\"press\"],\"label\":\"Sumar marcador externo\",\"parent\":\"25af9b7a0e5b4d9dad4037ae516926ac\",\"value\":null,\"role\":\"AXButton\",\"secure\":false,\"value_truncated\":false,\"selected_range\":null},{\"enabled\":true,\"ref\":\"85c2973b33af4917a944de81c369d646\",\"actions\":[],\"label\":\"Campo protegido\",\"parent\":\"25af9b7a0e5b4d9dad4037ae516926ac\",\"value\":null,\"role\":\"AXTextField\",\"selected_range\":null,\"value_truncated\":false,\"secure\":true},{\"ref\":\"4c7b0002baf34300ace6ed5689a76ee7\",\"enabled\":true,\"actions\":[\"press\"],\"label\":\"\",\"parent\":\"25af9b7a0e5b4d9dad4037ae516926ac\",\"role\":\"AXButton\",\"value\":null,\"secure\":false,\"value_truncated\":false,\"selected_range\":null},{\"ref\":\"aeb6f182d13e42759715576f01fb7e0d\",\"enabled\":true,\"actions\":[\"press\"],\"label\":\"\",\"parent\":\"25af9b7a0e5b4d9dad4037ae516926ac\",\"role\":\"AXButton\",\"value\":null,\"secure\":false,\"value_truncated\":false,\"selected_range\":null},{\"enabled\":true,\"ref\":\"d16d2da79aeb4496b08964898838808d\",\"actions\":[\"press\"],\"label\":\"\",\"parent\":\"25af9b7a0e5b4d9dad4037ae516926ac\",\"value\":null,\"role\":\"AXButton\",\"selected_range\":null,\"value_truncated\":false,\"secure\":false},{\"enabled\":true,\"ref\":\"7cbee77d9f764266bacdc7a8df2c1457\",\"actions\":[],\"label\":\"\",\"parent\":\"25af9b7a0e5b4d9dad4037ae516926ac\",\"role\":\"AXStaticText\",\"value\":\"Documento externo sintético Jarvis\",\"selected_range\":[0,0],\"value_truncated\":false,\"secure\":false},{\"enabled\":true,\"ref\":\"ac666d893dab4db6b79ca25561b482f9\",\"actions\":[],\"label\":\"\",\"parent\":\"aeb6f182d13e42759715576f01fb7e0d\",\"role\":\"AXGroup\",\"value\":null,\"secure\":false,\"value_truncated\":false,\"selected_range\":null},{\"enabled\":true,\"ref\":\"c01b404bb87c474dae5657942ef1c874\",\"actions\":[],\"label\":\"\",\"parent\":\"ac666d893dab4db6b79ca25561b482f9\",\"value\":null,\"role\":\"AXGroup\",\"secure\":false,\"value_truncated\":false,\"selected_range\":null}],\"schema\":\"jarvis.desktop.v1\",\"succeeded\":true,\"snapshot_id\":\"e3cb1b51a79645a9bc6ffdb04c9572cd\",\"source\":\"native_accessibility_observation\",\"expires_in_seconds\":120,\"truncated\":false,\"verification\":\"valor_releido_coincide\",\"effect_status\":\"known\",\"permits_replay\":false},\"frames\":[]}",
+        "error": null,
+        "answer_source": "model",
+        "action_receipts": [
+          {
+            "effect_status": "known",
+            "error": null,
+            "error_type": null,
+            "operation_id": "97b4661429ee4dfb8e64f08512e9777c",
+            "output": "{\"dispatched\":true,\"verified\":true,\"bounds\":[180,344,560,412],\"target\":{\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\",\"pid\":27924,\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\"},\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"elements\":[{\"ref\":\"25af9b7a0e5b4d9dad4037ae516926ac\",\"enabled\":true,\"actions\":[\"click_at\",\"drag\",\"key\"],\"label\":\"Documento externo sintético Jarvis\",\"parent\":null,\"value\":null,\"role\":\"AXWindow\",\"secure\":false,\"se",
+            "output_bytes": 3231,
+            "output_sha256": "ab2d96fed34a492ed293682f1e3f22eb1debf308ac959339cea9bd2b66c4858c",
+            "output_truncated": true,
+            "succeeded": true,
+            "tool_name": "desktop_action",
+            "verified": true
+          }
+        ]
+      },
+      "receipt": {
+        "effect_status": "known",
+        "error": null,
+        "error_type": null,
+        "operation_id": "97b4661429ee4dfb8e64f08512e9777c",
+        "output": "{\"dispatched\":true,\"verified\":true,\"bounds\":[180,344,560,412],\"target\":{\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\",\"pid\":27924,\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\"},\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"elements\":[{\"ref\":\"25af9b7a0e5b4d9dad4037ae516926ac\",\"enabled\":true,\"actions\":[\"click_at\",\"drag\",\"key\"],\"label\":\"Documento externo sintético Jarvis\",\"parent\":null,\"value\":null,\"role\":\"AXWindow\",\"secure\":false,\"se",
+        "output_bytes": 3231,
+        "output_sha256": "ab2d96fed34a492ed293682f1e3f22eb1debf308ac959339cea9bd2b66c4858c",
+        "output_truncated": true,
+        "succeeded": true,
+        "tool_name": "desktop_action",
+        "verified": true
+      },
+      "output": {
+        "dispatched": true,
+        "verified": true,
+        "bounds": [
+          180,
+          344,
+          560,
+          412
+        ],
+        "target": {
+          "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+          "pid": 27924,
+          "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b"
+        },
+        "window_ref": "beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30",
+        "elements": [
+          {
+            "ref": "25af9b7a0e5b4d9dad4037ae516926ac",
+            "enabled": true,
+            "actions": [
+              "click_at",
+              "drag",
+              "key"
+            ],
+            "label": "Documento externo sintético Jarvis",
+            "parent": null,
+            "value": null,
+            "role": "AXWindow",
+            "secure": false,
+            "selected_range": null,
+            "value_truncated": false
+          },
+          {
+            "enabled": true,
+            "ref": "b299ba340ed54e4cac0c74051e1c3caa",
+            "actions": [
+              "focus",
+              "set_value",
+              "type_text"
+            ],
+            "label": "Editor externo Jarvis",
+            "parent": "25af9b7a0e5b4d9dad4037ae516926ac",
+            "value": "INICIO 🧪\nSEGUNDA LÍNEA + AÑADIDO\nTERCERA",
+            "role": "AXTextArea",
+            "selected_range": [
+              41,
+              0
+            ],
+            "secure": false,
+            "value_truncated": false
+          },
+          {
+            "enabled": true,
+            "ref": "48c506339b6f4ba18fb2b45a1808fb7c",
+            "actions": [],
+            "label": "",
+            "parent": "25af9b7a0e5b4d9dad4037ae516926ac",
+            "role": "AXStaticText",
+            "value": "CONTADOR 0",
+            "selected_range": [
+              0,
+              0
+            ],
+            "value_truncated": false,
+            "secure": false
+          },
+          {
+            "enabled": true,
+            "ref": "a54f9b9a2dcf401d94bcfb3ea3806ab7",
+            "actions": [
+              "focus",
+              "press"
+            ],
+            "label": "Sumar marcador externo",
+            "parent": "25af9b7a0e5b4d9dad4037ae516926ac",
+            "value": null,
+            "role": "AXButton",
+            "secure": false,
+            "value_truncated": false,
+            "selected_range": null
+          },
+          {
+            "enabled": true,
+            "ref": "85c2973b33af4917a944de81c369d646",
+            "actions": [],
+            "label": "Campo protegido",
+            "parent": "25af9b7a0e5b4d9dad4037ae516926ac",
+            "value": null,
+            "role": "AXTextField",
+            "selected_range": null,
+            "value_truncated": false,
+            "secure": true
+          },
+          {
+            "ref": "4c7b0002baf34300ace6ed5689a76ee7",
+            "enabled": true,
+            "actions": [
+              "press"
+            ],
+            "label": "",
+            "parent": "25af9b7a0e5b4d9dad4037ae516926ac",
+            "role": "AXButton",
+            "value": null,
+            "secure": false,
+            "value_truncated": false,
+            "selected_range": null
+          },
+          {
+            "ref": "aeb6f182d13e42759715576f01fb7e0d",
+            "enabled": true,
+            "actions": [
+              "press"
+            ],
+            "label": "",
+            "parent": "25af9b7a0e5b4d9dad4037ae516926ac",
+            "role": "AXButton",
+            "value": null,
+            "secure": false,
+            "value_truncated": false,
+            "selected_range": null
+          },
+          {
+            "enabled": true,
+            "ref": "d16d2da79aeb4496b08964898838808d",
+            "actions": [
+              "press"
+            ],
+            "label": "",
+            "parent": "25af9b7a0e5b4d9dad4037ae516926ac",
+            "value": null,
+            "role": "AXButton",
+            "selected_range": null,
+            "value_truncated": false,
+            "secure": false
+          },
+          {
+            "enabled": true,
+            "ref": "7cbee77d9f764266bacdc7a8df2c1457",
+            "actions": [],
+            "label": "",
+            "parent": "25af9b7a0e5b4d9dad4037ae516926ac",
+            "role": "AXStaticText",
+            "value": "Documento externo sintético Jarvis",
+            "selected_range": [
+              0,
+              0
+            ],
+            "value_truncated": false,
+            "secure": false
+          },
+          {
+            "enabled": true,
+            "ref": "ac666d893dab4db6b79ca25561b482f9",
+            "actions": [],
+            "label": "",
+            "parent": "aeb6f182d13e42759715576f01fb7e0d",
+            "role": "AXGroup",
+            "value": null,
+            "secure": false,
+            "value_truncated": false,
+            "selected_range": null
+          },
+          {
+            "enabled": true,
+            "ref": "c01b404bb87c474dae5657942ef1c874",
+            "actions": [],
+            "label": "",
+            "parent": "ac666d893dab4db6b79ca25561b482f9",
+            "value": null,
+            "role": "AXGroup",
+            "secure": false,
+            "value_truncated": false,
+            "selected_range": null
+          }
+        ],
+        "schema": "jarvis.desktop.v1",
+        "succeeded": true,
+        "snapshot_id": "e3cb1b51a79645a9bc6ffdb04c9572cd",
+        "source": "native_accessibility_observation",
+        "expires_in_seconds": 120,
+        "truncated": false,
+        "verification": "valor_releido_coincide",
+        "effect_status": "known",
+        "permits_replay": false
+      },
+      "finished_ns": 1793078718502647000,
+      "sdk_proposal_delta": 1,
+      "sdk_reply_delta": 1,
+      "http_delta": {
+        "page": 0,
+        "confirm": 0,
+        "download": 0,
+        "search": 0,
+        "document": 0,
+        "forbidden": 0
+      }
+    },
+    {
+      "label": "03_readback_type_text",
+      "tool": "desktop_observe",
+      "arguments": {
+        "target": {
+          "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b",
+          "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+          "pid": 27924
+        },
+        "window_ref": "beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30",
+        "include_frame": false
+      },
+      "request_id": "81229df38631426196e4dd0f5f466690",
+      "started_ns": 1793078718531867000,
+      "approvals": [
+        {
+          "id": "b66ba9ddf8704bd99e06283b062c55bd",
+          "remember": "operation"
+        }
+      ],
+      "run_id": "81229df38631426196e4dd0f5f466690",
+      "run": {
+        "run_id": "81229df38631426196e4dd0f5f466690",
+        "status": "completed",
+        "outcome": "known",
+        "answer": "{\"fixture\":true,\"independent_verification_required\":true,\"transport_success\":true,\"receipt\":{\"tool_name\":\"desktop_observe\",\"succeeded\":true,\"verified\":true,\"error\":null,\"effect_status\":\"known\",\"operation_id\":\"2a307a3bc747476f8aa153517333ce39\",\"error_type\":null},\"output\":{\"succeeded\":true,\"elements\":[{\"label\":\"Documento externo sintético Jarvis\",\"selected_range\":null,\"ref\":\"50cdbf90001645edbe8aec01fb6b7a91\",\"enabled\":true,\"secure\":false,\"actions\":[\"click_at\",\"drag\",\"key\"],\"value\":null,\"value_truncated\":false,\"parent\":null,\"role\":\"AXWindow\"},{\"selected_range\":[41,0],\"label\":\"Editor externo Jarvis\",\"ref\":\"e8586ff4de5743a1b879f788d8a61a27\",\"enabled\":true,\"secure\":false,\"actions\":[\"focus\",\"set_value\",\"type_text\"],\"value\":\"INICIO 🧪\\nSEGUNDA LÍNEA + AÑADIDO\\nTERCERA\",\"value_truncated\":false,\"role\":\"AXTextArea\",\"parent\":\"50cdbf90001645edbe8aec01fb6b7a91\"},{\"selected_range\":[0,0],\"label\":\"\",\"ref\":\"49b471f2ac3840ab8303c32f53b7c697\",\"enabled\":true,\"secure\":false,\"actions\":[],\"value\":\"CONTADOR 0\",\"value_truncated\":false,\"parent\":\"50cdbf90001645edbe8aec01fb6b7a91\",\"role\":\"AXStaticText\"},{\"label\":\"Sumar marcador externo\",\"selected_range\":null,\"ref\":\"de0b9f05b5ff43fe8586b7e81560d4c0\",\"enabled\":true,\"secure\":false,\"actions\":[\"focus\",\"press\"],\"value\":null,\"value_truncated\":false,\"role\":\"AXButton\",\"parent\":\"50cdbf90001645edbe8aec01fb6b7a91\"},{\"selected_range\":null,\"label\":\"Campo protegido\",\"ref\":\"d35eb691dd0546c693841834e47d253a\",\"enabled\":true,\"secure\":true,\"actions\":[],\"value_truncated\":false,\"value\":null,\"role\":\"AXTextField\",\"parent\":\"50cdbf90001645edbe8aec01fb6b7a91\"},{\"selected_range\":null,\"label\":\"\",\"ref\":\"66b27023fb8a4ca982dd616dc37fb4f4\",\"enabled\":true,\"secure\":false,\"actions\":[\"press\"],\"value_truncated\":false,\"value\":null,\"parent\":\"50cdbf90001645edbe8aec01fb6b7a91\",\"role\":\"AXButton\"},{\"selected_range\":null,\"label\":\"\",\"ref\":\"ef443be34b454f119a8264826f1582a8\",\"enabled\":true,\"secure\":false,\"actions\":[\"press\"],\"value_truncated\":false,\"value\":null,\"role\":\"AXButton\",\"parent\":\"50cdbf90001645edbe8aec01fb6b7a91\"},{\"label\":\"\",\"selected_range\":null,\"ref\":\"bc97d41c50514ead9a964c7765ed4999\",\"enabled\":true,\"secure\":false,\"actions\":[\"press\"],\"value_truncated\":false,\"value\":null,\"role\":\"AXButton\",\"parent\":\"50cdbf90001645edbe8aec01fb6b7a91\"},{\"label\":\"\",\"selected_range\":[0,0],\"ref\":\"abc123acb6264b22b0066afddf95e047\",\"enabled\":true,\"secure\":false,\"actions\":[],\"value\":\"Documento externo sintético Jarvis\",\"value_truncated\":false,\"role\":\"AXStaticText\",\"parent\":\"50cdbf90001645edbe8aec01fb6b7a91\"},{\"selected_range\":null,\"label\":\"\",\"ref\":\"9ddc41a92fe84cd0bca58f09a3494418\",\"enabled\":true,\"secure\":false,\"actions\":[],\"value\":null,\"value_truncated\":false,\"parent\":\"ef443be34b454f119a8264826f1582a8\",\"role\":\"AXGroup\"},{\"selected_range\":null,\"label\":\"\",\"ref\":\"c6ed1ee722ff4ba29db6eebb9d693e1b\",\"enabled\":true,\"secure\":false,\"actions\":[],\"value\":null,\"value_truncated\":false,\"role\":\"AXGroup\",\"parent\":\"9ddc41a92fe84cd0bca58f09a3494418\"}],\"target\":{\"pid\":27924,\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\",\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\"},\"verified\":true,\"dispatched\":false,\"snapshot_id\":\"24a485f91d2c429c8df0ca24749eaec6\",\"truncated\":false,\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"bounds\":[180,344,560,412],\"expires_in_seconds\":120,\"source\":\"native_accessibility_observation\",\"effect_status\":\"known\",\"schema\":\"jarvis.desktop.v1\",\"permits_replay\":false},\"frames\":[]}",
+        "error": null,
+        "answer_source": "model",
+        "action_receipts": [
+          {
+            "effect_status": "known",
+            "error": null,
+            "error_type": null,
+            "operation_id": "2a307a3bc747476f8aa153517333ce39",
+            "output": "{\"succeeded\":true,\"elements\":[{\"label\":\"Documento externo sintético Jarvis\",\"selected_range\":null,\"ref\":\"50cdbf90001645edbe8aec01fb6b7a91\",\"enabled\":true,\"secure\":false,\"actions\":[\"click_at\",\"drag\",\"key\"],\"value\":null,\"value_truncated\":false,\"parent\":null,\"role\":\"AXWindow\"},{\"selected_range\":[41,0],\"label\":\"Editor externo Jarvis\",\"ref\":\"e8586ff4de5743a1b879f788d8a61a27\",\"enabled\":true,\"secure\":false,\"actions\":[\"focus\",\"set_value\",\"type_text\"],\"value\":\"INICIO 🧪\\nSEGUNDA LÍNEA + AÑADIDO\\nTERCERA\",\"value",
+            "output_bytes": 3192,
+            "output_sha256": "5d516c8b067b0d7cec9e1c25b253391ab5e6104e2723d00f0493a699110bda0d",
+            "output_truncated": true,
+            "succeeded": true,
+            "tool_name": "desktop_observe",
+            "verified": true
+          }
+        ]
+      },
+      "receipt": {
+        "effect_status": "known",
+        "error": null,
+        "error_type": null,
+        "operation_id": "2a307a3bc747476f8aa153517333ce39",
+        "output": "{\"succeeded\":true,\"elements\":[{\"label\":\"Documento externo sintético Jarvis\",\"selected_range\":null,\"ref\":\"50cdbf90001645edbe8aec01fb6b7a91\",\"enabled\":true,\"secure\":false,\"actions\":[\"click_at\",\"drag\",\"key\"],\"value\":null,\"value_truncated\":false,\"parent\":null,\"role\":\"AXWindow\"},{\"selected_range\":[41,0],\"label\":\"Editor externo Jarvis\",\"ref\":\"e8586ff4de5743a1b879f788d8a61a27\",\"enabled\":true,\"secure\":false,\"actions\":[\"focus\",\"set_value\",\"type_text\"],\"value\":\"INICIO 🧪\\nSEGUNDA LÍNEA + AÑADIDO\\nTERCERA\",\"value",
+        "output_bytes": 3192,
+        "output_sha256": "5d516c8b067b0d7cec9e1c25b253391ab5e6104e2723d00f0493a699110bda0d",
+        "output_truncated": true,
+        "succeeded": true,
+        "tool_name": "desktop_observe",
+        "verified": true
+      },
+      "output": {
+        "succeeded": true,
+        "elements": [
+          {
+            "label": "Documento externo sintético Jarvis",
+            "selected_range": null,
+            "ref": "50cdbf90001645edbe8aec01fb6b7a91",
+            "enabled": true,
+            "secure": false,
+            "actions": [
+              "click_at",
+              "drag",
+              "key"
+            ],
+            "value": null,
+            "value_truncated": false,
+            "parent": null,
+            "role": "AXWindow"
+          },
+          {
+            "selected_range": [
+              41,
+              0
+            ],
+            "label": "Editor externo Jarvis",
+            "ref": "e8586ff4de5743a1b879f788d8a61a27",
+            "enabled": true,
+            "secure": false,
+            "actions": [
+              "focus",
+              "set_value",
+              "type_text"
+            ],
+            "value": "INICIO 🧪\nSEGUNDA LÍNEA + AÑADIDO\nTERCERA",
+            "value_truncated": false,
+            "role": "AXTextArea",
+            "parent": "50cdbf90001645edbe8aec01fb6b7a91"
+          },
+          {
+            "selected_range": [
+              0,
+              0
+            ],
+            "label": "",
+            "ref": "49b471f2ac3840ab8303c32f53b7c697",
+            "enabled": true,
+            "secure": false,
+            "actions": [],
+            "value": "CONTADOR 0",
+            "value_truncated": false,
+            "parent": "50cdbf90001645edbe8aec01fb6b7a91",
+            "role": "AXStaticText"
+          },
+          {
+            "label": "Sumar marcador externo",
+            "selected_range": null,
+            "ref": "de0b9f05b5ff43fe8586b7e81560d4c0",
+            "enabled": true,
+            "secure": false,
+            "actions": [
+              "focus",
+              "press"
+            ],
+            "value": null,
+            "value_truncated": false,
+            "role": "AXButton",
+            "parent": "50cdbf90001645edbe8aec01fb6b7a91"
+          },
+          {
+            "selected_range": null,
+            "label": "Campo protegido",
+            "ref": "d35eb691dd0546c693841834e47d253a",
+            "enabled": true,
+            "secure": true,
+            "actions": [],
+            "value_truncated": false,
+            "value": null,
+            "role": "AXTextField",
+            "parent": "50cdbf90001645edbe8aec01fb6b7a91"
+          },
+          {
+            "selected_range": null,
+            "label": "",
+            "ref": "66b27023fb8a4ca982dd616dc37fb4f4",
+            "enabled": true,
+            "secure": false,
+            "actions": [
+              "press"
+            ],
+            "value_truncated": false,
+            "value": null,
+            "parent": "50cdbf90001645edbe8aec01fb6b7a91",
+            "role": "AXButton"
+          },
+          {
+            "selected_range": null,
+            "label": "",
+            "ref": "ef443be34b454f119a8264826f1582a8",
+            "enabled": true,
+            "secure": false,
+            "actions": [
+              "press"
+            ],
+            "value_truncated": false,
+            "value": null,
+            "role": "AXButton",
+            "parent": "50cdbf90001645edbe8aec01fb6b7a91"
+          },
+          {
+            "label": "",
+            "selected_range": null,
+            "ref": "bc97d41c50514ead9a964c7765ed4999",
+            "enabled": true,
+            "secure": false,
+            "actions": [
+              "press"
+            ],
+            "value_truncated": false,
+            "value": null,
+            "role": "AXButton",
+            "parent": "50cdbf90001645edbe8aec01fb6b7a91"
+          },
+          {
+            "label": "",
+            "selected_range": [
+              0,
+              0
+            ],
+            "ref": "abc123acb6264b22b0066afddf95e047",
+            "enabled": true,
+            "secure": false,
+            "actions": [],
+            "value": "Documento externo sintético Jarvis",
+            "value_truncated": false,
+            "role": "AXStaticText",
+            "parent": "50cdbf90001645edbe8aec01fb6b7a91"
+          },
+          {
+            "selected_range": null,
+            "label": "",
+            "ref": "9ddc41a92fe84cd0bca58f09a3494418",
+            "enabled": true,
+            "secure": false,
+            "actions": [],
+            "value": null,
+            "value_truncated": false,
+            "parent": "ef443be34b454f119a8264826f1582a8",
+            "role": "AXGroup"
+          },
+          {
+            "selected_range": null,
+            "label": "",
+            "ref": "c6ed1ee722ff4ba29db6eebb9d693e1b",
+            "enabled": true,
+            "secure": false,
+            "actions": [],
+            "value": null,
+            "value_truncated": false,
+            "role": "AXGroup",
+            "parent": "9ddc41a92fe84cd0bca58f09a3494418"
+          }
+        ],
+        "target": {
+          "pid": 27924,
+          "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+          "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b"
+        },
+        "verified": true,
+        "dispatched": false,
+        "snapshot_id": "24a485f91d2c429c8df0ca24749eaec6",
+        "truncated": false,
+        "window_ref": "beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30",
+        "bounds": [
+          180,
+          344,
+          560,
+          412
+        ],
+        "expires_in_seconds": 120,
+        "source": "native_accessibility_observation",
+        "effect_status": "known",
+        "schema": "jarvis.desktop.v1",
+        "permits_replay": false
+      },
+      "finished_ns": 1793078718830453000,
+      "sdk_proposal_delta": 1,
+      "sdk_reply_delta": 1,
+      "http_delta": {
+        "page": 0,
+        "confirm": 0,
+        "download": 0,
+        "search": 0,
+        "document": 0,
+        "forbidden": 0
+      }
+    },
+    {
+      "label": "03_press_counter_once",
+      "tool": "desktop_action",
+      "arguments": {
+        "target": {
+          "pid": 27924,
+          "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+          "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b"
+        },
+        "window_ref": "beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30",
+        "snapshot_id": "24a485f91d2c429c8df0ca24749eaec6",
+        "ref": "de0b9f05b5ff43fe8586b7e81560d4c0",
+        "action": "press",
+        "verify_ref": "49b471f2ac3840ab8303c32f53b7c697",
+        "expected_value": "CONTADOR 1"
+      },
+      "request_id": "b69f722b1bf145838fcf196a40a85a8f",
+      "started_ns": 1793078718862343000,
+      "approvals": [
+        {
+          "id": "20b7e848bbd8461689ad1e0432530e24",
+          "remember": "operation"
+        }
+      ],
+      "run_id": "b69f722b1bf145838fcf196a40a85a8f",
+      "run": {
+        "run_id": "b69f722b1bf145838fcf196a40a85a8f",
+        "status": "failed",
+        "outcome": "unknown",
+        "answer": null,
+        "error": "tool_outcome_unknown",
+        "answer_source": null,
+        "action_receipts": [
+          {
+            "effect_status": "unknown",
+            "error": "No se pudo completar la operación del escritorio (native_action_unconfirmed).",
+            "error_type": null,
+            "operation_id": "a58540e482a64e508104be7dc24a1db9",
+            "output": "{\"schema\":\"jarvis.desktop.v1\",\"error_code\":\"native_action_unconfirmed\",\"error\":\"No se pudo completar la operación del escritorio (native_action_unconfirmed).\",\"effect_status\":\"unknown\",\"verified\":false,\"dispatched\":true,\"succeeded\":false,\"permits_replay\":false}",
+            "output_bytes": 262,
+            "output_sha256": "2fd3e1621000e1f3154e1f4516c5fed0e988161ef5782996e2c68555a0a7c71f",
+            "output_truncated": false,
+            "succeeded": false,
+            "tool_name": "desktop_action",
+            "verified": false
+          }
+        ]
+      },
+      "receipt": {
+        "effect_status": "unknown",
+        "error": "No se pudo completar la operación del escritorio (native_action_unconfirmed).",
+        "error_type": null,
+        "operation_id": "a58540e482a64e508104be7dc24a1db9",
+        "output": "{\"schema\":\"jarvis.desktop.v1\",\"error_code\":\"native_action_unconfirmed\",\"error\":\"No se pudo completar la operación del escritorio (native_action_unconfirmed).\",\"effect_status\":\"unknown\",\"verified\":false,\"dispatched\":true,\"succeeded\":false,\"permits_replay\":false}",
+        "output_bytes": 262,
+        "output_sha256": "2fd3e1621000e1f3154e1f4516c5fed0e988161ef5782996e2c68555a0a7c71f",
+        "output_truncated": false,
+        "succeeded": false,
+        "tool_name": "desktop_action",
+        "verified": false
+      },
+      "output": {
+        "schema": "jarvis.desktop.v1",
+        "error_code": "native_action_unconfirmed",
+        "error": "No se pudo completar la operación del escritorio (native_action_unconfirmed).",
+        "effect_status": "unknown",
+        "verified": false,
+        "dispatched": true,
+        "succeeded": false,
+        "permits_replay": false
+      },
+      "finished_ns": 1793078719338829000,
+      "sdk_proposal_delta": 1,
+      "sdk_reply_delta": 1,
+      "http_delta": {
+        "page": 0,
+        "confirm": 0,
+        "download": 0,
+        "search": 0,
+        "document": 0,
+        "forbidden": 0
+      }
+    },
+    {
+      "label": "03_fresh_read_after_uncertain_press",
+      "tool": "desktop_observe",
+      "arguments": {
+        "target": {
+          "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b",
+          "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+          "pid": 27924
+        },
+        "window_ref": "beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30",
+        "include_frame": false
+      },
+      "request_id": "aa4486f8a1ba4abebca2d467473a33fc",
+      "started_ns": 1793078857140314000,
+      "approvals": [
+        {
+          "id": "9bfb76ea27264d95ac502a9704b9acd8",
+          "remember": "operation"
+        }
+      ],
+      "run_id": "aa4486f8a1ba4abebca2d467473a33fc",
+      "run": {
+        "run_id": "aa4486f8a1ba4abebca2d467473a33fc",
+        "status": "completed",
+        "outcome": "known",
+        "answer": "{\"fixture\":true,\"independent_verification_required\":true,\"transport_success\":true,\"receipt\":{\"tool_name\":\"desktop_observe\",\"succeeded\":true,\"verified\":true,\"error\":null,\"effect_status\":\"known\",\"operation_id\":\"40fd4a71b7674fbdad351b1476572a6d\",\"error_type\":null},\"output\":{\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"target\":{\"pid\":27924,\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\",\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\"},\"source\":\"native_accessibility_observation\",\"expires_in_seconds\":120,\"snapshot_id\":\"57023612e5d24954a59a973b18a4ef4e\",\"effect_status\":\"known\",\"dispatched\":false,\"verified\":true,\"schema\":\"jarvis.desktop.v1\",\"bounds\":[180,344,560,412],\"succeeded\":true,\"permits_replay\":false,\"elements\":[{\"secure\":false,\"label\":\"Documento externo sintético Jarvis\",\"role\":\"AXWindow\",\"enabled\":true,\"ref\":\"b0638549a6d24256917930acfe04fe77\",\"value_truncated\":false,\"selected_range\":null,\"parent\":null,\"value\":null,\"actions\":[\"click_at\",\"drag\",\"key\"]},{\"secure\":false,\"label\":\"Editor externo Jarvis\",\"role\":\"AXTextArea\",\"enabled\":true,\"value_truncated\":false,\"ref\":\"53b476d39ddf4334940616c583c4a673\",\"selected_range\":[41,0],\"parent\":\"b0638549a6d24256917930acfe04fe77\",\"value\":\"INICIO 🧪\\nSEGUNDA LÍNEA + AÑADIDO\\nTERCERA\",\"actions\":[\"focus\",\"set_value\",\"type_text\"]},{\"secure\":false,\"label\":\"\",\"role\":\"AXStaticText\",\"enabled\":true,\"value_truncated\":false,\"ref\":\"9ec3881f5e8e4ff192857cabae2ba1e9\",\"selected_range\":[0,0],\"parent\":\"b0638549a6d24256917930acfe04fe77\",\"value\":\"CONTADOR 1\",\"actions\":[]},{\"secure\":false,\"label\":\"Sumar marcador externo\",\"role\":\"AXButton\",\"enabled\":true,\"value_truncated\":false,\"ref\":\"168e27ee2a8e4fadaeeb0eee2e8aa8ee\",\"selected_range\":null,\"parent\":\"b0638549a6d24256917930acfe04fe77\",\"actions\":[\"focus\",\"press\"],\"value\":null},{\"secure\":true,\"label\":\"Campo protegido\",\"role\":\"AXTextField\",\"enabled\":true,\"ref\":\"36b88fd51b80424899d4cdad3f4c4882\",\"value_truncated\":false,\"selected_range\":null,\"parent\":\"b0638549a6d24256917930acfe04fe77\",\"actions\":[],\"value\":null},{\"secure\":false,\"label\":\"\",\"role\":\"AXButton\",\"ref\":\"74ab34a78e4a43a6ac430c6dfc79522c\",\"value_truncated\":false,\"enabled\":true,\"selected_range\":null,\"parent\":\"b0638549a6d24256917930acfe04fe77\",\"actions\":[\"press\"],\"value\":null},{\"secure\":false,\"label\":\"\",\"role\":\"AXButton\",\"ref\":\"2d409c70a454415eb009a6d4acf56886\",\"enabled\":true,\"value_truncated\":false,\"selected_range\":null,\"parent\":\"b0638549a6d24256917930acfe04fe77\",\"value\":null,\"actions\":[\"press\"]},{\"secure\":false,\"label\":\"\",\"role\":\"AXButton\",\"enabled\":true,\"value_truncated\":false,\"ref\":\"020ad28d513745a0bcb9d261c3c9d7ff\",\"selected_range\":null,\"parent\":\"b0638549a6d24256917930acfe04fe77\",\"value\":null,\"actions\":[\"press\"]},{\"secure\":false,\"label\":\"\",\"role\":\"AXStaticText\",\"enabled\":true,\"value_truncated\":false,\"ref\":\"08cd7c0e26434c5190c62360e8c557de\",\"selected_range\":[0,0],\"parent\":\"b0638549a6d24256917930acfe04fe77\",\"actions\":[],\"value\":\"Documento externo sintético Jarvis\"},{\"secure\":false,\"label\":\"\",\"role\":\"AXGroup\",\"enabled\":true,\"ref\":\"114f650597a345d1b846e39beb9d2878\",\"value_truncated\":false,\"selected_range\":null,\"parent\":\"2d409c70a454415eb009a6d4acf56886\",\"value\":null,\"actions\":[]}],\"truncated\":false},\"frames\":[]}",
+        "error": null,
+        "answer_source": "model",
+        "action_receipts": [
+          {
+            "effect_status": "known",
+            "error": null,
+            "error_type": null,
+            "operation_id": "40fd4a71b7674fbdad351b1476572a6d",
+            "output": "{\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"target\":{\"pid\":27924,\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\",\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\"},\"source\":\"native_accessibility_observation\",\"expires_in_seconds\":120,\"snapshot_id\":\"57023612e5d24954a59a973b18a4ef4e\",\"effect_status\":\"known\",\"dispatched\":false,\"verified\":true,\"schema\":\"jarvis.desktop.v1\",\"bounds\":[180,344,560,412],\"succeeded\":true,\"permits_replay\":false,\"e",
+            "output_bytes": 2975,
+            "output_sha256": "4d232b9bac8d9dcb668c564e42becf4db9bbfa5315a32c735a2203a4c36edebf",
+            "output_truncated": true,
+            "succeeded": true,
+            "tool_name": "desktop_observe",
+            "verified": true
+          }
+        ]
+      },
+      "receipt": {
+        "effect_status": "known",
+        "error": null,
+        "error_type": null,
+        "operation_id": "40fd4a71b7674fbdad351b1476572a6d",
+        "output": "{\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"target\":{\"pid\":27924,\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\",\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\"},\"source\":\"native_accessibility_observation\",\"expires_in_seconds\":120,\"snapshot_id\":\"57023612e5d24954a59a973b18a4ef4e\",\"effect_status\":\"known\",\"dispatched\":false,\"verified\":true,\"schema\":\"jarvis.desktop.v1\",\"bounds\":[180,344,560,412],\"succeeded\":true,\"permits_replay\":false,\"e",
+        "output_bytes": 2975,
+        "output_sha256": "4d232b9bac8d9dcb668c564e42becf4db9bbfa5315a32c735a2203a4c36edebf",
+        "output_truncated": true,
+        "succeeded": true,
+        "tool_name": "desktop_observe",
+        "verified": true
+      },
+      "output": {
+        "window_ref": "beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30",
+        "target": {
+          "pid": 27924,
+          "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+          "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b"
+        },
+        "source": "native_accessibility_observation",
+        "expires_in_seconds": 120,
+        "snapshot_id": "57023612e5d24954a59a973b18a4ef4e",
+        "effect_status": "known",
+        "dispatched": false,
+        "verified": true,
+        "schema": "jarvis.desktop.v1",
+        "bounds": [
+          180,
+          344,
+          560,
+          412
+        ],
+        "succeeded": true,
+        "permits_replay": false,
+        "elements": [
+          {
+            "secure": false,
+            "label": "Documento externo sintético Jarvis",
+            "role": "AXWindow",
+            "enabled": true,
+            "ref": "b0638549a6d24256917930acfe04fe77",
+            "value_truncated": false,
+            "selected_range": null,
+            "parent": null,
+            "value": null,
+            "actions": [
+              "click_at",
+              "drag",
+              "key"
+            ]
+          },
+          {
+            "secure": false,
+            "label": "Editor externo Jarvis",
+            "role": "AXTextArea",
+            "enabled": true,
+            "value_truncated": false,
+            "ref": "53b476d39ddf4334940616c583c4a673",
+            "selected_range": [
+              41,
+              0
+            ],
+            "parent": "b0638549a6d24256917930acfe04fe77",
+            "value": "INICIO 🧪\nSEGUNDA LÍNEA + AÑADIDO\nTERCERA",
+            "actions": [
+              "focus",
+              "set_value",
+              "type_text"
+            ]
+          },
+          {
+            "secure": false,
+            "label": "",
+            "role": "AXStaticText",
+            "enabled": true,
+            "value_truncated": false,
+            "ref": "9ec3881f5e8e4ff192857cabae2ba1e9",
+            "selected_range": [
+              0,
+              0
+            ],
+            "parent": "b0638549a6d24256917930acfe04fe77",
+            "value": "CONTADOR 1",
+            "actions": []
+          },
+          {
+            "secure": false,
+            "label": "Sumar marcador externo",
+            "role": "AXButton",
+            "enabled": true,
+            "value_truncated": false,
+            "ref": "168e27ee2a8e4fadaeeb0eee2e8aa8ee",
+            "selected_range": null,
+            "parent": "b0638549a6d24256917930acfe04fe77",
+            "actions": [
+              "focus",
+              "press"
+            ],
+            "value": null
+          },
+          {
+            "secure": true,
+            "label": "Campo protegido",
+            "role": "AXTextField",
+            "enabled": true,
+            "ref": "36b88fd51b80424899d4cdad3f4c4882",
+            "value_truncated": false,
+            "selected_range": null,
+            "parent": "b0638549a6d24256917930acfe04fe77",
+            "actions": [],
+            "value": null
+          },
+          {
+            "secure": false,
+            "label": "",
+            "role": "AXButton",
+            "ref": "74ab34a78e4a43a6ac430c6dfc79522c",
+            "value_truncated": false,
+            "enabled": true,
+            "selected_range": null,
+            "parent": "b0638549a6d24256917930acfe04fe77",
+            "actions": [
+              "press"
+            ],
+            "value": null
+          },
+          {
+            "secure": false,
+            "label": "",
+            "role": "AXButton",
+            "ref": "2d409c70a454415eb009a6d4acf56886",
+            "enabled": true,
+            "value_truncated": false,
+            "selected_range": null,
+            "parent": "b0638549a6d24256917930acfe04fe77",
+            "value": null,
+            "actions": [
+              "press"
+            ]
+          },
+          {
+            "secure": false,
+            "label": "",
+            "role": "AXButton",
+            "enabled": true,
+            "value_truncated": false,
+            "ref": "020ad28d513745a0bcb9d261c3c9d7ff",
+            "selected_range": null,
+            "parent": "b0638549a6d24256917930acfe04fe77",
+            "value": null,
+            "actions": [
+              "press"
+            ]
+          },
+          {
+            "secure": false,
+            "label": "",
+            "role": "AXStaticText",
+            "enabled": true,
+            "value_truncated": false,
+            "ref": "08cd7c0e26434c5190c62360e8c557de",
+            "selected_range": [
+              0,
+              0
+            ],
+            "parent": "b0638549a6d24256917930acfe04fe77",
+            "actions": [],
+            "value": "Documento externo sintético Jarvis"
+          },
+          {
+            "secure": false,
+            "label": "",
+            "role": "AXGroup",
+            "enabled": true,
+            "ref": "114f650597a345d1b846e39beb9d2878",
+            "value_truncated": false,
+            "selected_range": null,
+            "parent": "2d409c70a454415eb009a6d4acf56886",
+            "value": null,
+            "actions": []
+          }
+        ],
+        "truncated": false
+      },
+      "finished_ns": 1793078857364438000,
+      "sdk_proposal_delta": 1,
+      "sdk_reply_delta": 1,
+      "http_delta": {
+        "page": 0,
+        "confirm": 0,
+        "download": 0,
+        "search": 0,
+        "document": 0,
+        "forbidden": 0
+      }
+    },
+    {
+      "label": "03_window_frame_memory_only",
+      "tool": "desktop_observe",
+      "arguments": {
+        "target": {
+          "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b",
+          "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+          "pid": 27924
+        },
+        "window_ref": "beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30",
+        "include_frame": true
+      },
+      "request_id": "4e3f2e31b35147f3812e0f305b9a3479",
+      "started_ns": 1793078857396925000,
+      "approvals": [
+        {
+          "id": "a9d9c8acdb1a42c08c2c1169f3bd38d8",
+          "remember": "operation"
+        }
+      ],
+      "run_id": "4e3f2e31b35147f3812e0f305b9a3479",
+      "run": {
+        "run_id": "4e3f2e31b35147f3812e0f305b9a3479",
+        "status": "completed",
+        "outcome": "known",
+        "answer": "{\"fixture\":true,\"independent_verification_required\":true,\"transport_success\":true,\"receipt\":{\"tool_name\":\"desktop_observe\",\"succeeded\":true,\"verified\":true,\"error\":null,\"effect_status\":\"known\",\"operation_id\":\"4d1e84e5a510407086eef1895c75042e\",\"error_type\":null},\"output\":{\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"truncated\":false,\"frame\":{\"window_id\":18864,\"storage\":\"memory_only\",\"mime_type\":\"image/jpeg\",\"bytes\":14300,\"sha256\":\"bf4463d26c31bfd1cd61360093d84d35b25dc89abcc4ee0d8ea42905c1cdde0c\",\"source\":\"screen_capture_kit_window\",\"protected_regions_redacted\":1,\"atomic_with_ax\":false,\"provider_delivery\":\"ephemeral_image_channel\"},\"source\":\"native_accessibility_observation\",\"expires_in_seconds\":120,\"effect_status\":\"known\",\"snapshot_id\":\"e81825f558414e4eb92e803292305d9e\",\"dispatched\":false,\"schema\":\"jarvis.desktop.v1\",\"verified\":true,\"bounds\":[180,344,560,412],\"succeeded\":true,\"permits_replay\":false,\"elements\":[{\"ref\":\"f370cba429ef4845a8d391e2631f29c0\",\"enabled\":true,\"secure\":false,\"value\":null,\"actions\":[\"click_at\",\"drag\",\"key\"],\"selected_range\":null,\"role\":\"AXWindow\",\"label\":\"Documento externo sintético Jarvis\",\"parent\":null,\"value_truncated\":false},{\"ref\":\"98b7d0c64b5f4c189d6dadc7cb8c6ce9\",\"value\":\"INICIO 🧪\\nSEGUNDA LÍNEA + AÑADIDO\\nTERCERA\",\"secure\":false,\"enabled\":true,\"actions\":[\"focus\",\"set_value\",\"type_text\"],\"selected_range\":[41,0],\"role\":\"AXTextArea\",\"parent\":\"f370cba429ef4845a8d391e2631f29c0\",\"label\":\"Editor externo Jarvis\",\"value_truncated\":false},{\"parent\":\"f370cba429ef4845a8d391e2631f29c0\",\"value\":\"CONTADOR 1\",\"secure\":false,\"enabled\":true,\"actions\":[],\"selected_range\":[0,0],\"role\":\"AXStaticText\",\"label\":\"\",\"ref\":\"f279946588704045a66c2455fa8c4353\",\"value_truncated\":false},{\"label\":\"Sumar marcador externo\",\"enabled\":true,\"secure\":false,\"value\":null,\"actions\":[\"focus\",\"press\"],\"selected_range\":null,\"role\":\"AXButton\",\"parent\":\"f370cba429ef4845a8d391e2631f29c0\",\"ref\":\"0b1a6de253b64046a7ab9abbe0eba997\",\"value_truncated\":false},{\"parent\":\"f370cba429ef4845a8d391e2631f29c0\",\"enabled\":true,\"value\":null,\"secure\":true,\"actions\":[],\"selected_range\":null,\"role\":\"AXTextField\",\"ref\":\"8126a007291148738c2c01ccc680d8e7\",\"label\":\"Campo protegido\",\"value_truncated\":false},{\"parent\":\"f370cba429ef4845a8d391e2631f29c0\",\"enabled\":true,\"secure\":false,\"value\":null,\"actions\":[\"press\"],\"selected_range\":null,\"role\":\"AXButton\",\"label\":\"\",\"ref\":\"7daa4d9f47d249158038891066c432eb\",\"value_truncated\":false},{\"ref\":\"7cc50e194b094da38d3a9de8457cb8e7\",\"value\":null,\"enabled\":true,\"secure\":false,\"actions\":[\"press\"],\"selected_range\":null,\"role\":\"AXButton\",\"label\":\"\",\"parent\":\"f370cba429ef4845a8d391e2631f29c0\",\"value_truncated\":false},{\"label\":\"\",\"value\":null,\"secure\":false,\"enabled\":true,\"actions\":[\"press\"],\"selected_range\":null,\"role\":\"AXButton\",\"parent\":\"f370cba429ef4845a8d391e2631f29c0\",\"ref\":\"60eee53e7f284343be76a606c2c02cde\",\"value_truncated\":false},{\"value_truncated\":false,\"value\":\"Documento externo sintético Jarvis\",\"enabled\":true,\"secure\":false,\"actions\":[],\"selected_range\":[0,0],\"role\":\"AXStaticText\",\"label\":\"\",\"parent\":\"f370cba429ef4845a8d391e2631f29c0\",\"ref\":\"344ca331f0b94c7387f2f21b26e6f946\"},{\"label\":\"\",\"enabled\":true,\"secure\":false,\"value\":null,\"actions\":[],\"selected_range\":null,\"role\":\"AXGroup\",\"ref\":\"1409f5257fbb4ac9b5c368418d5a43ff\",\"parent\":\"7cc50e194b094da38d3a9de8457cb8e7\",\"value_truncated\":false},{\"parent\":\"1409f5257fbb4ac9b5c368418d5a43ff\",\"enabled\":true,\"secure\":false,\"value\":null,\"actions\":[],\"selected_range\":null,\"role\":\"AXGroup\",\"label\":\"\",\"ref\":\"ae3a0edd9c624e89a746226dc99c0d9d\",\"value_truncated\":false}],\"target\":{\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\",\"pid\":27924,\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\"}},\"frames\":[{\"redacted_image\":true,\"bytes\":14300,\"sha256\":\"bf4463d26c31bfd1cd61360093d84d35b25dc89abcc4ee0d8ea42905c1cdde0c\",\"media_type\":\"image/jpeg\"}]}",
+        "error": null,
+        "answer_source": "model",
+        "action_receipts": [
+          {
+            "effect_status": "known",
+            "error": null,
+            "error_type": null,
+            "operation_id": "4d1e84e5a510407086eef1895c75042e",
+            "output": "{\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"truncated\":false,\"frame\":{\"window_id\":18864,\"storage\":\"memory_only\",\"mime_type\":\"image/jpeg\",\"bytes\":14300,\"sha256\":\"bf4463d26c31bfd1cd61360093d84d35b25dc89abcc4ee0d8ea42905c1cdde0c\",\"source\":\"screen_capture_kit_window\",\"protected_regions_redacted\":1,\"atomic_with_ax\":false,\"provider_delivery\":\"ephemeral_image_channel\"},\"source\":\"native_accessibility_observation\",\"expires_in_seconds\":120,\"effect_status\":\"known\",\"snapshot_id\":\"e",
+            "output_bytes": 3496,
+            "output_sha256": "96aec60f86d02c9e8ccef5e9aed9f76e79dc322e7189ea3343fc87943b945365",
+            "output_truncated": true,
+            "succeeded": true,
+            "tool_name": "desktop_observe",
+            "verified": true
+          }
+        ]
+      },
+      "receipt": {
+        "effect_status": "known",
+        "error": null,
+        "error_type": null,
+        "operation_id": "4d1e84e5a510407086eef1895c75042e",
+        "output": "{\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"truncated\":false,\"frame\":{\"window_id\":18864,\"storage\":\"memory_only\",\"mime_type\":\"image/jpeg\",\"bytes\":14300,\"sha256\":\"bf4463d26c31bfd1cd61360093d84d35b25dc89abcc4ee0d8ea42905c1cdde0c\",\"source\":\"screen_capture_kit_window\",\"protected_regions_redacted\":1,\"atomic_with_ax\":false,\"provider_delivery\":\"ephemeral_image_channel\"},\"source\":\"native_accessibility_observation\",\"expires_in_seconds\":120,\"effect_status\":\"known\",\"snapshot_id\":\"e",
+        "output_bytes": 3496,
+        "output_sha256": "96aec60f86d02c9e8ccef5e9aed9f76e79dc322e7189ea3343fc87943b945365",
+        "output_truncated": true,
+        "succeeded": true,
+        "tool_name": "desktop_observe",
+        "verified": true
+      },
+      "output": {
+        "window_ref": "beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30",
+        "truncated": false,
+        "frame": {
+          "window_id": 18864,
+          "storage": "memory_only",
+          "mime_type": "image/jpeg",
+          "bytes": 14300,
+          "sha256": "bf4463d26c31bfd1cd61360093d84d35b25dc89abcc4ee0d8ea42905c1cdde0c",
+          "source": "screen_capture_kit_window",
+          "protected_regions_redacted": 1,
+          "atomic_with_ax": false,
+          "provider_delivery": "ephemeral_image_channel"
+        },
+        "source": "native_accessibility_observation",
+        "expires_in_seconds": 120,
+        "effect_status": "known",
+        "snapshot_id": "e81825f558414e4eb92e803292305d9e",
+        "dispatched": false,
+        "schema": "jarvis.desktop.v1",
+        "verified": true,
+        "bounds": [
+          180,
+          344,
+          560,
+          412
+        ],
+        "succeeded": true,
+        "permits_replay": false,
+        "elements": [
+          {
+            "ref": "f370cba429ef4845a8d391e2631f29c0",
+            "enabled": true,
+            "secure": false,
+            "value": null,
+            "actions": [
+              "click_at",
+              "drag",
+              "key"
+            ],
+            "selected_range": null,
+            "role": "AXWindow",
+            "label": "Documento externo sintético Jarvis",
+            "parent": null,
+            "value_truncated": false
+          },
+          {
+            "ref": "98b7d0c64b5f4c189d6dadc7cb8c6ce9",
+            "value": "INICIO 🧪\nSEGUNDA LÍNEA + AÑADIDO\nTERCERA",
+            "secure": false,
+            "enabled": true,
+            "actions": [
+              "focus",
+              "set_value",
+              "type_text"
+            ],
+            "selected_range": [
+              41,
+              0
+            ],
+            "role": "AXTextArea",
+            "parent": "f370cba429ef4845a8d391e2631f29c0",
+            "label": "Editor externo Jarvis",
+            "value_truncated": false
+          },
+          {
+            "parent": "f370cba429ef4845a8d391e2631f29c0",
+            "value": "CONTADOR 1",
+            "secure": false,
+            "enabled": true,
+            "actions": [],
+            "selected_range": [
+              0,
+              0
+            ],
+            "role": "AXStaticText",
+            "label": "",
+            "ref": "f279946588704045a66c2455fa8c4353",
+            "value_truncated": false
+          },
+          {
+            "label": "Sumar marcador externo",
+            "enabled": true,
+            "secure": false,
+            "value": null,
+            "actions": [
+              "focus",
+              "press"
+            ],
+            "selected_range": null,
+            "role": "AXButton",
+            "parent": "f370cba429ef4845a8d391e2631f29c0",
+            "ref": "0b1a6de253b64046a7ab9abbe0eba997",
+            "value_truncated": false
+          },
+          {
+            "parent": "f370cba429ef4845a8d391e2631f29c0",
+            "enabled": true,
+            "value": null,
+            "secure": true,
+            "actions": [],
+            "selected_range": null,
+            "role": "AXTextField",
+            "ref": "8126a007291148738c2c01ccc680d8e7",
+            "label": "Campo protegido",
+            "value_truncated": false
+          },
+          {
+            "parent": "f370cba429ef4845a8d391e2631f29c0",
+            "enabled": true,
+            "secure": false,
+            "value": null,
+            "actions": [
+              "press"
+            ],
+            "selected_range": null,
+            "role": "AXButton",
+            "label": "",
+            "ref": "7daa4d9f47d249158038891066c432eb",
+            "value_truncated": false
+          },
+          {
+            "ref": "7cc50e194b094da38d3a9de8457cb8e7",
+            "value": null,
+            "enabled": true,
+            "secure": false,
+            "actions": [
+              "press"
+            ],
+            "selected_range": null,
+            "role": "AXButton",
+            "label": "",
+            "parent": "f370cba429ef4845a8d391e2631f29c0",
+            "value_truncated": false
+          },
+          {
+            "label": "",
+            "value": null,
+            "secure": false,
+            "enabled": true,
+            "actions": [
+              "press"
+            ],
+            "selected_range": null,
+            "role": "AXButton",
+            "parent": "f370cba429ef4845a8d391e2631f29c0",
+            "ref": "60eee53e7f284343be76a606c2c02cde",
+            "value_truncated": false
+          },
+          {
+            "value_truncated": false,
+            "value": "Documento externo sintético Jarvis",
+            "enabled": true,
+            "secure": false,
+            "actions": [],
+            "selected_range": [
+              0,
+              0
+            ],
+            "role": "AXStaticText",
+            "label": "",
+            "parent": "f370cba429ef4845a8d391e2631f29c0",
+            "ref": "344ca331f0b94c7387f2f21b26e6f946"
+          },
+          {
+            "label": "",
+            "enabled": true,
+            "secure": false,
+            "value": null,
+            "actions": [],
+            "selected_range": null,
+            "role": "AXGroup",
+            "ref": "1409f5257fbb4ac9b5c368418d5a43ff",
+            "parent": "7cc50e194b094da38d3a9de8457cb8e7",
+            "value_truncated": false
+          },
+          {
+            "parent": "1409f5257fbb4ac9b5c368418d5a43ff",
+            "enabled": true,
+            "secure": false,
+            "value": null,
+            "actions": [],
+            "selected_range": null,
+            "role": "AXGroup",
+            "label": "",
+            "ref": "ae3a0edd9c624e89a746226dc99c0d9d",
+            "value_truncated": false
+          }
+        ],
+        "target": {
+          "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b",
+          "pid": 27924,
+          "bundle_id": "com.jarvis.fixture.macexternal.20261027"
+        }
+      },
+      "finished_ns": 1793078857785369000,
+      "sdk_proposal_delta": 1,
+      "sdk_reply_delta": 1,
+      "http_delta": {
+        "page": 0,
+        "confirm": 0,
+        "download": 0,
+        "search": 0,
+        "document": 0,
+        "forbidden": 0
+      }
+    },
+    {
+      "label": "03_open_download_own_site",
+      "tool": "browser_open",
+      "arguments": {
+        "url": "http://127.0.0.1:59399/"
+      },
+      "request_id": "bbd992c6b4ba400c8d53a759247965b8",
+      "started_ns": 1793078857830941000,
+      "approvals": [
+        {
+          "id": "5d13f78aa1a1492b9a450e2fbc0ca1c8",
+          "remember": "operation"
+        }
+      ],
+      "run_id": "bbd992c6b4ba400c8d53a759247965b8",
+      "run": {
+        "run_id": "bbd992c6b4ba400c8d53a759247965b8",
+        "status": "completed",
+        "outcome": "known",
+        "answer": "{\"fixture\":true,\"independent_verification_required\":true,\"transport_success\":true,\"receipt\":{\"tool_name\":\"browser_open\",\"succeeded\":true,\"verified\":false,\"error\":null,\"effect_status\":\"known\",\"operation_id\":\"f0a08cd6021b4e86b45ea7623b47c8c9\",\"error_type\":null},\"output\":{\"origin\":\"http://127.0.0.1:59399\",\"truncated\":false,\"snapshot_id\":\"9151edcb4211409eb7b1e86506969f7f\",\"effect_status\":\"known\",\"verified\":false,\"tab_id\":\"2117e6854b524d118f3695afe55f569a\",\"succeeded\":true,\"url\":\"http://127.0.0.1:59399/\",\"mode\":\"managed\",\"external_unverified\":true,\"frame_scope\":\"main\",\"synthetic_origin_exception\":true,\"schema\":\"jarvis.browser.v1\",\"title\":\"Jarvis QA propia\",\"network_scope\":\"private_pinned_proxy\",\"elements\":[{\"type\":\"\",\"label\":\"Texto de prueba\",\"ref\":\"r1\",\"href\":null,\"tag\":\"input\",\"role\":\"input\",\"disabled\":false,\"value\":\"\"},{\"type\":\"\",\"label\":\"Opcion de prueba\",\"ref\":\"r2\",\"href\":null,\"tag\":\"select\",\"role\":\"select\",\"disabled\":false,\"value\":\"uno\"},{\"type\":\"\",\"label\":\"Aplicar prueba\",\"ref\":\"r3\",\"href\":null,\"tag\":\"button\",\"role\":\"button\",\"disabled\":false,\"value\":\"\"},{\"type\":\"\",\"label\":\"Documento de prueba\",\"ref\":\"r4\",\"href\":\"http://127.0.0.1:59399/document\",\"tag\":\"a\",\"role\":\"a\",\"disabled\":false,\"value\":null},{\"type\":\"\",\"label\":\"Descargar prueba\",\"ref\":\"r5\",\"href\":\"http://127.0.0.1:59399/download\",\"tag\":\"a\",\"role\":\"a\",\"disabled\":false,\"value\":null}],\"text\":\"Prueba artificial de navegador\\nTexto de prueba Opcion de prueba Uno\\nDosAplicar prueba\\n\\nSIN CAMBIOS\\n\\nDocumento de prueba Descargar prueba\"},\"frames\":[]}",
+        "error": null,
+        "answer_source": "model",
+        "action_receipts": [
+          {
+            "effect_status": "known",
+            "error": null,
+            "error_type": null,
+            "operation_id": "f0a08cd6021b4e86b45ea7623b47c8c9",
+            "output": "{\"origin\":\"http://127.0.0.1:59399\",\"truncated\":false,\"snapshot_id\":\"9151edcb4211409eb7b1e86506969f7f\",\"effect_status\":\"known\",\"verified\":false,\"tab_id\":\"2117e6854b524d118f3695afe55f569a\",\"succeeded\":true,\"url\":\"http://127.0.0.1:59399/\",\"mode\":\"managed\",\"external_unverified\":true,\"frame_scope\":\"main\",\"synthetic_origin_exception\":true,\"schema\":\"jarvis.browser.v1\",\"title\":\"Jarvis QA propia\",\"network_scope\":\"private_pinned_proxy\",\"elements\":[{\"type\":\"\",\"label\":\"Texto de prueba\",\"ref\":\"r1\",\"href\":null,\"tag\":\"inp",
+            "output_bytes": 1243,
+            "output_sha256": "2cd4cbcdbe63b0fcc4aaf66b34b7e740f40c4c6d04b63e1e7b7509d50aa95f82",
+            "output_truncated": true,
+            "succeeded": true,
+            "tool_name": "browser_open",
+            "verified": false
+          }
+        ]
+      },
+      "receipt": {
+        "effect_status": "known",
+        "error": null,
+        "error_type": null,
+        "operation_id": "f0a08cd6021b4e86b45ea7623b47c8c9",
+        "output": "{\"origin\":\"http://127.0.0.1:59399\",\"truncated\":false,\"snapshot_id\":\"9151edcb4211409eb7b1e86506969f7f\",\"effect_status\":\"known\",\"verified\":false,\"tab_id\":\"2117e6854b524d118f3695afe55f569a\",\"succeeded\":true,\"url\":\"http://127.0.0.1:59399/\",\"mode\":\"managed\",\"external_unverified\":true,\"frame_scope\":\"main\",\"synthetic_origin_exception\":true,\"schema\":\"jarvis.browser.v1\",\"title\":\"Jarvis QA propia\",\"network_scope\":\"private_pinned_proxy\",\"elements\":[{\"type\":\"\",\"label\":\"Texto de prueba\",\"ref\":\"r1\",\"href\":null,\"tag\":\"inp",
+        "output_bytes": 1243,
+        "output_sha256": "2cd4cbcdbe63b0fcc4aaf66b34b7e740f40c4c6d04b63e1e7b7509d50aa95f82",
+        "output_truncated": true,
+        "succeeded": true,
+        "tool_name": "browser_open",
+        "verified": false
+      },
+      "output": {
+        "origin": "http://127.0.0.1:59399",
+        "truncated": false,
+        "snapshot_id": "9151edcb4211409eb7b1e86506969f7f",
+        "effect_status": "known",
+        "verified": false,
+        "tab_id": "2117e6854b524d118f3695afe55f569a",
+        "succeeded": true,
+        "url": "http://127.0.0.1:59399/",
+        "mode": "managed",
+        "external_unverified": true,
+        "frame_scope": "main",
+        "synthetic_origin_exception": true,
+        "schema": "jarvis.browser.v1",
+        "title": "Jarvis QA propia",
+        "network_scope": "private_pinned_proxy",
+        "elements": [
+          {
+            "type": "",
+            "label": "Texto de prueba",
+            "ref": "r1",
+            "href": null,
+            "tag": "input",
+            "role": "input",
+            "disabled": false,
+            "value": ""
+          },
+          {
+            "type": "",
+            "label": "Opcion de prueba",
+            "ref": "r2",
+            "href": null,
+            "tag": "select",
+            "role": "select",
+            "disabled": false,
+            "value": "uno"
+          },
+          {
+            "type": "",
+            "label": "Aplicar prueba",
+            "ref": "r3",
+            "href": null,
+            "tag": "button",
+            "role": "button",
+            "disabled": false,
+            "value": ""
+          },
+          {
+            "type": "",
+            "label": "Documento de prueba",
+            "ref": "r4",
+            "href": "http://127.0.0.1:59399/document",
+            "tag": "a",
+            "role": "a",
+            "disabled": false,
+            "value": null
+          },
+          {
+            "type": "",
+            "label": "Descargar prueba",
+            "ref": "r5",
+            "href": "http://127.0.0.1:59399/download",
+            "tag": "a",
+            "role": "a",
+            "disabled": false,
+            "value": null
+          }
+        ],
+        "text": "Prueba artificial de navegador\nTexto de prueba Opcion de prueba Uno\nDosAplicar prueba\n\nSIN CAMBIOS\n\nDocumento de prueba Descargar prueba"
+      },
+      "finished_ns": 1793078859088618000,
+      "sdk_proposal_delta": 1,
+      "sdk_reply_delta": 1,
+      "http_delta": {
+        "page": 1,
+        "confirm": 0,
+        "download": 0,
+        "search": 0,
+        "document": 0,
+        "forbidden": 0
+      }
+    },
+    {
+      "label": "03_download_flag_and_file",
+      "tool": "browser_download",
+      "arguments": {
+        "tab_id": "2117e6854b524d118f3695afe55f569a",
+        "expected_origin": "http://127.0.0.1:59399",
+        "url": "http://127.0.0.1:59399/download",
+        "path": "descarga-final.txt"
+      },
+      "request_id": "0cc0a3200fab4399ad4f9959f00e007d",
+      "started_ns": 1793078859117933000,
+      "approvals": [
+        {
+          "id": "f41c10b5b5f845929d92625f07b2d5b8",
+          "remember": "operation"
+        }
+      ],
+      "run_id": "0cc0a3200fab4399ad4f9959f00e007d",
+      "run": {
+        "run_id": "0cc0a3200fab4399ad4f9959f00e007d",
+        "status": "completed",
+        "outcome": "known",
+        "answer": "{\"fixture\":true,\"independent_verification_required\":true,\"transport_success\":true,\"receipt\":{\"tool_name\":\"browser_download\",\"succeeded\":true,\"verified\":true,\"error\":null,\"effect_status\":\"known\",\"operation_id\":\"a46bafe80de54e399d1afe26b86fcce4\",\"error_type\":null},\"output\":{\"media_type\":\"text/plain\",\"url\":\"http://127.0.0.1:59399/download\",\"external_unverified\":true,\"succeeded\":true,\"bytes\":21,\"verified\":true,\"written_to_workspace\":true,\"filename\":\"jarvis-fixture.txt\",\"effect_status\":\"known\",\"sha256\":\"4489856eac131fad85590be941894cb3738aed5caf8d641e6045798bcaef8688\",\"schema\":\"jarvis.browser.v1\",\"file\":{\"path\":\"descarga-final.txt\",\"bytes\":21,\"sha256\":\"4489856eac131fad85590be941894cb3738aed5caf8d641e6045798bcaef8688\"}},\"frames\":[]}",
+        "error": null,
+        "answer_source": "model",
+        "action_receipts": [
+          {
+            "effect_status": "known",
+            "error": null,
+            "error_type": null,
+            "operation_id": "a46bafe80de54e399d1afe26b86fcce4",
+            "output": "{\"media_type\":\"text/plain\",\"url\":\"http://127.0.0.1:59399/download\",\"external_unverified\":true,\"succeeded\":true,\"bytes\":21,\"verified\":true,\"written_to_workspace\":true,\"filename\":\"jarvis-fixture.txt\",\"effect_status\":\"known\",\"sha256\":\"4489856eac131fad85590be941894cb3738aed5caf8d641e6045798bcaef8688\",\"schema\":\"jarvis.browser.v1\",\"file\":{\"path\":\"descarga-final.txt\",\"bytes\":21,\"sha256\":\"4489856eac131fad85590be941894cb3738aed5caf8d641e6045798bcaef8688\"}}",
+            "output_bytes": 451,
+            "output_sha256": "6729dd3cec92383126bb353e8f78781546fef2aaa8aea805dbd76c6618057c5c",
+            "output_truncated": false,
+            "succeeded": true,
+            "tool_name": "browser_download",
+            "verified": true
+          }
+        ]
+      },
+      "receipt": {
+        "effect_status": "known",
+        "error": null,
+        "error_type": null,
+        "operation_id": "a46bafe80de54e399d1afe26b86fcce4",
+        "output": "{\"media_type\":\"text/plain\",\"url\":\"http://127.0.0.1:59399/download\",\"external_unverified\":true,\"succeeded\":true,\"bytes\":21,\"verified\":true,\"written_to_workspace\":true,\"filename\":\"jarvis-fixture.txt\",\"effect_status\":\"known\",\"sha256\":\"4489856eac131fad85590be941894cb3738aed5caf8d641e6045798bcaef8688\",\"schema\":\"jarvis.browser.v1\",\"file\":{\"path\":\"descarga-final.txt\",\"bytes\":21,\"sha256\":\"4489856eac131fad85590be941894cb3738aed5caf8d641e6045798bcaef8688\"}}",
+        "output_bytes": 451,
+        "output_sha256": "6729dd3cec92383126bb353e8f78781546fef2aaa8aea805dbd76c6618057c5c",
+        "output_truncated": false,
+        "succeeded": true,
+        "tool_name": "browser_download",
+        "verified": true
+      },
+      "output": {
+        "media_type": "text/plain",
+        "url": "http://127.0.0.1:59399/download",
+        "external_unverified": true,
+        "succeeded": true,
+        "bytes": 21,
+        "verified": true,
+        "written_to_workspace": true,
+        "filename": "jarvis-fixture.txt",
+        "effect_status": "known",
+        "sha256": "4489856eac131fad85590be941894cb3738aed5caf8d641e6045798bcaef8688",
+        "schema": "jarvis.browser.v1",
+        "file": {
+          "path": "descarga-final.txt",
+          "bytes": 21,
+          "sha256": "4489856eac131fad85590be941894cb3738aed5caf8d641e6045798bcaef8688"
+        }
+      },
+      "finished_ns": 1793078859330061000,
+      "sdk_proposal_delta": 1,
+      "sdk_reply_delta": 1,
+      "http_delta": {
+        "page": 0,
+        "confirm": 0,
+        "download": 1,
+        "search": 0,
+        "document": 0,
+        "forbidden": 0
+      }
+    },
+    {
+      "label": "03_close_download_binding",
+      "tool": "browser_close",
+      "arguments": {
+        "tab_id": "2117e6854b524d118f3695afe55f569a"
+      },
+      "request_id": "6cbe9f07d49a4ac1aa4c15856cf1a388",
+      "started_ns": 1793078859361674000,
+      "approvals": [
+        {
+          "id": "0676939e8e10452ba0ca36a5bb4f78b1",
+          "remember": "operation"
+        }
+      ],
+      "run_id": "6cbe9f07d49a4ac1aa4c15856cf1a388",
+      "run": {
+        "run_id": "6cbe9f07d49a4ac1aa4c15856cf1a388",
+        "status": "completed",
+        "outcome": "known",
+        "answer": "{\"fixture\":true,\"independent_verification_required\":true,\"transport_success\":true,\"receipt\":{\"tool_name\":\"browser_close\",\"succeeded\":true,\"verified\":true,\"error\":null,\"effect_status\":\"known\",\"operation_id\":\"76ca632fdc2c401785688a04d8dea300\",\"error_type\":null},\"output\":{\"detached\":false,\"tab_id\":\"2117e6854b524d118f3695afe55f569a\",\"schema\":\"jarvis.browser.v1\",\"closed\":true,\"verified\":true,\"succeeded\":true,\"effect_status\":\"known\"},\"frames\":[]}",
+        "error": null,
+        "answer_source": "model",
+        "action_receipts": [
+          {
+            "effect_status": "known",
+            "error": null,
+            "error_type": null,
+            "operation_id": "76ca632fdc2c401785688a04d8dea300",
+            "output": "{\"detached\":false,\"tab_id\":\"2117e6854b524d118f3695afe55f569a\",\"schema\":\"jarvis.browser.v1\",\"closed\":true,\"verified\":true,\"succeeded\":true,\"effect_status\":\"known\"}",
+            "output_bytes": 162,
+            "output_sha256": "c80c0703b3fac832bc608cf6637e3a506646f4f707bfea7fcf24600fdd8dbcf7",
+            "output_truncated": false,
+            "succeeded": true,
+            "tool_name": "browser_close",
+            "verified": true
+          }
+        ]
+      },
+      "receipt": {
+        "effect_status": "known",
+        "error": null,
+        "error_type": null,
+        "operation_id": "76ca632fdc2c401785688a04d8dea300",
+        "output": "{\"detached\":false,\"tab_id\":\"2117e6854b524d118f3695afe55f569a\",\"schema\":\"jarvis.browser.v1\",\"closed\":true,\"verified\":true,\"succeeded\":true,\"effect_status\":\"known\"}",
+        "output_bytes": 162,
+        "output_sha256": "c80c0703b3fac832bc608cf6637e3a506646f4f707bfea7fcf24600fdd8dbcf7",
+        "output_truncated": false,
+        "succeeded": true,
+        "tool_name": "browser_close",
+        "verified": true
+      },
+      "output": {
+        "detached": false,
+        "tab_id": "2117e6854b524d118f3695afe55f569a",
+        "schema": "jarvis.browser.v1",
+        "closed": true,
+        "verified": true,
+        "succeeded": true,
+        "effect_status": "known"
+      },
+      "finished_ns": 1793078859483208000,
+      "sdk_proposal_delta": 1,
+      "sdk_reply_delta": 1,
+      "http_delta": {
+        "page": 0,
+        "confirm": 0,
+        "download": 0,
+        "search": 0,
+        "document": 0,
+        "forbidden": 0
+      }
+    },
+    {
+      "label": "03_ui_always_observe_pending",
+      "tool": "desktop_observe",
+      "arguments": {
+        "target": {
+          "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b",
+          "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+          "pid": 27924
+        },
+        "window_ref": "beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30",
+        "include_frame": false
+      },
+      "request_id": "53e4e542063f41d6a7e9badea085516a",
+      "started_ns": 1793079045254495000,
+      "approvals": [],
+      "run_id": "53e4e542063f41d6a7e9badea085516a",
+      "pending_for_root_cua": {
+        "approval_id": "8e2b2ecaae1943b4935cd4c1b78b71d3",
+        "digest": "71728120e0e8aebb39b6343295afb74aa715e514e86ef069eb7178e2798822b6",
+        "expires_at": 1793079165.302853
+      },
+      "run": {
+        "run_id": "53e4e542063f41d6a7e9badea085516a",
+        "status": "completed",
+        "outcome": "known",
+        "answer": "{\"fixture\":true,\"independent_verification_required\":true,\"transport_success\":true,\"receipt\":{\"tool_name\":\"desktop_observe\",\"succeeded\":true,\"verified\":true,\"error\":null,\"effect_status\":\"known\",\"operation_id\":\"87f7afe500a14f7a8b56029e1668219f\",\"error_type\":null},\"output\":{\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"elements\":[{\"role\":\"AXWindow\",\"parent\":null,\"ref\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"secure\":false,\"actions\":[\"click_at\",\"drag\",\"key\"],\"value\":null,\"value_truncated\":false,\"enabled\":true,\"label\":\"Documento externo sintético Jarvis\",\"selected_range\":null},{\"role\":\"AXTextArea\",\"parent\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"ref\":\"107459f061ee47558550115a633dd303\",\"secure\":false,\"actions\":[\"focus\",\"set_value\",\"type_text\"],\"value\":\"INICIO 🧪\\nSEGUNDA LÍNEA + AÑADIDO\\nTERCERA\",\"value_truncated\":false,\"enabled\":true,\"label\":\"Editor externo Jarvis\",\"selected_range\":[41,0]},{\"role\":\"AXStaticText\",\"parent\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"ref\":\"0db1c3deffd041d8be63af8aaad7d404\",\"actions\":[],\"secure\":false,\"value\":\"CONTADOR 1\",\"label\":\"\",\"enabled\":true,\"value_truncated\":false,\"selected_range\":[0,0]},{\"role\":\"AXButton\",\"parent\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"ref\":\"b83ce959c6fa4f588c3239d590e649e9\",\"actions\":[\"focus\",\"press\"],\"secure\":false,\"value\":null,\"label\":\"Sumar marcador externo\",\"enabled\":true,\"value_truncated\":false,\"selected_range\":null},{\"role\":\"AXTextField\",\"parent\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"ref\":\"bcf062a976884cc5a45705bcac6cd593\",\"secure\":true,\"actions\":[],\"value\":null,\"value_truncated\":false,\"label\":\"Campo protegido\",\"enabled\":true,\"selected_range\":null},{\"role\":\"AXButton\",\"parent\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"ref\":\"fa9aa85e9c0a4e668f562cabd583aea3\",\"actions\":[\"press\"],\"secure\":false,\"value\":null,\"value_truncated\":false,\"label\":\"\",\"enabled\":true,\"selected_range\":null},{\"role\":\"AXButton\",\"parent\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"ref\":\"fe50e8b0b7ba430f9a12c049ac47201b\",\"secure\":false,\"actions\":[\"press\"],\"value\":null,\"value_truncated\":false,\"enabled\":true,\"label\":\"\",\"selected_range\":null},{\"role\":\"AXButton\",\"parent\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"ref\":\"67227c4703b049639e062330521f73b2\",\"actions\":[\"press\"],\"secure\":false,\"value\":null,\"label\":\"\",\"value_truncated\":false,\"enabled\":true,\"selected_range\":null},{\"role\":\"AXStaticText\",\"parent\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"ref\":\"b51007d857a94bc6873a84b2f55e9eae\",\"actions\":[],\"secure\":false,\"value\":\"Documento externo sintético Jarvis\",\"label\":\"\",\"enabled\":true,\"value_truncated\":false,\"selected_range\":[0,0]},{\"role\":\"AXGroup\",\"parent\":\"fe50e8b0b7ba430f9a12c049ac47201b\",\"ref\":\"4cfa8bd4f0df42d994d0bb821f6dd69a\",\"secure\":false,\"actions\":[],\"value\":null,\"value_truncated\":false,\"enabled\":true,\"label\":\"\",\"selected_range\":null}],\"schema\":\"jarvis.desktop.v1\",\"snapshot_id\":\"5de9f54077814f209cd4f5064ea1527b\",\"source\":\"native_accessibility_observation\",\"effect_status\":\"known\",\"dispatched\":false,\"target\":{\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\",\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\",\"pid\":27924},\"verified\":true,\"bounds\":[180,344,560,412],\"permits_replay\":false,\"expires_in_seconds\":120,\"succeeded\":true,\"truncated\":false},\"frames\":[]}",
+        "error": null,
+        "answer_source": "model",
+        "action_receipts": [
+          {
+            "effect_status": "known",
+            "error": null,
+            "error_type": null,
+            "operation_id": "87f7afe500a14f7a8b56029e1668219f",
+            "output": "{\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"elements\":[{\"role\":\"AXWindow\",\"parent\":null,\"ref\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"secure\":false,\"actions\":[\"click_at\",\"drag\",\"key\"],\"value\":null,\"value_truncated\":false,\"enabled\":true,\"label\":\"Documento externo sintético Jarvis\",\"selected_range\":null},{\"role\":\"AXTextArea\",\"parent\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"ref\":\"107459f061ee47558550115a633dd303\",\"secure\":false,\"actions\":[\"focus\",\"set_value\",\"type_text\"],\"value\":",
+            "output_bytes": 2975,
+            "output_sha256": "4ac2132541421518fcca7a2dc124fc890f9f16e5926b2c8fb3a8e10f2d5c0467",
+            "output_truncated": true,
+            "succeeded": true,
+            "tool_name": "desktop_observe",
+            "verified": true
+          }
+        ]
+      },
+      "observed_after_root_ui_ns": 1793079106044211000
+    }
+  ],
+  "state": {
+    "target": {
+      "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b",
+      "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+      "pid": 27924
+    },
+    "window_ref": "beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30"
+  },
+  "tcc_source": "owner_granted_before_start_not_changed_by_driver",
+  "limits": [
+    "Native app driven through signed RPC; GUI approval gesture belongs to parent.",
+    "No owner data, auth.json, clipboard, arbitrary application, MCP or login.",
+    "Named capture-file checks cover only corpus paths, not the whole filesystem."
+  ],
+  "prepared_only": true,
+  "external_fixture": {
+    "bundle": "com.jarvis.fixture.macexternal.20261027",
+    "window": "Documento externo sintético Jarvis",
+    "editor": "Editor externo Jarvis",
+    "button": "Sumar marcador externo",
+    "initial_text": "JARVIS EXTERNO BASE",
+    "state_file": "/private/tmp/jarvis-mac-external-fixture-20261027/state.json",
+    "application_launched_by_driver": false
+  },
+  "service_start": {
+    "profile_id": "764d5e04a86246fdb1752399567c57c2",
+    "generation": 3,
+    "root_identity": {
+      "device": "16777230",
+      "inode": "70898351"
+    },
+    "restore_admission": null,
+    "provider_choice": {
+      "required": false,
+      "selected": true,
+      "query_status_allowed": true,
+      "revision": 0
+    }
+  },
+  "baseline": {
+    "sqlite_counts": {
+      "sessions": 2,
+      "messages": 115,
+      "runs": 59,
+      "events": 468
+    },
+    "sqlite_sha256": "73b8d1b7fab1f7e7b783f3dc8ffeac1c8ca17980fe4a9b426343a585a8ec3133",
+    "no_image_carrier_in_sqlite": true,
+    "no_image_carrier_in_sdk_log": true,
+    "sdk_proposals": 59,
+    "sdk_replies": 59,
+    "sdk_frames": [],
+    "capture_files_present": [],
+    "http_counts": {
+      "page": 2,
+      "confirm": 2,
+      "download": 1,
+      "search": 1,
+      "document": 1,
+      "forbidden": 0
+    }
+  },
+  "external_fixture_baseline": {
+    "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+    "counter": 0,
+    "counter_value": "CONTADOR 0",
+    "editor_utf16_length": 19,
+    "editor_value": "JARVIS EXTERNO BASE",
+    "format": "jarvis-mac-external-fixture/1",
+    "pid": 27924,
+    "revision": 2329,
+    "secure_value_recorded": false,
+    "selected_range": [
+      19,
+      0
+    ],
+    "source": "independent_AppKit_objects_not_Jarvis_receipt",
+    "state_status": "running",
+    "synthetic_only": true,
+    "window_number": 18864
+  },
+  "external_oracle_checks": [
+    {
+      "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+      "counter": 0,
+      "counter_value": "CONTADOR 0",
+      "editor_utf16_length": 23,
+      "editor_value": "INICIO 🧪\nSEGUNDA LÍNEA",
+      "format": "jarvis-mac-external-fixture/1",
+      "pid": 27924,
+      "revision": 2338,
+      "secure_value_recorded": false,
+      "selected_range": [
+        23,
+        0
+      ],
+      "source": "independent_AppKit_objects_not_Jarvis_receipt",
+      "state_status": "running",
+      "synthetic_only": true,
+      "window_number": 18864
+    },
+    {
+      "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+      "counter": 0,
+      "counter_value": "CONTADOR 0",
+      "editor_utf16_length": 41,
+      "editor_value": "INICIO 🧪\nSEGUNDA LÍNEA + AÑADIDO\nTERCERA",
+      "format": "jarvis-mac-external-fixture/1",
+      "pid": 27924,
+      "revision": 2343,
+      "secure_value_recorded": false,
+      "selected_range": [
+        41,
+        0
+      ],
+      "source": "independent_AppKit_objects_not_Jarvis_receipt",
+      "state_status": "running",
+      "synthetic_only": true,
+      "window_number": 18864
+    },
+    {
+      "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+      "counter": 1,
+      "counter_value": "CONTADOR 1",
+      "editor_utf16_length": 41,
+      "editor_value": "INICIO 🧪\nSEGUNDA LÍNEA + AÑADIDO\nTERCERA",
+      "format": "jarvis-mac-external-fixture/1",
+      "pid": 27924,
+      "revision": 2902,
+      "secure_value_recorded": false,
+      "selected_range": [
+        41,
+        0
+      ],
+      "source": "independent_AppKit_objects_not_Jarvis_receipt",
+      "state_status": "running",
+      "synthetic_only": true,
+      "window_number": 18864
+    },
+    {
+      "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+      "counter": 1,
+      "counter_value": "CONTADOR 1",
+      "editor_utf16_length": 41,
+      "editor_value": "INICIO 🧪\nSEGUNDA LÍNEA + AÑADIDO\nTERCERA",
+      "format": "jarvis-mac-external-fixture/1",
+      "pid": 27924,
+      "revision": 2904,
+      "secure_value_recorded": false,
+      "selected_range": [
+        41,
+        0
+      ],
+      "source": "independent_AppKit_objects_not_Jarvis_receipt",
+      "state_status": "running",
+      "synthetic_only": true,
+      "window_number": 18864
+    }
+  ],
+  "expected_editor_text": "INICIO 🧪\nSEGUNDA LÍNEA + AÑADIDO\nTERCERA",
+  "counter_exact": 1,
+  "press_receipt_remains_unknown": true,
+  "press_post_read_value": "CONTADOR 1",
+  "protected_controls_withheld": true,
+  "frame_delivery_metadata": {
+    "redacted_image": true,
+    "bytes": 14300,
+    "sha256": "bf4463d26c31bfd1cd61360093d84d35b25dc89abcc4ee0d8ea42905c1cdde0c",
+    "media_type": "image/jpeg"
+  },
+  "download_file": {
+    "path": "descarga-final.txt",
+    "bytes": 21,
+    "sha256": "4489856eac131fad85590be941894cb3738aed5caf8d641e6045798bcaef8688"
+  },
+  "qualification_finished_ns": 1793078859498770000,
+  "qualification_status": "AX_text_frame_download_passed_press_receipt_unknown_counter_independently_one",
+  "final_oracle": {
+    "sqlite_counts": {
+      "sessions": 2,
+      "messages": 140,
+      "runs": 72,
+      "events": 572
+    },
+    "sqlite_sha256": "3d9de1ce78edef848262a6c2e8a2f8679dc4cf02b696a80ea41626d04ef203b9",
+    "no_image_carrier_in_sqlite": true,
+    "no_image_carrier_in_sdk_log": true,
+    "sdk_proposals": 72,
+    "sdk_replies": 72,
+    "sdk_frames": [
+      {
+        "redacted_image": true,
+        "bytes": 14300,
+        "sha256": "bf4463d26c31bfd1cd61360093d84d35b25dc89abcc4ee0d8ea42905c1cdde0c",
+        "media_type": "image/jpeg"
+      }
+    ],
+    "capture_files_present": [],
+    "http_counts": {
+      "page": 3,
+      "confirm": 2,
+      "download": 2,
+      "search": 1,
+      "document": 1,
+      "forbidden": 0
+    }
+  },
+  "ui_always": {
+    "status": "completed",
+    "run_id": "53e4e542063f41d6a7e9badea085516a",
+    "session": "c1a7690a375a45489abac9a2d17e1e7f",
+    "approval_id": "8e2b2ecaae1943b4935cd4c1b78b71d3",
+    "digest": "71728120e0e8aebb39b6343295afb74aa715e514e86ef069eb7178e2798822b6",
+    "expires_at": 1793079165.302853,
+    "expected_arguments": {
+      "target": {
+        "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b",
+        "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+        "pid": 27924
+      },
+      "window_ref": "beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30",
+      "include_frame": false
+    },
+    "observed_run": {
+      "run_id": "53e4e542063f41d6a7e9badea085516a",
+      "status": "completed",
+      "outcome": "known",
+      "answer": "{\"fixture\":true,\"independent_verification_required\":true,\"transport_success\":true,\"receipt\":{\"tool_name\":\"desktop_observe\",\"succeeded\":true,\"verified\":true,\"error\":null,\"effect_status\":\"known\",\"operation_id\":\"87f7afe500a14f7a8b56029e1668219f\",\"error_type\":null},\"output\":{\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"elements\":[{\"role\":\"AXWindow\",\"parent\":null,\"ref\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"secure\":false,\"actions\":[\"click_at\",\"drag\",\"key\"],\"value\":null,\"value_truncated\":false,\"enabled\":true,\"label\":\"Documento externo sintético Jarvis\",\"selected_range\":null},{\"role\":\"AXTextArea\",\"parent\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"ref\":\"107459f061ee47558550115a633dd303\",\"secure\":false,\"actions\":[\"focus\",\"set_value\",\"type_text\"],\"value\":\"INICIO 🧪\\nSEGUNDA LÍNEA + AÑADIDO\\nTERCERA\",\"value_truncated\":false,\"enabled\":true,\"label\":\"Editor externo Jarvis\",\"selected_range\":[41,0]},{\"role\":\"AXStaticText\",\"parent\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"ref\":\"0db1c3deffd041d8be63af8aaad7d404\",\"actions\":[],\"secure\":false,\"value\":\"CONTADOR 1\",\"label\":\"\",\"enabled\":true,\"value_truncated\":false,\"selected_range\":[0,0]},{\"role\":\"AXButton\",\"parent\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"ref\":\"b83ce959c6fa4f588c3239d590e649e9\",\"actions\":[\"focus\",\"press\"],\"secure\":false,\"value\":null,\"label\":\"Sumar marcador externo\",\"enabled\":true,\"value_truncated\":false,\"selected_range\":null},{\"role\":\"AXTextField\",\"parent\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"ref\":\"bcf062a976884cc5a45705bcac6cd593\",\"secure\":true,\"actions\":[],\"value\":null,\"value_truncated\":false,\"label\":\"Campo protegido\",\"enabled\":true,\"selected_range\":null},{\"role\":\"AXButton\",\"parent\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"ref\":\"fa9aa85e9c0a4e668f562cabd583aea3\",\"actions\":[\"press\"],\"secure\":false,\"value\":null,\"value_truncated\":false,\"label\":\"\",\"enabled\":true,\"selected_range\":null},{\"role\":\"AXButton\",\"parent\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"ref\":\"fe50e8b0b7ba430f9a12c049ac47201b\",\"secure\":false,\"actions\":[\"press\"],\"value\":null,\"value_truncated\":false,\"enabled\":true,\"label\":\"\",\"selected_range\":null},{\"role\":\"AXButton\",\"parent\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"ref\":\"67227c4703b049639e062330521f73b2\",\"actions\":[\"press\"],\"secure\":false,\"value\":null,\"label\":\"\",\"value_truncated\":false,\"enabled\":true,\"selected_range\":null},{\"role\":\"AXStaticText\",\"parent\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"ref\":\"b51007d857a94bc6873a84b2f55e9eae\",\"actions\":[],\"secure\":false,\"value\":\"Documento externo sintético Jarvis\",\"label\":\"\",\"enabled\":true,\"value_truncated\":false,\"selected_range\":[0,0]},{\"role\":\"AXGroup\",\"parent\":\"fe50e8b0b7ba430f9a12c049ac47201b\",\"ref\":\"4cfa8bd4f0df42d994d0bb821f6dd69a\",\"secure\":false,\"actions\":[],\"value\":null,\"value_truncated\":false,\"enabled\":true,\"label\":\"\",\"selected_range\":null}],\"schema\":\"jarvis.desktop.v1\",\"snapshot_id\":\"5de9f54077814f209cd4f5064ea1527b\",\"source\":\"native_accessibility_observation\",\"effect_status\":\"known\",\"dispatched\":false,\"target\":{\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\",\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\",\"pid\":27924},\"verified\":true,\"bounds\":[180,344,560,412],\"permits_replay\":false,\"expires_in_seconds\":120,\"succeeded\":true,\"truncated\":false},\"frames\":[]}",
+      "error": null,
+      "answer_source": "model",
+      "action_receipts": [
+        {
+          "effect_status": "known",
+          "error": null,
+          "error_type": null,
+          "operation_id": "87f7afe500a14f7a8b56029e1668219f",
+          "output": "{\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\",\"elements\":[{\"role\":\"AXWindow\",\"parent\":null,\"ref\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"secure\":false,\"actions\":[\"click_at\",\"drag\",\"key\"],\"value\":null,\"value_truncated\":false,\"enabled\":true,\"label\":\"Documento externo sintético Jarvis\",\"selected_range\":null},{\"role\":\"AXTextArea\",\"parent\":\"10e7174a42a94bf2ba8a71a5abc73c95\",\"ref\":\"107459f061ee47558550115a633dd303\",\"secure\":false,\"actions\":[\"focus\",\"set_value\",\"type_text\"],\"value\":",
+          "output_bytes": 2975,
+          "output_sha256": "4ac2132541421518fcca7a2dc124fc890f9f16e5926b2c8fb3a8e10f2d5c0467",
+          "output_truncated": true,
+          "succeeded": true,
+          "tool_name": "desktop_observe",
+          "verified": true
+        }
+      ]
+    },
+    "observer_sent_decision_rpc": false,
+    "parent_cua_decision_evidence_recorded_separately": true,
+    "permissions_snapshot": {
+      "profile_binding": "cd0feeb28c48f464ae6904ae5a296899a7ce0b673c99eea4cce23cf36d867787",
+      "revision": 6,
+      "rules": [
+        {
+          "agent_id": "jarvis",
+          "client_id": "0a4c4573bfbbfe6f53c0689cbd5f7eb5030d7157cd412447307744e7233b23ac",
+          "destination": "com.jarvis.fixture.macexternal.20261027",
+          "id": "a9d2f46228b64d0eadc266b8d3f9257a",
+          "max_input_bytes": 0,
+          "selector": "b39b72f684dfdb625284a5d94423aa9a5b58c58b8c0ed6eda3883136ad34424e",
+          "tool": "desktop_observe",
+          "workspace_id": "609f2379dfd61faa6b74def79e09a2731f64052e663629657f2f72f94af59184"
+        }
+      ],
+      "search_template": null,
+      "version": 1,
+      "session_rules": 0,
+      "volatile_rules": [],
+      "session_revision": 1,
+      "permissions_portable": false
+    },
+    "permission_id": "a9d2f46228b64d0eadc266b8d3f9257a",
+    "matching_persistent_rules": 1
+  },
+  "ui_always_cross_chat": {
+    "expected_permission_id": "a9d2f46228b64d0eadc266b8d3f9257a",
+    "arguments": {
+      "target": {
+        "launch_id": "604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b",
+        "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+        "pid": 27924
+      },
+      "window_ref": "beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30",
+      "include_frame": false
+    },
+    "observer_sent_decision_rpc": false,
+    "request_id": "6270fd4c44554af18fbd948c944195df",
+    "started_ns": 1793079165661615000,
+    "approval_ids_seen": [],
+    "session_id": "a91495e2c428483bb68dad89d9bfaf59",
+    "run_id": "6270fd4c44554af18fbd948c944195df",
+    "run": {
+      "run_id": "6270fd4c44554af18fbd948c944195df",
+      "status": "completed",
+      "outcome": "known",
+      "answer": "{\"fixture\":true,\"independent_verification_required\":true,\"transport_success\":true,\"receipt\":{\"tool_name\":\"desktop_observe\",\"succeeded\":true,\"verified\":true,\"error\":null,\"effect_status\":\"known\",\"operation_id\":\"5d456579349f4e93af27ddf5d569d04e\",\"error_type\":null},\"output\":{\"elements\":[{\"parent\":null,\"actions\":[\"click_at\",\"drag\",\"key\"],\"enabled\":true,\"value_truncated\":false,\"selected_range\":null,\"ref\":\"21d70cae92e34da38f5623aa9ee2cb4a\",\"role\":\"AXWindow\",\"secure\":false,\"label\":\"Documento externo sintético Jarvis\",\"value\":null},{\"parent\":\"21d70cae92e34da38f5623aa9ee2cb4a\",\"actions\":[\"focus\",\"set_value\",\"type_text\"],\"enabled\":true,\"value_truncated\":false,\"selected_range\":[41,0],\"ref\":\"9013d5293cac4eaab60b3d1fa4ed65ca\",\"role\":\"AXTextArea\",\"secure\":false,\"label\":\"Editor externo Jarvis\",\"value\":\"INICIO 🧪\\nSEGUNDA LÍNEA + AÑADIDO\\nTERCERA\"},{\"parent\":\"21d70cae92e34da38f5623aa9ee2cb4a\",\"actions\":[],\"enabled\":true,\"value_truncated\":false,\"selected_range\":[0,0],\"ref\":\"51d6b5a46d8049a89368e8fc840b0e3e\",\"role\":\"AXStaticText\",\"secure\":false,\"label\":\"\",\"value\":\"CONTADOR 1\"},{\"parent\":\"21d70cae92e34da38f5623aa9ee2cb4a\",\"actions\":[\"focus\",\"press\"],\"enabled\":true,\"value_truncated\":false,\"selected_range\":null,\"ref\":\"02c180d780054ea09d5d63d73ae34a89\",\"role\":\"AXButton\",\"label\":\"Sumar marcador externo\",\"secure\":false,\"value\":null},{\"parent\":\"21d70cae92e34da38f5623aa9ee2cb4a\",\"actions\":[],\"enabled\":true,\"value_truncated\":false,\"selected_range\":null,\"ref\":\"93bea19b8f82481dbbb06169aae95c91\",\"role\":\"AXTextField\",\"secure\":true,\"label\":\"Campo protegido\",\"value\":null},{\"parent\":\"21d70cae92e34da38f5623aa9ee2cb4a\",\"actions\":[\"press\"],\"enabled\":true,\"value_truncated\":false,\"selected_range\":null,\"ref\":\"db55a9424aac468e8f13cd59f56255e4\",\"role\":\"AXButton\",\"label\":\"\",\"secure\":false,\"value\":null},{\"parent\":\"21d70cae92e34da38f5623aa9ee2cb4a\",\"actions\":[\"press\"],\"enabled\":true,\"value_truncated\":false,\"selected_range\":null,\"ref\":\"c645b779e0c84595a53497460e9be0a4\",\"role\":\"AXButton\",\"secure\":false,\"label\":\"\",\"value\":null},{\"parent\":\"21d70cae92e34da38f5623aa9ee2cb4a\",\"actions\":[\"press\"],\"enabled\":true,\"value_truncated\":false,\"selected_range\":null,\"ref\":\"289825d372a34486b078561d34d0cde1\",\"role\":\"AXButton\",\"secure\":false,\"label\":\"\",\"value\":null},{\"parent\":\"21d70cae92e34da38f5623aa9ee2cb4a\",\"actions\":[],\"enabled\":true,\"value_truncated\":false,\"selected_range\":[0,0],\"ref\":\"080f8d7dd4d546e9adc6da18b77373f4\",\"role\":\"AXStaticText\",\"secure\":false,\"label\":\"\",\"value\":\"Documento externo sintético Jarvis\"},{\"parent\":\"c645b779e0c84595a53497460e9be0a4\",\"actions\":[],\"enabled\":true,\"value_truncated\":false,\"selected_range\":null,\"ref\":\"7ce738e845804b5cb96d0a9b1476d8bd\",\"role\":\"AXGroup\",\"secure\":false,\"label\":\"\",\"value\":null}],\"verified\":true,\"permits_replay\":false,\"snapshot_id\":\"7af3b435b38a4a7ab33db9be90a8ddea\",\"expires_in_seconds\":120,\"truncated\":false,\"target\":{\"bundle_id\":\"com.jarvis.fixture.macexternal.20261027\",\"pid\":27924,\"launch_id\":\"604a22b181c41fd3253bdea782e67fa0f66f009edbcce8a3dffe3f00a780b00b\"},\"effect_status\":\"known\",\"dispatched\":false,\"succeeded\":true,\"schema\":\"jarvis.desktop.v1\",\"source\":\"native_accessibility_observation\",\"bounds\":[180,344,560,412],\"window_ref\":\"beeaf0760b008457efc59765e2004612eeaa5b2a34197f19d35ee8e3617f0e30\"},\"frames\":[]}",
+      "error": null,
+      "answer_source": "model",
+      "action_receipts": [
+        {
+          "effect_status": "known",
+          "error": null,
+          "error_type": null,
+          "operation_id": "5d456579349f4e93af27ddf5d569d04e",
+          "output": "{\"elements\":[{\"parent\":null,\"actions\":[\"click_at\",\"drag\",\"key\"],\"enabled\":true,\"value_truncated\":false,\"selected_range\":null,\"ref\":\"21d70cae92e34da38f5623aa9ee2cb4a\",\"role\":\"AXWindow\",\"secure\":false,\"label\":\"Documento externo sintético Jarvis\",\"value\":null},{\"parent\":\"21d70cae92e34da38f5623aa9ee2cb4a\",\"actions\":[\"focus\",\"set_value\",\"type_text\"],\"enabled\":true,\"value_truncated\":false,\"selected_range\":[41,0],\"ref\":\"9013d5293cac4eaab60b3d1fa4ed65ca\",\"role\":\"AXTextArea\",\"secure\":false,\"label\":\"Editor externo J",
+          "output_bytes": 2975,
+          "output_sha256": "e462d327eb5355217143bee5c65407f1d2596a0f294fb226e8e872a1c15c8501",
+          "output_truncated": true,
+          "succeeded": true,
+          "tool_name": "desktop_observe",
+          "verified": true
+        }
+      ]
+    },
+    "remembered_event": {
+      "sequence": 5,
+      "kind": "approval.remembered",
+      "payload": {
+        "digest": "9e76748b9085e99c23a9b57dc54ee4fabb687356e62b6a29b56b8c2fb09f7e08",
+        "operation_id": "5d456579349f4e93af27ddf5d569d04e",
+        "permission_id": "a9d2f46228b64d0eadc266b8d3f9257a",
+        "tool_name": "desktop_observe"
+      }
+    },
+    "finished_ns": 1793079165940667000,
+    "passed": true
+  }
+}

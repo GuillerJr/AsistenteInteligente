@@ -1,0 +1,185 @@
+{
+  "schema_version": 1,
+  "format": "jarvis_mac_browser_documentary_evidence/1",
+  "synthetic_only": true,
+  "not_product_runtime": true,
+  "excluded_from_356_source_manifest": true,
+  "scan_scope": "These preserved files only; literal credential formats, image data URLs, JPEG base64 and private-key blocks. This is a bounded negative scan, not a universal secret detector.",
+  "files": [
+    {
+      "path": "docs/rebuild/evidence/mac-browser-20261027/FIXTURE_SOURCE_MANIFEST.json",
+      "bytes": 798,
+      "sha256": "6c390339349346d07800a19f738d7b7232efc7d7e182b3349e409304c99f8cbf",
+      "role": "synthetic qualification evidence metadata",
+      "forbidden_literal_counts": {
+        "image_data_url": 0,
+        "jpeg_base64": 0,
+        "private_key": 0,
+        "api_token_literal": 0,
+        "telegram_token_literal": 0
+      }
+    },
+    {
+      "path": "docs/rebuild/evidence/mac-browser-20261027/JarvisMacExternalFixture.swift",
+      "bytes": 6978,
+      "sha256": "568669cdd793d45cad1627f97c7c0f6297c713a75e7beb4d703c5c24c0e5d713",
+      "role": "documentary independent fixture source, not product runtime",
+      "forbidden_literal_counts": {
+        "image_data_url": 0,
+        "jpeg_base64": 0,
+        "private_key": 0,
+        "api_token_literal": 0,
+        "telegram_token_literal": 0
+      }
+    },
+    {
+      "path": "docs/rebuild/evidence/mac-browser-20261027/external-fixture-final-state.json",
+      "bytes": 406,
+      "sha256": "cde6b78c6d6744afb640324614b30b0a2923d2dcdd667aec24794bc943fb31c7",
+      "role": "synthetic qualification evidence metadata",
+      "forbidden_literal_counts": {
+        "image_data_url": 0,
+        "jpeg_base64": 0,
+        "private_key": 0,
+        "api_token_literal": 0,
+        "telegram_token_literal": 0
+      }
+    },
+    {
+      "path": "docs/rebuild/evidence/mac-browser-20261027/rpc-qa-always-ui-and-cross-chat.json",
+      "bytes": 141362,
+      "sha256": "b46370beefe24e8b98815ebd13554637570ea3b9cd49161185b49f5ebb7b6545",
+      "role": "synthetic qualification evidence metadata",
+      "forbidden_literal_counts": {
+        "image_data_url": 0,
+        "jpeg_base64": 0,
+        "private_key": 0,
+        "api_token_literal": 0,
+        "telegram_token_literal": 0
+      }
+    },
+    {
+      "path": "docs/rebuild/evidence/mac-browser-20261027/rpc-qa-final-qualified-13ops.json",
+      "bytes": 122787,
+      "sha256": "4128d63c38f6b67ee63059b7a9dd3d510f562fee6935fd85eca346db26cd8958",
+      "role": "synthetic qualification evidence metadata",
+      "forbidden_literal_counts": {
+        "image_data_url": 0,
+        "jpeg_base64": 0,
+        "private_key": 0,
+        "api_token_literal": 0,
+        "telegram_token_literal": 0
+      }
+    },
+    {
+      "path": "docs/rebuild/evidence/mac-browser-20261027/rpc-qa-old-fixture-closed-preflight.json",
+      "bytes": 950,
+      "sha256": "e9898ebd763c9d9597746452b3d0850cf29528f217c739b91abae786547826ef",
+      "role": "synthetic qualification evidence metadata",
+      "forbidden_literal_counts": {
+        "image_data_url": 0,
+        "jpeg_base64": 0,
+        "private_key": 0,
+        "api_token_literal": 0,
+        "telegram_token_literal": 0
+      }
+    },
+    {
+      "path": "docs/rebuild/evidence/mac-browser-20261027/rpc-qa-summary.json",
+      "bytes": 44694,
+      "sha256": "a6a5c3db4bf9969bc6a50f5687b7bf986ff92dc4c8c960ea2a677c833e664ac9",
+      "role": "synthetic qualification evidence metadata",
+      "forbidden_literal_counts": {
+        "image_data_url": 0,
+        "jpeg_base64": 0,
+        "private_key": 0,
+        "api_token_literal": 0,
+        "telegram_token_literal": 0
+      }
+    },
+    {
+      "path": "docs/rebuild/evidence/mac-browser-20261027/rpc-qa04-actions-permissions-closeout.json",
+      "bytes": 105955,
+      "sha256": "13534370b81e1451934de6a763f159f43a7d03ff78ff4bab6c6d88c911026d7d",
+      "role": "synthetic qualification evidence metadata",
+      "forbidden_literal_counts": {
+        "image_data_url": 0,
+        "jpeg_base64": 0,
+        "private_key": 0,
+        "api_token_literal": 0,
+        "telegram_token_literal": 0
+      }
+    },
+    {
+      "path": "docs/rebuild/evidence/mac-browser-20261027/rpc-qa04-cleanup-no-permissions.json",
+      "bytes": 763,
+      "sha256": "ed159b7197906f8989537203da89ee135fdf2fe345fa2a4159f658279ebf5284",
+      "role": "synthetic qualification evidence metadata",
+      "forbidden_literal_counts": {
+        "image_data_url": 0,
+        "jpeg_base64": 0,
+        "private_key": 0,
+        "api_token_literal": 0,
+        "telegram_token_literal": 0
+      }
+    },
+    {
+      "path": "docs/rebuild/evidence/mac-browser-20261027/rpc-qa04-closeout-summary.json",
+      "bytes": 5174,
+      "sha256": "9550c37d4547775d8a406158d4e0ea1ad0abfcd2d1fe9317cb0cc5340aabd19c",
+      "role": "synthetic qualification evidence metadata",
+      "forbidden_literal_counts": {
+        "image_data_url": 0,
+        "jpeg_base64": 0,
+        "private_key": 0,
+        "api_token_literal": 0,
+        "telegram_token_literal": 0
+      }
+    },
+    {
+      "path": "docs/rebuild/evidence/mac-browser-20261027/rpc-qa04-rejection-sql-oracle.json",
+      "bytes": 624,
+      "sha256": "8437b289157e5b7d8dce4dcc24213db77d4b9f6da716f50754fd68d298b29943",
+      "role": "synthetic qualification evidence metadata",
+      "forbidden_literal_counts": {
+        "image_data_url": 0,
+        "jpeg_base64": 0,
+        "private_key": 0,
+        "api_token_literal": 0,
+        "telegram_token_literal": 0
+      }
+    }
+  ],
+  "original_QA04_sources": {
+    "rpc-qa04-closeout-summary.json": {
+      "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa04-closeout-summary.json",
+      "bytes": 5174,
+      "sha256": "9550c37d4547775d8a406158d4e0ea1ad0abfcd2d1fe9317cb0cc5340aabd19c"
+    },
+    "rpc-qa04-actions-permissions-closeout.json": {
+      "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa04-actions-permissions-closeout.json",
+      "bytes": 105955,
+      "sha256": "13534370b81e1451934de6a763f159f43a7d03ff78ff4bab6c6d88c911026d7d"
+    },
+    "rpc-qa04-rejection-sql-oracle.json": {
+      "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa04-rejection-sql-oracle.json",
+      "bytes": 624,
+      "sha256": "8437b289157e5b7d8dce4dcc24213db77d4b9f6da716f50754fd68d298b29943"
+    },
+    "rpc-qa-old-fixture-closed-preflight.json": {
+      "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa-old-fixture-closed-preflight.json",
+      "bytes": 950,
+      "sha256": "e9898ebd763c9d9597746452b3d0850cf29528f217c739b91abae786547826ef"
+    },
+    "rpc-qa04-cleanup-no-permissions.json": {
+      "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa04-cleanup-no-permissions.json",
+      "bytes": 763,
+      "sha256": "ed159b7197906f8989537203da89ee135fdf2fe345fa2a4159f658279ebf5284"
+    }
+  },
+  "external_fixture_terminal_state_source": {
+    "path": "/private/tmp/jarvis-mac-external-fixture-20261027/state.json",
+    "bytes": 406,
+    "sha256": "cde6b78c6d6744afb640324614b30b0a2923d2dcdd667aec24794bc943fb31c7"
+  }
+}

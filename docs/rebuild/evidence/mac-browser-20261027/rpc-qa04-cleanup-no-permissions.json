@@ -1,0 +1,30 @@
+{
+  "format": "jarvis-own-cleanup-readonly/1",
+  "observed_ns": 1793106906738168000,
+  "read_only": true,
+  "permissions": {
+    "profile_binding": "cd0feeb28c48f464ae6904ae5a296899a7ce0b673c99eea4cce23cf36d867787",
+    "revision": 9,
+    "rules": [],
+    "search_template": null,
+    "version": 1,
+    "session_rules": 0,
+    "volatile_rules": [],
+    "session_revision": 1,
+    "permissions_portable": false
+  },
+  "native_status": {
+    "connected": true,
+    "capabilities": [
+      "browser",
+      "desktop"
+    ],
+    "active": 0,
+    "unresolved": 0,
+    "permits_replay": false
+  },
+  "main_session_pending_approvals": [],
+  "persistent_nonterminal_runs": 0,
+  "decision_or_native_execution_rpcs_sent": 0,
+  "immutable_prior_reports_not_modified": true
+}

@@ -34,12 +34,14 @@ class CodexBridge:
         on_event: Callable[[RunContext, str, dict], None],
         on_thread: Callable[[RunContext, str], None],
         on_turn_closed: Callable[[RunContext], None] | None = None,
+        take_tool_image: Callable | None = None,
     ) -> None:
         self.provider = provider
         self.prepare = prepare
         self.on_event = on_event
         self.on_thread = on_thread
         self.on_turn_closed = on_turn_closed
+        self.take_tool_image = take_tool_image
         self._turns: dict[str, _Turn] = {}
 
     async def next_step(self, context: RunContext) -> FinalAnswer | ToolProposal:
@@ -107,6 +109,10 @@ class CodexBridge:
                             + receipt.output,
                         }
                     )
+                if self.take_tool_image is not None:
+                    image = self.take_tool_image(receipt)
+                    if image is not None:
+                        items.append({"type": "inputImage", "imageUrl": image})
                 turn.waiting.set_result(
                     {
                         "success": receipt.succeeded,

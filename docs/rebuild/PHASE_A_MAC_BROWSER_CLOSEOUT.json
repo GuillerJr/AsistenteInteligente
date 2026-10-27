@@ -1,0 +1,1295 @@
+{
+  "schema_version": 1,
+  "record_id": "phase_a_mac_browser_increment",
+  "decision_date": "2026-10-26",
+  "status": "scoped_Mac_browser_actions_permissions_qualified_record_snapshot_before_own_commit",
+  "provisional": false,
+  "phase_a_complete": false,
+  "phase_b_started": false,
+  "summary_file": "PHASE_A_MAC_BROWSER_CLOSEOUT.md",
+  "contracts": [
+    "PHASE_A_MAC_PATCH_PTY.md",
+    "PHASE_A_MAC_AUTOMATION.md",
+    "PHASE_A_BROWSER_AUTOMATION.md"
+  ],
+  "scope": {
+    "target": "macOS Apple Silicon",
+    "iphone": "deferred_by_owner",
+    "provider_choice": "Codex with ChatGPT via official client",
+    "nvidia_used": false,
+    "implicit_provider_fallback": false,
+    "owner_installation_changed": false,
+    "owner_data_read": false,
+    "delegated_approvals": "synthetic_test_profiles_only",
+    "tcc_and_credentials": "credentials_owner_only; default_TCC_owner_only; explicit_one_time_owner_authorization_for_current_QA_TCC_controls",
+    "tcc_exception": {
+      "authorization": "puedes hacerlo tu",
+      "source": "explicit current owner reply reported by coordinator",
+      "scope": "current test app AX and screen-recording controls only",
+      "owner_completed_touch_id": true,
+      "credentials_delegated": false
+    }
+  },
+  "reference": {
+    "revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+    "role": "readonly_static_reference",
+    "executed": false,
+    "modified": false,
+    "code_or_resources_copied_into_product": false,
+    "acquisition": "git show of exact committed blobs into new private immutable partitions",
+    "integrity_policy": "fail",
+    "coverage_record": "REA_COVERAGE.json",
+    "completed_static_batches": 27,
+    "unique_ts_js_paths": 105,
+    "unique_typescript_paths": 103,
+    "global_coverage": "partial",
+    "whole_reference_review_complete": false,
+    "semantic_unknowns_remain": true,
+    "source_count_is_semantic_or_runtime_coverage": false,
+    "batches": [
+      {
+        "id": "OC-22A",
+        "summary": "REA_PART22A_SUMMARY.json",
+        "parent_evidence_id": "ev_e6487a9f6786e546c9ba11309b8d8f72bc80eafb6eff7e15a2207da4c4dc654e",
+        "summary_evidence_id": "ev_eb99fd1cfeabd10b2ffde9f3fc7267ef9728879356aacdbb1ea9e20bcac6ba38",
+        "partition_sha256": "5711b73988bff2067c40c78b65e46b9759dfbba290398f9c64292aa0e4eb6c64",
+        "semantic_unknowns": 720,
+        "bundle": "/private/tmp/jarvis-rea-22a-evidence.json",
+        "bundle_sha256": "5200928e34dcb4e94b64b3cc3ef28dd831db0601735cedaa7597a56c65886e36"
+      },
+      {
+        "id": "OC-22B1",
+        "summary": "REA_PART22B_SUMMARY.json",
+        "parent_evidence_id": "ev_1ce045e1d2808001122ef58726f75d575bc3e68e05939b50675135ebcf9400df",
+        "summary_evidence_id": "ev_3b41e5bc87946147a9aa5e372c5fce245d77a4aad493e691b7f93a3693c51ec8",
+        "partition_sha256": "be384fc097ad481bd0794192fa16d74b66ab7bbb26903fc5e1cccd4c2b1eea96",
+        "semantic_unknowns": 271,
+        "bundle": "/private/tmp/jarvis-rea-part22b-evidence.json",
+        "bundle_sha256": "31779b84ad580a385fd2d87368c186e37d97930f244329c9c6ffc5c603690210"
+      },
+      {
+        "id": "OC-22B2",
+        "summary": "REA_PART22B_SUMMARY.json",
+        "parent_evidence_id": "ev_c52b7b4f29b8e20a45d473d7e54b24a8b964f6e719578f6a6060c1a1a8dda907",
+        "summary_evidence_id": "ev_ba64df8502d771c8cdd39917f5f6f281a48ca777bcb23bc1271e624e6961d923",
+        "partition_sha256": "1c9c23bd17452efb59ec17a4fa87d8a5cc9ba8f50a8a4183b91b414dfdf65f73",
+        "semantic_unknowns": 331,
+        "bundle": "/private/tmp/jarvis-rea-part22b-control-evidence.json",
+        "bundle_sha256": "bd25790c7b13ed447fb3ece0bf09acef0aa6d047fe41dd2e4354bcb1578a51f1"
+      },
+      {
+        "id": "OC-22C",
+        "summary": "REA_PART22C_SUMMARY.json",
+        "parent_evidence_id": "ev_3c7e85f98d2003f2c62bf8ddd2c7391d57822db6e0cfa4b98c74ac78a1cc2355",
+        "summary_evidence_id": "ev_54b251888f13120cddb4952931268256a959114a52b00fa81095901620c012cb",
+        "partition_sha256": "a378eaa6441e917f4d6176a613c6eb15d1bc33304f43ec078b0c3cbbb2d8fab4",
+        "semantic_unknowns": 631,
+        "bundle": "/private/tmp/jarvis-rea-22c-evidence.json",
+        "bundle_sha256": "fe5463ddda6a2e8212d4850bb4fe25f3705b0cc456d6fd52b675fff11c0664c9"
+      }
+    ]
+  },
+  "parity": {
+    "source": "OPENCLAW_BASELINE_PARITY.json",
+    "families": 80,
+    "partial_implementation_contracts_tested": 47,
+    "not_implemented": 33,
+    "counts_are_completion_percentages": false,
+    "whole_family_completion_claimed": false
+  },
+  "implemented": {
+    "workspace_patch": {
+      "actions": [
+        "add",
+        "update",
+        "delete",
+        "move"
+      ],
+      "expected_hashes_required": true,
+      "all_paths_preflight_before_first_effect": true,
+      "atomicity": "per_file_only",
+      "maximum_operations": 16,
+      "maximum_patch_bytes": 96000,
+      "maximum_file_bytes": 32000,
+      "partial_effect": "unknown_receipt_with_completed_files_and_uncertain_phase_no_replay",
+      "automatic_rollback": false
+    },
+    "pty": {
+      "backend": "macOS Seatbelt real PTY",
+      "features": [
+        "stdin",
+        "canonical_eof",
+        "poll_cursor",
+        "resize",
+        "SIGINT",
+        "SIGTERM",
+        "cancel",
+        "cleanup_custody"
+      ],
+      "sandbox_fallback": false,
+      "confinement": "single_admitted_process_no_fork_no_arbitrary_shell",
+      "universal_terminal_isolation_claimed": false
+    },
+    "desktop": {
+      "target": "explicit_bundle_pid_launch_and_public_window_identity",
+      "ax_snapshot": "bounded_exact_window_opaque_refs_and_observation_cas",
+      "frame": "ScreenCaptureKit exact window JPEG in RAM only",
+      "maximum_frame_bytes": 49152,
+      "frame_and_ax_atomic": false,
+      "protected_or_untyped_controls": "withheld_and_redacted_or_entire_frame_withheld",
+      "directed_input_without_postcondition": "unknown_unverified_no_replay",
+      "host_private_windows": "excluded_except_identified_own_browser_and_trusted_qa_fixture",
+      "snapshot_cas": "semantic_inert_empty_chrome_groups_pruned_only_with_same_physical_editor_identity; semantic_content_parent_cycle_and_replacement_changes_reject",
+      "AX_acknowledgement_and_verification": "native_acknowledged is separate metadata; one dispatch only; an exact revalidated requested postcondition can verify state even when native ACK was absent; no match/no read/invalid lease remain unknown; native timeout unchanged"
+    },
+    "browser": {
+      "managed": "private_nonpersistent_native_WebKit",
+      "network": "authenticated_no_failover_CONNECT_public_IP_pinning_plus_required_content_rules",
+      "qa_loopback": "trusted_exact_origin_and_port_exception_declared_in_output",
+      "attached": "explicit_loopback_CDP_page_target_no_enumeration",
+      "external_browser_network_policy": "remains_owned_by_external_browser",
+      "actions": [
+        "observe",
+        "navigate",
+        "history",
+        "fill",
+        "select",
+        "click",
+        "scroll",
+        "finite_keys",
+        "close"
+      ],
+      "model_javascript_or_arbitrary_selectors": false,
+      "search": "owner_chosen_template_exactly_one_query_placeholder_no_implicit_engine",
+      "download": "explicit_same_origin_no_redirect_no_ambient_credentials_to_new_guarded_workspace_file",
+      "maximum_download_bytes": 65536,
+      "automatic_webkit_download_or_upload": false,
+      "download_publication_flag": "written_to_workspace true only after guarded workspace publication and independent bytes/hash verification; failures withhold bytes and success flag"
+    },
+    "authority": {
+      "single_operation_session_run_argument_authority": true,
+      "signed_native_worker": true,
+      "one_use_claim_and_effect_lease": true,
+      "scopes": [
+        "conversation",
+        "always"
+      ],
+      "temporary_session_persistence": false,
+      "revision_checked_revocation": true,
+      "search_destination_change_invalidates_prior_rules": true,
+      "cancel_cleanup_barrier": "retains_owner_until_callbacks_and_custody_settle",
+      "frames_removed_before_durable_receipt": true,
+      "host_lifecycle": "single shared transition for start stop reconnect; stop wins over pending registration/reconnect; busy controls disabled",
+      "chat_lifecycle": "interaction blocked before first await; uncertain native cleanup remains blocked; same runtime retained for retry; startup session setup is private and guarded"
+    }
+  },
+  "validation": {
+    "focals_overlap_do_not_sum": true,
+    "existing_logs": [
+      {
+        "id": "patch_pty_workspace_process_custody",
+        "path": "/private/tmp/jarvis-patch-pty-qualified-final.log",
+        "sha256": "9cdce1ef51595f51925cb612dce2c8232319ee7166ae28522c2628da1fd3856a",
+        "passed": 151,
+        "failed": 0,
+        "seconds": 3.56,
+        "scope": "real files Seatbelt PTY and own listeners with synthetic authorization decisions"
+      },
+      {
+        "id": "native_broker_permissions",
+        "path": "/private/tmp/jarvis-native-broker-permissions-qualified.log",
+        "sha256": "1e134ffe9b86e00a1f8e8e10db4a21266da6b31105bb11e4a7ba1beafe24225c",
+        "passed": 52,
+        "failed": 0,
+        "seconds": 0.84,
+        "scope": "signed Unix IPC and own fake workers/callbacks decisions and permission stores"
+      },
+      {
+        "id": "coordinator_core_focal",
+        "path": "/private/tmp/jarvis-mac-browser-core-focal.log",
+        "sha256": "5819b32bf55c0a80a786fbd5bc7f6b29ab33a18c55854eaabb2e29d1011f37a1",
+        "passed": 108,
+        "failed": 0,
+        "seconds": 0.9,
+        "scope": "coordinator integration selection not a complete Python suite"
+      },
+      {
+        "id": "native_mac_browser_audit_after_fixes",
+        "path": "/private/tmp/jarvis-mac-browser-audit-fixed-tests.log",
+        "sha256": "ee1d4b917d0c2aa775d0dc8c196dcb753bf67ea2b5cd81c62a52a5a87a35f125",
+        "passed": 39,
+        "failed": 0,
+        "seconds": 20.272,
+        "composition": {
+          "mac": 23,
+          "browser_cdp": 13,
+          "audit": 3
+        },
+        "scope": "real WebKit AppKit HTTP proxy with own synthetic AX driver CDP peer and lease callbacks"
+      },
+      {
+        "id": "trusted_automation_launch_options",
+        "path": "/private/tmp/jarvis-launch-options-automation-tests.log",
+        "sha256": "a2d460506963014304ec6ca46da7b9c36d6c9617969fed52a6a9ac091298bf9d",
+        "passed": 6,
+        "failed": 0,
+        "scope": "explicit private tmp profile and exact loopback origin accepted; traversal recovery restore and ambiguous origins rejected"
+      },
+      {
+        "id": "ruff_checkpoint",
+        "path": "/private/tmp/jarvis-mac-browser-ruff-current.log",
+        "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+        "result": "All checks passed"
+      },
+      {
+        "id": "real_chrome_exact_target",
+        "path": "/private/tmp/jarvis-real-chrome-tests-final-2.log",
+        "bytes": 1440,
+        "sha256": "5b728e60e69dc976a2ffe2c72c63a40d3d637165102680f2187db80bec74dd1a",
+        "passed": 1,
+        "failed": 0,
+        "seconds": 2.945,
+        "scope": "Chrome 155.0.8059.85 actual process with new private profile, own HTTP page, exact CDP target, DOM input/readback, click oracle, stale/origin negatives, navigation and detach preserving target; normal own-process shutdown",
+        "opt_in": "JARVIS_REAL_CHROME=1",
+        "default_suite": "explicitly skipped without opt-in"
+      },
+      {
+        "id": "native_host_lifecycle_after_full_suite",
+        "path": "/private/tmp/jarvis-native-automation-lifecycle-tests.log",
+        "bytes": 9786,
+        "sha256": "4b9efaf092abcb09fc1febbb5898eb49bbbf57258253846ecf41bfbc836de93b",
+        "passed": 9,
+        "failed": 0,
+        "seconds": 12.653,
+        "composition": {
+          "host_dto": 2,
+          "signed_host_webkit_integration": 2,
+          "new_shared_lifecycle": 5
+        },
+        "scope": "Signed real Unix RPC with synthetic delayed attach/detach and own WebKit fixture. Concurrent starts/stops/reconnects, stop during attach and stop winning over reconnect."
+      },
+      {
+        "id": "ax_semantic_cas_after_full_suite",
+        "path": "/private/tmp/jarvis-mac-automation-chrome-cas-tests.log",
+        "bytes": 15513,
+        "sha256": "7b5e5d3fecc51fca153846412629dbb774e6b4a27c40ccdd9ecc07ad1e4bbc10",
+        "passed": 31,
+        "failed": 0,
+        "seconds": 5.365,
+        "composition": {
+          "new_semantic_cas": 5,
+          "mac_backend": 23,
+          "window_and_webkit_cancellation_audit": 3
+        },
+        "scope": "Conservative empty native chrome-group normalization keeps physical editor identity. Semantic payload, replacement, missing parents, cycles and duplicate IDs remain rejected."
+      },
+      {
+        "id": "download_publication_flag_after_full_suite",
+        "path": "/private/tmp/jarvis-download-published-flag-qualified.log",
+        "bytes": 160,
+        "sha256": "d5909c51985bd5db202843a4382250d792189dd73767b52e1fa90d69193bf46c",
+        "passed": 91,
+        "failed": 0,
+        "new_regressions": 2,
+        "scope": "Published flag is set only after workspace bytes/hash verification. Native failure and publication conflict do not claim file success or preserve a byte carrier."
+      },
+      {
+        "id": "chat_lifecycle_build",
+        "path": "/private/tmp/jarvis-chat-lifecycle-build.log",
+        "bytes": 217,
+        "sha256": "9880f0997a837516b48d3e577f927949a7f6607035744f8f1e4861a42a223dda",
+        "result": "passed",
+        "seconds": 13.26,
+        "scope": "Actual Jarvis executable build after ChatStore early interaction blocking; not a ChatStore unit or GUI lifecycle test."
+      },
+      {
+        "id": "ax_postcondition_after_392_full_suite",
+        "path": "/private/tmp/jarvis-mac-ax-postcondition-tests.log",
+        "bytes": 16552,
+        "sha256": "8b15fafd5dae8ebe890cb1ac5324d217a11aa9e8018055c1f1075c202af00ab6",
+        "passed": 33,
+        "failed": 0,
+        "seconds": 0.735,
+        "composition": {
+          "new_ACK_postcondition": 5,
+          "semantic_CAS": 5,
+          "Mac_backend": 23
+        },
+        "scope": "Synthetic one-dispatch oracle proves missing native ACK may be followed by exact authorized readback; mismatch, failed read, cancellation/revocation or no ACK/no postcondition remain unknown without resending. Native timeout is unchanged."
+      }
+    ],
+    "historical_component_checkpoints": [
+      {
+        "path": "/private/tmp/jarvis-browser-tests-final-first.log",
+        "sha256": "846d1bd337aac6d15246e14edc90380370a33578acd047871dacc340a014c504",
+        "passed": 13,
+        "failed": 0,
+        "superseded_for_integrated_component_qualification_by": "native_mac_browser_audit_after_fixes"
+      },
+      {
+        "path": "/private/tmp/jarvis-mac-automation-window-identity-tests.log",
+        "sha256": "6ba78a5c2153fddb7ff9bc12e4d64d2723a519cada2f7901370e4fbc312d569f",
+        "passed": 22,
+        "failed": 0,
+        "superseded_for_integrated_component_qualification_by": "native_mac_browser_audit_after_fixes"
+      }
+    ],
+    "fixture_peer": {
+      "source": "script/mac_browser_fixture.py",
+      "source_sha256": "1711611d5187882e473b83402eaeec016f54d55d129dcc5c8427191c2d405b8f",
+      "tests": "tests/test_mac_browser_fixture.py",
+      "tests_sha256": "c2e96d26ada5d0af4e47abdb4d55766cccb402e0bbcce27639296240a5c83140",
+      "validation_source": "17 new cases included in historical full Python checkpoint; compatibility tests and RPC-driven native app QA recorded separately",
+      "new_cases_passed": 17,
+      "historical_compatibility_cases_passed": 4,
+      "sdk_peer_synthetic": true,
+      "initial_session_empty": true,
+      "seed_files": {
+        "editar.txt": "ANTES with newline",
+        "mover.txt": "MOVER with newline"
+      },
+      "http": "own_fixed_loopback_routes_only_explicit_port_no_account_or_arbitrary_file_serving",
+      "observe": "readonly_memory_deserialized_SQLite_own_fixed_files_and_metadata_logs_no_replay",
+      "image_logging": "hash_bytes_only_no_base64",
+      "gui_qualification": false,
+      "authenticated_inference": false
+    },
+    "failures_preserved": [
+      "Initial PTY oracle confused socket creation with connection; corrected to a real denied own-listener connect without relaxing sandbox.",
+      "Initial CDP fixture used HTTP/1.0; corrected own fixture handshake to HTTP/1.1.",
+      "Recreating WKContentWorld lost snapshots; executor now retains its isolated world.",
+      "Loopback WebKit proxy bypass was exposed by the decoy; mandatory content rules added, unsupported alternation syntax corrected.",
+      "Native cancellation audit reproduced JS continuing after stopLoading; callbacks and reset now retain the lane until real completion.",
+      "Host-private windows are excluded; only identified own-browser or trusted explicit QA fixture windows can be automated.",
+      "Concurrent native start/stop/reconnect could race registration/retirement. Shared lifecycle transition and five delayed signed-RPC tests now preserve ACK ownership and stop precedence.",
+      "ChatStore left send/session/input controls eligible before awaiting native cleanup. It now blocks before suspension and preserves uncertain cleanup without retiring the runtime; GUI build03 recheck remains explicit.",
+      "Actual own AX fixture write in build02 was rejected by empty native chrome-group growth. Conservative semantic CAS normalization and five adversarial tests fix it without accepting replacement editors or semantic changes; positive native GUI case remains pending build03.",
+      "Download bytes were really published but written_to_workspace retained the native false flag. Publication now sets it only after guarded verification; two new failure regressions passed.",
+      "Initial download-flag focal failed to bind its own Unix socket under the restricted test sandbox. The qualified rerun passed all 91 cases; the first failed log remains preserved.",
+      "Actual Chrome action checks passed but initial own-browser teardown interrupted asynchronous Browser.close. Bounded ACK/connection-close wait, a non-evidentiary shutdown grace and independent process reaping fixed the harness; final opt-in test passed.",
+      "AX press was sent once and independent counter/readback showed 1, but native ACK failed and the original receipt stayed unknown. The correction separates ACK metadata from requested postcondition readback, never resends, preserves cancellation/lease checks and does not change native timeouts. Five new regressions passed; build04 positive requalification remains pending."
+    ],
+    "native_gui": {
+      "status": "scoped_Mac_browser_actions_permissions_GUI_cases_qualified",
+      "qualified": [
+        "interprocess AX resolve/windows",
+        "Unicode/newline set_value and type_text with external AppKit oracle",
+        "selected-window ephemeral frame, 14300 bytes, independent carrier checks",
+        "native Always selection and another-chat remembered permission with no approval RPC",
+        "build04 new-target press0->1 exactly once with separate native ACK and postcondition verified",
+        "build04 frame12352 bytes on external window19381, one protected region redacted",
+        "new Always UI permission survived same-byte SUT restart after explicit native target rebind",
+        "new rule revoked by native UI; renewed identical observation approval rejected through native UI; durable SQL has approval_denied and zero native action receipts"
+      ],
+      "pending": [],
+      "tcc": {
+        "AX_effective_in_qualified_SUT": true,
+        "screen_recording_effective_in_qualified_SUT": true,
+        "authorization": "explicit current owner exception: puedes hacerlo tu",
+        "touch_id": "completed by owner",
+        "credentials_delegated": false,
+        "initial_build03_denial_preserved": {
+          "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa03-report.json",
+          "bytes": 10196,
+          "sha256": "8953fafe01b9f1b814d2bedfec7b58c00586a15ef15e946571bbeb33c84e893b"
+        },
+        "fresh_identity_probe": {
+          "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa-fresh-identity-ax-probe.json",
+          "bytes": 6720,
+          "sha256": "922d48da7c58c1938c64a6e7ed79551c7ae52b8709782a286d74f96c8c8112e4"
+        },
+        "qualification_identity": "com.jarvis.desktop.macbrowserqualification.final.20261027",
+        "diagnostic_context": "Prior ad-hoc code identities had stale OS permission behavior; a fresh dedicated test identity was qualified. This does not read, reset or migrate owner personal data, and is not a universal TCC workaround.",
+        "effective_build04_AX_and_frame": true
+      },
+      "runtime_layout": {
+        "source": "/private/tmp/jarvis-mac-browser-source-final-20261026/src",
+        "dependencies": "/private/tmp/jarvis-mac-browser-runtime-20261027/site-packages",
+        "python": "external real interpreter; private copied source/dependencies avoid requesting Documents access for test runtime",
+        "self_contained": false
+      },
+      "not_claimed": "Native action QA uses signed RPC; native permission grant/revoke/reject use coordinator CUA. Historical unknown press stays unchanged. Native handles still need explicit rebind after restart; no universal OS/site qualification or authenticated inference.",
+      "external_fixture_source": {
+        "schema_version": 1,
+        "kind": "independently_authored_external_test_fixture_source",
+        "source": {
+          "path": "/private/tmp/jarvis-mac-external-fixture-20261027/JarvisMacExternalFixture.swift",
+          "bytes": 6978,
+          "sha256": "568669cdd793d45cad1627f97c7c0f6297c713a75e7beb4d703c5c24c0e5d713"
+        },
+        "preserved_copy": {
+          "path": "docs/rebuild/evidence/mac-browser-20261027/JarvisMacExternalFixture.swift",
+          "bytes": 6978,
+          "sha256": "568669cdd793d45cad1627f97c7c0f6297c713a75e7beb4d703c5c24c0e5d713"
+        },
+        "purpose": "Reproduce the independent AppKit state oracle. Documentary evidence only; no runtime/product import and no increase to the 356-source manifest.",
+        "uses_owner_data": false,
+        "secure_field_value_recorded": false,
+        "uses_network": false,
+        "grants_TCC": false
+      }
+    },
+    "python_full_suite": {
+      "status": "passed_current_Python_sources",
+      "passed": 2672,
+      "failed": 0,
+      "seconds": 488.93,
+      "log": {
+        "path": "/private/tmp/jarvis-mac-browser-python-final-full.log",
+        "bytes": 3073,
+        "sha256": "a50c7f7dcf7d80931c68e2d3731a3cdd4cead79dae28817ca7189b1814dab42f"
+      },
+      "source_snapshot": "355-path source checkpoint; all Python sources/tests remain identical in the 356-path snapshot",
+      "source_manifest": "PHASE_A_MAC_BROWSER_SOURCE_MANIFEST.json",
+      "python_changes_after_pass": false,
+      "later_changes": "three Swift implementation files and one five-case Swift test file only",
+      "final_hooks": "pending actual commit/push hook run; no future success claimed"
+    },
+    "swift_full_suite": {
+      "status": "passed_355_path_snapshot_before_AX_postcondition_fix",
+      "tests": 392,
+      "skipped": 1,
+      "failed": 0,
+      "seconds": 154.796,
+      "log": {
+        "path": "/private/tmp/jarvis-mac-browser-swift-final-full.log",
+        "bytes": 129108,
+        "sha256": "fcf71220969cf9e233c11a1f72bf0fdff6e24b26e509b185a3d2e3b0c8d2ed20"
+      },
+      "source_snapshot": "historical_final_source_snapshot_355 in PHASE_A_MAC_BROWSER_SOURCE_MANIFEST.json",
+      "skip": "actual Chrome opt-in, separately executed and passed",
+      "later_fix": "AX acknowledgement/postcondition separation in three Swift files and five new regressions",
+      "later_coverage": "ax_postcondition_after_392_full_suite focal 33 passed",
+      "not_claimed": "The 392-case full Swift suite does not include the later AX ACK/postcondition fix or its five new tests; a future full result is not anticipated."
+    },
+    "packages_and_offline_smoke": {
+      "status": "pending_final_commit_push_hooks",
+      "record": null,
+      "success_claimed": false
+    },
+    "development_bundle_and_cleanup": {
+      "status": "build04_qualified_and_test_resources_closed",
+      "build02": {
+        "path": "/private/tmp/jarvis-mac-browser-build-02.log",
+        "bytes": 1175,
+        "sha256": "7fa78bd085a1d39255871abd32be7f77a4270e6bccac958ae15f38366da01173",
+        "result": "passed"
+      },
+      "build03": {
+        "path": "/private/tmp/jarvis-mac-browser-build-03.log",
+        "bytes": 1104,
+        "sha256": "88f26dd20e1fa44d581734c0fefeeb5ee503fc7657e3d87e63740076ae319921",
+        "result": "passed",
+        "seconds": 53.98
+      },
+      "build03_bundle": "/private/tmp/jarvis-mac-browser-build-03/Jarvis.app",
+      "earlier_qa_cleanup": "PTY reaped, browser owned bindings closed/detached and rules cleared as recorded in build02 QA summary",
+      "final_bundle_cleanup": {
+        "status": "confirmed",
+        "source": "coordinator CUA quit and own scoped process/socket observations; external fixture independent terminal state preserved",
+        "qualified_app_process_absent": true,
+        "service_socket_absent": true,
+        "external_fixture_state": "closed",
+        "external_fixture_counter": 1,
+        "terminal_state_record": {
+          "path": "docs/rebuild/evidence/mac-browser-20261027/external-fixture-final-state.json",
+          "bytes": 406,
+          "sha256": "cde6b78c6d6744afb640324614b30b0a2923d2dcdd667aec24794bc943fb31c7"
+        },
+        "owner_installation_untouched": true
+      },
+      "self_contained_distribution": false,
+      "owner_installation_changed": false,
+      "qualified_SUT": {
+        "bundle": "com.jarvis.desktop.macbrowserqualification.final.20261027",
+        "path": "/private/tmp/jarvis-mac-browser-qualified-20261027/Jarvis.app",
+        "cdhash": "bc7101b3af701d2841416321ff2c9b3b4a4b70ad"
+      },
+      "build04": {
+        "path": "/private/tmp/jarvis-mac-browser-build-04.log",
+        "bytes": 1224,
+        "sha256": "f66f66a358955b12ca2daf24a56a60c8fd0913935dcec3db2f94ab9347e762ab",
+        "status": "passed",
+        "seconds": 45.88,
+        "source_snapshot": "356-path v2",
+        "qualification_bundle": "/private/tmp/jarvis-mac-browser-build-04/Jarvis Prueba Mac 04.app",
+        "qualification_bundle_id": "com.jarvis.desktop.macbrowserqualification.v04.20261027",
+        "qualification_cdhash": "d0fbc0dcd13bfcef08ddb9583fbbb03c81cc421e",
+        "success_claimed": true
+      }
+    },
+    "native_app_rpc_qa": {
+      "status": "55_step_native_app_RPC_QA_with_expected_negatives_and_historical_AXI_CAS_issue",
+      "record": {
+        "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa-summary.json",
+        "bytes": 44694,
+        "sha256": "a6a5c3db4bf9969bc6a50f5687b7bf986ff92dc4c8c960ea2a677c833e664ac9"
+      },
+      "detailed_record": {
+        "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa-report.json",
+        "bytes": 504112,
+        "sha256": "7083f8efdc7edb16a8be495b04a398b877940782b3edbfd317e6a01a6de436a4"
+      },
+      "phase": "build02 before AX stale fix and download-flag fix",
+      "route": "running native app via signed RPC",
+      "sdk_peer_synthetic": true,
+      "authenticated_inference": false,
+      "gui_gestures_claimed": false,
+      "step_count": 55,
+      "sdk_proposals": 55,
+      "sdk_replies": 55,
+      "run_statuses": {
+        "completed": 52,
+        "failed": 3
+      },
+      "expected_negative_cases": [
+        "session rule does not cross chat, denied before native dispatch",
+        "revoked Always requires approval, denied before native dispatch",
+        "stale browser ref rejected without a second click, receipt unknown"
+      ],
+      "case_requiring_build03_recheck": "Historical build02 stale CAS write was later positively qualified in native_external_qa_13ops; do not retroactively mark the original failed action successful",
+      "managed_browser": true,
+      "actual_owned_chrome_cdp": true,
+      "workspace_patch": true,
+      "pty_stdin_resize_signal_eof_reap": true,
+      "permission_scope_checks": "conversation isolation, Always across another chat, revision-checked revocation and denial tested through signed RPC decisions",
+      "managed_click": {
+        "at_ns": 1793076272356141000,
+        "route": "confirm",
+        "text": "JARVIS SIEMPRE OTRO CHAT 7319",
+        "choice": "dos",
+        "count": "1"
+      },
+      "cdp_click": {
+        "at_ns": 1793076761634615000,
+        "route": "confirm",
+        "text": "JARVIS CDP APP 7319",
+        "choice": "dos",
+        "count": "1"
+      },
+      "http_counts": {
+        "page": 2,
+        "not_found": 1,
+        "confirm": 2,
+        "download": 1,
+        "search": 1,
+        "document": 1
+      },
+      "forbidden_requests": 0,
+      "workspace_files": {
+        "editar.txt": {
+          "exists": true,
+          "bytes": 8,
+          "sha256": "bedd3a947d60ac57d3b861594e12b0d0faff2cdb4425931e0bd3984399a2c7b2"
+        },
+        "mover.txt": {
+          "exists": false,
+          "bytes": null,
+          "sha256": null
+        },
+        "movido.txt": {
+          "exists": true,
+          "bytes": 6,
+          "sha256": "b78acbb8ba73269a6737459ed4921595678dae0712fc521ef770f24cd7b3717a"
+        },
+        "nuevo.txt": {
+          "exists": true,
+          "bytes": 13,
+          "sha256": "593a0ed512e1d3ee23a126932e7f29f482538cef1c92f282b2eac888effaef62"
+        },
+        "descarga-fase-a.txt": {
+          "exists": true,
+          "bytes": 21,
+          "sha256": "4489856eac131fad85590be941894cb3738aed5caf8d641e6045798bcaef8688"
+        }
+      },
+      "download_matches": true,
+      "no_image_carrier_in_sqlite": true,
+      "capture_files_present": [],
+      "pty_reaped": true,
+      "permissions_cleared": true,
+      "browser_bindings_closed_or_detached": true,
+      "no_frame_claimed": "No frame was claimed in build02; actual frame is separately qualified in native_external_qa_13ops",
+      "limitations": [
+        "Running native app driven through signed RPC, not GUI gestures.",
+        "The fixed page confirms clicks by GET /confirm, not HTTP POST.",
+        "Real AX on the own synthetic fixture only; no frame capture or owner apps.",
+        "Positive AX write deferred to build03 after causal stale fix.",
+        "This is API-driven native-app QA; no GUI click on an approval button is claimed."
+      ],
+      "positive_public_https": {
+        "status": "passed_once_and_binding_closed",
+        "request_url": "https://example.com",
+        "open_attempts": 1,
+        "retried": false,
+        "succeeded": true,
+        "verified": false,
+        "effect_status": "known",
+        "network_scope": "private_pinned_proxy",
+        "synthetic_origin_exception": false,
+        "external_unverified": true,
+        "binding_closed": true,
+        "text_sha256": "fc560c3a0aed90ded84d7a1fa2be2ef4367f41ffe683e823bd60ec42acd16c45",
+        "close_log": {
+          "path": "/private/tmp/jarvis-mac-browser-rpc-qa-public-https-close.log",
+          "bytes": 1785,
+          "sha256": "5177b60ec99e1c986bf5c5a905a186320786296a378f14c9e51690c6e48e6c8f"
+        }
+      }
+    },
+    "preserved_later_failure_logs": [
+      {
+        "path": "/private/tmp/jarvis-download-published-flag-focal.log",
+        "bytes": 4815,
+        "sha256": "4a640ad99159d4d481569dde6d791f300daec23acbb0f913b42a597e2a4f4b7d"
+      },
+      {
+        "path": "/private/tmp/jarvis-real-chrome-tests-second.log",
+        "bytes": 1587,
+        "sha256": "c79dc1ea8286af987937fb3438649725894e7be00ce2ccf7958d2a1c7bf9e862"
+      },
+      {
+        "path": "/private/tmp/jarvis-real-chrome-tests-final.log",
+        "bytes": 1552,
+        "sha256": "48e61af2f52ff8cb3dc4103b5dab9a03f6606c3b91150e50d46df4aa4ad2fbf0"
+      }
+    ],
+    "historical_full_suites": {
+      "python_2670": {
+        "status": "passed_on_preserved_pre_later_fix_snapshot",
+        "passed": 2670,
+        "failed": 0,
+        "seconds": 598.94,
+        "log": {
+          "path": "/private/tmp/jarvis-mac-browser-python-full.log",
+          "bytes": 3073,
+          "sha256": "de3c6a8fabddf80a60f5b12535a22081be805f1b549fc49649b9e879cf420954"
+        },
+        "source_manifest": {
+          "path": "/private/tmp/jarvis-mac-browser-python-sources.json",
+          "bytes": 23653,
+          "sha256": "62f201bafa00b736b74fbea748e8eb77b1e02fcaaca9ce7a4523215c287bb44f"
+        },
+        "source_manifest_files": 173,
+        "later_changed_paths": [
+          "src/jarvis_core/native_tools.py",
+          "tests/test_native_automation.py"
+        ],
+        "later_coverage": "download_publication_flag_after_full_suite focal 91 passed, including two new regressions",
+        "final_collection": {
+          "cases": 2672,
+          "log": {
+            "path": "/private/tmp/jarvis-mac-browser-python-final-collection.log",
+            "bytes": 3538,
+            "sha256": "544a097952e38b21e5457dd4f6d305a58a4881620ce85928dce78cc79b30bd1d"
+          },
+          "is_execution": false
+        },
+        "final_hooks": "pending; not represented as already passed"
+      },
+      "swift_382": {
+        "status": "passed_before_later_lifecycle_cas_and_chat_changes",
+        "tests": 382,
+        "skipped": 1,
+        "failed": 0,
+        "seconds": 144.516,
+        "log": {
+          "path": "/private/tmp/jarvis-mac-browser-swift-full.log",
+          "bytes": 126083,
+          "sha256": "eac8f1eb099e25959072a603095aa9919f884ad9d5bad477683f27bfb3dde7c5"
+        },
+        "skip": "actual Chrome opt-in test; separately executed and passed",
+        "later_coverage": [
+          "native_host_lifecycle_after_full_suite",
+          "ax_semantic_cas_after_full_suite",
+          "chat_lifecycle_build"
+        ],
+        "not_claimed": "The historical full suite does not cover source changes made after its snapshot."
+      }
+    },
+    "historical_native_app_rpc_53_checkpoint": {
+      "step_count": 53,
+      "record_identity_as_previously_observed": {
+        "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa-summary.json",
+        "bytes": 44694,
+        "sha256": "a6a5c3db4bf9969bc6a50f5687b7bf986ff92dc4c8c960ea2a677c833e664ac9"
+      },
+      "subsequently_extended_in_place_to_55": true,
+      "old_byte_copy_available": false,
+      "retained_summary_only": true,
+      "not_claimed": "The old SHA is a historical identity, not the hash of the subsequently extended current file."
+    },
+    "native_external_qa_13ops": {
+      "status": "AX_text_frame_download_qualified_press_remains_unknown",
+      "record": {
+        "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa-final-qualified-13ops.json",
+        "bytes": 122787,
+        "sha256": "4128d63c38f6b67ee63059b7a9dd3d510f562fee6935fd85eca346db26cd8958"
+      },
+      "record_immutable": true,
+      "SDK_peer": "own synthetic, no login",
+      "step_count": 13,
+      "source_snapshot": "historical 355-path snapshot before AX ACK/postcondition fix",
+      "sut": {
+        "bundle": "com.jarvis.desktop.macbrowserqualification.final.20261027",
+        "path": "/private/tmp/jarvis-mac-browser-qualified-20261027/Jarvis.app",
+        "cdhash": "bc7101b3af701d2841416321ff2c9b3b4a4b70ad"
+      },
+      "external_fixture": {
+        "bundle": "com.jarvis.fixture.macexternal.20261027",
+        "pid": 27924,
+        "oracles": "Independent AppKit state.json and fresh AX reads, not the Jarvis receipt"
+      },
+      "set_value_unicode_newline": {
+        "succeeded": true,
+        "verified": true,
+        "effect_status": "known",
+        "external_editor_utf16_length": 23
+      },
+      "type_text_unicode_selection": {
+        "succeeded": true,
+        "verified": true,
+        "effect_status": "known",
+        "external_editor_utf16_length": 41
+      },
+      "frame": {
+        "redacted_image": true,
+        "bytes": 14300,
+        "sha256": "bf4463d26c31bfd1cd61360093d84d35b25dc89abcc4ee0d8ea42905c1cdde0c",
+        "media_type": "image/jpeg"
+      },
+      "protected_controls_withheld": true,
+      "download_file": {
+        "path": "descarga-final.txt",
+        "bytes": 21,
+        "sha256": "4489856eac131fad85590be941894cb3738aed5caf8d641e6045798bcaef8688"
+      },
+      "download_publication": {
+        "written_to_workspace": true,
+        "verified": true,
+        "file_bytes_and_hash_match": true
+      },
+      "press_before_fix": {
+        "dispatched_once": true,
+        "external_counter": 1,
+        "fresh_AX_value": "CONTADOR 1",
+        "succeeded": false,
+        "verified": false,
+        "effect_status": "unknown",
+        "error": "native_action_unconfirmed",
+        "replayed": false,
+        "not_claimed": "Independent counter=1 does not rewrite the original unknown receipt as a success."
+      },
+      "no_image_carrier_in_sqlite": true,
+      "no_image_carrier_in_sdk_log": true,
+      "capture_files_present": [],
+      "sdk_image_evidence": "in-memory delivery, only hash/byte metadata retained in peer log",
+      "download_binding_closed": true,
+      "qualification_status": "AX_text_frame_download_passed_press_receipt_unknown_counter_independently_one"
+    },
+    "native_GUI_Always_initial_and_cross_chat": {
+      "status": "passed_actual_native_UI_Always_and_cross_chat_reuse",
+      "record": {
+        "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa-always-ui-and-cross-chat.json",
+        "bytes": 141362,
+        "sha256": "b46370beefe24e8b98815ebd13554637570ea3b9cd49161185b49f5ebb7b6545"
+      },
+      "decision_route": "Coordinator CUA: Recordar -> Siempre para este destino -> Permitir y guardar",
+      "observer_sent_decision_RPC": false,
+      "run_id": "53e4e542063f41d6a7e9badea085516a",
+      "permission_id": "a9d2f46228b64d0eadc266b8d3f9257a",
+      "matching_persistent_rules": 1,
+      "cross_chat": {
+        "passed": true,
+        "run_id": "6270fd4c44554af18fbd948c944195df",
+        "approvals_seen": [],
+        "observer_sent_decision_RPC": false,
+        "remembered_permission_id": "a9d2f46228b64d0eadc266b8d3f9257a"
+      },
+      "still_pending": [],
+      "historical_scope": "Qualified on the old target before pause; that process later exited. The new target required its own separate Always grant and persistence test."
+    },
+    "native_QA04_resume": {
+      "status": "press_frame_passed_once_on_new_explicit_target",
+      "record": {
+        "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa04-press-frame-qualified.json",
+        "bytes": 54370,
+        "sha256": "d3606e07647458dd8dc457a392bb99ac7eef15440fb7d3d5fd958ca997136528"
+      },
+      "log": {
+        "path": "/private/tmp/jarvis-mac-browser-qa04-resume-qualify.log",
+        "bytes": 12409,
+        "sha256": "1b9a27d6306d18c29933ba68c85fe525ffe4334621e38d77d7284945d45c2f69"
+      },
+      "step_count": 5,
+      "sut": {
+        "sut_bundle": "com.jarvis.desktop.macbrowserqualification.v04.20261027",
+        "sut_path": "/private/tmp/jarvis-mac-browser-build-04/Jarvis Prueba Mac 04.app",
+        "sut_cdhash": "d0fbc0dcd13bfcef08ddb9583fbbb03c81cc421e",
+        "source_manifest_sha256": "30ffc5274692415f79531d86c6de0efd135346f0ef26720714518cd24f5a54f2"
+      },
+      "old_fixture_closed": true,
+      "new_external_target": {
+        "pid": 36913,
+        "window_number": 19381,
+        "target": {
+          "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+          "pid": 36913,
+          "launch_id": "6a65448e9e6f92577347b263875639f9ef132552a75835740f37b33233daa80a"
+        },
+        "window_ref": "e98af9c633d7066aa0084a2fdfe324073ea69cd98dc7dd651c4a820571867b35"
+      },
+      "old_permission_not_inherited": true,
+      "new_press": {
+        "baseline": 0,
+        "observed_counter": 1,
+        "attempts": 1,
+        "succeeded": true,
+        "verified": true,
+        "effect_status": "known",
+        "native_acknowledged": true,
+        "native_ACK_is_separate_metadata": true
+      },
+      "frame": {
+        "source": "screen_capture_kit_window",
+        "bytes": 12352,
+        "atomic_with_ax": false,
+        "mime_type": "image/jpeg",
+        "sha256": "f7d30e601ff1dc2d9be96fd640baa693a8f11716ff9dcb5f340ca095a70b8cae",
+        "protected_regions_redacted": 1,
+        "storage": "memory_only",
+        "window_id": 19381,
+        "provider_delivery": "ephemeral_image_channel"
+      },
+      "peer_frame_metadata": [
+        {
+          "redacted_image": true,
+          "bytes": 12352,
+          "sha256": "f7d30e601ff1dc2d9be96fd640baa693a8f11716ff9dcb5f340ca095a70b8cae",
+          "media_type": "image/jpeg"
+        }
+      ],
+      "no_image_carrier_in_SQLite": true,
+      "no_image_carrier_in_SDK_log": true,
+      "capture_files_present": [],
+      "historical_unknown_run_preserved": "b69f722b1bf145838fcf196a40a85a8f",
+      "historical_unknown_run_replayed": false,
+      "not_claimed": "The earlier target had exited. This is a new0->1 operation on the new destination, not a 1->2 replay on the expired PID."
+    },
+    "native_QA04_Always": {
+      "status": "native_UI_grant_restart_persistence_UI_revocation_and_renewed_rejection_passed",
+      "grant_record": {
+        "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa04-always-ui-granted.json",
+        "bytes": 67361,
+        "sha256": "36b0d9cc66f42a754f562a9c2c6a21a0cf19c90ff79046f8f221cff5e48aa387"
+      },
+      "persistence_record": {
+        "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa04-always-persistence-qualified.json",
+        "bytes": 99787,
+        "sha256": "2eff27adb2b716c65bf942d370b00969df1982b1fe790fdbcc0b125b803c079d"
+      },
+      "persistence_log": {
+        "path": "/private/tmp/jarvis-mac-browser-qa04-persistence-after-rebind-20261027.log",
+        "bytes": 1439,
+        "sha256": "55f57885784d1ecb0beab91404ddff5e514ceec38da3c8b593a1b4a098b32ec0"
+      },
+      "permission_id": "9f0101bb68204055b32b165c538f7825",
+      "native_UI_decision_route": "Coordinator CUA: Siempre para este destino, then Permitir y guardar",
+      "observer_sent_grant_decision_RPC": false,
+      "same_SUT_bytes_restarted": true,
+      "same_new_external_process_remained_alive": true,
+      "initial_after_restart": {
+        "remembered_rule_applied": true,
+        "approvals": [],
+        "decision_RPC_count": 0,
+        "receipt": "known failure, not dispatched: target_changed",
+        "reason": "Native target/window handles are intentionally ephemeral RAM bindings; the persisted authorization is not restored as a native handle."
+      },
+      "explicit_rebind": {
+        "calls": [
+          "desktop_resolve",
+          "desktop_windows"
+        ],
+        "read_approvals": 2,
+        "same_physical_target_and_window": true
+      },
+      "after_rebind": {
+        "passed": true,
+        "run_id": "66bc5fdb2d9d40079d95ce6de24c1d77",
+        "approvals_seen": [],
+        "observe_decision_RPC_count": 0,
+        "receipt": "known verified",
+        "remembered_same_permission": true
+      },
+      "pending": [],
+      "revocation_and_rejection": {
+        "revoked_permission_id": "9f0101bb68204055b32b165c538f7825",
+        "store_revision": 8,
+        "permission_absent": true,
+        "new_request_became_pending": true,
+        "parent_gui_rejected_run_id": "e10bd27c17be4b988ddc4c05de38b00b",
+        "run_status": "failed",
+        "run_outcome": "unknown",
+        "run_error": "approval_denied",
+        "action_receipts": [],
+        "observer_decisions_rpc": 0,
+        "no_native_dispatch_after_authority_denial": true,
+        "event_kind_counts": {
+          "run_queued": 1,
+          "run_status": 3,
+          "tool.requested": 1,
+          "run_settled": 1
+        }
+      }
+    },
+    "native_QA04_closeout": {
+      "status": "actions_frame_permission_UI_persistence_revocation_and_rejection_qualified",
+      "compact_record": {
+        "path": "docs/rebuild/evidence/mac-browser-20261027/rpc-qa04-closeout-summary.json",
+        "bytes": 5174,
+        "sha256": "9550c37d4547775d8a406158d4e0ea1ad0abfcd2d1fe9317cb0cc5340aabd19c"
+      },
+      "detail_record": {
+        "path": "docs/rebuild/evidence/mac-browser-20261027/rpc-qa04-actions-permissions-closeout.json",
+        "bytes": 105955,
+        "sha256": "13534370b81e1451934de6a763f159f43a7d03ff78ff4bab6c6d88c911026d7d"
+      },
+      "independent_SQL_oracle": {
+        "path": "docs/rebuild/evidence/mac-browser-20261027/rpc-qa04-rejection-sql-oracle.json",
+        "bytes": 624,
+        "sha256": "8437b289157e5b7d8dce4dcc24213db77d4b9f6da716f50754fd68d298b29943"
+      },
+      "evidence_manifest": {
+        "path": "docs/rebuild/evidence/mac-browser-20261027/MANIFEST.json",
+        "bytes": 7065,
+        "sha256": "addc8e4209ac0ddce12ee86f1c6b2091d17135327331f83d5ad68112a935a57f"
+      },
+      "press_frame_source": {
+        "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa04-press-frame-qualified.json",
+        "sha256": "d3606e07647458dd8dc457a392bb99ac7eef15440fb7d3d5fd958ca997136528",
+        "bytes": 54370
+      },
+      "persistence_source": {
+        "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa04-always-persistence-qualified.json",
+        "sha256": "2eff27adb2b716c65bf942d370b00969df1982b1fe790fdbcc0b125b803c079d",
+        "bytes": 99787
+      },
+      "old_fixture_closed_source": {
+        "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa-old-fixture-closed-preflight.json",
+        "sha256": "e9898ebd763c9d9597746452b3d0850cf29528f217c739b91abae786547826ef",
+        "bytes": 950
+      },
+      "new_target": {
+        "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+        "pid": 36913,
+        "launch_id": "6a65448e9e6f92577347b263875639f9ef132552a75835740f37b33233daa80a"
+      },
+      "window_ref": "e98af9c633d7066aa0084a2fdfe324073ea69cd98dc7dd651c4a820571867b35",
+      "press": {
+        "distinct_target": true,
+        "attempts": 1,
+        "counter_before": 0,
+        "counter_after": 1,
+        "succeeded": true,
+        "verified": true,
+        "effect_status": "known",
+        "native_acknowledgement_separate": [
+          {
+            "path": "native_acknowledged",
+            "value": true
+          }
+        ],
+        "verification_scope": "explicit_AX_state_postcondition_and_independent_AppKit_oracle",
+        "old_unknown_run_was_not_replayed_or_reclassified": "b69f722b1bf145838fcf196a40a85a8f"
+      },
+      "frame": {
+        "source": "screen_capture_kit_window",
+        "bytes": 12352,
+        "atomic_with_ax": false,
+        "mime_type": "image/jpeg",
+        "sha256": "f7d30e601ff1dc2d9be96fd640baa693a8f11716ff9dcb5f340ca095a70b8cae",
+        "protected_regions_redacted": 1,
+        "storage": "memory_only",
+        "window_id": 19381,
+        "provider_delivery": "ephemeral_image_channel"
+      },
+      "peer_frame": [
+        {
+          "redacted_image": true,
+          "bytes": 12352,
+          "sha256": "f7d30e601ff1dc2d9be96fd640baa693a8f11716ff9dcb5f340ca095a70b8cae",
+          "media_type": "image/jpeg"
+        }
+      ],
+      "always": {
+        "run_id": "c3ad1ce49c1848a7869bf355a41661f1",
+        "permission_id": "9f0101bb68204055b32b165c538f7825",
+        "observer_sent_decision_rpc": false
+      },
+      "same_binary_restart": {
+        "server_id_changed": true,
+        "initial_read_known_not_dispatched_due_to_empty_native_binding_registry_preserved": true,
+        "explicit_rebind": [
+          "desktop_resolve",
+          "desktop_windows"
+        ],
+        "rebind_operation_approvals": 2,
+        "observe_run_id": "66bc5fdb2d9d40079d95ce6de24c1d77",
+        "observe_approvals": 0,
+        "observe_decisions_rpc": 0,
+        "remembered_permission_id": "9f0101bb68204055b32b165c538f7825"
+      },
+      "revocation_and_rejection": {
+        "revoked_permission_id": "9f0101bb68204055b32b165c538f7825",
+        "store_revision": 8,
+        "permission_absent": true,
+        "new_request_became_pending": true,
+        "parent_gui_rejected_run_id": "e10bd27c17be4b988ddc4c05de38b00b",
+        "run_status": "failed",
+        "run_outcome": "unknown",
+        "run_error": "approval_denied",
+        "action_receipts": [],
+        "observer_decisions_rpc": 0,
+        "no_native_dispatch_after_authority_denial": true,
+        "event_kind_counts": {
+          "run_queued": 1,
+          "run_status": 3,
+          "tool.requested": 1,
+          "run_settled": 1
+        }
+      },
+      "final_oracles": {
+        "counter": 1,
+        "editor_value": "JARVIS EXTERNO BASE",
+        "same_external_pid": 36913,
+        "no_image_carrier_in_sqlite": true,
+        "no_image_carrier_in_sdk_log": true,
+        "capture_files_present": [],
+        "sdk_proposals": 85,
+        "sdk_replies": 85
+      },
+      "negative_outcome_explanation": "The run field outcome=unknown is retained as recorded for this failed run. Independent durable SQL shows approval_denied, no action receipts and no native dispatch after authority denial; it is not reclassified or described as an executed uncertain native effect.",
+      "limitations": [
+        "Native action QA is driven through signed RPC; Always/revoke/reject gestures were performed by parent CUA.",
+        "Own model peer is synthetic; no authenticated model inference or owner history was used.",
+        "Native target handles are volatile; explicit resolve/windows is required after host restart.",
+        "Old inactive permission for the closed target remains scoped to its old launch/window and was not inherited.",
+        "No universal OS isolation, all-sites qualification or self-contained distribution is claimed."
+      ],
+      "final_log": {
+        "path": "/private/tmp/jarvis-mac-browser-qa04-rejection-closeout-20261027.log",
+        "bytes": 557,
+        "sha256": "fd08aad9e8a17d109bcff5059469635850a6259535aea78f7a2286454748be2d"
+      },
+      "cleanup_addendum": {
+        "record": {
+          "path": "docs/rebuild/evidence/mac-browser-20261027/rpc-qa04-cleanup-no-permissions.json",
+          "bytes": 763,
+          "sha256": "ed159b7197906f8989537203da89ee135fdf2fe345fa2a4159f658279ebf5284"
+        },
+        "persistent_rules": 0,
+        "volatile_rules": 0,
+        "revision": 9,
+        "native_active": 0,
+        "native_unresolved": 0,
+        "pending_approvals": 0,
+        "persistent_nonterminal_runs": 0,
+        "is_later_addendum_not_rewrite_of_earlier_snapshot": true
+      },
+      "terminal_fixture_state": {
+        "record": {
+          "path": "docs/rebuild/evidence/mac-browser-20261027/external-fixture-final-state.json",
+          "bytes": 406,
+          "sha256": "cde6b78c6d6744afb640324614b30b0a2923d2dcdd667aec24794bc943fb31c7"
+        },
+        "state_status": "closed",
+        "counter": 1,
+        "pid": 36913,
+        "source": {
+          "path": "/private/tmp/jarvis-mac-external-fixture-20261027/state.json",
+          "bytes": 406,
+          "sha256": "cde6b78c6d6744afb640324614b30b0a2923d2dcdd667aec24794bc943fb31c7"
+        }
+      }
+    }
+  },
+  "source_snapshot": {
+    "status": "current_356_paths_match_frozen_source_355_and_173_historical_identities_preserved",
+    "record": {
+      "path": "/Users/guillerjr/Documents/Proyectos/AsistenteInteligente/docs/rebuild/PHASE_A_MAC_BROWSER_SOURCE_MANIFEST.json",
+      "bytes": 151983,
+      "sha256": "bb5bed0e07dd1e28b451fac0f4eaf2e000433270f7f80e356716897376b8a21f"
+    },
+    "original_final_manifest": {
+      "path": "/private/tmp/jarvis-mac-browser-final-source-manifest-v2.json",
+      "bytes": 55692,
+      "sha256": "30ffc5274692415f79531d86c6de0efd135346f0ef26720714518cd24f5a54f2"
+    },
+    "final_file_count": 356,
+    "historical_python_file_count": 173,
+    "historical_selected_source_checkpoint": {
+      "status": "provisional_working_tree_fingerprints_final_tree_match_pending",
+      "base_head": "5e236de61c09cca2b8adff6e299382fc971b3ee1",
+      "files": [
+        {
+          "path": "src/jarvis_core/workspace.py",
+          "sha256": "e8eef07d7a5ffc536cb231346087746cb3c1d1378f6953d9610a70dd833e0558"
+        },
+        {
+          "path": "src/jarvis_core/workspace_patch.py",
+          "sha256": "da370b23ce1eedb4651269c6f3e81adeca5a9eb534ea6d1b16c4a90d9c1bf234"
+        },
+        {
+          "path": "src/jarvis_core/processes.py",
+          "sha256": "0a7d514ae5823306d4c0948acaa26f40598a6290170086568318780557fac0c6"
+        },
+        {
+          "path": "src/jarvis_core/process_pty.py",
+          "sha256": "8a31a508ffb1b58406fd5400940b132f4bf770bd820b12aaa1cc4db8cb8a3d8d"
+        },
+        {
+          "path": "src/jarvis_core/native_automation.py",
+          "sha256": "ecc918c0211ae1d2b981ea2d03f5a2865e0633993673484f7cc99d95342a3874"
+        },
+        {
+          "path": "src/jarvis_core/native_tools.py",
+          "sha256": "0c468ae23bd1be41e06c0d05ebe04862df70e7347913663c240d1fbb81a32c3c"
+        },
+        {
+          "path": "src/jarvis_core/automation_permissions.py",
+          "sha256": "152e9477525a350e46e008db267033a4de62e99054a58fbddb8101d9301ef942"
+        },
+        {
+          "path": "src/jarvis_core/automation_management.py",
+          "sha256": "fc1dd174fc4c7a620abd07a5d67fd8ce71eff72422ffa7381513ea082da33b55"
+        },
+        {
+          "path": "src/jarvis_core/bridge.py",
+          "sha256": "78fbbbc21f2e4bbca0d4ac1aeab3e151cd6dde1db37af2b1a270d363b3dd8dfc"
+        },
+        {
+          "path": "src/jarvis_core/service.py",
+          "sha256": "96a5695d5501b8c50372509bdcd3f5ddc14eb2472b1278396ccdafdd87844c39"
+        },
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/MacAutomationModels.swift",
+          "sha256": "dfd653cfa263ff70bb4636799dec9559622db00f9327603c10d0fa2cd086c026"
+        },
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/MacAutomationExecutor.swift",
+          "sha256": "51b2e285260e81c4cd3ea64f55718b9b23e5cdb16720d4150f2b6c3880209f48"
+        },
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/MacAutomationAXDriver.swift",
+          "sha256": "2c6fb412e0bd25de3944f69fdfc92f9a52c9a0f1ec869732bf76bd9f2468da90"
+        },
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/BrowserAutomationExecutor.swift",
+          "sha256": "104d53ac01370056ca02c564e659c6e28e42f741edf1596a48202fb71521b334"
+        },
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/BrowserAutomationPolicy.swift",
+          "sha256": "a0bfaac333528de0ce482f1c8869bad69287c7fe627b81cbce0e89e75507087d"
+        },
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/BrowserAutomationCDP.swift",
+          "sha256": "8421d5b73d8236a132e8085359ebc3253ad5390c8810b68a9db0543bc35c2402"
+        },
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/BrowserAutomationScripts.swift",
+          "sha256": "8de3aeeffcd776bb52158b11637b70fbbf02e2a0fc49d7a348d4ee794e85ee49"
+        },
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/BrowserAutomationProxy.swift",
+          "sha256": "5c86242074317611684d09720d5a7f7a9d270d3cf2665a67c1a2a6ac2cd2cad1"
+        },
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/NativeAutomationHost.swift",
+          "sha256": "a458a1aa34268111b65088ea020275abab0943deee1da1f999cbf70c27e41ab5"
+        }
+      ]
+    },
+    "docs_are_outside_source_identity": true,
+    "publication_strategy": "containing commit; no self-attesting future SHA embedded",
+    "historical_final_355_record": {
+      "path": "/private/tmp/jarvis-mac-browser-final-source-manifest.json",
+      "bytes": 55503,
+      "sha256": "6b2255b27db5884aacfa1acd4642a8d8dc2d2f83060fe3dc132cadbb8952c43e"
+    },
+    "historical_355_file_count": 355,
+    "python_identical_since_final_full_suite": true,
+    "post_392_Swift_changes": [
+      "native/JarvisDesktop/Sources/DesktopCore/MacAutomationAXDriver.swift",
+      "native/JarvisDesktop/Sources/DesktopCore/MacAutomationExecutor.swift",
+      "native/JarvisDesktop/Sources/DesktopCore/MacAutomationModels.swift",
+      "native/JarvisDesktop/Tests/DesktopCoreTests/MacAutomationAXPostconditionTests.swift"
+    ]
+  },
+  "publication": {
+    "record_snapshot_before_own_commit": true,
+    "status": "not_executed_at_record_snapshot",
+    "strategy": "containing_commit",
+    "commit": null,
+    "commit_resolution": "Resolve the commit containing this qualification record from Git history after commit. No future or self-referential SHA is embedded.",
+    "git_and_CI_results_location": "Actual hook metadata and the coordinator final response after commit/push; results after this snapshot do not retroactively change it.",
+    "push_to_main": "not_executed_at_record_snapshot",
+    "pre_commit": "not_executed_at_record_snapshot",
+    "pre_push": "not_executed_at_record_snapshot",
+    "packages_and_offline_smoke": "final hook execution results recorded outside this snapshot",
+    "CI": "verify_after_actual_push",
+    "success_claimed": false,
+    "Chrome_gate_configuration": "Coordinator plans JARVIS_REAL_CHROME=1; no future test total or outcome is claimed."
+  },
+  "limits": [
+    "Static REA partitions preserve unknowns; source counts and complete-within-view do not establish complete reference coverage.",
+    "Component tests, synthetic SDK inference and fake authorization decisions are not a real GUI/TCC or authenticated model qualification.",
+    "Credentials remain owner-only. Default TCC decisions belong to the owner; this run has one explicit current-owner exception for test app AX/screen controls, with Touch ID completed by the owner. OS toggles do not by themselves prove effective frame access after restart.",
+    "Already-dispatched JavaScript can continue after stopLoading, cancellation or CDP transport close. Autonomous site behavior is not undone or universally terminated; retain custody and unknown outcomes rather than claiming cleanup.",
+    "The PTY supports admitted single processes, not arbitrary fork/pipeline process trees; no unsandboxed fallback.",
+    "AX and frame reads are separate, bounded and non-atomic. Protected control redaction is not universal secret detection or defense against same-user malware.",
+    "Attached external browsers retain their own network policy. All websites, authentication flows, frames, extensions and isTrusted physical-input behavior are not qualified.",
+    "The development bundle uses external Python and official Codex. Self-contained distribution, Developer ID/notarization and remote signed updates remain pending.",
+    "No phase A family or the whole phase is declared complete by this increment; phase B remains deferred.",
+    "Full-suite logs belong to their preserved historical snapshots. Later fixes have focused regressions/builds; final source hooks and post-push CI remain unclaimed until actually observed."
+  ],
+  "updated_date": "2026-10-27",
+  "pause_history": {
+    "record": "PHASE_A_MAC_BROWSER_PAUSE_20261027.md",
+    "status": "historical_pause_explicitly_resumed_and_scoped_QA04_actions_permissions_completed",
+    "resume_request": "Owner resumed finishing actions, permissions and commit/push to main.",
+    "resume_preflight": "All356 current source hashes, preserved355/173 snapshots,14 positive logs and three preserved report identities matched; no writes occurred before authorization to draft final QA04 closure.",
+    "closed_old_fixture": {
+      "record": {
+        "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa-old-fixture-closed-preflight.json",
+        "bytes": 950,
+        "sha256": "e9898ebd763c9d9597746452b3d0850cf29528f217c739b91abae786547826ef"
+      },
+      "method": "semantic fields observed before the next launch replaced state.json; not a byte-identical copy of that older state file",
+      "old_PID": 27924,
+      "kernel_signal_zero": "ESRCH",
+      "not_reused": true
+    }
+  },
+  "qualification_cut": {
+    "all_requested_Mac_browser_action_and_permission_cases_completed": true,
+    "phase_A_complete": false,
+    "phase_B_started": false,
+    "current_sources": 356,
+    "historical_sources": [
+      355,
+      173
+    ],
+    "full_Python": 2672,
+    "full_Swift_before_last_AX_fix": 392,
+    "latest_AX_focal": 33,
+    "actual_Chrome_opt_in": 1,
+    "new_full_Swift_result_claimed": false,
+    "remaining_for_coordinator": [
+      "actual final hooks/package smoke and Chrome opt-in gate as configured",
+      "commit and push to main",
+      "post-push CI verification"
+    ],
+    "all_scoped_test_resources_closed": true
+  },
+  "record_snapshot_before_own_commit": true
+}

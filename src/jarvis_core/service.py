@@ -19,6 +19,8 @@ from contextvars import ContextVar
 from dataclasses import asdict
 from pathlib import Path
 
+from jarvis_core.automation_management import AutomationAPI
+from jarvis_core.automation_permissions import AutomationPermissions
 from jarvis_core.bridge import CodexBridge
 from jarvis_core.client_identity import ClientAuthority, ClientIdentityError
 from jarvis_core.codex import CodexClient, CodexError
@@ -42,6 +44,8 @@ from jarvis_core.management import ManagementAPI
 from jarvis_core.mcp_registry import McpRegistry, McpRegistryError, ServerSpec
 from jarvis_core.memory import Citation, MemoryError, MemoryLimits, MemoryScope, MemoryStore
 from jarvis_core.memory_tools import MemoryTools
+from jarvis_core.native_automation import NativeAutomationBroker
+from jarvis_core.native_tools import NativeAutomationTools
 from jarvis_core.private_json import PrivateJsonError
 from jarvis_core.processes import ProcessTools
 from jarvis_core.profiles import ProfileError, ProfilesStore
@@ -99,6 +103,7 @@ class _ProviderAdapter:
             on_event=service._event,
             on_thread=service._bind_thread,
             on_turn_closed=service._provider_turn_closed,
+            take_tool_image=service.native_tools.take_frame,
         )
 
     async def next_step(self, context: RunContext):
@@ -129,6 +134,7 @@ class _ProviderAdapter:
         try:
             await self.bridge.cleanup(context)
         finally:
+            self.service.native_tools.clear_run(context.run_id)
             self.service._active_ref.set(None)
 
 
@@ -144,14 +150,15 @@ class _ApprovalGate:
         ref = self.service._refs[operation.run_id]
         self.service.store.set_run_status(ref, operation.run_id, "waiting_approval")
         try:
-            return await self.service.authority.request(operation, cancellation)
+            return await self.service.authority.request(operation, cancellation,
+                on_pending=lambda view: self.service._decide_remembered(operation, view))
         finally:
             record = self.service.store.get_run(ref, operation.run_id)
             if record.status == "waiting_approval" and not cancellation.is_set():
                 self.service.store.set_run_status(ref, operation.run_id, "running")
 
 
-class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI):
+class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, AutomationAPI):
     def __init__(self, directory: Path, provider: CodexClient, *,
                  profile_lease: ProfileLease | None = None,
                  bootstrap_public_key: str | None = None) -> None:
@@ -221,6 +228,9 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI):
         )
         self.scheduler = Scheduler(self.schedule_store, self._dispatch_schedule, close_timeout=10)
         self.authority = ApprovalAuthority()
+        self.native_broker = NativeAutomationBroker(
+            assert_owner=lambda owner: self.client_authority.lookup(owner, scope="owner"))
+        self.automation_permissions = AutomationPermissions(directory)
         self.client_authority.on_revoke = self._client_revoked
         self.mcp = McpRegistry(directory / "mcp")
         self.mcp.child_custody = self.profile_lease.child_custody_fds
@@ -292,6 +302,11 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI):
         specs.extend(self.web_tools.specs())
         definitions.extend(self.delegation_tools.definitions())
         specs.extend(self.delegation_tools.specs())
+        self.native_tools = NativeAutomationTools(self.native_broker,
+            scope=self._native_scope, guard=self._native_guard,
+            permissions=self.automation_permissions, workspace=lambda: self.workspace_tools)
+        definitions.extend(self.native_tools.definitions())
+        specs.extend(self.native_tools.specs())
         if self.workspace_tools:
             definitions.extend(self.workspace_tools.definitions())
             specs.extend(self.workspace_tools.specs())
@@ -504,14 +519,18 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI):
         methods.update(self.management_handlers())
         methods.update(self.telegram_handlers())
         methods.update(self.delegation_handlers())
+        methods.update(self.automation_handlers())
 
-        def safe(name, callback):
+        def safe(name, callback, *, closing=False):
             async def invoke(params):
                 try:
-                    with self.profile_gate.admit(name, mutating=name not in READ_RPCS):
+                    with self.profile_gate.admit(name, mutating=name not in READ_RPCS,
+                                                 closing=closing):
                         return await callback(params)
                 except (HostProfileError, ProviderChoiceError) as error:
                     raise RpcError(-32037, error.code) from None
+                except ClientIdentityError:
+                    raise RpcError(-32003, "Este cliente no posee el permiso requerido.") from None
                 except StateError as error:
                     raise RpcError(-32010, error.code) from None
                 except CodexError as error:
@@ -538,7 +557,10 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI):
 
             return invoke
 
-        handlers = {name: safe(name, callback) for name, callback in methods.items()}
+        cleanup_methods = {"automation.poll", "automation.complete", "automation.detach",
+                           "automation.status"}
+        handlers = {name: safe(name, callback, closing=name in cleanup_methods)
+                    for name, callback in methods.items()}
         # These fixed native controls own their admission and background jobs.
         # Status/decision/cancel must remain available while a cut excludes every
         # pre-existing handler. They cannot expose a model tool or touch stores.
@@ -812,7 +834,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI):
     async def decide_approval(self, params: dict) -> dict:
         _params(
             params,
-            _BASE | {"approval_id", "digest", "allow"},
+            _BASE | {"approval_id", "digest", "allow", "remember"},
             {"session_id", "approval_id", "digest", "allow"},
         )
         ref = self._ref(params)
@@ -828,7 +850,20 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI):
             ),
             None,
         )
+        mode = params.get("remember", "operation")
+        if (mode not in {"operation", "session", "always"}
+                or (not params["allow"] and mode != "operation")):
+            raise RpcError(-32602, "El alcance del permiso no es válido.")
+        context = self._permission_context(item) if item is not None else None
+        if mode != "operation" and (context is None or (ref.temporary and mode == "always")):
+            raise RpcError(-32602, "Este permiso requiere una conversación local durable.")
         accepted = self.authority.decide(item.approval_id, params["allow"]) if item else False
+        if accepted and mode != "operation":
+            try:
+                self.automation_permissions.remember(**context, mode=mode)
+            except BaseException:
+                self.authority.revoke(ref.session_id)
+                raise
         return {"accepted": accepted}
 
     async def revoke_approvals(self, params: dict) -> dict:
@@ -1019,6 +1054,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI):
         if self.telegram_uses_session(ref):
             raise RpcError(-32036, "Quita la ruta de Telegram antes de borrar esta conversación.")
         self.authority.revoke(ref.session_id)
+        self.native_broker.assert_settled(ref.session_id)
+        self.automation_permissions.clear_session(ref.session_id)
         self._retiring_sessions.add(ref)
         try:
             if self.process_tools:
@@ -1263,6 +1300,11 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI):
 
     async def _close_resources(self) -> None:
         resource_errors = []
+        for handle in tuple(self._handles.values()):
+            handle.cancel()
+        # Keep signed worker cleanup acknowledgements reachable until native
+        # actions have actually settled. A cancel ACK is not that receipt.
+        await self.native_broker.aclose(drain=True)
         try:
             await self.server.aclose()
         except Exception:
@@ -1304,6 +1346,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI):
         # Close every independent owner even when one provider cannot settle.
         # Retain the stores while any child, channel or callback is unconfirmed.
         for closer in (
+            self.native_broker.aclose,
             self.process_tools.aclose if self.process_tools else None,
             self.web_tools.aclose,
             self.provider.aclose if not provider_close_attempted else None,

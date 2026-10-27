@@ -1,0 +1,137 @@
+{
+  "format": "jarvis-mac-browser-qa04-closeout/1",
+  "synthetic_only": true,
+  "sut": {
+    "sut_bundle": "com.jarvis.desktop.macbrowserqualification.v04.20261027",
+    "sut_path": "/private/tmp/jarvis-mac-browser-build-04/Jarvis Prueba Mac 04.app",
+    "sut_cdhash": "d0fbc0dcd13bfcef08ddb9583fbbb03c81cc421e",
+    "source_manifest_sha256": "30ffc5274692415f79531d86c6de0efd135346f0ef26720714518cd24f5a54f2"
+  },
+  "source_files": 356,
+  "no_source_or_repo_edits_in_resumed_qa": true,
+  "external_target": {
+    "bundle_id": "com.jarvis.fixture.macexternal.20261027",
+    "pid": 36913,
+    "launch_id": "6a65448e9e6f92577347b263875639f9ef132552a75835740f37b33233daa80a"
+  },
+  "window_ref": "e98af9c633d7066aa0084a2fdfe324073ea69cd98dc7dd651c4a820571867b35",
+  "external_window_number": 19381,
+  "old_target_27924_closed_no_rule_inheritance": true,
+  "new_press": {
+    "distinct_target": true,
+    "attempts": 1,
+    "counter_before": 0,
+    "counter_after": 1,
+    "succeeded": true,
+    "verified": true,
+    "effect_status": "known",
+    "native_acknowledgement_separate": [
+      {
+        "path": "native_acknowledged",
+        "value": true
+      }
+    ],
+    "verification_scope": "explicit_AX_state_postcondition_and_independent_AppKit_oracle",
+    "old_unknown_run_was_not_replayed_or_reclassified": "b69f722b1bf145838fcf196a40a85a8f"
+  },
+  "frame": {
+    "source": "screen_capture_kit_window",
+    "bytes": 12352,
+    "atomic_with_ax": false,
+    "mime_type": "image/jpeg",
+    "sha256": "f7d30e601ff1dc2d9be96fd640baa693a8f11716ff9dcb5f340ca095a70b8cae",
+    "protected_regions_redacted": 1,
+    "storage": "memory_only",
+    "window_id": 19381,
+    "provider_delivery": "ephemeral_image_channel"
+  },
+  "peer_frame": [
+    {
+      "redacted_image": true,
+      "bytes": 12352,
+      "sha256": "f7d30e601ff1dc2d9be96fd640baa693a8f11716ff9dcb5f340ca095a70b8cae",
+      "media_type": "image/jpeg"
+    }
+  ],
+  "always_gui": {
+    "run_id": "c3ad1ce49c1848a7869bf355a41661f1",
+    "permission_id": "9f0101bb68204055b32b165c538f7825",
+    "observer_sent_decision_rpc": false
+  },
+  "same_binary_restart": {
+    "server_id_changed": true,
+    "initial_read_known_not_dispatched_due_to_empty_native_binding_registry_preserved": true,
+    "explicit_rebind": [
+      "desktop_resolve",
+      "desktop_windows"
+    ],
+    "rebind_operation_approvals": 2,
+    "observe_run_id": "66bc5fdb2d9d40079d95ce6de24c1d77",
+    "observe_approvals": 0,
+    "observe_decisions_rpc": 0,
+    "remembered_permission_id": "9f0101bb68204055b32b165c538f7825"
+  },
+  "revocation_gui": {
+    "revoked_permission_id": "9f0101bb68204055b32b165c538f7825",
+    "store_revision": 8,
+    "permission_absent": true,
+    "new_request_became_pending": true,
+    "parent_gui_rejected_run_id": "e10bd27c17be4b988ddc4c05de38b00b",
+    "run_status": "failed",
+    "run_outcome": "unknown",
+    "run_error": "approval_denied",
+    "action_receipts": [],
+    "observer_decisions_rpc": 0,
+    "no_native_dispatch_after_authority_denial": true,
+    "event_kind_counts": {
+      "run_queued": 1,
+      "run_status": 3,
+      "tool.requested": 1,
+      "run_settled": 1
+    }
+  },
+  "final_oracles": {
+    "counter": 1,
+    "editor_value": "JARVIS EXTERNO BASE",
+    "same_external_pid": 36913,
+    "no_image_carrier_in_sqlite": true,
+    "no_image_carrier_in_sdk_log": true,
+    "capture_files_present": [],
+    "sdk_proposals": 85,
+    "sdk_replies": 85
+  },
+  "artifacts": {
+    "press_frame": {
+      "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa04-press-frame-qualified.json",
+      "sha256": "d3606e07647458dd8dc457a392bb99ac7eef15440fb7d3d5fd958ca997136528",
+      "bytes": 54370
+    },
+    "always_ui": {
+      "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa04-always-ui-granted.json",
+      "sha256": "36b0d9cc66f42a754f562a9c2c6a21a0cf19c90ff79046f8f221cff5e48aa387",
+      "bytes": 67361
+    },
+    "always_persistence": {
+      "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa04-always-persistence-qualified.json",
+      "sha256": "2eff27adb2b716c65bf942d370b00969df1982b1fe790fdbcc0b125b803c079d",
+      "bytes": 99787
+    },
+    "old_fixture_closed": {
+      "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa-old-fixture-closed-preflight.json",
+      "sha256": "e9898ebd763c9d9597746452b3d0850cf29528f217c739b91abae786547826ef",
+      "bytes": 950
+    },
+    "detail": {
+      "path": "/private/tmp/jarvis-mac-browser-live-20261026/rpc-qa04-actions-permissions-closeout.json",
+      "sha256": "13534370b81e1451934de6a763f159f43a7d03ff78ff4bab6c6d88c911026d7d",
+      "bytes": 105955
+    }
+  },
+  "limits": [
+    "Native action QA is driven through signed RPC; Always/revoke/reject gestures were performed by parent CUA.",
+    "Own model peer is synthetic; no authenticated model inference or owner history was used.",
+    "Native target handles are volatile; explicit resolve/windows is required after host restart.",
+    "Old inactive permission for the closed target remains scoped to its old launch/window and was not inherited.",
+    "No universal OS isolation, all-sites qualification or self-contained distribution is claimed."
+  ]
+}

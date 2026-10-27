@@ -14,7 +14,7 @@ import math
 import re
 import threading
 import time
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, replace
@@ -360,6 +360,15 @@ class _Lease:
 _LEASE: ContextVar[_Lease | None] = ContextVar("jarvis_tool_authority", default=None)
 
 
+def current_tool_operation() -> ApprovalRequest:
+    """Trusted adapter context, never a grant from model-controlled arguments."""
+    lease = _LEASE.get()
+    if lease is None or not lease.active:
+        raise ToolError("tool_authority_required")
+    lease.authority._check_issued(lease.issued)
+    return lease.issued.operation
+
+
 def check_tool_authority(
     tool_name: str, arguments: Mapping[str, Any], *, commit: bool = False,
 ) -> None:
@@ -444,6 +453,7 @@ class ApprovalAuthority:
 
     async def request(
         self, operation: ApprovalRequest, cancellation: asyncio.Event,
+        *, on_pending: Callable[[PendingApproval], None] | None = None,
     ) -> ApprovalGrant | None:
         self._on_loop()
         if (not isinstance(operation, ApprovalRequest)
@@ -472,6 +482,13 @@ class ApprovalAuthority:
                          self._versions.get(operation.session_id, 0),
                          time.monotonic() + self.ttl)
         self._pending[approval_id] = entry
+        if on_pending is not None:
+            try:
+                on_pending(view)
+            except BaseException:
+                self._pending.pop(approval_id, None)
+                future.cancel()
+                raise
         cancelled = asyncio.create_task(cancellation.wait())
         delivered = False
 
@@ -893,7 +910,9 @@ class ToolCatalog:
             return ToolResult(tool_name, False, False, error="tool_execution_failed",
                               effect_status="unknown", operation_id=operation_id)
         if (not isinstance(result, ToolResult) or result.tool_name != tool_name
-                or result.operation_id not in {None, operation_id} or cancellation.is_set()):
+                or result.operation_id not in {None, operation_id}
+                or (cancellation.is_set() and not (
+                    not result.succeeded and result.effect_status == "unknown"))):
             return ToolResult(tool_name, False, False, error="invalid_tool_result",
                               effect_status="unknown", operation_id=operation_id)
         return replace(result, operation_id=operation_id)

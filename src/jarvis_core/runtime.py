@@ -550,7 +550,16 @@ class AgentRuntime:
             try:
                 result = await tool.execute(_freeze(arguments), handle._cancellation)
             except asyncio.CancelledError as error:
-                record_uncertain("execution_cancelled", type(error).__name__)
+                partial = getattr(error, "receipt", None)
+                if (isinstance(partial, ToolResult) and partial.tool_name == tool.name
+                        and partial.operation_id in {None, operation_id}
+                        and not partial.succeeded and partial.effect_status == "unknown"):
+                    receipt = replace(partial, operation_id=operation_id)
+                    results.append(receipt)
+                    if self._on_tool_result:
+                        self._on_tool_result(context, receipt)
+                else:
+                    record_uncertain("execution_cancelled", type(error).__name__)
                 raise
             except Exception as error:
                 record_uncertain("tool_execution_failed", type(error).__name__)
@@ -559,7 +568,15 @@ class AgentRuntime:
                 ) from error
         if handle._cancellation.is_set():
             cancellation = asyncio.CancelledError()
-            record_uncertain("execution_cancelled", type(cancellation).__name__)
+            if (isinstance(result, ToolResult) and result.tool_name == tool.name
+                    and result.operation_id in {None, operation_id}
+                    and not result.succeeded and result.effect_status == "unknown"):
+                receipt = replace(result, operation_id=operation_id)
+                results.append(receipt)
+                if self._on_tool_result:
+                    self._on_tool_result(context, receipt)
+            else:
+                record_uncertain("execution_cancelled", type(cancellation).__name__)
             raise cancellation
         if handle._deadline is not None and asyncio.get_running_loop().time() >= handle._deadline:
             record_uncertain("execution_deadline")

@@ -190,7 +190,8 @@ def test_command_admits_only_host_framework_interpreter_without_spawning(monkeyp
 def test_catalog_preserves_single_authority_and_explicit_sandbox(bundle):
     manager, _authority, catalog, _root, _owner = bundle
     definitions = {item.name: item for item in catalog.definitions()}
-    assert set(definitions) == {"process_run", "process_poll", "process_send", "process_stop"}
+    assert set(definitions) == {"process_run", "process_poll", "process_send", "process_stop",
+                                "process_resize", "process_signal"}
     assert all(
         item.requires_confirmation for name, item in definitions.items() if name != "process_poll"
     )

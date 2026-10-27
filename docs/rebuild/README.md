@@ -170,11 +170,53 @@ las fuentes productivas ya cualificadas. El cierre conserva ese fallo y su corre
 
 La investigación [OC-21A](REA_PART21A_CORE_SERVICE.json),
 [OC-21B](REA_PART21B_SUMMARY.json) y [OC-21C](REA_PART21C_SUMMARY.json)
-eleva el registro a 23 lotes y 90 fuentes TS/JS seleccionadas, con incógnitas
-estáticas y dependencias sin revisar; no es revisión exhaustiva ni ejecución de
-OpenClaw. Las 80 familias mantienen 44 avances parciales y 36 sin implementación;
-no son porcentajes de producto terminado. A-71 y la fase A siguen abiertas y la
-fase B continúa aplazada.
+dejó el checkpoint de núcleo en 23 lotes y 90 fuentes TS/JS seleccionadas.
+El [bloque actual de herramientas del Mac y navegador](PHASE_A_MAC_BROWSER_CLOSEOUT.md)
+añade [OC-22A](REA_PART22A_SUMMARY.json), [OC-22B1/B2](REA_PART22B_SUMMARY.json)
+y [OC-22C](REA_PART22C_SUMMARY.json): **27 lotes y 105 rutas TS/JS únicas**,
+con incógnitas estáticas y dependencias sin revisar. No es revisión exhaustiva
+ni ejecución de OpenClaw. Las 80 familias mantienen ahora **47 avances parciales
+y 33 sin implementación**; esas cifras no son porcentajes de producto terminado.
+A-71 y la fase A siguen abiertas y la fase B continúa aplazada.
+
+Este incremento implementa parches multiarchivo con CAS, PTY confinada de un
+solo proceso, observación/acciones AX de ventana exacta y frame sólo en RAM,
+navegador WebKit no persistente, conexión CDP explícita, búsqueda configurada,
+descarga al workspace y gestión nativa de permisos/revocación. Conserva una
+autoridad y recibos independientes del texto del modelo. Cancelar no demuestra
+terminar JavaScript ya despachado: callback y limpieza pendientes retienen el
+lane sin replay. No se promete un shell arbitrario ni todos los sitios posibles.
+El [registro JSON](PHASE_A_MAC_BROWSER_CLOSEOUT.json) fija los focales disponibles
+y sus hashes: 151 Python de patch/PTY/custodia, 52 de broker/permisos, selección
+integrada de 108 y 39 nativos de Mac/navegador/auditoría. Se solapan; no se suman.
+La ejecución completa pasó **2672 Python** en 488,93 s, sin cambios Python
+posteriores, y **392 Swift**, con una omisión opt-in y cero fallos, en 154,796 s.
+Se conservan los checkpoints previos de 2670 y 382. La corrección AX posterior
+separa ACK y postcondición: tiene cinco tests nuevos y un focal de 33 aprobado;
+los 392 anteriores no la cubren. Chrome real pasó su caso opt-in en 2,945 s.
+El [manifiesto](PHASE_A_MAC_BROWSER_SOURCE_MANIFEST.json) conserva 173 identidades
+históricas Python, el checkpoint de 355 y las 356 actuales verificadas.
+
+La app completó **55 operaciones por RPC firmado**, con WebKit y Chrome propios
+reales, patch, descarga, PTY y una apertura pública HTTPS por el proxy sin
+excepción sintética. No son 55 efectos exitosos: se conservan los negativos.
+Un corte posterior inmutable de 13 operaciones prueba AX entre procesos con
+texto Unicode/UTF-16, un frame real de 14.300 bytes y descarga publicada; el press
+anterior sigue incierto pese al contador externo 1 y no se repite. El SDK es
+sintético. La selección nativa de «Siempre» y su reutilización en otro chat ya
+pasaron por CUA y un observador sin decisiones RPC. El bundle 04 verificó una
+operación nueva 0→1 y frame de 12.352 bytes: el destino previo había salido y
+su regla no se heredó. La regla nueva persistió al reiniciar los mismos bytes;
+requiere resolver/ventana explícitos para revalidar handles nativos en RAM antes
+de la lectura automática autorizada. Revocación UI y rechazo posterior pasaron
+sin despacho; la limpieza dejó cero permisos y cero acciones sin resolver.
+La identidad dedicada con TCC efectivo usa la excepción puntual explícita del
+dueño y Touch ID suyo; las credenciales siguen reservadas al dueño.
+Paquete/smoke y hooks finales, commit/push y CI se registrarán tras observarlos;
+la estrategia usa el commit que contiene el cierre, sin autoatestiguar un SHA
+futuro. Este cierre es el snapshot previo al propio commit; sus resultados Git/CI
+posteriores figuran en los metadatos de hooks y la respuesta final. Este bloque
+no cambia la instalación personal ni completa la fase A.
 
 El prototipo original probaba serialización por sesión,
 propuesta/validación/autorización, resultado explícito, cancelación y asentamiento.

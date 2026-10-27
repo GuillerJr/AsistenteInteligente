@@ -51,7 +51,7 @@ public struct ApprovalOperation: Identifiable, Equatable, Sendable {
               expectedRunID == nil || expectedRunID == run,
               let name = value["tool_name"].string, (1...128).contains(name.utf8.count),
               let arguments = value["arguments_json"].string,
-              arguments.utf8.count <= 65_536,
+              arguments.utf8.count <= 131_072,
               let argumentData = arguments.data(using: .utf8),
               (try? JSONSerialization.jsonObject(with: argumentData)) is [String: Any],
               let digest = value["digest"].string, Self.hex(digest, count: 64),
@@ -71,11 +71,12 @@ public struct ApprovalOperation: Identifiable, Equatable, Sendable {
 
     public func isExpired(at now: Date) -> Bool { now >= expiresAt }
 
-    public func decision(allow: Bool) -> [String: RPCValue] {
+    public func decision(allow: Bool, remember: String = "operation") -> [String: RPCValue] {
         var parameters = scope.params
         parameters["approval_id"] = .string(id)
         parameters["digest"] = .string(digest)
         parameters["allow"] = .bool(allow)
+        if remember != "operation" { parameters["remember"] = .string(remember) }
         return parameters
     }
 

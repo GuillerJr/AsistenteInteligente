@@ -928,6 +928,8 @@ def service_blockers(service):
         codes.add("scheduler_active_or_cleanup")
     if service.process_tools and service.process_tools.has_running:
         codes.add("processes_active_or_cleanup")
+    if getattr(service, "native_broker", None) is not None and service.native_broker.blockers:
+        codes.add("native_automation_active_or_cleanup")
     channel = service._telegram_channel
     if channel is not None and (channel._lease is not None or channel.running
                                 or (channel._worker is not None and not channel._worker.done())
@@ -952,6 +954,7 @@ def service_blockers(service):
 # Reads may initialize SQLite or provider/pairing state, so ALL handlers are
 # admitted. This set only avoids false generation bumps for unchanged polling.
 READ_RPCS = frozenset({
+    "automation.status", "automation.poll", "automation.check", "automation.permissions.list",
     "sessions.context", "sessions.operation", "sessions.operations",
     "delegations.get", "delegations.lookup",
     "delegations.wait", "delegations.list", "clients.status",

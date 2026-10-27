@@ -15,14 +15,14 @@ import json
 import os
 import re
 import stat
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 from .runtime import ToolDefinition, ToolResult
-from .tools import ToolError, ToolSpec, check_tool_authority
+from .tools import ToolError, ToolSpec, check_tool_authority, revalidate_committed_tool_authority
 
 _PRIVATE = {
     "auth.json", "history", "history.json", "chat_history.json", "conversations.json",
@@ -91,9 +91,10 @@ class WorkspaceTools:
         self._definitions = tuple(ToolDefinition(
             name, lambda arguments, name=name: self._validate(name, arguments),
             lambda arguments, cancellation, name=name: self._execute(name, arguments, cancellation),
-            requires_confirmation=name in {"workspace_write", "workspace_edit", "workspace_mkdir"},
+            requires_confirmation=name in {"workspace_write", "workspace_edit", "workspace_mkdir",
+                                           "workspace_patch"},
         ) for name in ("workspace_list", "workspace_read", "workspace_write", "workspace_edit",
-                       "workspace_mkdir"))
+                       "workspace_mkdir", "workspace_patch"))
 
     @property
     def root(self) -> Path:
@@ -141,22 +142,26 @@ class WorkspaceTools:
             if (original.st_dev, original.st_ino) != (current.st_dev, current.st_ino):
                 raise WorkspaceError("workspace_parent_changed")
 
-    def _read(self, parent: int, name: str) -> tuple[bytes, os.stat_result]:
+    def _read(self, parent: int, name: str, *, limit: int | None = None
+              ) -> tuple[bytes, os.stat_result]:
+        limit = self.max_file_bytes if limit is None else limit
+        if type(limit) is not int or not 1 <= limit <= 65536:
+            raise WorkspaceError("workspace_file_limit")
         descriptor = os.open(name, _FILE, dir_fd=parent)
         try:
             before = os.fstat(descriptor)
             if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.getuid()
                     or before.st_nlink != 1):
                 raise WorkspaceError("workspace_unsafe_file")
-            if before.st_size > self.max_file_bytes:
+            if before.st_size > limit:
                 raise WorkspaceError("workspace_file_limit")
             chunks, size = [], 0
             while True:
-                chunk = os.read(descriptor, min(4096, self.max_file_bytes + 1 - size))
+                chunk = os.read(descriptor, min(4096, limit + 1 - size))
                 if not chunk:
                     break
                 size += len(chunk)
-                if size > self.max_file_bytes:
+                if size > limit:
                     raise WorkspaceError("workspace_file_limit")
                 chunks.append(chunk)
             if _fingerprint(before) != _fingerprint(os.fstat(descriptor)):
@@ -176,7 +181,81 @@ class WorkspaceTools:
                 or not info.st_mode & stat.S_IWUSR):
             raise WorkspaceError("workspace_version_conflict")
 
+    def publish_download(self, path: str, payload: bytes, *, arguments: Mapping,
+                         guard: Callable[[], None]) -> dict:
+        """Publish one reviewed browser download; never overwrite or infer a path.
+
+        The browser tool already committed its exact authority before its native
+        fetch. Continuation must retain that same lease, plus the host's fresh
+        profile/target/cancellation guard; no second tool permission is created.
+        """
+        parts = _parts(path)
+        if (not callable(guard) or not isinstance(arguments, Mapping)
+                or arguments.get("path") != path or type(payload) is not bytes
+                or len(payload) > 65536):
+            raise WorkspaceError("workspace_download_invalid")
+        def check():
+            revalidate_committed_tool_authority("browser_download", arguments)
+            guard()
+            revalidate_committed_tool_authority("browser_download", arguments)
+        check()
+        with self._parent(parts[:-1]) as parent:
+            def absent():
+                try:
+                    os.stat(parts[-1], dir_fd=parent, follow_symlinks=False)
+                except FileNotFoundError:
+                    return
+                raise WorkspaceError("workspace_download_destination_exists")
+            absent()
+            temporary = ".jarvis-tmp-" + uuid4().hex
+            fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                         0o600, dir_fd=parent)
+            published, stage_exists = False, True
+            try:
+                view = memoryview(payload)
+                while view:
+                    count = os.write(fd, view)
+                    if count <= 0:
+                        raise OSError("short download write")
+                    view = view[count:]
+                os.fsync(fd)
+                original = os.fstat(fd)
+                self._same_parent(parts[:-1], parent)
+                absent()
+                check()
+                os.link(temporary, parts[-1], src_dir_fd=parent, dst_dir_fd=parent,
+                        follow_symlinks=False)
+                published = True
+                os.unlink(temporary, dir_fd=parent)
+                stage_exists = False
+                os.fsync(parent)
+                self._same_parent(parts[:-1], parent)
+                actual, current = self._read(parent, parts[-1], limit=65536)
+                if (actual != payload or (current.st_dev, current.st_ino)
+                        != (original.st_dev, original.st_ino)
+                        or stat.S_IMODE(current.st_mode) != 0o600):
+                    raise WorkspaceError("workspace_download_verification_failed")
+                return {"path": path, "bytes": len(actual),
+                        "sha256": hashlib.sha256(actual).hexdigest()}
+            except Exception as error:
+                if published:
+                    raise _Uncertain("workspace_download_uncertain") from error
+                raise
+            finally:
+                os.close(fd)
+                if stage_exists:
+                    try:
+                        os.unlink(temporary, dir_fd=parent)
+                    except FileNotFoundError:
+                        pass
+                    except OSError as error:
+                        raise _Uncertain("workspace_download_cleanup_uncertain") from error
+
     def _validate(self, name: str, arguments: Mapping[str, Any]) -> None:
+        if name == "workspace_patch":
+            from .workspace_patch import validate_patch
+            validate_patch(arguments)
+            return
         if not isinstance(arguments, Mapping):
             raise WorkspaceError("invalid_workspace_arguments")
         allowed = {
@@ -304,6 +383,9 @@ class WorkspaceTools:
 
     async def _execute(self, name: str, arguments: Mapping[str, Any],
                        cancellation: asyncio.Event) -> ToolResult:
+        if name == "workspace_patch":
+            from .workspace_patch import execute_patch
+            return execute_patch(self, arguments, cancellation)
         try:
             self._validate(name, arguments)
             if cancellation.is_set():
@@ -363,6 +445,14 @@ class WorkspaceTools:
              ["path", "old_text", "new_text", "expected_sha256"]),
             ("workspace_mkdir", "Crea un directorio explícito tras la aprobación del dueño.",
              {"path": path}, ["path"]),
+            ("workspace_patch", "Aplica diff unificado UTF-8 exacto sobre hasta 16 archivos. "
+             "---/+++ y @@ con conteos; admite crear, editar, borrar o mover. "
+             "expected_sha256 debe incluir cada ruta: hash de origen y null para destino nuevo. "
+             "Publicación atómica por archivo; una operación parcial es incierta y no se repite.",
+             {"patch": {"type": "string", "maxLength": 96000},
+              "expected_sha256": {"type": "object", "maxProperties": 32,
+                                  "additionalProperties": {"type": ["string", "null"]}}},
+             ["patch", "expected_sha256"]),
         ]
         return tuple(ToolSpec(name, description, {"type": "object", "properties": properties,
                                                   "required": required,

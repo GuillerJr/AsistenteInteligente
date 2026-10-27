@@ -44,6 +44,12 @@ private struct ApprovalCard: View {
                     Button("Permitir esta operación") { Task { await access.decide(operation, allow: true) } }
                         .buttonStyle(.borderedProminent)
                         .disabled(expired || access.decidingIDs.contains(operation.id))
+                    Menu("Recordar permiso…") {
+                        Button("En esta conversación") { Task { await access.decide(operation, allow: true, remember: "session") } }
+                        if !operation.scope.temporary {
+                            Button("Siempre para este destino") { Task { await access.decide(operation, allow: true, remember: "always") } }
+                        }
+                    }.disabled(expired || access.decidingIDs.contains(operation.id))
                 }
             }
             .padding(14).background(.quaternary, in: .rect(cornerRadius: 12))

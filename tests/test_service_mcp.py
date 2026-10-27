@@ -24,6 +24,10 @@ BASE_TOOL_NAMES = {
     "agents_available", "agents_delegate", "workspace_list", "workspace_read",
     "workspace_write", "workspace_edit", "workspace_mkdir", "process_run",
     "process_poll", "process_send", "process_stop",
+    "workspace_patch", "process_resize", "process_signal",
+    "desktop_resolve", "desktop_windows", "desktop_observe", "desktop_action",
+    "browser_open", "browser_attach", "browser_observe", "browser_action",
+    "browser_navigate", "browser_history", "browser_close", "browser_search", "browser_download",
 }
 
 SERVER = r"""

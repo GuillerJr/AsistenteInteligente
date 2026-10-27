@@ -3307,6 +3307,144 @@
         "Static source and AST relationships do not prove OpenClaw runtime behavior.",
         "Code, fixtures and UI implementation are original Jarvis sources; no reference implementation or resource is imported."
       ]
+    },
+    {
+      "id": "OC-22A",
+      "topic": "strict patch operations and bounded PTY lifecycle",
+      "source_paths": [
+        "package.json",
+        "src/agents/apply-patch-parse.ts",
+        "src/agents/apply-patch-file-ops.ts",
+        "src/process/terminal-pty.ts",
+        "src/process/terminal-pty-worker.ts"
+      ],
+      "parent_evidence_id": "ev_e6487a9f6786e546c9ba11309b8d8f72bc80eafb6eff7e15a2207da4c4dc654e",
+      "summary_evidence_id": "ev_eb99fd1cfeabd10b2ffde9f3fc7267ef9728879356aacdbb1ea9e20bcac6ba38",
+      "partition_sha256": "5711b73988bff2067c40c78b65e46b9759dfbba290398f9c64292aa0e4eb6c64",
+      "coverage": {
+        "application": "partial",
+        "semantic": "unknown",
+        "application_unknowns": 0,
+        "semantic_unknowns": 720,
+        "selected_typescript_sources": 4,
+        "unselected_files": 0,
+        "execution_observed": false
+      },
+      "execution_observed": false,
+      "provenance_file": "REA_PART22A_SUMMARY.json",
+      "acquisition_method": "git show commit:path into fresh read-only private partition",
+      "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "semantic_unknowns": 720,
+      "full_evidence_path": "/private/tmp/jarvis-rea-22a-evidence.json",
+      "export_sha256": "5200928e34dcb4e94b64b3cc3ef28dd831db0601735cedaa7597a56c65886e36",
+      "limitations": [
+        "Selected exact Git blobs only; not a whole repository review.",
+        "Inert source/AST observations do not establish reference runtime behavior.",
+        "Original Jarvis code uses own contracts; no OpenClaw implementation or resources are imported."
+      ]
+    },
+    {
+      "id": "OC-22B1",
+      "topic": "desktop source and dedicated invocation ownership",
+      "source_paths": [
+        "package.json",
+        "src/agents/tools/screen-tool.ts",
+        "src/agents/tools/nodes-tool-invoke.ts",
+        "packages/gateway-protocol/src/schema/desktop.ts"
+      ],
+      "parent_evidence_id": "ev_1ce045e1d2808001122ef58726f75d575bc3e68e05939b50675135ebcf9400df",
+      "summary_evidence_id": "ev_3b41e5bc87946147a9aa5e372c5fce245d77a4aad493e691b7f93a3693c51ec8",
+      "partition_sha256": "be384fc097ad481bd0794192fa16d74b66ab7bbb26903fc5e1cccd4c2b1eea96",
+      "coverage": {
+        "application": "partial",
+        "semantic": "unknown",
+        "application_unknowns": 1,
+        "semantic_unknowns": 271,
+        "selected_typescript_sources": 3,
+        "unselected_files": 1,
+        "execution_observed": false
+      },
+      "execution_observed": false,
+      "provenance_file": "REA_PART22B_SUMMARY.json",
+      "acquisition_method": "Read-only git show of exact blobs into new immutable private partitions; original clone unchanged.",
+      "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "semantic_unknowns": 271,
+      "full_evidence_path": "/private/tmp/jarvis-rea-part22b-evidence.json",
+      "export_sha256": "31779b84ad580a385fd2d87368c186e37d97930f244329c9c6ffc5c603690210",
+      "limitations": [
+        "Selected exact Git blobs only; not a whole repository review.",
+        "Inert source/AST observations do not establish reference runtime behavior.",
+        "Original Jarvis code uses own contracts; no OpenClaw implementation or resources are imported."
+      ]
+    },
+    {
+      "id": "OC-22B2",
+      "topic": "computer target references, frame generations and dedicated control",
+      "source_paths": [
+        "package.json",
+        "extensions/cua-computer/src/action-targets.ts",
+        "extensions/cua-computer/src/execution-state.ts",
+        "extensions/cua-computer/src/frame.ts",
+        "src/agents/tools/computer-tool-control.ts"
+      ],
+      "parent_evidence_id": "ev_c52b7b4f29b8e20a45d473d7e54b24a8b964f6e719578f6a6060c1a1a8dda907",
+      "summary_evidence_id": "ev_ba64df8502d771c8cdd39917f5f6f281a48ca777bcb23bc1271e624e6961d923",
+      "partition_sha256": "1c9c23bd17452efb59ec17a4fa87d8a5cc9ba8f50a8a4183b91b414dfdf65f73",
+      "coverage": {
+        "application": "partial",
+        "semantic": "unknown",
+        "application_unknowns": 1,
+        "semantic_unknowns": 331,
+        "selected_typescript_sources": 4,
+        "unselected_files": 1,
+        "execution_observed": false
+      },
+      "execution_observed": false,
+      "provenance_file": "REA_PART22B_SUMMARY.json",
+      "acquisition_method": "Read-only git show of exact blobs into new immutable private partitions; original clone unchanged.",
+      "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "semantic_unknowns": 331,
+      "full_evidence_path": "/private/tmp/jarvis-rea-part22b-control-evidence.json",
+      "export_sha256": "bd25790c7b13ed447fb3ece0bf09acef0aa6d047fe41dd2e4354bcb1578a51f1",
+      "limitations": [
+        "Selected exact Git blobs only; not a whole repository review.",
+        "Inert source/AST observations do not establish reference runtime behavior.",
+        "Original Jarvis code uses own contracts; no OpenClaw implementation or resources are imported."
+      ]
+    },
+    {
+      "id": "OC-22C",
+      "topic": "browser route binding, bounded untrusted snapshot, target filter and action lifecycle",
+      "source_paths": [
+        "package.json",
+        "extensions/browser/src/browser-tool-binding.ts",
+        "extensions/browser/src/browser-tool.snapshot.ts",
+        "extensions/browser/src/browser/cdp-target-filter.ts",
+        "extensions/browser/src/browser/client-actions.ts"
+      ],
+      "parent_evidence_id": "ev_3c7e85f98d2003f2c62bf8ddd2c7391d57822db6e0cfa4b98c74ac78a1cc2355",
+      "summary_evidence_id": "ev_54b251888f13120cddb4952931268256a959114a52b00fa81095901620c012cb",
+      "partition_sha256": "a378eaa6441e917f4d6176a613c6eb15d1bc33304f43ec078b0c3cbbb2d8fab4",
+      "coverage": {
+        "application": "complete within the five-file partition only",
+        "semantic": "unknown",
+        "semantic_unknowns": 631,
+        "selected_typescript_sources": 4,
+        "whole_reference_complete": false,
+        "execution_observed": false
+      },
+      "execution_observed": false,
+      "provenance_file": "REA_PART22C_SUMMARY.json",
+      "acquisition_method": "git show exact immutable committed blobs to a private readonly selected partition",
+      "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "semantic_unknowns": 631,
+      "full_evidence_path": "/private/tmp/jarvis-rea-22c-evidence.json",
+      "export_sha256": "fe5463ddda6a2e8212d4850bb4fe25f3705b0cc456d6fd52b675fff11c0664c9",
+      "limitations": [
+        "Selected exact Git blobs only; not a whole repository review.",
+        "Inert source/AST observations do not establish reference runtime behavior.",
+        "Original Jarvis code uses own contracts; no OpenClaw implementation or resources are imported."
+      ]
     }
   ],
   "remaining_parts": [
@@ -3316,9 +3454,10 @@
       "status": "pending",
       "original_plan_id": "OC-01B",
       "reviewed_subsets": [
-        "OC-21C"
+        "OC-21C",
+        "OC-22A"
       ],
-      "remaining_note": "OC-21C adds a fixed static subset for subagent controls, owner scope, steering identity and restart helpers. Remaining orchestration, resources, runtime dependencies and reference settlement behavior are unqualified."
+      "remaining_note": "OC-21C adds a fixed static subset for subagent controls, owner scope, steering identity and restart helpers. Remaining orchestration, resources, runtime dependencies and reference settlement behavior are unqualified. OC-22A adds a selected PTY/worker lifecycle subset; remaining orchestration, execution resources and full settlement behavior remain unqualified."
     },
     {
       "id": "SCOPE-02",
@@ -3327,9 +3466,10 @@
       "original_plan_id": "OC-02",
       "reviewed_subsets": [
         "OC-21A",
-        "OC-21B"
+        "OC-21B",
+        "OC-22B1"
       ],
-      "remaining_note": "OC-21A/21B add client identity/lock-recovery and compaction/rewind/fork source subsets. The complete gateway/API, ownership/session handlers and unselected dependencies remain unreviewed or unqualified."
+      "remaining_note": "OC-21A/21B add client identity/lock-recovery and compaction/rewind/fork source subsets. The complete gateway/API, ownership/session handlers and unselected dependencies remain unreviewed or unqualified. OC-22B1 adds source and dedicated desktop invocation shapes; full gateway/API, authentication routes and ownership handlers remain unreviewed or unqualified."
     },
     {
       "id": "SCOPE-03",
@@ -3346,7 +3486,14 @@
       "id": "SCOPE-04",
       "scope": "MCP, plugins, schemas and all execution admission paths",
       "status": "pending",
-      "original_plan_id": "OC-04"
+      "original_plan_id": "OC-04",
+      "reviewed_subsets": [
+        "OC-22A",
+        "OC-22B1",
+        "OC-22B2",
+        "OC-22C"
+      ],
+      "remaining_note": "Selected sources inform dedicated admission boundaries and source/target binding only. All execution admission paths, MCP/plugins and dependencies remain open."
     },
     {
       "id": "SCOPE-05",
@@ -3365,7 +3512,14 @@
       "id": "SCOPE-06",
       "scope": "Computer use, browser, native devices and platform permissions",
       "status": "pending",
-      "original_plan_id": "OC-06"
+      "original_plan_id": "OC-06",
+      "reviewed_subsets": [
+        "OC-22A",
+        "OC-22B1",
+        "OC-22B2",
+        "OC-22C"
+      ],
+      "remaining_note": "Selected patch/PTY, desktop target/reference and browser snapshot/action sources are now traced statically. Native reference binaries/drivers, all computer/browser variants, permissions and unselected dependencies remain unqualified."
     },
     {
       "id": "SCOPE-07",
@@ -3377,7 +3531,13 @@
       "id": "SCOPE-08",
       "scope": "Native/web/mobile interface and event/state synchronization",
       "status": "pending",
-      "original_plan_id": "OC-08"
+      "original_plan_id": "OC-08",
+      "reviewed_subsets": [
+        "OC-22B1",
+        "OC-22B2",
+        "OC-22C"
+      ],
+      "remaining_note": "Selected requesting-client presentation and observation identity sources are static evidence. They do not qualify the complete UI, client runtime or platform event/state behavior."
     },
     {
       "id": "SCOPE-09",
@@ -3399,9 +3559,13 @@
         "OC-18",
         "OC-19",
         "OC-20",
-        "OC-21A"
+        "OC-21A",
+        "OC-22A",
+        "OC-22B1",
+        "OC-22B2",
+        "OC-22C"
       ],
-      "remaining_note": "Static subsets add WAL prefixes, file walking, update intents/pointers/launchers and dead-lock recovery identity. Remaining helpers, distribution/authenticity and full reference runtime are unqualified; Jarvis implementations and native qualification are tracked separately."
+      "remaining_note": "Static subsets add WAL prefixes, file walking, update intents/pointers/launchers and dead-lock recovery identity. Remaining helpers, distribution/authenticity and full reference runtime are unqualified; Jarvis implementations and native qualification are tracked separately. Selected source subsets inform resource identity, bounded input and action lifecycle. This does not certify full sandbox, secrets, distribution, recovery or reference runtime behavior."
     },
     {
       "id": "SCOPE-11",
@@ -3410,14 +3574,21 @@
       "original_plan_id": "OC-11"
     }
   ],
-  "rea_parsed_unique_source_files": 90,
+  "rea_parsed_unique_source_files": 105,
   "remaining_parts_id_note": "Los scopes restantes usan SCOPE para no confundir etiquetas del plan inicial con lotes OC completados. Un lote estático no cierra un scope.",
   "rea_parsed_unique_source_paths": [
     "cli-parent-lifetime.mjs",
+    "extensions/browser/src/browser-tool-binding.ts",
+    "extensions/browser/src/browser-tool.snapshot.ts",
+    "extensions/browser/src/browser/cdp-target-filter.ts",
+    "extensions/browser/src/browser/client-actions.ts",
     "extensions/codex/src/app-server/connection-health.ts",
     "extensions/codex/src/app-server/dynamic-tool-response-state.ts",
     "extensions/codex/src/app-server/dynamic-tool-result-projection.ts",
     "extensions/codex/src/app-server/thread-ownership.ts",
+    "extensions/cua-computer/src/action-targets.ts",
+    "extensions/cua-computer/src/execution-state.ts",
+    "extensions/cua-computer/src/frame.ts",
     "extensions/memory-core/src/memory/manager-chunk-writer.ts",
     "extensions/memory-core/src/memory/manager-search-schema.ts",
     "extensions/memory-core/src/memory/manager-search-scorer.ts",
@@ -3432,6 +3603,7 @@
     "extensions/telegram/src/update-offset-store.ts",
     "extensions/telegram/update-offset-runtime-api.ts",
     "gateway-shutdown-budget.mjs",
+    "packages/gateway-protocol/src/schema/desktop.ts",
     "packages/memory-host-sdk/src/host/memory-schema-base.ts",
     "packages/memory-host-sdk/src/host/memory-schema-provenance.ts",
     "packages/memory-host-sdk/src/host/memory-schema-storage-migration.ts",
@@ -3442,6 +3614,8 @@
     "src/agents/agent-scope.ts",
     "src/agents/agent-tools.before-tool-call.policy.ts",
     "src/agents/agent-tools.before-tool-call.wrapper.ts",
+    "src/agents/apply-patch-file-ops.ts",
+    "src/agents/apply-patch-parse.ts",
     "src/agents/compaction.ts",
     "src/agents/embedded-agent-runner/run-orchestrator.ts",
     "src/agents/mcp-client-elicitation.ts",
@@ -3452,6 +3626,9 @@
     "src/agents/subagents/registry/subagent-registry-restart-recovery-helpers.ts",
     "src/agents/tool-fs-policy.types.ts",
     "src/agents/tool-policy-pipeline.ts",
+    "src/agents/tools/computer-tool-control.ts",
+    "src/agents/tools/nodes-tool-invoke.ts",
+    "src/agents/tools/screen-tool.ts",
     "src/agents/tools/subagents-tool.ts",
     "src/commands/backup-restore.ts",
     "src/commands/backup-sqlite.ts",
@@ -3495,6 +3672,8 @@
     "src/process/supervisor/cancellation-policy.ts",
     "src/process/supervisor/service-child-cleanup-deadline.ts",
     "src/process/supervisor/supervisor.ts",
+    "src/process/terminal-pty-worker.ts",
+    "src/process/terminal-pty.ts",
     "src/shared/device-auth.ts",
     "src/skills/library/authoring.ts",
     "src/skills/library/import.kernel.ts",

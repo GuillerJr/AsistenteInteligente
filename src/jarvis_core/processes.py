@@ -15,6 +15,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -25,7 +26,13 @@ from pathlib import Path
 from uuid import uuid4
 
 from .runtime import ToolDefinition, ToolResult
-from .tools import ToolCancelled, ToolError, ToolSpec, check_tool_authority
+from .tools import (
+    ToolCancelled,
+    ToolError,
+    ToolSpec,
+    check_tool_authority,
+    revalidate_committed_tool_authority,
+)
 from .workspace import _PRIVATE, WorkspaceError, WorkspaceTools
 
 _ID = re.compile(r"[a-f0-9]{32}")
@@ -103,7 +110,7 @@ def _runtime_roots(executable: Path) -> tuple[Path, ...]:
     return tuple(sorted(roots))
 
 
-def _mac_profile(root: Path, executable: Path) -> str:
+def _mac_profile(root: Path, executable: Path, pty_path: str | None = None) -> str:
     readable = list(_SYSTEM_READS)
     readable.extend(str(item) for item in _runtime_roots(executable))
     filters = " ".join(f"(subpath {json.dumps(path, ensure_ascii=False)})" for path in readable)
@@ -115,6 +122,12 @@ def _mac_profile(root: Path, executable: Path) -> str:
         r".*[.]([pP]12|[pP][fF][xX]|[kK][eE][yY])$",
     ]
     deny_filters = " ".join("#" + json.dumps(value) for value in (*private, *extra))
+    terminal = ""
+    if pty_path is not None:
+        if re.fullmatch(r"/dev/ttys[0-9A-Za-z]+", pty_path) is None:
+            raise ProcessError("process_pty_path_invalid")
+        terminal = ('(allow file-read* file-write* file-ioctl '
+                    f'(literal {json.dumps(pty_path)}) (literal "/dev/tty"))')
     return (
         "(version 1)(deny default)(allow process-exec)(deny process-fork)"
         "(allow sysctl-read)(allow file-read-metadata)"
@@ -124,6 +137,7 @@ def _mac_profile(root: Path, executable: Path) -> str:
         '(literal "/private/etc/localtime"))'
         f"(allow file-read* file-write* (subpath {json.dumps(str(root), ensure_ascii=False)}))"
         f"(deny file-read* file-write* (regex {deny_filters}))"
+        + terminal
     )
 
 
@@ -144,6 +158,7 @@ class _Entry:
     pump_tasks: tuple[asyncio.Task, ...] = ()
     watcher: asyncio.Task | None = None
     timer: asyncio.Task | None = None
+    terminal: object | None = None
 
 
 class ProcessTools:
@@ -238,6 +253,8 @@ class ProcessTools:
             "max_wall_seconds": self.max_wall_seconds,
             "max_processes": self.max_processes,
             "max_output_bytes": self.max_output_bytes,
+            "pty_available": self._helper is not None and self._backend == "macos_seatbelt",
+            "pty_confinement": "single_process_same_sandbox",
         }
 
     @property
@@ -302,14 +319,20 @@ class ProcessTools:
         if not isinstance(arguments, Mapping):
             raise ProcessError("process_arguments_invalid")
         allowed = {
-            "process_run": {"argv", "wait_ms", "timeout_seconds"},
+            "process_run": {"argv", "wait_ms", "timeout_seconds", "pty", "rows", "cols"},
             "process_poll": {"process_id", "cursor"},
             "process_send": {"process_id", "text", "close_stdin"},
             "process_stop": {"process_id"},
+            "process_resize": {"process_id", "rows", "cols"},
+            "process_signal": {"process_id", "signal"},
         }[name]
         required = {"argv"} if name == "process_run" else {"process_id"}
         if name == "process_send":
             required.add("text")
+        if name == "process_resize":
+            required.update(("rows", "cols"))
+        if name == "process_signal":
+            required.add("signal")
         if set(arguments) - allowed or required - set(arguments):
             raise ProcessError("process_arguments_invalid")
         if name == "process_run":
@@ -335,6 +358,10 @@ class ProcessTools:
                 or not 0.05 <= timeout <= 300
             ):
                 raise ProcessError("process_deadline_invalid")
+            if type(arguments.get("pty", False)) is not bool:
+                raise ProcessError("process_pty_invalid")
+            if ({"rows", "cols"} & arguments.keys()) and not arguments.get("pty", False):
+                raise ProcessError("process_pty_required")
         else:
             if (
                 not isinstance(arguments["process_id"], str)
@@ -351,6 +378,14 @@ class ProcessTools:
             or type(arguments.get("close_stdin", False)) is not bool
         ):
             raise ProcessError("process_stdin_invalid")
+        for key in {"rows", "cols"} & arguments.keys():
+            if type(arguments[key]) is not int or not 1 <= arguments[key] <= 500:
+                raise ProcessError("process_pty_size_invalid")
+        if name == "process_signal" and (
+            not isinstance(arguments["signal"], str)
+            or arguments["signal"] not in {"interrupt", "terminate"}
+        ):
+            raise ProcessError("process_signal_invalid")
 
     def definitions(self) -> tuple[ToolDefinition, ...]:
         return tuple(
@@ -362,7 +397,8 @@ class ProcessTools:
                 ),
                 requires_confirmation=name != "process_poll",
             )
-            for name in ("process_run", "process_poll", "process_send", "process_stop")
+            for name in ("process_run", "process_poll", "process_send", "process_stop",
+                         "process_resize", "process_signal")
         )
 
     def specs(self) -> tuple[ToolSpec, ...]:
@@ -379,14 +415,19 @@ class ProcessTools:
             "cursor": {"type": "integer", "minimum": 0, "maximum": 65536},
             "text": {"type": "string", "maxLength": 4096},
             "close_stdin": {"type": "boolean"},
+            "pty": {"type": "boolean"},
+            "rows": {"type": "integer", "minimum": 1, "maximum": 500},
+            "cols": {"type": "integer", "minimum": 1, "maximum": 500},
+            "signal": {"type": "string", "enum": ["interrupt", "terminate"]},
         }
         entries = (
             (
                 "process_run",
                 "Ejecuta argv exacto en la carpeta con sandbox sin red. "
                 "Requiere aprobación. Devuelve identidad propia si sigue activo; "
-                "exit 0 no verifica efectos.",
-                ("argv", "wait_ms", "timeout_seconds"),
+                "exit 0 no verifica efectos. pty:true usa una terminal propia en macOS, "
+                "con rows/cols entre 1 y 500; conserva la prohibición de fork y red.",
+                ("argv", "wait_ms", "timeout_seconds", "pty", "rows", "cols"),
                 ("argv",),
             ),
             (
@@ -398,7 +439,8 @@ class ProcessTools:
             (
                 "process_send",
                 "Envía texto exacto a stdin de un proceso de este chat con aprobación. "
-                "close_stdin cierra su entrada después de enviar; no reintenta entregas inciertas.",
+                "close_stdin cierra su entrada después de enviar; en PTY envía EOF canónico "
+                "y cierra la entrada lógica; rechaza modo raw. No reintenta entregas inciertas.",
                 ("process_id", "text", "close_stdin"),
                 ("process_id", "text"),
             ),
@@ -409,6 +451,12 @@ class ProcessTools:
                 ("process_id",),
                 ("process_id",),
             ),
+            ("process_resize", "Cambia filas y columnas de un PTY propio de este chat, "
+             "con aprobación exacta. No cambia una Terminal del dueño.",
+             ("process_id", "rows", "cols"), ("process_id", "rows", "cols")),
+            ("process_signal", "Envía SIGINT o SIGTERM al proceso propio con aprobación. "
+             "Aceptar la señal no confirma su salida ni revierte efectos.",
+             ("process_id", "signal"), ("process_id", "signal")),
         )
         return tuple(
             ToolSpec(
@@ -424,7 +472,7 @@ class ProcessTools:
             for name, description, keys, required in entries
         )
 
-    def _command(self, argv: tuple[str, ...]) -> tuple[str, ...]:
+    def _command(self, argv: tuple[str, ...], pty_path: str | None = None) -> tuple[str, ...]:
         if self._helper is None:
             raise ProcessError("process_sandbox_unavailable")
         executable = Path(argv[0]).resolve(strict=True)
@@ -459,7 +507,7 @@ class ProcessTools:
             return (
                 self._helper,
                 "-p",
-                _mac_profile(self.workspace.root, executable),
+                _mac_profile(self.workspace.root, executable, pty_path),
                 "/bin/sh",
                 "-c",
                 _WRAPPER,
@@ -523,6 +571,19 @@ class ProcessTools:
                 self._signal(entry)
             await asyncio.sleep(0)
 
+    async def _pump_terminal(self, entry: _Entry) -> None:
+        assert entry.terminal is not None
+        while chunk := await entry.terminal.read(4096):
+            entry.output_seen += len(chunk)
+            entry.digest.update(chunk)
+            room = self.max_output_bytes - len(entry.output)
+            entry.output.extend(chunk[:max(room, 0)])
+            if len(chunk) > room:
+                entry.output_truncated = True
+                entry.reason = entry.reason or "output_limit"
+                self._signal(entry)
+            await asyncio.sleep(0)
+
     @staticmethod
     def _signal(entry: _Entry) -> None:
         if entry.process.returncode is None:
@@ -561,6 +622,9 @@ class ProcessTools:
                 entry.stdin_closed = True
                 entry.process.stdin.close()
             if entry.process.returncode is not None:
+                if entry.terminal:
+                    entry.terminal.close()
+                    entry.stdin_closed = True
                 entry.finished.set()
 
     async def _deadline(self, entry: _Entry, seconds: float) -> None:
@@ -582,7 +646,7 @@ class ProcessTools:
             if not entry.finished.is_set()
             else entry.reason or ("completed" if entry.process.returncode == 0 else "failed")
         )
-        return {
+        value = {
             "process_id": process_id,
             "state": state,
             "running": not entry.finished.is_set(),
@@ -601,6 +665,13 @@ class ProcessTools:
             "verification": "process_state_only",
             "effects_independently_verified": False,
         }
+        if entry.terminal is not None:
+            value["terminal"] = {
+                "pty": True, "rows": entry.terminal.rows, "cols": entry.terminal.cols,
+                "controlling_terminal": True, "input_closed": entry.stdin_closed,
+                "stderr": "merged_with_stdout", "confinement": "single_process_same_sandbox",
+            }
+        return value
 
     def list_processes(self, scope: str) -> tuple[dict, ...]:
         self._owner(scope)
@@ -645,11 +716,21 @@ class ProcessTools:
         self._check_workspace()
         # This runs in the inherited authority context immediately before Popen.
         # The caller shields it until the new process has an owned cleanup entry.
-        check_tool_authority("process_run", args, commit=True)
-        process = await asyncio.create_subprocess_exec(
-            *command,
-            cwd=self.workspace.root,
-            env={
+        terminal = None
+        try:
+            if args.get("pty", False):
+                if self._backend != "macos_seatbelt":
+                    raise ProcessError("process_pty_unavailable")
+                from .process_pty import PTY_BOOTSTRAP, PTYChannel
+                terminal = PTYChannel(args.get("rows", 24), args.get("cols", 80))
+                command = self._command(tuple(args["argv"]), terminal.path)
+                command = (str(Path(sys.executable).resolve()), "-I", "-S", "-c",
+                           PTY_BOOTSTRAP, *command)
+            check_tool_authority("process_run", args, commit=True)
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                cwd=self.workspace.root,
+                env={
                 "HOME": str(self.workspace.root),
                 "TMPDIR": str(self.workspace.root),
                 "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
@@ -657,21 +738,31 @@ class ProcessTools:
                 "PYTHONUTF8": "1",
                 "PYTHONNOUSERSITE": "1",
                 "PYTHONDONTWRITEBYTECODE": "1",
-            },
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            start_new_session=True,
-            pass_fds=self.child_custody() if self.child_custody else (),
-            limit=16384,
-        )
+                **({"TERM": "xterm-256color"} if terminal else {}),
+                },
+                stdin=terminal.slave if terminal else asyncio.subprocess.PIPE,
+                stdout=terminal.slave if terminal else asyncio.subprocess.PIPE,
+                stderr=terminal.slave if terminal else asyncio.subprocess.PIPE,
+                start_new_session=True,
+                pass_fds=self.child_custody() if self.child_custody else (),
+                limit=16384,
+            )
+        except BaseException:
+            if terminal:
+                terminal.close()
+            raise
         entry = _Entry(uuid4().hex, owner, process, time.time_ns(), tuple(args["argv"]))
+        entry.terminal = terminal
         self._entries[entry.process_id] = entry
-        assert process.stdout is not None and process.stderr is not None
-        entry.pump_tasks = tuple(
-            asyncio.create_task(self._pump(entry, stream))
-            for stream in (process.stdout, process.stderr)
-        )
+        if terminal:
+            terminal.close_slave()
+            entry.pump_tasks = (asyncio.create_task(self._pump_terminal(entry)),)
+        else:
+            assert process.stdout is not None and process.stderr is not None
+            entry.pump_tasks = tuple(
+                asyncio.create_task(self._pump(entry, stream))
+                for stream in (process.stdout, process.stderr)
+            )
         entry.timer = asyncio.create_task(
             self._deadline(
                 entry,
@@ -686,6 +777,8 @@ class ProcessTools:
     async def _run(self, args: Mapping, cancellation: asyncio.Event, owner: str) -> ToolResult:
         if self._closed or owner in self._closing_scopes:
             raise ProcessError("process_manager_closed")
+        if args.get("pty", False) and self._backend != "macos_seatbelt":
+            raise ProcessError("process_pty_unavailable")
         # Retain finite result history; only settled entries can be evicted.
         if len(self._entries) >= 64:
             oldest = next(
@@ -724,8 +817,8 @@ class ProcessTools:
                     await self._stop(entry, "cancelled")
                     raise asyncio.CancelledError
             finally:
-                for task in (cancelled, finished):
-                    task.cancel()
+                for waiter in (cancelled, finished):
+                    waiter.cancel()
                 await asyncio.gather(cancelled, finished, return_exceptions=True)
             return self._receipt("process_run", entry)
         except asyncio.CancelledError:
@@ -792,19 +885,49 @@ class ProcessTools:
                     dispatched = True
                     await self._stop(entry, "stopped")
                 return self._receipt(name, entry)
-            if entry.finished.is_set() or entry.stdin_closed or not entry.process.stdin:
+            if name in {"process_resize", "process_signal"}:
+                if entry.finished.is_set() or entry.process.returncode is not None:
+                    raise ProcessError("process_already_finished")
+                if name == "process_resize" and entry.terminal is None:
+                    raise ProcessError("process_pty_required")
+                check_tool_authority(name, args, commit=True)
+                dispatched = True
+                if name == "process_resize":
+                    entry.terminal.resize(args["rows"], args["cols"])
+                else:
+                    entry.process.send_signal({"interrupt": signal.SIGINT,
+                                               "terminate": signal.SIGTERM}[args["signal"]])
+                data = self.poll(owner, entry.process_id)
+                data["control_accepted"] = name
+                return ToolResult(name, True, False, output=json.dumps(data, ensure_ascii=False))
+            if (entry.finished.is_set() or entry.stdin_closed
+                    or (entry.terminal is None and not entry.process.stdin)):
                 raise ProcessError("process_stdin_closed")
+            payload = args["text"].encode()
+            if entry.terminal and args.get("close_stdin", False):
+                try:
+                    payload += entry.terminal.eof()
+                except ValueError as error:
+                    raise ProcessError(str(error)) from None
             check_tool_authority(name, args, commit=True)
             dispatched = True
-            entry.process.stdin.write(args["text"].encode())
             try:
-                await asyncio.wait_for(entry.process.stdin.drain(), 2)
+                if entry.terminal:
+                    def check():
+                        if cancellation.is_set():
+                            raise asyncio.CancelledError
+                        revalidate_committed_tool_authority(name, args)
+                    await asyncio.wait_for(entry.terminal.write(payload, check), 2)
+                else:
+                    entry.process.stdin.write(payload)
+                    await asyncio.wait_for(entry.process.stdin.drain(), 2)
                 if args.get("close_stdin", False):
                     entry.stdin_closed = True
-                    entry.process.stdin.close()
+                    if entry.process.stdin:
+                        entry.process.stdin.close()
                 if cancellation.is_set():
                     raise asyncio.CancelledError
-            except (OSError, TimeoutError, asyncio.CancelledError):
+            except (ToolError, OSError, TimeoutError, asyncio.CancelledError):
                 entry.reason = "stdin_unconfirmed"
                 await self._stop(entry, "stdin_unconfirmed")
                 return self._receipt(name, entry)

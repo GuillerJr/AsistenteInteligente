@@ -1,0 +1,830 @@
+{
+  "schema_version": 1,
+  "part_id": "OC-22B",
+  "decision_date": "2026-10-26",
+  "reference_commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "reference_execution": false,
+  "reference_code_copied": false,
+  "acquisition": "Read-only git show of exact blobs into new immutable private partitions; original clone unchanged.",
+  "static_batches": [
+    {
+      "id": "OC-22B1",
+      "summary_evidence_id": "ev_3b41e5bc87946147a9aa5e372c5fce245d77a4aad493e691b7f93a3693c51ec8",
+      "parent_evidence_id": "ev_1ce045e1d2808001122ef58726f75d575bc3e68e05939b50675135ebcf9400df",
+      "artifact_sha256": "be384fc097ad481bd0794192fa16d74b66ab7bbb26903fc5e1cccd4c2b1eea96",
+      "source_manifest": {
+        "reference_root": "/Users/guillerjr/Documents/Proyectos/Jarvis-Base-OpenClaw",
+        "reference_commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+        "files": [
+          {
+            "path": "package.json",
+            "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+            "bytes": 153025,
+            "git_blob_sha1": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d"
+          },
+          {
+            "path": "src/agents/tools/screen-tool.ts",
+            "sha256": "9dbe25a9cb298e4e6ab1eea207e005fb72ef5d0284a343585479df268c67e220",
+            "bytes": 7183,
+            "git_blob_sha1": "199a2b384aa55331f3d83099a1e11c695e21494a"
+          },
+          {
+            "path": "src/agents/tools/nodes-tool-invoke.ts",
+            "sha256": "3af406e80c80d39608a04f25ebf841a739355593b441e191c011719ae19d3c9d",
+            "bytes": 3142,
+            "git_blob_sha1": "405653ffd17caeac8453768a67ca97fe69e7466e"
+          },
+          {
+            "path": "packages/gateway-protocol/src/schema/desktop.ts",
+            "sha256": "8b80926daba46ffaf09a567b82316458855c5f30485ae4726c57ceb88eba1bcb",
+            "bytes": 3425,
+            "git_blob_sha1": "73f407b471034951bf0bfa40ac3a0773383bcbf8"
+          }
+        ],
+        "input_path": "/private/tmp/jarvis-rea-part22b-48wvpao9"
+      },
+      "coverage": {
+        "application": {
+          "status": "partial",
+          "truncated": false,
+          "omitted_count": null,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 24,
+              "omitted_relations": 0,
+              "unknown_count": 104
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 48,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 598,
+              "omitted_relations": 0,
+              "unknown_count": 72
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 83,
+              "omitted_relations": 0,
+              "unknown_count": 93
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 2,
+              "omitted_relations": 0,
+              "unknown_count": 2
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 1,
+        "semantic_unknowns": 271
+      },
+      "statistics": {
+        "relevant_files": 5,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 166775,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 3,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 1466,
+        "findings": 56,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "limits": [
+        "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+        "Caller-selected source analysis leaves 1 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+        "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+        "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+        "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+        "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+        "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+        "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+        "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+        "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ]
+    },
+    {
+      "id": "OC-22B2",
+      "summary_evidence_id": "ev_ba64df8502d771c8cdd39917f5f6f281a48ca777bcb23bc1271e624e6961d923",
+      "parent_evidence_id": "ev_c52b7b4f29b8e20a45d473d7e54b24a8b964f6e719578f6a6060c1a1a8dda907",
+      "artifact_sha256": "1c9c23bd17452efb59ec17a4fa87d8a5cc9ba8f50a8a4183b91b414dfdf65f73",
+      "source_manifest": {
+        "reference_root": "/Users/guillerjr/Documents/Proyectos/Jarvis-Base-OpenClaw",
+        "reference_commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+        "files": [
+          {
+            "path": "package.json",
+            "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+            "bytes": 153025,
+            "git_blob_sha1": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d"
+          },
+          {
+            "path": "extensions/cua-computer/src/action-targets.ts",
+            "sha256": "a09a08895c3c2b94b5d1868d2f1965f7e270e27f828a193d7205e404e7f5c7dc",
+            "bytes": 3709,
+            "git_blob_sha1": "424658f192d9f1ae635dd7994ac78dd013c47e93"
+          },
+          {
+            "path": "extensions/cua-computer/src/execution-state.ts",
+            "sha256": "13d770f04e18c91ebf73e3b97109e3f69490c68138a94b76c4c6002cee331901",
+            "bytes": 242,
+            "git_blob_sha1": "c822c4c6f4d715014b4a67d05c3b7f1ff82a2425"
+          },
+          {
+            "path": "extensions/cua-computer/src/frame.ts",
+            "sha256": "5d5dd473e666b2e1dceb8e14369464a17b0d4b2aa52b287a851a39e02d114a6a",
+            "bytes": 10767,
+            "git_blob_sha1": "614467ec90995e5053a661f4476e380d6dde9130"
+          },
+          {
+            "path": "src/agents/tools/computer-tool-control.ts",
+            "sha256": "5387f856324ae50a94c6318af03a8e50d16ffe1742ecfbf0ee02fcef844efde7",
+            "bytes": 440,
+            "git_blob_sha1": "d218ef93efe91ae0b617ea1e5e1f63e6fe16fa38"
+          }
+        ],
+        "input_path": "/private/tmp/jarvis-rea-part22b-control-j6dqju0r"
+      },
+      "coverage": {
+        "application": {
+          "status": "partial",
+          "truncated": false,
+          "omitted_count": null,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 103,
+              "omitted_relations": 0,
+              "unknown_count": 35
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 53,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 638,
+              "omitted_relations": 0,
+              "unknown_count": 163
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 124,
+              "omitted_relations": 0,
+              "unknown_count": 133
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 1,
+        "semantic_unknowns": 331
+      },
+      "statistics": {
+        "relevant_files": 6,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 168183,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 4,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 2070,
+        "findings": 56,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "limits": [
+        "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+        "Caller-selected source analysis leaves 1 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+        "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+        "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+        "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+        "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+        "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+        "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+        "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+        "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+      ]
+    }
+  ],
+  "evidence_bundles": [
+    {
+      "path": "/private/tmp/jarvis-rea-part22b-evidence.json",
+      "sha256": "31779b84ad580a385fd2d87368c186e37d97930f244329c9c6ffc5c603690210",
+      "bytes": 1619988
+    },
+    {
+      "path": "/private/tmp/jarvis-rea-part22b-control-evidence.json",
+      "sha256": "bd25790c7b13ed447fb3ece0bf09acef0aa6d047fe41dd2e4354bcb1578a51f1",
+      "bytes": 3909428
+    }
+  ],
+  "observations": [
+    {
+      "id": "OC22B-F1",
+      "source": "src/agents/tools/screen-tool.ts",
+      "finding": "Screen tool is requester UI presentation; dispatched delivery does not prove physical application input or a working preview."
+    },
+    {
+      "id": "OC22B-F2",
+      "source": "src/agents/tools/nodes-tool-invoke.ts",
+      "finding": "Generic node invocation rejects commands owned by dedicated computer/browser/mobile tool policy."
+    },
+    {
+      "id": "OC22B-F3",
+      "source": "packages/gateway-protocol/src/schema/desktop.ts",
+      "finding": "Desktop source is explicit; observation endpoints have expiry, optional control and separate screen-owned audio capture."
+    },
+    {
+      "id": "OC22B-F4",
+      "source": "extensions/cua-computer/src/action-targets.ts",
+      "finding": "Window and browser actions resolve explicit target references, observation identity and source geometry before invoking a driver."
+    },
+    {
+      "id": "OC22B-F5",
+      "source": "extensions/cua-computer/src/frame.ts",
+      "finding": "Changing driver generation invalidates target and observation references; observation-specific element mappings are volatile."
+    }
+  ],
+  "own_contract": "PHASE_A_MAC_AUTOMATION.md",
+  "own_design_not_observed_reference_behavior": [
+    "Native AX target is explicit bundle/PID/launch identity and opaque exact window binding.",
+    "Central broker owns approvals; trusted asynchronous beforeEffect callback rechecks admission immediately before AX or directed CG input.",
+    "Protected and untyped controls are withheld; values/cursor/geometry are checked against the current observation.",
+    "Pixels are encoded as bounded JPEG in memory only; public ScreenCaptureKit targets one unambiguously matched window.",
+    "CG input without an exact read-back postcondition remains unknown and is never replayed.",
+    "Persistent window reference is a domain-separated hash of exact target launch identity and public CGWindowID; matching titles/bounds are not authority or identity."
+  ],
+  "coverage_status": "partial",
+  "whole_reference_review_complete": false,
+  "limitations": [
+    "Seven selected TypeScript source paths plus manifests do not cover complete computer-use modules, providers, native services, remote desktops or all runtime behavior.",
+    "REA application coverage is partial; semantic coverage remains unknown, with 271 and 331 retained semantic unknowns respectively.",
+    "The extra provenance.json files are inventoried but outside source analysis; dependencies and unselected source scopes remain unknown.",
+    "Source behavior was read as inert text; native implementation uses independent public Apple APIs and original code."
+  ],
+  "own_validation": {
+    "component_tests": 22,
+    "failed": 0,
+    "log": {
+      "path": "/private/tmp/jarvis-mac-automation-window-identity-tests.log",
+      "sha256": "6ba78a5c2153fddb7ff9bc12e4d64d2723a519cada2f7901370e4fbc312d569f",
+      "bytes": 12649
+    },
+    "sources": [
+      {
+        "path": "native/JarvisDesktop/Sources/DesktopCore/MacAutomationModels.swift",
+        "sha256": "0807d1fb88c172a294c3e2d0493efe0d189733457aaae2290d4a52132734b087",
+        "bytes": 7768
+      },
+      {
+        "path": "native/JarvisDesktop/Sources/DesktopCore/MacAutomationExecutor.swift",
+        "sha256": "10957a47328273ea2331d19f03a8aa3fc2789d49090473c0bb4ab7561fe9cc0b",
+        "bytes": 17232
+      },
+      {
+        "path": "native/JarvisDesktop/Sources/DesktopCore/MacAutomationAXDriver.swift",
+        "sha256": "8a88b8615cb933ade95459b91c701c776a7cd7165a9ee4e13180b9ed0b97e8be",
+        "bytes": 33520
+      },
+      {
+        "path": "native/JarvisDesktop/Tests/DesktopCoreTests/MacAutomationTests.swift",
+        "sha256": "245b448e8e7419e348859c75c440af0084867bd4f4738a67c874aa853e41b74a",
+        "bytes": 27482
+      }
+    ],
+    "not_a_gui_or_tcc_claim": true,
+    "integration_closeout_owned_by_parent": true
+  },
+  "own_validation_updates": [
+    {
+      "id": "JARVIS-MAC-BROWSER-SECURITY-20261026",
+      "kind": "own_implementation_followup_not_reference_evidence",
+      "component_tests": 39,
+      "failed": 0,
+      "selection": [
+        "MacAutomationTests",
+        "BrowserAutomationTests",
+        "BrowserAutomationCDPTests",
+        "MacBrowserAuditTests"
+      ],
+      "class_counts": {
+        "MacAutomationTests": 23,
+        "BrowserAutomationTests_and_BrowserAutomationCDPTests": 13,
+        "MacBrowserAuditTests": 3
+      },
+      "log": {
+        "path": "/private/tmp/jarvis-mac-browser-audit-fixed-tests.log",
+        "sha256": "ee1d4b917d0c2aa775d0dc8c196dcb753bf67ea2b5cd81c62a52a5a87a35f125",
+        "bytes": 17597
+      },
+      "sources": [
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/MacAutomationModels.swift",
+          "sha256": "dfd653cfa263ff70bb4636799dec9559622db00f9327603c10d0fa2cd086c026",
+          "bytes": 7903
+        },
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/MacAutomationExecutor.swift",
+          "sha256": "51b2e285260e81c4cd3ea64f55718b9b23e5cdb16720d4150f2b6c3880209f48",
+          "bytes": 17428
+        },
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/MacAutomationAXDriver.swift",
+          "sha256": "2c6fb412e0bd25de3944f69fdfc92f9a52c9a0f1ec869732bf76bd9f2468da90",
+          "bytes": 37312
+        },
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/BrowserAutomationExecutor.swift",
+          "sha256": "104d53ac01370056ca02c564e659c6e28e42f741edf1596a48202fb71521b334",
+          "bytes": 38357
+        },
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/BrowserAutomationScripts.swift",
+          "sha256": "8de3aeeffcd776bb52158b11637b70fbbf02e2a0fc49d7a348d4ee794e85ee49",
+          "bytes": 5773
+        },
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/BrowserAutomationPolicy.swift",
+          "sha256": "a0bfaac333528de0ce482f1c8869bad69287c7fe627b81cbce0e89e75507087d",
+          "bytes": 7171
+        },
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/BrowserAutomationProxy.swift",
+          "sha256": "5c86242074317611684d09720d5a7f7a9d270d3cf2665a67c1a2a6ac2cd2cad1",
+          "bytes": 11851
+        },
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/BrowserAutomationCDP.swift",
+          "sha256": "8421d5b73d8236a132e8085359ebc3253ad5390c8810b68a9db0543bc35c2402",
+          "bytes": 5422
+        },
+        {
+          "path": "native/JarvisDesktop/Tests/DesktopCoreTests/MacAutomationTests.swift",
+          "sha256": "02127d565be94d23c6347340129759da1f895f26b0d991af384f7496f17622ac",
+          "bytes": 28131
+        },
+        {
+          "path": "native/JarvisDesktop/Tests/DesktopCoreTests/BrowserAutomationTests.swift",
+          "sha256": "2f8044297347df55fac04067fad4a0d161870698279d1577242016ac4fe52301",
+          "bytes": 19666
+        },
+        {
+          "path": "native/JarvisDesktop/Tests/DesktopCoreTests/BrowserAutomationCDPTests.swift",
+          "sha256": "c6ca7fe868a2a1e79a0ca0f11a43fc5330e8a44f3e0936e6ddba56a56cb9fa7f",
+          "bytes": 10661
+        },
+        {
+          "path": "native/JarvisDesktop/Tests/DesktopCoreTests/MacBrowserAuditTests.swift",
+          "sha256": "ca738eb8de416a76c9f363a9bf5f1a0c4f46bae669f26fcbcab63af0ffc851d2",
+          "bytes": 9137
+        }
+      ],
+      "source_manifest_scope": "Relevant current source files only; not a complete whole-build manifest.",
+      "overlaps_historical_validation": true,
+      "security_changes": [
+        {
+          "id": "owned_webkit_evaluation_custody",
+          "finding": "Cancellation previously resumed the native evaluation continuation before already-dispatched JavaScript finished; a synthetic slow click produced an HTTP effect after the operation had settled.",
+          "initial_failure_log": {
+            "path": "/private/tmp/jarvis-mac-browser-audit-tests.log",
+            "sha256": "c13fb4a8d2be45dfb9846aa9a578fd3db5c2762aaee790ef564eea6e1b8ce0ae",
+            "bytes": 7704
+          },
+          "historical_repro_limit": "The original assertion was subsequently amended into the fixed-contract regression; the initial log does not claim to identify the current test source at the same line.",
+          "fix": "Cancel and timeout mark evaluations interrupted without resuming or dropping their owner. Only the real WebKit callback or WebContent process-termination notification settles them. Reset and close await the same cleanup. A non-returning script retains pending custody; no external process is killed.",
+          "tests": [
+            "testCancelDoesNotAcknowledgeCleanupWhileDispatchedJavaScriptStillRuns",
+            "testResetWaitsForOwnedEvaluationAndKeepsOperationConsumed"
+          ]
+        },
+        {
+          "id": "own_approval_windows_not_automation_targets",
+          "fix": "Production automation admits own-PID windows only by native jarvis.browser.* identifier and exact public CGWindowID. Chat, approvals and settings remain excluded. The exact jarvis.automation.fixture identifier additionally requires trusted allowOwnTestWindow, false by default. Window titles do not convey authority; unambiguous AX/CG geometry and native modal/sheet checks are revalidated before effects.",
+          "test": "testOwnAppApprovalSettingsAndChatWindowsAreNeverAutomationTargets"
+        },
+        {
+          "id": "system_permissions_owner_only",
+          "fix": "System settings, Keychain, SecurityAgent, authorizationhost and loginwindow bundle targets are rejected at resolve and target validation; no TCC prompting or automatic approval is introduced.",
+          "test": "testSystemPermissionsAndKeychainRemainOwnerOnly"
+        }
+      ],
+      "not_a_gui_or_tcc_claim": true,
+      "not_real_chrome_qualification": true,
+      "limits": [
+        "Managed JavaScript evaluation cleanup does not prove all autonomous page activity has ended.",
+        "CDP browser identity/network and previously dispatched remote effects remain owned by that existing browser; no transport-close claim verifies their semantics.",
+        "The 39-test selection includes earlier component cases and must not be added to the historical 22 as distinct coverage."
+      ]
+    },
+    {
+      "id": "JARVIS-AUTOMATION-LAUNCH-20261026",
+      "kind": "own_native_launch_option_validation_not_reference_evidence",
+      "component_tests": 6,
+      "failed": 0,
+      "selection": [
+        "LaunchOptionsAutomationTests"
+      ],
+      "log": {
+        "path": "/private/tmp/jarvis-launch-options-automation-tests.log",
+        "sha256": "a2d460506963014304ec6ca46da7b9c36d6c9617969fed52a6a9ac091298bf9d",
+        "bytes": 8767
+      },
+      "sources": [
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/LaunchOptions.swift",
+          "sha256": "91b8185813e5dd506e29bccab8a015ff7aa2d287d4d85fa02594d1ac4beac790",
+          "bytes": 5342
+        },
+        {
+          "path": "native/JarvisDesktop/Tests/DesktopCoreTests/LaunchOptionsAutomationTests.swift",
+          "sha256": "a32c7c603df1058e960c8dda97dcc6408d70679a6de2cb6877f1e4e011d1786e",
+          "bytes": 4149
+        }
+      ],
+      "contract": "--automation-test-origin is native-only and absent by default. Parse requires an explicit /private/tmp/ state, canonical http://127.0.0.1:1024...65535 origin, no credentials/path/query/fragment, no recovery or expected-restore bootstrap. Opening a restored profile drops the origin. serviceArguments never forwards it to Python.",
+      "rejections": [
+        "state outside exact private tmp prefix",
+        "parent traversal",
+        "recovery-only in either flag order",
+        "restored bootstrap in either flag order",
+        "scheme/host/port/credential/path/query/fragment variants",
+        "NUL/whitespace/noncanonical or missing value",
+        "duplicate/unknown automation flags"
+      ],
+      "limitations": [
+        "These are parser/contract tests without filesystem or TCC effects.",
+        "An accepted synthetic-state path is not evidence of a sandbox or that the directory contains no owner data."
+      ],
+      "not_a_gui_or_tcc_claim": true
+    },
+    {
+      "id": "JARVIS-AUTOMATION-LIFECYCLE-20261026",
+      "kind": "own_signed_native_host_lifecycle_followup_not_reference_evidence",
+      "component_tests": 9,
+      "failed": 0,
+      "selection": [
+        "NativeAutomationLifecycleTests",
+        "NativeAutomationHostTests",
+        "NativeAutomationIntegrationTests"
+      ],
+      "class_counts": {
+        "NativeAutomationLifecycleTests": 5,
+        "NativeAutomationHostTests": 2,
+        "NativeAutomationIntegrationTests": 2
+      },
+      "log": {
+        "path": "/private/tmp/jarvis-native-automation-lifecycle-tests.log",
+        "sha256": "4b9efaf092abcb09fc1febbb5898eb49bbbf57258253846ecf41bfbc836de93b",
+        "bytes": 9786
+      },
+      "sources": [
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/NativeAutomationHost.swift",
+          "sha256": "1a7305a5fb968dad74c5d7838a2284711ce712404fcf70de02372dbc198ea366",
+          "bytes": 16807
+        },
+        {
+          "path": "native/JarvisDesktop/Sources/JarvisApp/Views/AutomationControlView.swift",
+          "sha256": "b004ca6d471970b07d46d31df32e699fee4344b141685e740ff5a657fc628077",
+          "bytes": 9887
+        },
+        {
+          "path": "native/JarvisDesktop/Tests/DesktopCoreTests/NativeAutomationLifecycleTests.swift",
+          "sha256": "00ed0f003d7859d0da409c37deb958453d86eacb5e93d8ad3ae16e1c30372260",
+          "bytes": 8065
+        },
+        {
+          "path": "native/JarvisDesktop/Tests/DesktopCoreTests/NativeAutomationHostTests.swift",
+          "sha256": "1018a6fff3faae3a12fb52cd8df9915fc54417b13eaafcd5509f4ef8763e86b8",
+          "bytes": 3571
+        },
+        {
+          "path": "native/JarvisDesktop/Tests/DesktopCoreTests/NativeAutomationIntegrationTests.swift",
+          "sha256": "540fd94c734399df244b3c5560b423401fcf9b16ff5aab98954e8536dd3f18d2",
+          "bytes": 13555
+        }
+      ],
+      "contract": "A single shared lifecycle task owns start/stop/reconnect. Duplicate calls join it, in-flight configuration cannot retarget it, and stop wins over pending attach/reconnect while retaining the real registration ACK for exact retirement. The native panel disables configuration/reconnect while lifecycleBusy.",
+      "tests": [
+        "Concurrent signed start calls produce exactly one attach.",
+        "Concurrent signed stop calls produce exactly one detach and share its confirmed result.",
+        "Concurrent reconnect calls perform exactly one retirement and replacement registration.",
+        "Stop during delayed attach drains and retires that acknowledged host before allowing a new start.",
+        "Stop during delayed reconnect prevents replacement registration."
+      ],
+      "scope": "Real actor scheduling and signed IPC with own delayed local handlers. The two integration cases also exercise private WebKit, model/approval fixtures and an independent synthetic HTTP/file oracle.",
+      "limits": [
+        "No real ChatGPT inference, owner data, AX input, TCC grant or external browser qualification.",
+        "This selection is separate from the 39-test component selection and is not a full-suite total."
+      ]
+    },
+    {
+      "id": "JARVIS-MAC-CHROME-CAS-20261026",
+      "kind": "own_real_AX_diagnosis_and_component_regression_not_reference_evidence",
+      "component_tests": 31,
+      "failed": 0,
+      "selection": [
+        "MacAutomationSnapshotTests",
+        "MacAutomationTests",
+        "MacBrowserAuditTests"
+      ],
+      "class_counts": {
+        "MacAutomationSnapshotTests": 5,
+        "MacAutomationTests": 23,
+        "MacBrowserAuditTests": 3
+      },
+      "log": {
+        "path": "/private/tmp/jarvis-mac-automation-chrome-cas-tests.log",
+        "sha256": "7b5e5d3fecc51fca153846412629dbb774e6b4a27c40ccdd9ecc07ad1e4bbc10",
+        "bytes": 15513
+      },
+      "diagnostic_artifact": {
+        "path": "/private/tmp/jarvis-mac-cas-diagnostic-16u5afaf/synthetic-ax-baseline.json",
+        "sha256": "d1b26cb63c63b0eadbda83bbf9b8f971894a8f58a2174bf4aa671954dea5080e",
+        "bytes": 21598
+      },
+      "sources": [
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/MacAutomationModels.swift",
+          "sha256": "ac7e259e9e646d4e46b7270e797b6f3ef64e564fbf46f8e59e4a27c161008bc7",
+          "bytes": 9663
+        },
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/MacAutomationExecutor.swift",
+          "sha256": "51b2e285260e81c4cd3ea64f55718b9b23e5cdb16720d4150f2b6c3880209f48",
+          "bytes": 17428
+        },
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/MacAutomationAXDriver.swift",
+          "sha256": "2c6fb412e0bd25de3944f69fdfc92f9a52c9a0f1ec869732bf76bd9f2468da90",
+          "bytes": 37312
+        },
+        {
+          "path": "native/JarvisDesktop/Tests/DesktopCoreTests/MacAutomationSnapshotTests.swift",
+          "sha256": "5aa8b984e5a9851f8b0ab1cbf1c03b09f402f35322a5c506b40da764ebdd6d3c",
+          "bytes": 7467
+        },
+        {
+          "path": "native/JarvisDesktop/Tests/DesktopCoreTests/MacAutomationTests.swift",
+          "sha256": "02127d565be94d23c6347340129759da1f895f26b0d991af384f7496f17622ac",
+          "bytes": 28131
+        },
+        {
+          "path": "native/JarvisDesktop/Tests/DesktopCoreTests/MacBrowserAuditTests.swift",
+          "sha256": "ca738eb8de416a76c9f363a9bf5f1a0c4f46bae669f26fcbcab63af0ffc851d2",
+          "bytes": 9137
+        }
+      ],
+      "finding": "A real own synthetic AppKit window passed resolve/windows/observe, but an approved fresh set_value was rejected before dispatch. Two subsequent read-only observations showed a new empty AXGroup child under a pre-existing empty chrome AXGroup; all substantive fields and bounds matched.",
+      "fix": "The semantic CAS digest recursively prunes only wholly empty AXGroup subtrees: enabled true, no label, no value, no actions, nonsecure, no selection and no truncation. The fixed point is bounded to 160 nodes; cycles/missing parents/duplicate IDs keep the original tree. Visible nodes, operation refs, IDs of all retained controls and physical AX bindings are unchanged.",
+      "rejections_verified": [
+        "label",
+        "value including empty string",
+        "action",
+        "secure",
+        "selected range",
+        "disabled",
+        "truncated value",
+        "child with a different role or semantic payload",
+        "replaced editor with the same visible contents",
+        "cycle or missing parent or duplicate IDs"
+      ],
+      "limits": [
+        "Component tests pass, but post-fix actual AX/input/frame qualification belongs to the new app build and is recorded separately by the parent.",
+        "The real pre-fix failure was known and not dispatched; no uncertain effect was retried.",
+        "These 31 cases overlap prior Mac/audit selections and are not a new global total."
+      ]
+    },
+    {
+      "id": "JARVIS-AX-POSTCONDITION-20261027",
+      "kind": "own_interprocess_AX_diagnosis_and_component_regression_not_reference_evidence",
+      "component_tests": 33,
+      "failed": 0,
+      "selection": [
+        "MacAutomationAXPostconditionTests",
+        "MacAutomationSnapshotTests",
+        "MacAutomationTests"
+      ],
+      "class_counts": {
+        "MacAutomationAXPostconditionTests": 5,
+        "MacAutomationSnapshotTests": 5,
+        "MacAutomationTests": 23
+      },
+      "log": {
+        "path": "/private/tmp/jarvis-mac-ax-postcondition-tests.log",
+        "sha256": "8b15fafd5dae8ebe890cb1ac5324d217a11aa9e8018055c1f1075c202af00ab6",
+        "bytes": 16552
+      },
+      "diagnostic_artifact": {
+        "path": "/private/tmp/jarvis-ax-postcondition-diagnostic-lsiyvfa3/synthetic-press-baseline.json",
+        "sha256": "78fdbf1b0d031e504de755789555ed67a72b31b2181276df345d6c302e567a50",
+        "bytes": 4794
+      },
+      "sources": [
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/MacAutomationAXDriver.swift",
+          "sha256": "71f2de43cc732d33150b86a4fa6eedcf0dc95d704bdaf1df10de9a3cb6be0911",
+          "bytes": 40282
+        },
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/MacAutomationModels.swift",
+          "sha256": "ab73a48538a100c849c9e14aef43cd26bd892ab8b454bb021363646e59e1d83b",
+          "bytes": 9806
+        },
+        {
+          "path": "native/JarvisDesktop/Sources/DesktopCore/MacAutomationExecutor.swift",
+          "sha256": "7d32d6838633518c30698b60a9d4f15af48f3ec55379df276b2ec1bfea6fabad",
+          "bytes": 17596
+        },
+        {
+          "path": "native/JarvisDesktop/Tests/DesktopCoreTests/MacAutomationAXPostconditionTests.swift",
+          "sha256": "028fd0028ba2b581ad97564775ac0dab644d667b6ffae170171658e17d8a4a8d",
+          "bytes": 4548
+        },
+        {
+          "path": "native/JarvisDesktop/Tests/DesktopCoreTests/MacAutomationSnapshotTests.swift",
+          "sha256": "5aa8b984e5a9851f8b0ab1cbf1c03b09f402f35322a5c506b40da764ebdd6d3c",
+          "bytes": 7467
+        },
+        {
+          "path": "native/JarvisDesktop/Tests/DesktopCoreTests/MacAutomationTests.swift",
+          "sha256": "02127d565be94d23c6347340129759da1f895f26b0d991af384f7496f17622ac",
+          "bytes": 28131
+        }
+      ],
+      "finding": "The live independent AppKit target incremented its counter exactly once to CONTADOR 1, but the original receipt remained unknown/native_action_unconfirmed. The AX press/scroll branch returned before using an explicit verify_ref/expected_value; only the CG input branch previously consumed those fields.",
+      "fix": "AX press/scroll dispatch exactly once, then perform bounded exact AX readback if explicitly requested, for either acknowledged or missing native ACK. Each read rechecks central lease, target identity, exact physical window and a known nonsecure role on the original verification element. A match verifies only that exact postcondition state; metadata native_acknowledged keeps ACK evidence separate. Nonmatch/error/cancel/revocation stays unknown, without resend.",
+      "tests": [
+        "Missing native ACK plus eventual exact match becomes verified known from readback only; dispatch count remains one.",
+        "Nonmatching readback remains unknown with acknowledged or unacknowledged native dispatch.",
+        "Read failure cannot verify or resend the dispatched action.",
+        "Revocation/cancellation/changed target/protected-ref checks prevent matching data from being read or promoted.",
+        "Without an explicit postcondition the original native ACK contract is preserved and no readback is attempted."
+      ],
+      "native_timeout_changed": false,
+      "native_raw_error_cause_identified": false,
+      "old_unknown_receipt_reclassified": false,
+      "uncertain_effect_replayed": false,
+      "apple_api_source": "https://developer.apple.com/documentation/applicationservices/1462091-axuielementperformaction",
+      "limits": [
+        "The component selection is not the live qualification of the next app build; the parent records that independent new operation separately.",
+        "Verified postcondition state does not establish action causality, completion of all remote handlers or absence of future autonomous app effects.",
+        "The original uncertain counter-1 operation is retained; live qualification must use a fresh observed state and a distinct newly authorized counter-1-to-2 operation.",
+        "The 33 cases overlap earlier Mac/CAS selections and are not a full-suite total."
+      ]
+    }
+  ],
+  "historical_validation_note": "own_validation preserves the original 22-test log and source identities. Later fixes and current identities are appended in own_validation_updates; historical REA and validation records were not replaced."
+}

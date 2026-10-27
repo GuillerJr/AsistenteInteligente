@@ -86,7 +86,7 @@ final class AccessStore {
         if context == scope { approvals = operations }
     }
 
-    func decide(_ operation: ApprovalOperation, allow: Bool) async {
+    func decide(_ operation: ApprovalOperation, allow: Bool, remember: String = "operation") async {
         guard context == operation.scope, !decidingIDs.contains(operation.id) else { return }
         guard approvals.contains(operation) else {
             errorMessage = "La solicitud cambió o ya no está pendiente. No se envió la decisión."
@@ -96,10 +96,23 @@ final class AccessStore {
             errorMessage = "La solicitud ha caducado. Espera una solicitud nueva."
             return
         }
+        guard ["operation", "session", "always"].contains(remember),
+              allow || remember == "operation", !(operation.scope.temporary && remember == "always") else { return }
+        if remember != "operation" {
+            let native = ["desktop_action", "browser_action"].contains(operation.toolName)
+            guard OwnerManagementReview.confirm(title: "Recordar permiso de herramienta",
+                action: remember == "always" ? "Permitir y guardar este permiso" : "Permitir durante este chat",
+                detail: "Herramienta: \(operation.toolName)\n\n\(operation.argumentsJSON)\n\n" +
+                    (native ? "Este permiso admite nuevos textos de hasta 4096 bytes y referencias vigentes dentro del mismo destino y tipo de acción. No permite otra app, ventana, pestaña u origen."
+                            : "Se recordarán únicamente estos argumentos exactos; su contenido no se duplicará en el registro del permiso.") +
+                    (remember == "always" ? "\nSe conservará para este cliente, agente y carpeta hasta que lo retires en Mac y navegador. No se incluye en respaldos."
+                                          : "\nSólo permanece en memoria durante esta conversación."),
+                isCurrent: { context == operation.scope && approvals.contains(operation) && !operation.isExpired(at: Date()) }) else { return }
+        }
         decidingIDs.insert(operation.id)
         defer { decidingIDs.remove(operation.id) }
         do {
-            let result = try await rpc("approvals.decide", operation.decision(allow: allow))
+            let result = try await rpc("approvals.decide", operation.decision(allow: allow, remember: remember))
             guard let accepted = result["accepted"].bool else { throw RPCFailure.invalidResponse }
             if !accepted { errorMessage = "La solicitud ya no está vigente; no se autorizó ninguna acción nueva." }
             try await refreshApprovals(runID: operation.runID)

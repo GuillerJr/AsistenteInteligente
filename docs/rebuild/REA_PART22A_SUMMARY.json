@@ -1,0 +1,241 @@
+{
+  "schema_version": 1,
+  "id": "OC-22A",
+  "topic": "Parches de workspace y terminal PTY propios",
+  "reference": {
+    "project": "OpenClaw",
+    "commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+    "modified": false,
+    "executed": false
+  },
+  "acquisition": {
+    "method": "git show commit:path into fresh read-only private partition",
+    "path": "/private/tmp/jarvis-rea-22a-patch-pty",
+    "prior_identity_failure_reused": false
+  },
+  "parent_evidence_id": "ev_e6487a9f6786e546c9ba11309b8d8f72bc80eafb6eff7e15a2207da4c4dc654e",
+  "summary_evidence_id": "ev_eb99fd1cfeabd10b2ffde9f3fc7267ef9728879356aacdbb1ea9e20bcac6ba38",
+  "root_artifact_sha256": "5711b73988bff2067c40c78b65e46b9759dfbba290398f9c64292aa0e4eb6c64",
+  "source_paths": [
+    "package.json",
+    "src/agents/apply-patch-parse.ts",
+    "src/agents/apply-patch-file-ops.ts",
+    "src/process/terminal-pty.ts",
+    "src/process/terminal-pty-worker.ts"
+  ],
+  "statistics": {
+    "relevant_files": 5,
+    "nested_asar_containers": 0,
+    "text_bytes_read": 182982,
+    "invalid_utf8_files": 0,
+    "parsed_javascript_files": 4,
+    "skipped_javascript_files": 0,
+    "visited_ast_nodes": 3778,
+    "findings": 75,
+    "modules": 0,
+    "parse_failures": 0
+  },
+  "coverage": {
+    "application": {
+      "status": "partial",
+      "truncated": false,
+      "omitted_count": null,
+      "limits": []
+    },
+    "semantic": {
+      "status": "unknown",
+      "truncated": false,
+      "omitted_nodes": 0,
+      "omitted_relations": 0,
+      "limits": [],
+      "families": [
+        {
+          "family": "boundary",
+          "status": "partial",
+          "retained_relations": 2,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "call-flow",
+          "status": "partial",
+          "retained_relations": 95,
+          "omitted_relations": 0,
+          "unknown_count": 202
+        },
+        {
+          "family": "child-process",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "closure",
+          "status": "partial",
+          "retained_relations": 275,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "configuration",
+          "status": "partial",
+          "retained_relations": 1,
+          "omitted_relations": 0,
+          "unknown_count": 1
+        },
+        {
+          "family": "data-flow",
+          "status": "partial",
+          "retained_relations": 1919,
+          "omitted_relations": 0,
+          "unknown_count": 221
+        },
+        {
+          "family": "event",
+          "status": "partial",
+          "retained_relations": 6,
+          "omitted_relations": 0,
+          "unknown_count": 2
+        },
+        {
+          "family": "object-flow",
+          "status": "partial",
+          "retained_relations": 196,
+          "omitted_relations": 0,
+          "unknown_count": 259
+        },
+        {
+          "family": "promise-ownership",
+          "status": "partial",
+          "retained_relations": 39,
+          "omitted_relations": 0,
+          "unknown_count": 35
+        },
+        {
+          "family": "request",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "resource-lifecycle",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "timer",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        }
+      ]
+    },
+    "application_unknowns": 0,
+    "semantic_unknowns": 720
+  },
+  "execution_observed": false,
+  "limitations": [
+    "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+    "Caller-selected source analysis leaves 0 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+    "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+    "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+    "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+    "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+    "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+    "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+    "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+    "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+    "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+    "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+    "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+    "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+    "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+    "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+    "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+    "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+  ],
+  "unknowns": [
+    "720 semantic graph unknowns remain in the parent Evidence.",
+    "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+    "Caller-selected source analysis leaves 0 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+    "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+    "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+    "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+    "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+    "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+    "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+    "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+    "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+    "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+    "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+    "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+    "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+    "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+    "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+    "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+    "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code.",
+    "graph.coverage.status is partial",
+    "semantic_graph.coverage.status is unknown"
+  ],
+  "findings": [
+    {
+      "kind": "static_observation",
+      "summary": "La selección contiene un parser con tipos de alta/baja/actualización y marcador de movimiento; las operaciones de archivos y su contención viven en otro módulo."
+    },
+    {
+      "kind": "static_observation",
+      "summary": "El adaptador terminal declara write, resize y kill, preparación/arranque y suscripción; el grafo estático no prueba que un proceso real esté aislado ni que se recojan todos sus descendientes."
+    },
+    {
+      "kind": "own_design",
+      "summary": "Jarvis utiliza diff unificado estricto con hashes explícitos, publicación por archivo y recibo incierto ante una operación parcial. No interpreta comandos ni copia el parser de la referencia."
+    },
+    {
+      "kind": "own_design",
+      "summary": "PTY macOS propio con cTTY, stdin, EOF canónico, resize, señales y custodia de descriptor. Conserva sandbox sin red y sin fork; no se presenta como shell arbitrario multiproceso."
+    }
+  ],
+  "evidence_bundle": {
+    "path": "/private/tmp/jarvis-rea-22a-evidence.json",
+    "records": 2,
+    "sha256": "5200928e34dcb4e94b64b3cc3ef28dd831db0601735cedaa7597a56c65886e36",
+    "bytes": 4554364
+  },
+  "sources": [
+    {
+      "path": "package.json",
+      "bytes": 153025,
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "git_blob_sha1": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d"
+    },
+    {
+      "path": "src/agents/apply-patch-parse.ts",
+      "bytes": 6290,
+      "sha256": "9ecf0e7ea448cf4f9656e2b05e7e6b9243efe987a3b06fe3733c26f7787c8516",
+      "git_blob_sha1": "233d0b5fba73c668d64613e255448583244d05c5"
+    },
+    {
+      "path": "src/agents/apply-patch-file-ops.ts",
+      "bytes": 11626,
+      "sha256": "fdccd4967fad89b0ddd09563a94832986ba59431b110c3dcf00beeb0825253f4",
+      "git_blob_sha1": "f11179af8a6e6853fbd5faf15d4251844a37fe12"
+    },
+    {
+      "path": "src/process/terminal-pty.ts",
+      "bytes": 8766,
+      "sha256": "df8af90fa13334d1247e54547b301fcd2521459f16d824b297b45ca656f301b1",
+      "git_blob_sha1": "d90cb1df0c5025e9d7e65e53b345a87dbbe3d35b"
+    },
+    {
+      "path": "src/process/terminal-pty-worker.ts",
+      "bytes": 3275,
+      "sha256": "ce4f0a8334354fd00ed102dce658ed92a0d9b55c48a90cf72f75d5a0757a931c",
+      "git_blob_sha1": "a7a2c6c1b3510847333b5fb05f4695455b763d36"
+    }
+  ]
+}

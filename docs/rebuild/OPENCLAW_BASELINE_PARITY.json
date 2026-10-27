@@ -45,7 +45,7 @@
       "Contratos declarados y rutas UI no acreditan disponibilidad ni funcionamiento real.",
       "No se ejecutó OpenClaw ni se leyó configuración/cuenta del dueño."
     ],
-    "current_jarvis_state": "Desarrollo propio con Codex oficial y bloques previos de archivos, memoria léxica, MCP, procesos, agentes, skills, programador, Telegram, voz y lectura HTTPS. El bloque finito de núcleo/sesiones añade identidad Ed25519 local y revocación, supervisión de caída sin replay, compactación extractiva, fork/rewind conversacionales, objetivos con hijos, límites, cola y steering. Recorridos nativos de este incremento usan perfiles y peer de inferencia propios sintéticos; se conserva separada la evidencia autenticada anterior. Recuperación/activación/copia de memoria/reconciliación previamente cualificadas no se reabren. macOS inicial, iPhone aplazado; ninguna familia amplia ni fase A completas y fase B no iniciada."
+    "current_jarvis_state": "Desarrollo propio con Codex oficial y bloques previos de archivos, memoria léxica, MCP, procesos, agentes, skills, programador, Telegram, voz y lectura HTTPS. El bloque finito de núcleo/sesiones añade identidad Ed25519 local y revocación, supervisión de caída sin replay, compactación extractiva, fork/rewind conversacionales, objetivos con hijos, límites, cola y steering. Recorridos nativos de este incremento usan perfiles y peer de inferencia propios sintéticos; se conserva separada la evidencia autenticada anterior. Recuperación/activación/copia de memoria/reconciliación previamente cualificadas no se reabren. macOS inicial, iPhone aplazado; ninguna familia amplia ni fase A completas y fase B no iniciada. El incremento Mac/navegador añade patches/PTY, decisiones recordadas, broker firmado y herramientas nativas AX/WebKit/CDP con pruebas de componentes. La cualificación GUI/TCC y los controles globales están registrados por separado en PHASE_A_MAC_BROWSER_CLOSEOUT; no se presume éxito real por fixtures."
   },
   "status_vocabulary": {
     "no_implementado": "Sin evidencia productiva propia de cierre.",
@@ -161,6 +161,10 @@
         {
           "progress_id": "P-CORE-SERVICE",
           "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        },
+        {
+          "progress_id": "P-AUTOMATION-PERMISSIONS",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
         }
       ],
       "acceptance": {
@@ -173,7 +177,9 @@
         "E006",
         "E001",
         "E007",
-        "E008"
+        "E008",
+        "ev_1ce045e1d2808001122ef58726f75d575bc3e68e05939b50675135ebcf9400df",
+        "ev_c52b7b4f29b8e20a45d473d7e54b24a8b964f6e719578f6a6060c1a1a8dda907"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -339,6 +345,14 @@
         {
           "progress_id": "P-CORE-DELEGATION",
           "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        },
+        {
+          "progress_id": "P-MAC-PATCH-PTY",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
+        },
+        {
+          "progress_id": "P-AUTOMATION-PERMISSIONS",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
         }
       ],
       "acceptance": {
@@ -350,7 +364,10 @@
       "reference_evidence": [
         "E015",
         "E016",
-        "E017"
+        "E017",
+        "ev_e6487a9f6786e546c9ba11309b8d8f72bc80eafb6eff7e15a2207da4c4dc654e",
+        "ev_1ce045e1d2808001122ef58726f75d575bc3e68e05939b50675135ebcf9400df",
+        "ev_c52b7b4f29b8e20a45d473d7e54b24a8b964f6e719578f6a6060c1a1a8dda907"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -433,6 +450,22 @@
         {
           "progress_id": "P-CORE-DELEGATION",
           "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        },
+        {
+          "progress_id": "P-MAC-PATCH-PTY",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
+        },
+        {
+          "progress_id": "P-AUTOMATION-PERMISSIONS",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
+        },
+        {
+          "progress_id": "P-NATIVE-AUTOMATION",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
+        },
+        {
+          "progress_id": "P-BROWSER-AUTOMATION",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
         }
       ],
       "acceptance": {
@@ -445,7 +478,11 @@
         "E018",
         "E019",
         "E020",
-        "E002"
+        "E002",
+        "ev_e6487a9f6786e546c9ba11309b8d8f72bc80eafb6eff7e15a2207da4c4dc654e",
+        "ev_1ce045e1d2808001122ef58726f75d575bc3e68e05939b50675135ebcf9400df",
+        "ev_c52b7b4f29b8e20a45d473d7e54b24a8b964f6e719578f6a6060c1a1a8dda907",
+        "ev_3c7e85f98d2003f2c62bf8ddd2c7391d57822db6e0cfa4b98c74ac78a1cc2355"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -562,6 +599,22 @@
         {
           "progress_id": "P-CORE-DELEGATION",
           "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        },
+        {
+          "progress_id": "P-MAC-PATCH-PTY",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
+        },
+        {
+          "progress_id": "P-AUTOMATION-PERMISSIONS",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
+        },
+        {
+          "progress_id": "P-NATIVE-AUTOMATION",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
+        },
+        {
+          "progress_id": "P-BROWSER-AUTOMATION",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
         }
       ],
       "acceptance": {
@@ -573,7 +626,11 @@
       "reference_evidence": [
         "E015",
         "E016",
-        "E017"
+        "E017",
+        "ev_e6487a9f6786e546c9ba11309b8d8f72bc80eafb6eff7e15a2207da4c4dc654e",
+        "ev_1ce045e1d2808001122ef58726f75d575bc3e68e05939b50675135ebcf9400df",
+        "ev_c52b7b4f29b8e20a45d473d7e54b24a8b964f6e719578f6a6060c1a1a8dda907",
+        "ev_3c7e85f98d2003f2c62bf8ddd2c7391d57822db6e0cfa4b98c74ac78a1cc2355"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -1000,6 +1057,10 @@
         {
           "progress_id": "P-TOOLS",
           "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
+        },
+        {
+          "progress_id": "P-MAC-PATCH-PTY",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
         }
       ],
       "acceptance": {
@@ -1011,7 +1072,8 @@
       "reference_evidence": [
         "E040",
         "E002",
-        "E041"
+        "E041",
+        "ev_e6487a9f6786e546c9ba11309b8d8f72bc80eafb6eff7e15a2207da4c4dc654e"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -1025,6 +1087,10 @@
         {
           "progress_id": "P-PROCESS",
           "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-MAC-PATCH-PTY",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
         }
       ],
       "acceptance": {
@@ -1037,7 +1103,8 @@
         "E042",
         "E043",
         "E044",
-        "E045"
+        "E045",
+        "ev_e6487a9f6786e546c9ba11309b8d8f72bc80eafb6eff7e15a2207da4c4dc654e"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -1051,6 +1118,10 @@
         {
           "progress_id": "P-PROCESS",
           "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-MAC-PATCH-PTY",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
         }
       ],
       "acceptance": {
@@ -1063,7 +1134,8 @@
         "E042",
         "E043",
         "E044",
-        "E045"
+        "E045",
+        "ev_e6487a9f6786e546c9ba11309b8d8f72bc80eafb6eff7e15a2207da4c4dc654e"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -1098,6 +1170,10 @@
         {
           "progress_id": "P-WEB-FETCH",
           "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
+        },
+        {
+          "progress_id": "P-BROWSER-AUTOMATION",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
         }
       ],
       "acceptance": {
@@ -1110,7 +1186,8 @@
         "E046",
         "E047",
         "E048",
-        "ev_fb243fa619291280abc90a15b505371284b7a9d4646eb4b8a4ee97dcb097a085"
+        "ev_fb243fa619291280abc90a15b505371284b7a9d4646eb4b8a4ee97dcb097a085",
+        "ev_3c7e85f98d2003f2c62bf8ddd2c7391d57822db6e0cfa4b98c74ac78a1cc2355"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -1119,8 +1196,13 @@
       "family": "browser",
       "name": "Navegador administrado, perfiles y pestañas",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-BROWSER-AUTOMATION",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
+        }
+      ],
       "acceptance": {
         "observable_success": "Abrir perfil aislado, navegar página local, localizar/rellenar/pulsar y verificar estado resultante.",
         "observable_failure_or_revocation": "DOM cambiante, pestaña cerrada, destino distinto y permiso revocado obligan a detener o volver a observar.",
@@ -1130,7 +1212,8 @@
       "reference_evidence": [
         "E049",
         "E050",
-        "E051"
+        "E051",
+        "ev_3c7e85f98d2003f2c62bf8ddd2c7391d57822db6e0cfa4b98c74ac78a1cc2355"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -1139,8 +1222,13 @@
       "family": "browser",
       "name": "Navegador existente y relay",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-BROWSER-AUTOMATION",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
+        }
+      ],
       "acceptance": {
         "observable_success": "El dueño adjunta pestaña de prueba explícita; Jarvis actúa sólo allí y muestra destino.",
         "observable_failure_or_revocation": "Pestaña no adjunta, relay revocado y cambio de perfil no dan acceso a pestañas/cookies personales.",
@@ -1150,7 +1238,8 @@
       "reference_evidence": [
         "E049",
         "E050",
-        "E051"
+        "E051",
+        "ev_3c7e85f98d2003f2c62bf8ddd2c7391d57822db6e0cfa4b98c74ac78a1cc2355"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -1159,8 +1248,13 @@
       "family": "computer",
       "name": "Observación y acciones reales del escritorio",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-NATIVE-AUTOMATION",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
+        }
+      ],
       "acceptance": {
         "observable_success": "En documento vacío observar ventana/controles, autorizar efecto y verificar texto sin confundir observación con guardar capturas.",
         "observable_failure_or_revocation": "TCC denegado, ventana distinta y permiso revocado bloquean efecto; estado incierto nunca es éxito inventado.",
@@ -1172,7 +1266,9 @@
         "E053",
         "E054",
         "E055",
-        "E056"
+        "E056",
+        "ev_1ce045e1d2808001122ef58726f75d575bc3e68e05939b50675135ebcf9400df",
+        "ev_c52b7b4f29b8e20a45d473d7e54b24a8b964f6e719578f6a6060c1a1a8dda907"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -1208,6 +1304,10 @@
         {
           "progress_id": "P-MCP",
           "scope": "Ver avance parcial; no cierra la capacidad."
+        },
+        {
+          "progress_id": "P-AUTOMATION-PERMISSIONS",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
         }
       ],
       "acceptance": {
@@ -1219,7 +1319,9 @@
       "reference_evidence": [
         "E057",
         "E058",
-        "E059"
+        "E059",
+        "ev_1ce045e1d2808001122ef58726f75d575bc3e68e05939b50675135ebcf9400df",
+        "ev_c52b7b4f29b8e20a45d473d7e54b24a8b964f6e719578f6a6060c1a1a8dda907"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -1730,6 +1832,18 @@
         {
           "progress_id": "P-CORE-DELEGATION",
           "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        },
+        {
+          "progress_id": "P-AUTOMATION-PERMISSIONS",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
+        },
+        {
+          "progress_id": "P-NATIVE-AUTOMATION",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
+        },
+        {
+          "progress_id": "P-BROWSER-AUTOMATION",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
         }
       ],
       "acceptance": {
@@ -1742,7 +1856,10 @@
         "E092",
         "E003",
         "E093",
-        "E094"
+        "E094",
+        "ev_1ce045e1d2808001122ef58726f75d575bc3e68e05939b50675135ebcf9400df",
+        "ev_c52b7b4f29b8e20a45d473d7e54b24a8b964f6e719578f6a6060c1a1a8dda907",
+        "ev_3c7e85f98d2003f2c62bf8ddd2c7391d57822db6e0cfa4b98c74ac78a1cc2355"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -1792,6 +1909,18 @@
         {
           "progress_id": "P-CORE-DELEGATION",
           "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        },
+        {
+          "progress_id": "P-AUTOMATION-PERMISSIONS",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
+        },
+        {
+          "progress_id": "P-NATIVE-AUTOMATION",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
+        },
+        {
+          "progress_id": "P-BROWSER-AUTOMATION",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
         }
       ],
       "acceptance": {
@@ -1804,7 +1933,10 @@
         "E092",
         "E003",
         "E093",
-        "E094"
+        "E094",
+        "ev_1ce045e1d2808001122ef58726f75d575bc3e68e05939b50675135ebcf9400df",
+        "ev_c52b7b4f29b8e20a45d473d7e54b24a8b964f6e719578f6a6060c1a1a8dda907",
+        "ev_3c7e85f98d2003f2c62bf8ddd2c7391d57822db6e0cfa4b98c74ac78a1cc2355"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -2035,6 +2167,22 @@
         {
           "progress_id": "P-CORE-DELEGATION",
           "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        },
+        {
+          "progress_id": "P-MAC-PATCH-PTY",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
+        },
+        {
+          "progress_id": "P-AUTOMATION-PERMISSIONS",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
+        },
+        {
+          "progress_id": "P-NATIVE-AUTOMATION",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
+        },
+        {
+          "progress_id": "P-BROWSER-AUTOMATION",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
         }
       ],
       "acceptance": {
@@ -2049,7 +2197,11 @@
         "E011",
         "E012",
         "E013",
-        "E014"
+        "E014",
+        "ev_e6487a9f6786e546c9ba11309b8d8f72bc80eafb6eff7e15a2207da4c4dc654e",
+        "ev_1ce045e1d2808001122ef58726f75d575bc3e68e05939b50675135ebcf9400df",
+        "ev_c52b7b4f29b8e20a45d473d7e54b24a8b964f6e719578f6a6060c1a1a8dda907",
+        "ev_3c7e85f98d2003f2c62bf8ddd2c7391d57822db6e0cfa4b98c74ac78a1cc2355"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -2127,6 +2279,22 @@
         {
           "progress_id": "P-PROCESS",
           "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-MAC-PATCH-PTY",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
+        },
+        {
+          "progress_id": "P-AUTOMATION-PERMISSIONS",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
+        },
+        {
+          "progress_id": "P-NATIVE-AUTOMATION",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
+        },
+        {
+          "progress_id": "P-BROWSER-AUTOMATION",
+          "scope": "Implementación propia y pruebas de componentes del bloque Mac/navegador; GUI/TCC y gates globales se registran separadamente. No cierra la familia amplia."
         }
       ],
       "acceptance": {
@@ -2139,7 +2307,11 @@
         "E107",
         "E108",
         "E109",
-        "E110"
+        "E110",
+        "ev_e6487a9f6786e546c9ba11309b8d8f72bc80eafb6eff7e15a2207da4c4dc654e",
+        "ev_1ce045e1d2808001122ef58726f75d575bc3e68e05939b50675135ebcf9400df",
+        "ev_c52b7b4f29b8e20a45d473d7e54b24a8b964f6e719578f6a6060c1a1a8dda907",
+        "ev_3c7e85f98d2003f2c62bf8ddd2c7391d57822db6e0cfa4b98c74ac78a1cc2355"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -13896,7 +14068,7 @@
   },
   "progress_snapshot": {
     "date": "2026-10-26",
-    "revision_scope": "Bloque finito de núcleo y sesiones: identidad local firmada/revocación, supervisión de caída, compactación, fork/rewind, subagentes/objetivos, presupuestos, cola y steering, con código propio, pruebas y recorridos nativos sobre perfil sintético. Recuperación/activación/copia de memoria/reconciliación previas se conservan cerradas en su alcance finito. Familias amplias y fase A siguen abiertas; fase B no iniciada.",
+    "revision_scope": "Herramientas propias de Mac y navegador: patches/PTY, autoridad única y decisiones recordadas, broker nativo firmado, AX/fotograma efímero y navegador WebKit/CDP explícito. Pruebas de componentes realizadas; recorridos GUI/TCC y controles globales en cierre integrado. Núcleo/sesiones, recuperación, activación, copia de memoria y reconciliación anteriores conservan sus cierres finitos. Ninguna familia amplia ni fase A completas; fase B no iniciada.",
     "complete_capability_count": 0,
     "complete_reference_parity": false,
     "authenticated_inference_verified": true,
@@ -14052,7 +14224,7 @@
           "A-73"
         ],
         "verified_scope": "Filesystem real propio: listar/leer/escribir/editar/mkdir, raíz fijada, rutas privadas/enlaces rechazados, compare-and-swap de bytes, leases exactos de un uso y guard antes del efecto. Configuración privada transaccional con lock y merge.",
-        "remaining": "Parches completos, perfiles persistentes de permisos y herramientas completas de referencia pendientes. Exec/sandbox tienen avance separado en P-PROCESS, sin equivalencia universal."
+        "remaining": "Parches UTF-8 estrictos y publicación de descargas se acreditan en P-MAC-PATCH-PTY. Persistencia acotada de decisiones en P-AUTOMATION-PERMISSIONS. Quedan herramientas de referencia no reconstruidas, parches binarios/modos Git, política universal de permisos y cualificación de entradas adicionales."
       },
       {
         "id": "P-MEMORY",
@@ -14104,7 +14276,7 @@
           "A-73"
         ],
         "verified_scope": "Procesos reales en Seatbelt macOS con decisiones sintéticas: stdin/EOF/poll/stop, límites/cancel/cierre, red/fork/externos/privados denegados. En app Codex real y dueño aprobaron echo: output y exit0 con recibo sin falsa verificación de efectos.",
-        "remaining": "PTY, política completa de ubicaciones/privilegios y defensa contra un proceso malicioso concurrente del mismo usuario. Linux exige bubblewrap utilizable sin fallback."
+        "remaining": "La PTY productiva macOS de un solo proceso se acredita en P-MAC-PATCH-PTY; no shell arbitrario con pipelines/fork ni árboles distribuidos, ubicaciones/privilegios universales o defensa contra malware del mismo usuario. Linux conserva pipes/bubblewrap utilizable sin fallback; esta ampliación PTY no cualifica un cliente Linux."
       },
       {
         "id": "P-PROFILES",
@@ -14221,7 +14393,7 @@
           "A-72"
         ],
         "verified_scope": "Pruebas RPC/HTTP sintéticas y recorridos reales limitados: vinculación, suma, y workspace_write con aprobación nativa y archivo/hash verificado. Tarjeta y resultado observados en el chat seleccionado sin recarga del agente. Reconciliación local de rutas restauradas implementada con la autoridad central, revisión exacta, recibos durables, incertidumbre/custodia y limpieza sin replay. No inicia conexión ni restaura tokens o permisos. El arranque exige nonce/claim nuevo del chat, con prueba sólo en RAM ligada a conexión/ruta/agente/workspace; reiniciar o cambiar esos vínculos la invalida. Se descarta el primer segundo parcial del lector. Tests de RPC/Store y transportes propios separan esas garantías de una cuenta externa; la evidencia GUI final se registra en PHASE_A_RECONCILIATION_CLOSEOUT.md.",
-        "remaining": "Cualificación final del incremento de reconciliación local en su registro propio, y cualificación externa prolongada de Telegram privado. La causa histórica de la detención posterior no está establecida. Grupos, adjuntos, otros canales y exclusividad externa no se acreditan por la lease local ni por las pruebas sintéticas de vinculación fresca.",
+        "remaining": "Se conserva el cierre local del incremento de reconciliación, sin reabrirlo. Quedan cualificación externa prolongada de Telegram privado, grupos, adjuntos y otros canales elegidos. La causa histórica de una detención posterior no está establecida; una lease local o los fixtures de vinculación fresca no acreditan exclusividad externa.",
         "qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json",
         "live_scope": "Suma y salida confirmada; archivo sintético de20bytes/hash coincide con recibo tras aprobación del dueño. Token/nonce no documentados. Una detención posterior tuvo causa no establecida; nueva UI distingue errores futuros seguros."
       },
@@ -14267,7 +14439,7 @@
           "A-33"
         ],
         "verified_scope": "GET HTTPS público con aprobación, IP/DNS fijados y límites; suite Python1234 incluye las regresiones de cierre. Un GET real example.com completó HTTP200 con contenido externo no verificado, sin JS ni seguimiento de enlaces.",
-        "remaining": "Buscador/proveedor de búsqueda, JS, navegador, cuentas, cookies y descarga de archivos no implementados. Una URL real no cualifica sitios arbitrarios ni toda la familia.",
+        "remaining": "web_fetch conserva su lectura HTTPS estática. Búsqueda por motor elegido, JS y navegador administrado/adjunto, y descarga acotada se reconstruyen en P-BROWSER-AUTOMATION; su cualificación GUI integrada y los servicios externos elegidos se registran en el cierre nuevo. No se declaran cualificados sitios arbitrarios, búsqueda universal o acceso a cookies/cuentas personales.",
         "qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json",
         "post_close_fix_validation": "156 pruebas acotadas y posterior suite1234 aprobadas; cuatro regresiones de cierre/cancelación, además del recorrido HTTPS real limitado."
       },
@@ -14552,13 +14724,133 @@
         "remaining": "No swarm distribuido/recursivo, comunicación remota, tablero de trabajo ni coordinación universal de referencia. Pasos no equivalen a tokens/coste. No se repitió inferencia autenticada de ChatGPT en esta cualificación.",
         "detail_file": "PHASE_A_CORE_DELEGATION.md",
         "qualification_file": "PHASE_A_CORE_CLOSEOUT.json"
+      },
+      {
+        "id": "P-MAC-PATCH-PTY",
+        "component": "Parches estrictos, publicación de descargas y PTY macOS propia",
+        "status": "implemented_contracts_component_verified_gui_and_global_gates_pending",
+        "code": [
+          "src/jarvis_core/workspace_patch.py",
+          "src/jarvis_core/workspace.py",
+          "src/jarvis_core/process_pty.py",
+          "src/jarvis_core/processes.py"
+        ],
+        "tests": [
+          "tests/test_workspace_patch.py",
+          "tests/test_process_pty.py",
+          "tests/test_child_custody.py"
+        ],
+        "capability_ids": [
+          "A-08",
+          "A-10",
+          "A-13",
+          "A-29",
+          "A-30",
+          "A-31",
+          "A-70",
+          "A-73"
+        ],
+        "verified_scope": "Diff unificado UTF-8 con altas, bajas, cambios y movimientos, hashes/raíces/descriptores revalidados; recibo de efecto parcial sin replay. Descarga nueva hasta 64 KiB con autoridad original y verificación independiente. PTY macOS con Seatbelt real, cTTY, stdin, EOF canónico, resize, señales, custodia y cierre. Focal Python de 151 casos solapados; no total integrado nuevo.",
+        "remaining": "No atomicidad de todo el conjunto de archivos, parches binarios/modos Git, pipelines/fork o shell multiproceso. La PTY mantiene sandbox de un solo proceso y no ofrece fallback sin confinamiento. Recorrido GUI del bloque y controles globales en registro separado.",
+        "detail_file": "PHASE_A_MAC_PATCH_PTY.md",
+        "qualification_file": "PHASE_A_MAC_BROWSER_CLOSEOUT.json"
+      },
+      {
+        "id": "P-AUTOMATION-PERMISSIONS",
+        "component": "Broker nativo firmado y decisiones recordadas con revocación",
+        "status": "implemented_contracts_component_verified_gui_and_global_gates_pending",
+        "code": [
+          "src/jarvis_core/native_automation.py",
+          "src/jarvis_core/automation_permissions.py",
+          "src/jarvis_core/automation_management.py",
+          "native/JarvisDesktop/Sources/DesktopCore/NativeAutomationHost.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Views/AutomationControlView.swift"
+        ],
+        "tests": [
+          "tests/test_native_automation.py",
+          "tests/test_automation_permissions.py"
+        ],
+        "capability_ids": [
+          "A-03",
+          "A-08",
+          "A-10",
+          "A-13",
+          "A-38",
+          "A-59",
+          "A-60",
+          "A-70",
+          "A-73"
+        ],
+        "verified_scope": "Host autenticado reclama operación exacta mediante nonce/digest y reconsulta la lease central inmediatamente antes del efecto. Decisiones session/always limitadas a cliente/agente/workspace/destino/acción; revocación retira capacidad antes de ejecutar. No hay segunda autoridad de permisos. Frames validados se entregan al modelo desde RAM sin base64 en SQLite o historial. Motor de búsqueda requiere elección explícita desde UI.",
+        "remaining": "Estos contratos y pruebas propias no conceden TCC, atestación Apple, autoridad remota o acceso personal. La aprobación delegada sólo aplica a perfiles sintéticos. Cualificación GUI y persistencia entre arranques del bloque se registran en el cierre integrado.",
+        "detail_file": "PHASE_A_MAC_BROWSER_CLOSEOUT.md",
+        "qualification_file": "PHASE_A_MAC_BROWSER_CLOSEOUT.json"
+      },
+      {
+        "id": "P-NATIVE-AUTOMATION",
+        "component": "Observación y acciones del Mac mediante AX y fotograma efímero",
+        "status": "implemented_contracts_component_verified_gui_and_global_gates_pending",
+        "code": [
+          "native/JarvisDesktop/Sources/DesktopCore/MacAutomationModels.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/MacAutomationExecutor.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/MacAutomationAXDriver.swift"
+        ],
+        "tests": [
+          "native/JarvisDesktop/Tests/DesktopCoreTests/MacAutomationTests.swift"
+        ],
+        "capability_ids": [
+          "A-10",
+          "A-13",
+          "A-36",
+          "A-59",
+          "A-60",
+          "A-70",
+          "A-73"
+        ],
+        "verified_scope": "Destino explícito bundle/PID/lanzamiento y ventana opaca estable por CGWindowID; refs/snapshot de un uso, CAS de contenido/cursor/geometría, callback central fresco, input dirigido y postcondición AX acotada. Valores/regiones protegidos ocultos; JPEG de ventana en RAM hasta 48 KiB, sin archivo. 22 tests de componente y AppKit propio reales; no se confunden con input AX/TCC entre procesos.",
+        "remaining": "Cualificación GUI de Accesibilidad/grabación de pantalla depende del permiso TCC del dueño. No observa escritorio completo ni detecta secretos arbitrarios sin AX; ambigüedad o árbol incompleto retienen frame. No atestación Apple, aislamiento contra malware mismo UID, dispositivos móviles o todas las superficies de referencia. CG sin postcondición sigue incierto sin replay.",
+        "detail_file": "PHASE_A_MAC_AUTOMATION.md",
+        "qualification_file": "PHASE_A_MAC_BROWSER_CLOSEOUT.json"
+      },
+      {
+        "id": "P-BROWSER-AUTOMATION",
+        "component": "Navegador nativo administrado y pestaña adjunta explícita",
+        "status": "implemented_contracts_component_verified_gui_and_global_gates_pending",
+        "code": [
+          "native/JarvisDesktop/Sources/DesktopCore/BrowserAutomationExecutor.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/BrowserAutomationScripts.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/BrowserAutomationPolicy.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/BrowserAutomationProxy.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/BrowserAutomationCDP.swift",
+          "src/jarvis_core/native_automation.py"
+        ],
+        "tests": [
+          "native/JarvisDesktop/Tests/DesktopCoreTests/BrowserAutomationTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/BrowserAutomationCDPTests.swift",
+          "tests/test_native_automation.py"
+        ],
+        "capability_ids": [
+          "A-10",
+          "A-13",
+          "A-33",
+          "A-34",
+          "A-35",
+          "A-59",
+          "A-60",
+          "A-70",
+          "A-73"
+        ],
+        "verified_scope": "WebKit nativo no persistente con perfil propio, proxy CONNECT autenticado sin fallback y validación de destinos/DNS. DOM y scripts propios en mundo aislado; pestaña/origen/snapshot/ref y lease exactos. Adjunta exclusivamente WebSocket/target declarados sin enumerar tabs/cookies. Búsqueda usa plantilla elegida; descargas vuelven acotadas al host para publicación guardada en workspace. Focal de 13 casos con WKWebView/HTTP/proxy reales y peer CDP propio.",
+        "remaining": "Fixtures HTTP locales llevan excepción de prueba explícita y no acreditan navegación pública arbitraria. La red de un navegador externo adjunto pertenece a ese navegador y no adquiere el proxy/sandbox administrado. Cualificación con Chrome real, servicios públicos elegidos y GUI final sigue en cierre separado; no se leen perfiles o historial personales ni se afirma cobertura universal.",
+        "detail_file": "PHASE_A_MAC_BROWSER_CLOSEOUT.md",
+        "qualification_file": "PHASE_A_MAC_BROWSER_CLOSEOUT.json"
       }
     ],
-    "detail_file": "PHASE_A_CORE_CLOSEOUT.md",
+    "detail_file": "PHASE_A_MAC_BROWSER_CLOSEOUT.md",
     "rea": {
       "source_file": "REA_COVERAGE.json",
-      "static_batches": 23,
-      "unique_typescript_paths_in_completed_batches": 88,
+      "static_batches": 27,
+      "unique_typescript_paths_in_completed_batches": 103,
       "global_status": "partial",
       "runtime_executed": false,
       "semantic_unknowns_remain": true,
@@ -14585,20 +14877,24 @@
         "OC-20",
         "OC-21A",
         "OC-21B",
-        "OC-21C"
+        "OC-21C",
+        "OC-22A",
+        "OC-22B1",
+        "OC-22B2",
+        "OC-22C"
       ],
       "limits": "Contar rutas examinadas no significa comprensión semántica ni revisión global. IDs y evidencias completos en REA_COVERAGE.json/provenance.",
-      "unique_ts_js_paths_in_completed_batches": 90,
+      "unique_ts_js_paths_in_completed_batches": 105,
       "source_count_note": "El contador TypeScript conserva su sentido estricto; el total TS/JS incluye también MJS/CJS."
     },
-    "previous_detail_file": "PHASE_A_RECONCILIATION_CLOSEOUT.md",
+    "previous_detail_file": "PHASE_A_CORE_CLOSEOUT.md",
     "qualification_file": "PHASE_A_RECOVERY_QUALIFICATION.json",
-    "latest_qualification_status": "core_sessions_local_contracts_and_bounded_native_verified_publication_requires_gates",
-    "latest_qualification_record": "PHASE_A_CORE_CLOSEOUT.json",
+    "latest_qualification_status": "mac_browser_implemented_component_verified_native_gui_and_global_gates_pending",
+    "latest_qualification_record": "PHASE_A_MAC_BROWSER_CLOSEOUT.json",
     "completion_increment_file": "PHASE_A_RECOVERY_COMPLETION.md",
     "completion_increment_qualification": "recovery_finite_matrix_and_local_reconciliation_native_verified",
-    "previous_qualification_status": "207native_1914python_ci_and_bounded_native_memory_copy_passed_phase_a_open",
-    "previous_qualification_record": "PHASE_A_MEMORY_COPY_LIVE.json",
+    "previous_qualification_status": "2540python_332native_ci_success_core_finite_contract_closed",
+    "previous_qualification_record": "PHASE_A_CORE_CLOSEOUT.json",
     "reconciliation_increment_file": "PHASE_A_RECONCILIATION_CLOSEOUT.md",
     "core_increment_file": "PHASE_A_CORE_CLOSEOUT.md",
     "core_contract_files": [
@@ -14613,9 +14909,22 @@
       "No cierra ninguna familia amplia ni revisión global de OpenClaw."
     ],
     "capability_status_counts": {
-      "implementacion_parcial_contratos_probados": 44,
-      "no_implementado": 36
-    }
+      "implementacion_parcial_contratos_probados": 47,
+      "no_implementado": 33
+    },
+    "mac_browser_increment_file": "PHASE_A_MAC_BROWSER_CLOSEOUT.md",
+    "mac_browser_contract_files": [
+      "PHASE_A_MAC_PATCH_PTY.md",
+      "PHASE_A_MAC_AUTOMATION.md"
+    ],
+    "mac_browser_validation_limits": [
+      "Focales 151 Python, 22 Mac y 13 navegador: conjuntos solapados y pruebas de componentes, no total integrado ni gestos GUI.",
+      "WebKit/HTTP/proxy y AppKit propios son reales; CDP y decisiones/callbacks de tests son sintéticos. No inferencia autenticada repetida ni acceso a datos personales.",
+      "Las aprobaciones delegadas sólo cubren perfiles de prueba; TCC y credenciales corresponden al dueño.",
+      "La PTY conserva restricción de un solo proceso sin fork y sin fallback. El navegador adjunto conserva su propia política de red.",
+      "Frames sólo RAM y payload acotado; el recibo durable conserva metadatos sin base64.",
+      "La investigación REA es estática y mantiene incógnitas; no cierra paridad global."
+    ]
   },
   "target_decisions": {
     "date": "2026-10-24",
