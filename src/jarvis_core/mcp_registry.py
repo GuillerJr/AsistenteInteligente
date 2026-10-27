@@ -125,6 +125,7 @@ class McpRegistry:
         self._bindings: dict[str, _Binding] = {}
         self._lock = asyncio.Lock()
         self._closed = False
+        self.child_custody = None
 
     @staticmethod
     def _connected(entry: _Entry) -> bool:
@@ -210,6 +211,7 @@ class McpRegistry:
                 max_items=self.max_tools + 1,
             )
             entry = _Entry(spec, client)
+            client.child_custody = self.child_custody
             client.authorize = lambda name, arguments: self._authorize(entry, name, arguments)
             self._entries[spec.server_id] = entry
             try:

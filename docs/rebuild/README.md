@@ -155,23 +155,36 @@ congelado al publicar; las cifras anteriores siguen siendo checkpoints históric
 Este canal `development` utiliza Python y Codex oficial externos. No acredita
 autenticidad completa, distribución autocontenida, Developer ID, notarización o
 canal remoto firmado. La instalación personal anterior permanece independiente.
-La investigación [OC-19](REA_PART19_SUMMARY.json)/[OC-20](REA_PART20_SUMMARY.json)
-eleva el registro a veinte lotes y 80 fuentes TS/JS seleccionadas, con incógnitas
+El [cierre de núcleo y sesiones](PHASE_A_CORE_CLOSEOUT.md) añade identidad local
+Ed25519 con admisión/revocación, recuperación del servicio sin reconexión ni
+replay, compactación conservadora, ramas con CAS y recibos durables, objetivos
+de hasta cuatro hijos y presupuestos, cola y corrección de turno exacto. Todos
+tienen controles SwiftUI y pruebas Python/Swift integradas. Se comprobaron nueve
+decisiones nativas delegadas, escritura hija por hash, recuperación con
+Mantenimiento abierto y persistencia tras reabrir la app, usando sólo un perfil
+y un peer de modelo sintéticos. Los controles integrados pasaron 2536 pruebas
+Python y 332 Swift. Esto no repite la inferencia autenticada del recorrido inicial.
+
+La investigación [OC-21A](REA_PART21A_CORE_SERVICE.json),
+[OC-21B](REA_PART21B_SUMMARY.json) y [OC-21C](REA_PART21C_SUMMARY.json)
+eleva el registro a 23 lotes y 90 fuentes TS/JS seleccionadas, con incógnitas
 estáticas y dependencias sin revisar; no es revisión exhaustiva ni ejecución de
-OpenClaw. Las 80 familias mantienen 43 avances parciales y 37 sin implementación;
+OpenClaw. Las 80 familias mantienen 44 avances parciales y 36 sin implementación;
 no son porcentajes de producto terminado. A-71 y la fase A siguen abiertas y la
 fase B continúa aplazada.
 
-El prototipo prueba serialización por sesión, propuesta/validación/autorización,
-resultado explícito, cancelación y asentamiento. El prototipo aislado no acredita permisos persistentes, cifrado, herramientas
-reales ni voz. El servicio añadido tiene pruebas separadas de autenticación local,
-recuperación de SQLite e IPC; token local no equivale a identidad firmada. Es el primer contrato ejecutable de la reconstrucción,
-no una nueva versión funcional de la app.
+El prototipo original probaba serialización por sesión,
+propuesta/validación/autorización, resultado explícito, cancelación y asentamiento.
+Sus límites históricos no se atribuyen a los incrementos cualificados de arriba:
+la identidad de clave local firmada ya no depende sólo del token. Esa identidad
+no es atestación del binario por Apple ni aislamiento contra malware del mismo
+usuario. El producto actual continúa siendo una distribución de desarrollo.
 
-Límites adicionales del prototipo: `max_steps` acota las propuestas, no el tiempo
-total de un callback ni la profundidad/tamaño de sus argumentos. Un callback de
-confianza que no termine puede impedir el asentamiento. La retención de sesiones
-y la recuperación de una sesión cuyo cierre falló requieren diseño productivo.
+El Runtime actual incorpora límites de pasos/tiempo y conserva el propietario
+mientras su limpieza o persistencia no se asientan. Un callback de confianza que
+no termine puede seguir impidiendo el asentamiento; no se resuelve declarando
+éxito o liberando su lane. La custodia de procesos cubre hijos cooperativos de
+los adaptadores propios, no descendientes externos arbitrarios.
 Los recibos sintéticos no son firmas IPC ni acreditan TCC o efectos físicos.
 El texto final lleva procedencia `model`; los recibos de acciones se presentan
 por separado y no verifican automáticamente las frases del modelo.

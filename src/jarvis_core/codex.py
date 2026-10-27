@@ -11,6 +11,7 @@ import asyncio
 import json
 import math
 import os
+import re
 import signal
 from collections.abc import Awaitable, Callable, Sequence
 from contextvars import Context, copy_context
@@ -80,6 +81,7 @@ class CodexClient:
         self._threads: set[str] = set()
         self._uncertain_threads: set[str] = set()
         self._tool_turns: dict[str, _ToolTurn] = {}
+        self._active_turn_ids: dict[str, str] = {}
         self._server_requests: set[int | str] = set()
         self._next_id = 0
         self._start_lock = asyncio.Lock()
@@ -89,6 +91,7 @@ class CodexClient:
         self._shutdown_timeout = 2.0
         # Optional host-owned policy, checked at the final process/write boundary.
         self.before_io: Callable[[str], None] | None = None
+        self.child_custody: Callable[[], tuple[int, ...]] | None = None
 
     async def start(self) -> None:
         async with self._start_lock:
@@ -139,6 +142,7 @@ class CodexClient:
                     cwd=workspace,
                     limit=1024 * 1024,
                     start_new_session=True,
+                    pass_fds=self.child_custody() if self.child_custody else (),
                 )
                 self._reader = asyncio.create_task(self._read())
                 self._stderr = asyncio.create_task(self._drain_stderr())
@@ -496,6 +500,7 @@ class CodexClient:
             turn_id = result.get("turn", {}).get("id")
             if not isinstance(turn_id, str):
                 raise CodexError("codex_turn_invalid")
+            self._active_turn_ids[thread_id] = turn_id
             if tool_turn:
                 tool_turn.turn_id = turn_id
             text_parts: dict[str, str] = {}
@@ -546,6 +551,8 @@ class CodexClient:
                     await self._stop_process()
             raise
         finally:
+            if self._active_turn_ids.get(thread_id) == turn_id:
+                self._active_turn_ids.pop(thread_id, None)
             if tool_turn:
                 if tool_turn.budget:
                     tool_turn.budget.closed = True
@@ -554,6 +561,40 @@ class CodexClient:
                     task.cancel()
                 await asyncio.gather(*tuple(tool_turn.tasks), return_exceptions=True)
             self._events.pop(thread_id, None)
+
+    def active_turn_id(self, thread_id: str) -> str | None:
+        """Return only an owned live turn; never query another Codex thread."""
+        return self._active_turn_ids.get(thread_id)
+
+    async def steer(self, thread_id: str, expected_turn_id: str, message: str,
+                    *, request_id: str) -> dict:
+        """One explicit owner correction, tied to the exact current turn.
+
+        The caller records an uncertain write durably and must not retry it.
+        The official expectedTurnId precondition prevents routing a late steer
+        into a successor turn. Text is input only, never a tool grant.
+        """
+        if (not isinstance(message, str) or not message.strip()
+                or len(message.encode()) > 8000 or "\0" in message
+                or not isinstance(request_id, str)
+                or re.fullmatch(r"[a-f0-9]{32}", request_id) is None):
+            raise ValueError("codex_steer_invalid")
+        if (thread_id not in self._threads or thread_id not in self._events
+                or self._active_turn_ids.get(thread_id) != expected_turn_id
+                or thread_id in self._uncertain_threads):
+            raise CodexError("codex_steer_turn_changed")
+        turn = self._tool_turns.get(thread_id)
+        if turn is not None and any(not task.done() for task in turn.tasks):
+            raise CodexError("codex_steer_tool_pending")
+        result = await self.request("turn/steer", {
+            "threadId": thread_id,
+            "expectedTurnId": expected_turn_id,
+            "clientUserMessageId": request_id,
+            "input": [{"type": "text", "text": message}],
+        })
+        if result != {"turnId": expected_turn_id}:
+            raise CodexError("codex_steer_unconfirmed")
+        return {"turn_id": expected_turn_id, "accepted": True}
 
     async def _interrupt_and_settle(
         self,

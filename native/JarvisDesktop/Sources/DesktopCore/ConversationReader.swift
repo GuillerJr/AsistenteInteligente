@@ -58,6 +58,7 @@ public final class ConversationReader: Sendable {
 
     public func read(_ scope: SessionScope) async throws -> ConversationSnapshot {
         var latestID: String?
+        var activeID: String?
         var offset = 0
         var runsComplete = false
         for _ in 0..<20 {
@@ -68,6 +69,8 @@ public final class ConversationReader: Sendable {
             for row in rows {
                 guard let id = row["run_id"].string, ManagementValidation.identifier(id) else { throw RPCFailure.invalidResponse }
                 latestID = id
+                if activeID == nil, let status = row["status"].string,
+                   ["queued", "running", "waiting_approval", "cancelling", "cleaning"].contains(status) { activeID = id }
             }
             if !more { runsComplete = true; break }
             guard next > offset else { throw RPCFailure.invalidResponse }
@@ -75,10 +78,10 @@ public final class ConversationReader: Sendable {
         }
         guard runsComplete else { throw RPCFailure.oversized }
         let run: ConversationRun?
-        if let latestID {
-            var params = scope.params; params["run_id"] = .string(latestID)
+        if let selectedID = activeID ?? latestID {
+            var params = scope.params; params["run_id"] = .string(selectedID)
             let result = try await transport.call("runs.get", params: params)
-            run = try ConversationRun(result["run"], expectedID: latestID)
+            run = try ConversationRun(result["run"], expectedID: selectedID)
         } else { run = nil }
         var messages: [ConversationMessage] = []
         var after = 0

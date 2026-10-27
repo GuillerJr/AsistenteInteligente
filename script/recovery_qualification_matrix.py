@@ -460,9 +460,9 @@ def socket_binding(profile):
 def retire_fixture_socket(fixture, expected, *, child_exit_confirmed=False):
     """Explicit TEST intervention after its owner confirmed the child's exit.
 
-    Normal production startup refuses a leftover socket. This helper neither
-    changes that policy nor guesses stale ownership. It acquires the profile's
-    actual exclusive lease and removes exactly one previously pinned socket.
+    Historical fixture intervention, independent of productive stale-socket
+    recovery. It acquires the profile's actual exclusive lease and removes
+    exactly one previously pinned socket; it never guesses ownership.
     """
     from jarvis_core.host_profile import ProfileLease
     if child_exit_confirmed is not True or expected.get("type") != "socket":
@@ -563,7 +563,8 @@ async def serve_fixture(fixture, *, negative=None):
                 "initial_fixture_sha256": initial["fixture_sha256"],
                 "previous_operations": list(service.maintenance_coordinator.journal.previous),
                 "decision_origin": "synthetic_fixture_client",
-                "socket_binding": socket_binding(profile)}
+                "socket_binding": socket_binding(profile),
+                "production_socket_recovered": service.server.recovered_stale_socket}
 
     async def check_artifact(params):
         if set(params) != {"target", "operation_id"} or params["target"] not in {

@@ -28,6 +28,9 @@ final class ChatStore {
     let access = AccessStore()
     let mcp = MCPStore()
     let management = ManagementStore()
+    let sessionCore = SessionCoreStore()
+    let clientIdentities = ClientIdentityStore()
+    let delegation = DelegationStore()
     let telegram = TelegramStore()
     let maintenance = MaintenanceStore()
     let restored = RestoreProfileStore()
@@ -43,6 +46,7 @@ final class ChatStore {
     var dictationNotice: String?
     var newAgentID = "jarvis"
     var lostTemporaryRun = false
+    var runInputNotice: String?
 
     @ObservationIgnored private var client: LocalRPCClient?
     @ObservationIgnored private let service = ServiceProcess()
@@ -52,26 +56,37 @@ final class ChatStore {
     @ObservationIgnored private var started = false
     @ObservationIgnored private var options: LaunchOptions?
     @ObservationIgnored private var pendingSubmission: PendingSubmission?
+    @ObservationIgnored private var pendingQueue: PendingSubmission?
     @ObservationIgnored private var activeSession: ChatSession?
     @ObservationIgnored private var stopping = false
     @ObservationIgnored private var awaitingStartupReadiness = false
     @ObservationIgnored private var startupErrorMessage: String?
     @ObservationIgnored private var conversationRefresh: ConversationRefresh?
     @ObservationIgnored private var observedConversationRunID: String?
+    @ObservationIgnored private var recoveringCrash = false
+    @ObservationIgnored private var crashRecoveryBlocked = false
+    @ObservationIgnored private var coldRecovery = false
+    @ObservationIgnored private var nextCrashAttempt = ContinuousClock.now
 
     var isShuttingDown: Bool { stopping }
+    var coreBlocksHost: Bool { sessionCore.blocksInteraction || clientIdentities.blocksInteraction || delegation.blocksInteraction || hasUnconfirmedQueue }
+    var hasUnconfirmedQueue: Bool { pendingQueue != nil }
+    var canSupplyRunInput: Bool { ready && connected && !busy && !stopping && !handoffPreparing && !coldRecovery
+        && activeRunID != nil && selected?.scope == activeSession?.scope && !coreBlocksHost && !lostTemporaryRun
+        && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction
+        && !recovery.blocksInteraction && !restored.blocksInteraction }
     var launchOptions: LaunchOptions? { options }
     var isRecoveryOnly: Bool { (options ?? suppliedOptions)?.recoveryOnly == true }
     var serviceOwner: ServiceOwnerIdentity? { service.ownedIdentity }
     var durableDraftSnapshot: SessionDrafts { drafts.durableOnly }
-    var mayHandoff: Bool { !isRecoveryOnly && ready && !starting && !stopping && !handoffPreparing && !busy && activeRunID == nil && !voice.canStopDictation && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction && !restored.isRequesting && !restored.responseUnconfirmed && restored.operation?.workerPending != true && restored.operation?.cleanupOwnerPending != true }
+    var mayHandoff: Bool { !isRecoveryOnly && ready && !starting && !stopping && !handoffPreparing && !busy && activeRunID == nil && !voice.canStopDictation && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction && !restored.isRequesting && !restored.responseUnconfirmed && restored.operation?.workerPending != true && restored.operation?.cleanupOwnerPending != true }
     var shutdownWarning: String? { service.lastStopReport?.warning }
 
     var selected: ChatSession? { sessions.first { $0.id == selectedID } }
-    var canSend: Bool { !isRecoveryOnly && ready && connected && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil && selected != nil
+    var canSend: Bool { !isRecoveryOnly && ready && connected && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil && selected != nil
                        && selected?.archived == false
                        && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    var canChangeSession: Bool { !isRecoveryOnly && ready && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil }
+    var canChangeSession: Bool { !isRecoveryOnly && ready && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil }
     var selectedAgentName: String { management.agents.first(where: { $0.id == selected?.agentID })?.name ?? selected?.agentID ?? "Jarvis" }
     var canUseVoice: Bool { canChangeSession && connected && selected?.archived == false && selected != nil }
 
@@ -134,20 +149,10 @@ final class ChatStore {
         do {
             let options = try suppliedOptions ?? LaunchOptions.parse(Array(CommandLine.arguments.dropFirst()))
             self.options = options
-            let connection = LocalRPCClient(stateDirectory: options.state, runtime: runtime)
-            client = connection
-            conversationRefresh = ConversationRefresh(reader: ConversationReader(transport: connection))
-            access.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
-            mcp.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
-            management.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
-            telegram.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
-            maintenance.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
-            restored.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
-            channelRestoration.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
-            memoryRestoration.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
-            recovery.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+            configureConnections(options)
             try service.start(options)
             try await ServiceBootstrap.waitForHealth(stateDirectory: options.state) { service.isRunning }
+            try service.confirmReadyProfile(options)
             if isRecoveryOnly {
                 try await refreshRecoveryStatus()
                 startMonitor()
@@ -177,6 +182,24 @@ final class ChatStore {
         }
     }
 
+    private func configureConnections(_ options: LaunchOptions) {
+        let connection = LocalRPCClient(stateDirectory: options.state, runtime: runtime)
+        client = connection
+        conversationRefresh = ConversationRefresh(reader: ConversationReader(transport: connection))
+        access.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+        mcp.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+        management.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+        sessionCore.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+        clientIdentities.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+        delegation.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+        telegram.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+        maintenance.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+        restored.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+        channelRestoration.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+        memoryRestoration.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+        recovery.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+    }
+
     private func startMonitor() {
         guard !stopping else { return }
         monitor?.cancel()
@@ -184,7 +207,13 @@ final class ChatStore {
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(2)) } catch { return }
                 guard let self else { return }
-                if self.starting || self.maintenance.monitorPaused || self.channelRestoration.monitorPaused || self.memoryRestoration.monitorPaused || self.recovery.monitorPaused || self.restored.monitorPaused || self.handoffPreparing { continue }
+                let supervision = ServiceSupervisionPolicy.decision(childRunning: self.service.isRunning,
+                    lifecycleChanging: self.starting || self.stopping || self.handoffPreparing,
+                    recoveryBlocked: self.crashRecoveryBlocked,
+                    readersPaused: self.maintenance.monitorPaused || self.channelRestoration.monitorPaused
+                        || self.memoryRestoration.monitorPaused || self.recovery.monitorPaused || self.restored.monitorPaused)
+                if supervision == .recover { _ = await self.recoverCrashedService(); continue }
+                if supervision != .read { continue }
                 do {
                     try await self.refreshMonitoredState()
                 } catch {
@@ -192,6 +221,11 @@ final class ChatStore {
                     if MaintenanceMonitorPolicy.isTemporaryBusy(error) { continue }
                     self.ready = false; self.connected = false
                     self.voice.cancel()
+                    if !self.service.isRunning, !self.crashRecoveryBlocked {
+                        if await self.recoverCrashedService() { continue }
+                        if self.recoveringCrash || ContinuousClock.now < self.nextCrashAttempt { continue }
+                    }
+                    if !self.service.isRunning, self.crashRecoveryBlocked { continue }
                     if self.awaitingStartupReadiness, self.service.isRunning,
                        let failure = error as? RPCFailure,
                        [.startupUnconfirmed, .unavailable, .disconnected].contains(failure) {
@@ -223,11 +257,16 @@ final class ChatStore {
         guard service.isRunning else { throw RPCFailure.disconnected }
         if awaitingStartupReadiness, let options = options {
             try await ServiceBootstrap.waitForHealth(stateDirectory: options.state, timeout: 1) { service.isRunning }
+            try service.confirmReadyProfile(options)
         guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         }
         if isRecoveryOnly {
             try await refreshRecoveryStatus()
             finishStartupRecovery()
+            return
+        }
+        if coldRecovery {
+            try await refreshColdRecoveryState()
             return
         }
         try await refreshStatus()
@@ -257,6 +296,63 @@ final class ChatStore {
         let result = try await client.call(method, params: params)
         try runtime.check()
         return result
+    }
+
+    /// Restart only the exact owned child whose exit is kernel-confirmed and
+    /// whose inherited profile lease is free. This never retries an RPC effect.
+    private func recoverCrashedService() async -> Bool {
+        guard !recoveringCrash, !crashRecoveryBlocked, !starting, !stopping, !handoffPreparing,
+              runtime.isActive, let options, !service.isRunning, ContinuousClock.now >= nextCrashAttempt else { return false }
+        recoveringCrash = true
+        defer { recoveringCrash = false }
+        nextCrashAttempt = ContinuousClock.now.advanced(by: .seconds(3))
+        do {
+            access.setContext(nil); management.setContext(nil)
+            let previous = try service.prepareCrashRecovery(options)
+            polling?.cancel(); conversationRefresh?.setScope(nil)
+            await client?.close(); await access.close(); await mcp.close(); await management.close()
+            await sessionCore.close(); await clientIdentities.close(); await delegation.close(); await telegram.close()
+            await maintenance.close(); await restored.close(); await channelRestoration.close()
+            await memoryRestoration.close(); await recovery.close()
+            guard !stopping, runtime.isActive else { return false }
+            configureConnections(options)
+            try service.start(options)
+            try await ServiceBootstrap.waitForHealth(stateDirectory: options.state) { service.isRunning }
+            try service.confirmReadyProfile(options)
+            coldRecovery = true; ready = true; connected = false
+            if pendingQueue != nil { runInputNotice = "El envío previo quedó en el registro local. No se reenviará tras recuperar el servicio." }
+            pendingQueue = nil
+            drafts.clearTemporary(); sessions.removeAll(where: \.temporary)
+            if activeSession?.temporary == true {
+                lostTemporaryRun = true; runPhase = "disconnected"
+            } else {
+                activeRunID = nil; activeSession = nil; pendingSubmission = nil; runPhase = "interrupted"
+            }
+            access.setContext(selected?.scope); management.setContext(selected?.scope)
+            sessionCore.setScope(selected?.scope); delegation.setScope(selected?.scope)
+            conversationRefresh?.setScope(selected?.scope)
+            if isRecoveryOnly { try await refreshRecoveryStatus() }
+            else { try await refreshColdRecoveryState() }
+            errorMessage = previous.warning ?? "El servicio se recuperó. Los resultados anteriores se conservan sin repetir operaciones."
+            return true
+        } catch {
+            ready = false; connected = false
+            if let failure = error as? ServiceProcessFailure, failure == .recoveryResourcesBusy {
+                statusText = failure.localizedDescription
+            } else {
+                crashRecoveryBlocked = true; statusText = "Recuperación automática detenida"; report(error)
+            }
+            return false
+        }
+    }
+
+    private func refreshColdRecoveryState() async throws {
+        localProfileStatus = try await readLocalStatus()
+        try await management.refresh(); try await access.refreshCatalog(); try await mcp.refresh()
+        try await refreshSessions()
+        try await refreshSelectedConversation()
+        ready = true; connected = false
+        statusText = "Servicio recuperado · cuentas desconectadas · revisa los resultados anteriores"
     }
 
     func readLocalStatus() async throws -> LocalProfileStatus {
@@ -333,6 +429,8 @@ final class ChatStore {
             selectedID = session.id
             access.setContext(session.scope)
             management.setContext(session.scope)
+            sessionCore.setScope(session.scope)
+            delegation.setScope(session.scope)
             messages = []; activities = []; draft = ""; streamingText = ""; errorMessage = nil
             receipts = []
             observedConversationRunID = nil
@@ -350,6 +448,8 @@ final class ChatStore {
             selectedID = id
             access.setContext(session.scope)
             management.setContext(session.scope)
+            sessionCore.setScope(session.scope)
+            delegation.setScope(session.scope)
             messages = try decodeMessages(rows, scope: session.scope)
             activities = []; streamingText = ""; errorMessage = nil
             receipts = []
@@ -370,7 +470,9 @@ final class ChatStore {
     }
 
     private func chatMessage(_ message: ConversationMessage, scope: SessionScope) -> ChatMessage {
-        ChatMessage(id: "\(scope.temporary):\(scope.sessionID):\(message.id)", role: message.role, text: message.text)
+        ChatMessage(id: "\(scope.temporary):\(scope.sessionID):\(message.id)", role: message.role,
+                    text: SessionContextPresentation.systemRecord(message.text, role: message.role) ?? message.text,
+                    sequence: message.sequence)
     }
 
     private func refreshMessages(_ session: ChatSession) async throws {
@@ -475,6 +577,9 @@ final class ChatStore {
                                let kind = row["kind"].string {
                                 self.activities.append(RunActivity(id: sequence, kind: kind))
                                 if self.activities.count > 500 { self.activities.removeFirst() }
+                                if kind == "coordination.created", let goalID = row["payload"]["goal_id"].string {
+                                    await self.delegation.observe(scope: session.scope, parentRunID: runID, goalID: goalID)
+                                }
                                 if kind == "answer.delta", let text = row["payload"]["text"].string {
                                     self.streamingText = try RunPresentation.appendDelta(text, to: self.streamingText)
                                 }
@@ -498,6 +603,7 @@ final class ChatStore {
                         self.activeRunID = nil
                         self.pendingSubmission = nil
                         self.activeSession = nil
+                        try await self.recoverLatestRun(session)
                         return
                     }
                     try await Task.sleep(for: .milliseconds(350))
@@ -530,6 +636,7 @@ final class ChatStore {
     private func recoverLatestRun(_ session: ChatSession) async throws {
         var offset = 0
         var latest: RPCValue?
+        var firstActive: RPCValue?
         var complete = false
         for _ in 0..<20 {
             var parameters = scope(session)
@@ -538,12 +645,15 @@ final class ChatStore {
             guard let rows = result["runs"].array, let more = result["has_more"].bool,
                   let next = result["next_offset"].integer else { throw RPCFailure.invalidResponse }
             latest = rows.last ?? latest
+            if firstActive == nil {
+                firstActive = rows.first(where: { ["queued", "running", "waiting_approval", "cancelling", "cleaning"].contains($0["status"].string ?? "") })
+            }
             if !more { complete = true; break }
             guard next > offset else { throw RPCFailure.invalidResponse }
             offset = next
         }
         guard complete else { throw RPCFailure.oversized }
-        guard let latest, let runID = latest["run_id"].string,
+        guard let latest = firstActive ?? latest, let runID = latest["run_id"].string,
               let phase = latest["status"].string else { return }
         var parameters = scope(session); parameters["run_id"] = .string(runID)
         let result = try await rpc("runs.get", parameters)
@@ -567,7 +677,11 @@ final class ChatStore {
     }
 
     func reconnect() async {
-        guard runtime.isActive, !stopping, !starting, !handoffPreparing, !maintenance.blocksInteraction, !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction, !restored.blocksInteraction, let options else { return }
+        if runtime.isActive, !stopping, !starting, !handoffPreparing, !service.isRunning, service.ownedIdentity != nil {
+            crashRecoveryBlocked = false; nextCrashAttempt = .now
+            _ = await recoverCrashedService(); startMonitor(); return
+        }
+        guard runtime.isActive, !stopping, !starting, !handoffPreparing, !maintenance.blocksInteraction, !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction, !restored.blocksInteraction, !sessionCore.blocksInteraction, !clientIdentities.blocksInteraction, !delegation.blocksInteraction, !hasUnconfirmedQueue, let options else { return }
         conversationRefresh?.setScope(nil)
         voice.cancel(); dictationNotice = nil
         starting = true
@@ -577,17 +691,18 @@ final class ChatStore {
         await access.close()
         await mcp.close()
         await management.close()
+        await sessionCore.close()
+        await clientIdentities.close()
+        await delegation.close()
         await telegram.close()
         await maintenance.close()
         await restored.close()
         await channelRestoration.close()
         await memoryRestoration.close()
         await recovery.close()
-        restored.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
-        channelRestoration.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
-        memoryRestoration.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
-        recovery.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
-        maintenance.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+        configureConnections(options)
+        sessionCore.setScope(selected?.scope)
+        delegation.setScope(selected?.scope)
         guard !stopping else { return }
         do {
             let restarted = !service.isRunning
@@ -603,13 +718,20 @@ final class ChatStore {
                 sessions.removeAll(where: \.temporary)
                 access.setContext(nil)
                 management.setContext(nil)
+                sessionCore.setScope(nil)
+                delegation.setScope(nil)
             }
             try await ServiceBootstrap.waitForHealth(stateDirectory: options.state) { service.isRunning }
+            try service.confirmReadyProfile(options)
             if isRecoveryOnly {
                 try await refreshRecoveryStatus()
                 finishStartupRecovery()
                 startMonitor()
                 return
+            }
+            if coldRecovery {
+                try await refreshColdRecoveryState()
+                finishStartupRecovery(); startMonitor(); return
             }
             try await refreshStatus()
             try await refreshSessions()
@@ -624,6 +746,8 @@ final class ChatStore {
             } else if activeRunID != nil {
                 access.setContext((activeSession ?? selected)?.scope)
                 management.setContext((activeSession ?? selected)?.scope)
+                sessionCore.setScope((activeSession ?? selected)?.scope)
+                delegation.setScope((activeSession ?? selected)?.scope)
                 conversationRefresh?.setScope((activeSession ?? selected)?.scope)
                 runPhase = "disconnected"
                 resumeStatus()
@@ -640,6 +764,8 @@ final class ChatStore {
         selectedID = nil; messages = []; streamingText = ""; activities = []; receipts = []
         access.setContext(nil)
         management.setContext(nil)
+        sessionCore.setScope(nil)
+        delegation.setScope(nil)
         runPhase = "interrupted"
     }
 
@@ -650,20 +776,17 @@ final class ChatStore {
     }
 
     func forkSession(_ session: ChatSession) async {
+        guard canChangeSession else { return }
         voice.cancel(); dictationNotice = nil
-        guard canChangeSession,
-              OwnerManagementReview.confirm(title: "Ramificar conversación", action: "Crear rama",
-                detail: "Se copiará únicamente el contexto completado de «\(session.title)» a una conversación nueva del mismo agente. No se ejecutan ni copian acciones, runs o autorizaciones.", isCurrent: { runtime.isActive && !stopping && !handoffPreparing }) else { return }
-        busy = true
-        do {
-            let result = try await rpc("sessions.fork", scope(session))
-            guard let created = ChatSession(result["session"]), created.parentSessionID == session.id,
-                  created.agentID == session.agentID, created.temporary == session.temporary else { throw RPCFailure.invalidResponse }
-            try await refreshSessions()
-            if !sessions.contains(where: { $0.id == created.id }) { sessions.insert(created, at: 0) }
-            busy = false
-            await selectSession(created.id)
-        } catch { busy = false; report(error) }
+        if selectedID != session.id { await selectSession(session.id) }
+        guard selected?.scope == session.scope else { return }
+        await refreshSessionContext()
+        guard canChangeSession, let context = sessionCore.snapshot,
+              OwnerManagementReview.confirm(title: "Ramificar conversación", action: "Crear esta rama",
+                detail: "Se copiará el contexto completado de «\(session.title)», revisión \(context.revision), junto con decisiones y referencias históricas a recibos. El original se conserva. No hereda autorizaciones, ejecuciones ni el hilo del proveedor; los efectos anteriores no se repiten.",
+                isCurrent: { canChangeSession && selected?.scope == session.scope && sessionCore.snapshot?.revision == context.revision }) else { return }
+        await sessionCore.fork(title: session.title)
+        if let branch = sessionCore.result?.branch { await openSessionBranch(branch) }
     }
 
     func openScheduledSession(_ id: String) async {
@@ -713,6 +836,8 @@ final class ChatStore {
                 selectedID = nil; messages = []; activities = []; streamingText = ""; receipts = []
                 access.setContext(nil)
                 management.setContext(nil)
+                sessionCore.setScope(nil)
+                delegation.setScope(nil)
             }
         } catch { report(error) }
         busy = false
@@ -721,7 +846,7 @@ final class ChatStore {
     }
 
     func login() async {
-        guard !isRecoveryOnly, !handoffPreparing, !maintenance.blocksInteraction, !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction, runtime.isActive else { return }
+        guard !isRecoveryOnly, !coreBlocksHost, !handoffPreparing, !maintenance.blocksInteraction, !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction, runtime.isActive else { return }
         do {
             let result = try await rpc("provider.login")
             guard let raw = result["url"].string, let url = URL(string: raw), url.scheme == "https",
@@ -732,11 +857,12 @@ final class ChatStore {
             try runtime.check()
             guard !stopping, !handoffPreparing else { throw CancellationError() }
             guard NSWorkspace.shared.open(url) else { throw RPCFailure.unavailable }
+            coldRecovery = false
         } catch { report(error) }
     }
 
     func logout() async {
-        guard !isRecoveryOnly, activeRunID == nil, !maintenance.blocksInteraction, !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction else { return }
+        guard !isRecoveryOnly, activeRunID == nil, !coreBlocksHost, !maintenance.blocksInteraction, !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction else { return }
         voice.cancel(); dictationNotice = nil
         do { _ = try await rpc("provider.logout"); try await refreshStatus() }
         catch { report(error) }
@@ -757,6 +883,8 @@ final class ChatStore {
         monitor?.cancel(); polling?.cancel()
         access.setContext(nil)
         management.setContext(nil)
+        sessionCore.setScope(nil)
+        delegation.setScope(nil)
         // Stopping the owned service wakes blocked RPC readers. Waiting for a
         // socket queue before sending SIGTERM could otherwise delay shutdown.
         let confirmed = await service.stop()
@@ -769,6 +897,9 @@ final class ChatStore {
         await access.close()
         await mcp.close()
         await management.close()
+        await sessionCore.close()
+        await clientIdentities.close()
+        await delegation.close()
         await telegram.close()
         await maintenance.close()
         await restored.close()
@@ -776,6 +907,164 @@ final class ChatStore {
         await memoryRestoration.close()
         await recovery.close()
         return true
+    }
+
+    func sendRunInput(_ message: String, queued: Bool) async {
+        guard canSupplyRunInput, let runID = activeRunID, let session = activeSession,
+              ManagementValidation.text(message, limit: queued ? 32000 : 8000) else { return }
+        guard OwnerManagementReview.confirm(title: queued ? "Poner mensaje en cola" : "Corregir turno activo",
+            action: queued ? "Poner este mensaje en cola" : "Enviar esta corrección",
+            detail: "Conversación «\(session.title)», ejecución \(runID):\n\n\(message)\n\n" + (queued
+                ? "El mensaje esperará el cierre y el recibo de la ejecución anterior. Si hay efectos sin confirmar, no continuará automáticamente."
+                : "Sólo se enviará al turno activo. Una respuesta incierta no permite repetir la corrección automáticamente."),
+            isCurrent: { canSupplyRunInput && activeRunID == runID && selected?.scope == session.scope }) else { return }
+        let request = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        var params = scope(session); params["message"] = .string(message); params["request_id"] = .string(request)
+        busy = true
+        defer { busy = false }
+        if queued { pendingQueue = PendingSubmission(id: request, session: session, text: message) }
+        do {
+            if queued {
+                _ = try await RunInputReply(queued: rpc("runs.enqueue", params), requestID: request)
+                pendingQueue = nil; runInputNotice = "Mensaje registrado en cola: \(request). Esperará el asentamiento anterior."
+                try await refreshMessages(session)
+            } else {
+                params["run_id"] = .string(runID)
+                let result = try await RunInputReply(steering: rpc("runs.steer", params), runID: runID, requestID: request)
+                runInputNotice = result.status == "accepted" ? "Corrección \(request) aceptada por el turno."
+                    : "Corrección \(request) sin confirmar. No se reenviará automáticamente."
+            }
+        } catch {
+            if queued {
+                if RunPresentation.startWasRejected(error) { pendingQueue = nil }
+                runInputNotice = pendingQueue == nil ? "El envío en cola fue rechazado."
+                    : "Envío \(request) sin confirmar. Consulta su registro; no se repetirá automáticamente."
+            } else { runInputNotice = "Corrección \(request) sin confirmar. No se reenviará automáticamente." }
+            report(error)
+        }
+    }
+
+    func inspectQueuedInput() async {
+        guard ready, !busy, !stopping, let pending = pendingQueue else { return }
+        busy = true; defer { busy = false }
+        var params = scope(pending.session); params["run_id"] = .string(pending.id)
+        do {
+            let result = try await rpc("runs.get", params)
+            _ = try ConversationRun(result["run"], expectedID: pending.id)
+            pendingQueue = nil
+            runInputNotice = "Se encontró el registro de \(pending.id). Esta consulta no confirma la recepción original ni vuelve a ponerlo en cola."
+        } catch { report(error) }
+    }
+
+    func refreshDelegation() async {
+        guard ready, !stopping, !handoffPreparing else { return }
+        delegation.setScope(selected?.scope)
+        await delegation.reloadCatalogue()
+        await delegation.refresh()
+        if delegation.goal?.settled == false { delegation.resumePolling() }
+    }
+
+    func startDelegation(objective: String, children: [DelegatedTaskSpec], timeout: Int) async {
+        guard canChangeSession, connected, let selected, delegation.scope == selected.scope else { return }
+        let profilesCurrent = { children.allSatisfy { child in self.management.agents.contains(where: { $0.id == child.agentID && $0.revision == child.agentRevision }) } }
+        guard profilesCurrent() else { errorMessage = "Un agente cambió o ya no está disponible. Revisa el catálogo antes de delegar."; return }
+        let steps = children.reduce(0) { $0 + $1.maxSteps }
+        let detail = "Objetivo: \(objective)\nPresupuesto total: \(steps) pasos, plazo \(timeout) s.\n\n" + children.enumerated().map { index, child in
+            "Tarea \(index + 1): agente \(child.agentID), revisión \(child.agentRevision), máximo \(child.maxSteps) pasos.\n\(child.message)"
+        }.joined(separator: "\n\n") + "\n\nCada tarea tendrá una sesión nueva y requerirá su propia autorización para herramientas. No hereda permisos ni historial."
+        guard OwnerManagementReview.confirm(title: "Delegar este objetivo", action: "Iniciar estas tareas", detail: detail,
+            isCurrent: { canChangeSession && connected && self.selected?.scope == selected.scope && profilesCurrent() }) else {
+            if !profilesCurrent() { errorMessage = "La revisión del agente cambió durante la decisión. No se iniciaron tareas." }
+            return
+        }
+        await delegation.start(objective: objective, children: children, maxSteps: steps, timeout: timeout)
+        if let goal = delegation.goal {
+            activeRunID = goal.parentRunID; activeSession = selected; observedConversationRunID = goal.parentRunID
+            watchRun(goal.parentRunID, session: selected)
+        }
+    }
+
+    func steerDelegatedChild(_ child: DelegatedChildSnapshot, message: String) async {
+        guard ready, !stopping, !handoffPreparing, let goal = delegation.goal,
+              goal.scope == selected?.scope, !goal.settled, goal.children.contains(child), !child.settled,
+              OwnerManagementReview.confirm(title: "Corregir tarea delegada", action: "Enviar esta corrección",
+                detail: "Tarea \(child.index + 1), agente \(child.agentID), ejecución \(child.runID):\n\n\(message)\n\nSe enviará únicamente al turno activo de esta tarea. Si no se confirma, no se repetirá automáticamente.",
+                isCurrent: { ready && !stopping && !handoffPreparing && delegation.goal?.id == goal.id }) else { return }
+        await delegation.steer(child: child, message: message)
+    }
+
+    func openDelegatedChild(_ child: DelegatedChildSnapshot) async {
+        guard canChangeSession, let goal = delegation.goal, goal.settled,
+              goal.scope == selected?.scope, goal.children.contains(child) else { return }
+        do {
+            if goal.scope.temporary, !sessions.contains(where: { $0.id == child.sessionID }) {
+                let value: RPCValue = .object(["session_id": .string(child.sessionID), "temporary": .bool(true),
+                    "title": .string("Tarea delegada \(child.index + 1)"), "archived": .bool(false),
+                    "agent_id": .string(child.agentID), "parent_session_id": .string(goal.scope.sessionID)])
+                guard let session = ChatSession(value) else { throw RPCFailure.invalidResponse }; sessions.insert(session, at: 0)
+            } else { try await refreshSessions() }
+            await selectSession(child.sessionID)
+        } catch { report(error) }
+    }
+
+    func refreshSessionContext() async {
+        guard ready, !busy, !stopping, !handoffPreparing else { return }
+        sessionCore.setScope(selected?.scope)
+        delegation.setScope(selected?.scope)
+        await sessionCore.refresh()
+    }
+
+    func compactSession(decisions: String) async {
+        let retained = decisions.split(whereSeparator: \.isNewline).map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+        }.filter { !$0.isEmpty }
+        guard retained.count <= 16, retained.allSatisfy({ $0.utf8.count <= 1024 }) else {
+            errorMessage = "Conserva como máximo 16 decisiones, de hasta 1024 bytes cada una."; return
+        }
+        guard canChangeSession, let selected, sessionCore.scope == selected.scope,
+              let snapshot = sessionCore.snapshot, snapshot.revision > 0,
+              OwnerManagementReview.confirm(title: "Compactar contexto", action: "Compactar este contexto",
+                detail: "Se preparará el contexto de «\(selected.title)» en la revisión \(snapshot.revision), conservando el primer mensaje, las decisiones indicadas y las referencias a recibos. Parte del texto puede omitirse del contexto del modelo; el historial original se conserva. No concede permisos ni ejecuta herramientas.",
+                isCurrent: { canChangeSession && self.selected?.scope == selected.scope && sessionCore.snapshot?.revision == snapshot.revision }) else { return }
+        conversationRefresh?.setScope(nil)
+        defer { conversationRefresh?.setScope(self.selected?.scope) }
+        await sessionCore.compact(decisions: retained)
+        if sessionCore.result != nil {
+            do { messages = try await decodeMessages(fetchMessages(selected), scope: selected.scope) }
+            catch { report(error) }
+        }
+    }
+
+    func rewindSession(until: Int, title: String) async {
+        guard canChangeSession, let selected, sessionCore.scope == selected.scope,
+              let snapshot = sessionCore.snapshot, until > 0, until <= snapshot.revision,
+              messages.contains(where: { $0.sequence == until && $0.role != "system" }),
+              OwnerManagementReview.confirm(title: "Continuar desde un punto anterior", action: "Crear esta rama",
+                detail: "Se creará una conversación nueva desde el punto \(until) de «\(selected.title)». El original y los registros de sus acciones se conservan. No revierte efectos, no copia permisos ni reutiliza el hilo del proveedor.",
+                isCurrent: { canChangeSession && self.selected?.scope == selected.scope && sessionCore.snapshot?.revision == snapshot.revision }) else { return }
+        conversationRefresh?.setScope(nil)
+        defer { conversationRefresh?.setScope(self.selected?.scope) }
+        await sessionCore.rewind(until: until, title: title)
+        if sessionCore.result != nil {
+            do {
+                messages = try await decodeMessages(fetchMessages(selected), scope: selected.scope)
+                try await refreshSessions()
+            } catch { report(error) }
+        }
+    }
+
+    func openSessionBranch(_ branch: SessionBranchSnapshot) async {
+        guard canChangeSession, selected?.id == branch.parentID, selected?.agentID == branch.agentID else { return }
+        do {
+            if branch.scope.temporary, !sessions.contains(where: { $0.id == branch.scope.sessionID }) {
+                let value: RPCValue = .object(["session_id": .string(branch.scope.sessionID),
+                    "temporary": .bool(true), "title": .string(branch.title), "archived": .bool(false),
+                    "agent_id": .string(branch.agentID), "parent_session_id": .string(branch.parentID)])
+                guard let session = ChatSession(value) else { throw RPCFailure.invalidResponse }
+                sessions.insert(session, at: 0)
+            } else { try await refreshSessions() }
+            await selectSession(branch.scope.sessionID)
+        } catch { report(error) }
     }
 
     private func report(_ error: Error) {

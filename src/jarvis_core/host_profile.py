@@ -181,6 +181,17 @@ class ProfileLease:
         with self._lock:
             return self._scope
 
+    def child_custody_fds(self) -> tuple[int, ...]:
+        """Share the flock's open file description with a controlled child.
+
+        After a host crash its inherited descriptor prevents a fresh host from
+        opening stores while that child remains alive. This is cooperative
+        process custody, not a sandbox for a program that closes/unlocks it.
+        """
+        with self._lock:
+            self.assert_current()
+            return (self._fd,)
+
     def assert_current(self, expected_scope: HostScope | None = None) -> None:
         with self._lock:
             if self._fd < 0 or self._directory is None:
@@ -941,6 +952,9 @@ def service_blockers(service):
 # Reads may initialize SQLite or provider/pairing state, so ALL handlers are
 # admitted. This set only avoids false generation bumps for unchanged polling.
 READ_RPCS = frozenset({
+    "sessions.context", "sessions.operation", "sessions.operations",
+    "delegations.get", "delegations.lookup",
+    "delegations.wait", "delegations.list", "clients.status",
     "service.status", "service.local_status", "sessions.list", "sessions.messages",
     "runs.get", "events.poll",
     "runs.list", "tools.list", "workspace.get", "approvals.list", "memory.list",

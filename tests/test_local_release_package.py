@@ -64,6 +64,25 @@ def test_package_exact_own_files_install_and_resolve_without_executing_source(tm
     assert result["files"] == 5
 
 
+def test_launch_explicit_dependency_path_is_one_argument_and_never_inferred(tmp_path):
+    _, source = packaged(tmp_path)
+    installation = tmp_path / "installation"
+    installation.mkdir(mode=0o700)
+    receipt = install(source, installation)
+    plan = resolve_launch(
+        installation, context(), profile_pin(), expected_current_sha256=receipt.current_sha256
+    )
+    base = dict(python=Path("/usr/bin/python3"), codex=Path("/private/tmp/fixture-codex"),
+                state=tmp_path / "own-profile")
+    legacy = plan.arguments(**base)
+    assert "--dependencies" not in legacy
+    chosen = tmp_path / "selected dependencies with spaces"
+    assert plan.arguments(**base, dependencies=chosen) == [*legacy, "--dependencies", str(chosen)]
+    for invalid in (Path("relative"), Path("/private/tmp/../foreign")):
+        with pytest.raises(ReleaseError, match="release_launch_arguments_invalid"):
+            plan.arguments(**base, dependencies=invalid)
+
+
 def test_python_only_copy_skips_bytecode_icloud_duplicates_and_does_not_read_credentials(tmp_path):
     source, bundle = own_inputs(tmp_path)
     root = source / "jarvis_core"

@@ -48,7 +48,17 @@ struct ContentView: View {
                 MessageListView(messages: store.messages, temporary: store.selected?.temporary ?? false,
                                 streamingText: store.streamingText, canRead: store.canUseVoice && !store.voice.canStopDictation,
                                 onRead: store.readMessage)
-                ApprovalListView(access: store.access)
+                if store.ready {
+                    ApprovalListView(access: store.access)
+                    DelegatedApprovalsView(coordination: store.delegation)
+                }
+                if let goal = store.delegation.goal, !goal.settled {
+                    HStack {
+                        Text("Objetivo: \(goal.objective)").lineLimit(1).font(.caption)
+                        Spacer()
+                        Button("Ver tareas delegadas") { inspectorTab = "delegation"; showInspector = true }
+                    }.padding(.horizontal, 24).padding(.vertical, 8)
+                }
                 if !store.receipts.isEmpty {
                     ReceiptListView(receipts: store.receipts)
                         .padding(.horizontal, 24)
@@ -98,6 +108,10 @@ struct ContentView: View {
                         inspectorTab = "memory"; showInspector = true
                     }.disabled(!store.ready || store.selected == nil)
                     Menu("Gestionar", systemImage: "slider.horizontal.3") {
+                        Button("Contexto y ramas") { inspectorTab = "sessionCore"; showInspector = true }
+                        Button("Clientes locales") { inspectorTab = "clients"; showInspector = true }
+                        Button("Delegación y objetivos") { inspectorTab = "delegation"; showInspector = true }
+                        Button("Turno y cola") { inspectorTab = "runInput"; showInspector = true }
                         Button("Agentes") { inspectorTab = "agents"; showInspector = true }
                         Button("Skills") { inspectorTab = "skills"; showInspector = true }
                         Button("Programador") { inspectorTab = "schedules"; showInspector = true }
@@ -113,6 +127,10 @@ struct ContentView: View {
         .inspector(isPresented: $showInspector) {
             VStack(spacing: 0) {
                 Picker("Panel", selection: $inspectorTab) {
+                    Text("Contexto y ramas").tag("sessionCore")
+                    Text("Clientes locales").tag("clients")
+                    Text("Delegación y objetivos").tag("delegation")
+                    Text("Turno y cola").tag("runInput")
                     Text("Herramientas").tag("tools")
                     Text("Memoria").tag("memory")
                     Text("MCP").tag("mcp")
@@ -123,6 +141,10 @@ struct ContentView: View {
                     Text("Telegram").tag("telegram")
                 }.pickerStyle(.menu).padding()
                 if inspectorTab == "mcp" { MCPView(store: store) }
+                else if inspectorTab == "sessionCore" { SessionCoreView(store: store) }
+                else if inspectorTab == "clients" { ClientIdentityView(store: store) }
+                else if inspectorTab == "delegation" { DelegationView(store: store) }
+                else if inspectorTab == "runInput" { RunInputView(store: store) }
                 else if inspectorTab == "memory" { MemoryView(store: store) }
                 else if inspectorTab == "agents" { AgentsView(store: store) }
                 else if inspectorTab == "skills" { SkillsView(store: store) }

@@ -1,4 +1,4 @@
-"""Adversarial source/archive checks for the independent stdlib foundation."""
+"""Adversarial source/archive checks for the independent foundation."""
 
 import importlib.util
 import io
@@ -262,5 +262,66 @@ def test_gate_setup_reports_only_the_python_profile(tmp_path):
 def test_clean_base_cli_does_not_claim_native_app():
     completed = subprocess.run([sys.executable, str(ROOT / "script/check_clean_base.py")],
                                capture_output=True, text=True, check=True)
-    assert "runtime_dependencies=0" in completed.stdout
+    assert "runtime_dependencies=1" in completed.stdout
     assert "native_app=development" in completed.stdout
+
+
+def test_reviewed_crypto_import_requires_exact_declared_dependency(tmp_path):
+    root = fixture_tree(tmp_path)
+    source = root / "src/jarvis_core/runtime.py"
+    source.write_text("from cryptography.hazmat.primitives.asymmetric.ed25519 "
+                      "import Ed25519PublicKey\n")
+    with pytest.raises(guard.CleanBaseError, match="import externo"):
+        guard.check_tree(root)
+    manifest = root / "pyproject.toml"
+    manifest.write_text(manifest.read_text().replace(
+        "dependencies=[]", 'dependencies=["cryptography==50.0.2"]'))
+    assert guard.check_tree(root)["source_files"]
+    # A transitive dependency is not an authorization to use arbitrary cffi APIs.
+    source.write_text("import cffi\n")
+    with pytest.raises(guard.CleanBaseError, match="import externo"):
+        guard.check_tree(root)
+
+
+@pytest.mark.parametrize("requirement", [
+    "cryptography", "cryptography>=50", "cryptography==50.0.1",
+    "cryptography[ssh]==50.0.2", "cryptography @ https://example.com/package.whl",
+    'cryptography==50.0.2; python_version>="3.11"',
+])
+def test_crypto_dependency_is_not_a_general_dependency_escape(tmp_path, requirement):
+    root = fixture_tree(tmp_path)
+    manifest = root / "pyproject.toml"
+    import json
+    manifest.write_text(manifest.read_text().replace(
+        "dependencies=[]", "dependencies=" + json.dumps([requirement])))
+    with pytest.raises(guard.CleanBaseError, match="dependencias"):
+        guard.check_tree(root)
+    with pytest.raises(guard.CleanBaseError, match="dependencias"):
+        guard.check_wheel(wheel(tmp_path / "bad.whl", requires=f"Requires-Dist: {requirement}\n"))
+
+
+def test_crypto_wheel_metadata_must_match_declared_project(tmp_path):
+    root = fixture_tree(tmp_path / "project")
+    metadata = "Requires-Dist: cryptography==50.0.2\n"
+    artifact = wheel(tmp_path / "reviewed.whl", requires=metadata)
+    with pytest.raises(guard.CleanBaseError, match="dependencias del wheel"):
+        guard.check_wheel(artifact, root)
+    manifest = root / "pyproject.toml"
+    manifest.write_text(manifest.read_text().replace(
+        "dependencies=[]", 'dependencies=["cryptography==50.0.2"]'))
+    assert guard.check_wheel(artifact, root)["runtime_dependencies"] == 1
+    with pytest.raises(guard.CleanBaseError, match="dependencias del wheel"):
+        guard.check_wheel(wheel(tmp_path / "missing.whl"), root)
+
+
+def test_crypto_sdist_metadata_must_match_its_manifest(tmp_path):
+    root = fixture_tree(tmp_path / "project")
+    manifest = root / "pyproject.toml"
+    manifest.write_text(manifest.read_text().replace(
+        "dependencies=[]", 'dependencies=["cryptography==50.0.2"]'))
+    with pytest.raises(guard.CleanBaseError, match="dependencias del sdist"):
+        guard.check_sdist(native_sdist(tmp_path / "missing.tar.gz", root), root)
+    metadata = ("Metadata-Version: 2.3\nName: jarvis-core\nVersion: 1.0.0\n"
+                "Requires-Dist: cryptography==50.0.2\n")
+    own = native_sdist(tmp_path / "ok.tar.gz", root, overrides={"PKG-INFO": metadata.encode()})
+    assert guard.check_sdist(own, root)["files"]

@@ -47,13 +47,15 @@ class LaunchPlan:
             "restored_profile_activation_requires_owner": True,
         }
 
-    def arguments(self, *, python, codex, state):
+    def arguments(self, *, python, codex, state, dependencies=None):
         values = [Path(value) for value in (python, codex, state)]
+        if dependencies is not None:
+            values.append(Path(dependencies))
         if any(
             not path.is_absolute() or ".." in path.parts or "\0" in str(path) for path in values
         ):
             raise core.ReleaseError("release_launch_arguments_invalid")
-        return [
+        arguments = [
             str(self.native_executable),
             "--python",
             str(values[0]),
@@ -64,6 +66,9 @@ class LaunchPlan:
             "--codex",
             str(values[1]),
         ]
+        if dependencies is not None:
+            arguments.extend(("--dependencies", str(values[3])))
+        return arguments
 
 
 def read_closed_maintenance_journal(profile_root, context, lease):

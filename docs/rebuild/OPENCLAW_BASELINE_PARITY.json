@@ -45,7 +45,7 @@
       "Contratos declarados y rutas UI no acreditan disponibilidad ni funcionamiento real.",
       "No se ejecutó OpenClaw ni se leyó configuración/cuenta del dueño."
     ],
-    "current_jarvis_state": "Desarrollo propio con Codex oficial, herramientas/archivos, memoria léxica, MCP, procesos aislados, agentes, skills y programador. Telegram, voz local y lectura HTTPS tienen recorridos acotados. Los seis bloques locales de recuperación están implementados; la matriz nativa finita de variantes, rechazos y pruebas de incertidumbre y los recorridos autorizados/delegados se registran en PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md. Se corrigieron arranque aislado, recuperación sin abrir SQLite original y descubrimiento/retirada de tickets en la interfaz. No equivale a cierre de familias, distribución completa ni referencia exhaustiva. macOS inicial, iPhone aplazado; fase A abierta y B no iniciada. Continuación actual: copia de memoria sobre familias frías WAL/journal íntegras, reconciliación local de rutas mediante autoridad central y prueba fresca de chat sólo en RAM antes de arrancar Telegram. La cualificación final del incremento se consolida en PHASE_A_RECONCILIATION_CLOSEOUT.md; los checkpoints anteriores no se atribuyen a fuentes posteriores."
+    "current_jarvis_state": "Desarrollo propio con Codex oficial y bloques previos de archivos, memoria léxica, MCP, procesos, agentes, skills, programador, Telegram, voz y lectura HTTPS. El bloque finito de núcleo/sesiones añade identidad Ed25519 local y revocación, supervisión de caída sin replay, compactación extractiva, fork/rewind conversacionales, objetivos con hijos, límites, cola y steering. Recorridos nativos de este incremento usan perfiles y peer de inferencia propios sintéticos; se conserva separada la evidencia autenticada anterior. Recuperación/activación/copia de memoria/reconciliación previamente cualificadas no se reabren. macOS inicial, iPhone aplazado; ninguna familia amplia ni fase A completas y fase B no iniciada."
   },
   "status_vocabulary": {
     "no_implementado": "Sin evidencia productiva propia de cierre.",
@@ -93,6 +93,10 @@
         {
           "progress_id": "P-RECOVERY",
           "scope": "Avance contractual parcial; límites y cualificación en PHASE_A_RECOVERY.md."
+        },
+        {
+          "progress_id": "P-CORE-SERVICE",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
         }
       ],
       "acceptance": {
@@ -119,6 +123,10 @@
         {
           "progress_id": "P-IPC",
           "scope": "Ver avance parcial; no cierra la capacidad."
+        },
+        {
+          "progress_id": "P-CORE-SERVICE",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
         }
       ],
       "acceptance": {
@@ -149,6 +157,10 @@
         {
           "progress_id": "P-TELEGRAM",
           "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
+        },
+        {
+          "progress_id": "P-CORE-SERVICE",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
         }
       ],
       "acceptance": {
@@ -230,6 +242,10 @@
         {
           "progress_id": "P-PROCESS",
           "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-CORE-SERVICE",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
         }
       ],
       "acceptance": {
@@ -266,6 +282,10 @@
         {
           "progress_id": "P-TOOLS",
           "scope": "Avance parcial conectado; el cierre completo y los recorridos reales de la familia siguen pendientes."
+        },
+        {
+          "progress_id": "P-CORE-DELEGATION",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
         }
       ],
       "acceptance": {
@@ -311,6 +331,14 @@
         {
           "progress_id": "P-RECOVERY",
           "scope": "Avance contractual parcial; límites y cualificación en PHASE_A_RECOVERY.md."
+        },
+        {
+          "progress_id": "P-CORE-SERVICE",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        },
+        {
+          "progress_id": "P-CORE-DELEGATION",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
         }
       ],
       "acceptance": {
@@ -348,6 +376,10 @@
         {
           "progress_id": "P-CLEANUP-OWNERS",
           "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
+        },
+        {
+          "progress_id": "P-CORE-DELEGATION",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
         }
       ],
       "acceptance": {
@@ -393,6 +425,14 @@
         {
           "progress_id": "P-CLEANUP-OWNERS",
           "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
+        },
+        {
+          "progress_id": "P-CORE-SERVICE",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        },
+        {
+          "progress_id": "P-CORE-DELEGATION",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
         }
       ],
       "acceptance": {
@@ -461,6 +501,10 @@
         {
           "progress_id": "P-SKILLS",
           "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-CORE-SESSIONS",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
         }
       ],
       "acceptance": {
@@ -506,6 +550,18 @@
         {
           "progress_id": "P-CLEANUP-OWNERS",
           "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
+        },
+        {
+          "progress_id": "P-CORE-SERVICE",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        },
+        {
+          "progress_id": "P-CORE-SESSIONS",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        },
+        {
+          "progress_id": "P-CORE-DELEGATION",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
         }
       ],
       "acceptance": {
@@ -539,6 +595,10 @@
         {
           "progress_id": "P-PROFILES",
           "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-CORE-SESSIONS",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
         }
       ],
       "acceptance": {
@@ -593,6 +653,10 @@
         {
           "progress_id": "P-PROFILES",
           "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-CORE-SESSIONS",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
         }
       ],
       "acceptance": {
@@ -658,6 +722,10 @@
         {
           "progress_id": "P-PROFILES",
           "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-CORE-DELEGATION",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
         }
       ],
       "acceptance": {
@@ -679,8 +747,13 @@
       "family": "agents",
       "name": "Subagentes, swarm, comunicación y objetivos",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-CORE-DELEGATION",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        }
+      ],
       "acceptance": {
         "observable_success": "Padre delega dos tareas, recoge resultados correlacionados y registra objetivo con presupuesto.",
         "observable_failure_or_revocation": "Cancelar padre/agotar presupuesto cierra hijos; un hijo no amplía autoridad ni finge petición del dueño.",
@@ -897,6 +970,10 @@
         {
           "progress_id": "P-PROFILES",
           "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-CORE-SESSIONS",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
         }
       ],
       "acceptance": {
@@ -1641,6 +1718,18 @@
         {
           "progress_id": "P-NATIVE",
           "scope": "Ver avance parcial; no cierra la capacidad."
+        },
+        {
+          "progress_id": "P-CORE-SERVICE",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        },
+        {
+          "progress_id": "P-CORE-SESSIONS",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        },
+        {
+          "progress_id": "P-CORE-DELEGATION",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
         }
       ],
       "acceptance": {
@@ -1691,6 +1780,18 @@
         {
           "progress_id": "P-RECOVERY",
           "scope": "Avance contractual parcial; límites y cualificación en PHASE_A_RECOVERY.md."
+        },
+        {
+          "progress_id": "P-CORE-SERVICE",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        },
+        {
+          "progress_id": "P-CORE-SESSIONS",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        },
+        {
+          "progress_id": "P-CORE-DELEGATION",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
         }
       ],
       "acceptance": {
@@ -1926,6 +2027,14 @@
         {
           "progress_id": "P-RECOVERY",
           "scope": "Avance contractual parcial; límites y cualificación en PHASE_A_RECOVERY.md."
+        },
+        {
+          "progress_id": "P-CORE-SERVICE",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        },
+        {
+          "progress_id": "P-CORE-DELEGATION",
+          "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
         }
       ],
       "acceptance": {
@@ -13787,7 +13896,7 @@
   },
   "progress_snapshot": {
     "date": "2026-10-26",
-    "revision_scope": "Continuación de activación, copia de memoria y reconciliación de canales: contratos propios ampliados, regresiones de negativos/custodia/caducidad y prueba fresca RAM por conexión/ruta/agente/workspace. La matriz finita de recuperación cerrada en b03ad7a no se reabre. La evidencia GUI y los controles finales del incremento se consolidan por separado; A-71/fase A abiertas y B no iniciada.",
+    "revision_scope": "Bloque finito de núcleo y sesiones: identidad local firmada/revocación, supervisión de caída, compactación, fork/rewind, subagentes/objetivos, presupuestos, cola y steering, con código propio, pruebas y recorridos nativos sobre perfil sintético. Recuperación/activación/copia de memoria/reconciliación previas se conservan cerradas en su alcance finito. Familias amplias y fase A siguen abiertas; fase B no iniciada.",
     "complete_capability_count": 0,
     "complete_reference_parity": false,
     "authenticated_inference_verified": true,
@@ -13812,7 +13921,7 @@
           "A-28"
         ],
         "verified_scope": "Persistencia SQLite real con datos sintéticos: sesiones/mensajes/runs/eventos, transacciones, temporales RAM, límites y recuperación interrupted/unknown sin repetir efectos.",
-        "remaining": "No memoria semántica, PostgreSQL, cifrado integral certificado, sharing/múltiples usuarios, ramas/rewind completos ni migración de datos del dueño."
+        "remaining": "No memoria semántica, PostgreSQL, cifrado integral certificado, sharing/múltiples usuarios ni migración de datos del dueño. Ramas/rewind conversacionales acotados se acreditan separadamente en P-CORE-SESSIONS; no rewind de repositorios."
       },
       {
         "id": "P-IPC",
@@ -13838,7 +13947,7 @@
           "A-14"
         ],
         "verified_scope": "Sockets/procesos locales reales con contenido y proveedor sintéticos; token privado, límites, idempotencia de petición, errores, cancelación y cierre.",
-        "remaining": "No identidad firmada de cliente, API completa de referencia ni acceso remoto productivo."
+        "remaining": "No API completa de referencia ni acceso remoto productivo. La identidad local firmada se acredita separadamente en P-CORE-SERVICE y no es atestación del binario Apple."
       },
       {
         "id": "P-CODEX",
@@ -13943,7 +14052,7 @@
           "A-73"
         ],
         "verified_scope": "Filesystem real propio: listar/leer/escribir/editar/mkdir, raíz fijada, rutas privadas/enlaces rechazados, compare-and-swap de bytes, leases exactos de un uso y guard antes del efecto. Configuración privada transaccional con lock y merge.",
-        "remaining": "No exec/sandbox, parches completos, perfiles persistentes de permisos ni herramientas completas de referencia."
+        "remaining": "Parches completos, perfiles persistentes de permisos y herramientas completas de referencia pendientes. Exec/sandbox tienen avance separado en P-PROCESS, sin equivalencia universal."
       },
       {
         "id": "P-MEMORY",
@@ -14023,7 +14132,7 @@
           "A-60"
         ],
         "verified_scope": "Perfiles CAS, contexto por revisión, memoria por agente/workspace, sesiones con agente inmutable, migración SQLitev1->v2 y fork de texto completado sin acciones/permisos/hilos.",
-        "remaining": "Agentes delegados/swarm, workspaces múltiples simultáneos, colaboración y rewind completo. No importa perfiles históricos."
+        "remaining": "Workspaces múltiples simultáneos, colaboración, swarm distribuido y rewind de repositorios siguen pendientes. Delegación local y ramas conversacionales se acreditan separadamente en P-CORE-DELEGATION/P-CORE-SESSIONS. No importa perfiles históricos."
       },
       {
         "id": "P-SKILLS",
@@ -14325,7 +14434,7 @@
           "A-71"
         ],
         "verified_scope": "Checkpoint b8ce4bc con 1585 Python / 162 Swift y CI aprobados; respaldo, verificación y staging sintéticos desde la app con decisiones reales del dueño. Captura/diagnóstico frío DELETE y rechazo de bootstrap restaurado; los tres SQLite de otro recorrido nativo no vacío conservaron bytes/metadatos. Alcances y demora inicial no atribuida registrados por separado. Ampliación local integrada: 1754 Python/175 Swift, admisión contextual y handoff explícito sin SDK inicial; revisión GUI descartada conservando borrador. Checkpoint 1d378a6 con CI macOS/Linux aprobado y activación/apertura reales del perfil sintético elegidas por el dueño. Estado local sin cuenta, diagnóstico y revisión de copia observados; límites y pruebas independientes en PHASE_A_ACTIVATION.md. Copia explícita de memoria conservada integrada con autoridad/corte, límites de perfil y panel nativo; 85 casos nuevos del host, 154 regresiones anteriores y 23 casos Swift focalizados, incluidas dos conexiones IPC reales con SQLite y decisiones sintéticas. Núcleo/compatibilidad f8e5a67 con CI macOS/Linux aprobada; contrato, fallo de custodia corregido y límites en PHASE_A_MEMORY_RECONCILIATION.md. Una incidencia real posterior acabó caducada sin efecto. Se reprodujo y corrigió el descarte de decisiones durante sondeo; 32 casos focalizados y comparación GUI sintética, más prueba de cola IPC serial real. Detalle en PHASE_A_OWNER_CLICK_REGRESSION.json; la copia corregida quedó completada y asentada en la app (2 notas sintéticas, 175 bytes), con originales intactos, IDs nuevos, revisión 1, un recibo y dos mapas verificados independientemente. Consulta nativa coincidente sin replay; identidad y límites en PHASE_A_MEMORY_COPY_LIVE.json. Producto 985b72a con 1914 Python, 207 Swift, gates y CI aprobados; no cierra la familia. OC-18 estudia adquisición privada SQLite y custodia de staging (cinco TS, sin runtime). El contrato PHASE_A_COLD_WAL_CONTRACT.md fija requisitos; la investigación por sí sola no acredita implementación. Primer incremento WAL implementado en código propio: backup/doctor sobre copias privadas, estado confirmado y fuentes intactas, propietario/mismo corte retenidos ante cleanup incierto; 45 casos núcleo y 21 host nuevos, 14 Swift de custodia y dos IPC WAL nuevos. Suites integradas: 1980 Python y 223 Swift aprobadas. Identidad, política estricta y límites en PHASE_A_WAL_RECOVERY_QUALIFICATION.json. Producto 8c7e7bc con 1982 Python, 225 Swift, paquetes, bundle y CI macOS/Linux aprobados. Diagnóstico y respaldo WAL desde la app sobre un perfil sintético (memoria WAL; estado/tareas DELETE), con aprobación real del dueño, publicación y recibo durable. Verificación independiente del último commit, hashes de recursos y los cinco originales intactos; verificación nativa coincidente. Se corrigió y comprobó visualmente la identidad del aviso WAL. Evidencia y límites en PHASE_A_WAL_RECOVERY_LIVE.json; no cierra A-71. Continuación 26-10: restauración del respaldo WAL por la app con aprobación real del dueño a otro perfil sintético desarmado. Verificador independiente conserva datos lógicos, nota del último commit, IDs/ámbitos, cinco originales y seis archivos del respaldo. La revisión muestra origen/hash y distingue las cifras del host activo. El caso IPC WAL existente ahora comprueba los tres destinos restaurados; 225 Swift aprobadas, sin aumentar el número de casos. Evidencia y límites en PHASE_A_WAL_RESTORE_LIVE.json; no activa el destino ni cierra la familia. Continuación de implementación 26-10: seis bloques propios conectados al host: WAL ausente/vacío/cabecera, journals compatibles recuperados en privado, archivo portátil independiente de workspace, reparación FTS y prefijo WAL hacia respaldo nuevo, actualizaciones y rollback locales de una pareja app/Python coherente. Autoridad central, copia actual verificada, pin de perfil/esquemas y custodia ante ACK incierto; lanzamiento explícito comprueba familias frías y mismo CURRENT. Los tests de motor/host y launcher propio son sintéticos; cualificación real del nuevo panel y controles finales se registran aparte. Canal development con Python/Codex externos, sin migración inversa ni activación implícita. Alcance en PHASE_A_RECOVERY_COMPLETION.md; no cierra A-71. Cualificación final del incremento: 2297 pruebas Python, 249 Swift, Ruff, paquetes/smoke y bundle aprobados. Copia/restauración nativas de dos archivos (283 bytes), respaldo con journal caliente (65 notas), reparación FTS/restauración de una nota e instalación v1, actualización v2 y rollback v1 con decisiones del dueño. Todos los recibos durables y hashes verificados independientemente; originales conservados. La v1 seleccionada arrancó realmente con app/Python coherentes y cerró correctamente, sin cuenta. Las dos versiones positivas sólo difieren en marcadores de prueba del código final. Snapshot propio antiguo incompatible rechazado sin ejecutarlo. Registro PHASE_A_RECOVERY_COMPLETION_QUALIFICATION.json. Cierre posterior de los puntos 1 y 2:16 revisiones GUI (siete modos en tres roles y nueve prefijos), tres rechazos GUI y16 publicaciones nativas IPC con oráculos. Memoria/tareas recuperadas y restauradas con decisiones del dueño y delegación expresa posterior; originales intactos. Caducidad, denegación, cancelación e interrupción conservan identidad/recibos sin replay. Recovery-only evita abrir las bases por consultas automáticas; avisos persistentes y tickets retirados tras desconexión. Detalle y límites en PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md y PHASE_A_STARTUP_ISOLATION.md. La continuación de reconciliación mantiene el núcleo de activación y añade regresiones adversariales del host y validación nativa del plazo de revisión. Amplía copia de memoria sobre familias frías íntegras y reconciliación local de rutas conservadas, sin restaurar autoridad externa. Detalle de contratos en PHASE_A_ACTIVATION.md/PHASE_A_MEMORY_RECONCILIATION.md y evidencia final del incremento en PHASE_A_RECONCILIATION_CLOSEOUT.md; el cierre local añade 14 casos nativos observados, reinicio de ambos perfiles, 2402 pruebas Python y 305 Swift aprobadas. El registro conserva los fallos previos y sus correcciones; la CI se verifica al publicar.",
-        "remaining": "Distribución autocontenida, autenticidad completa, Developer ID/notarización y actualización remota firmada siguen sin acreditar. Tras caída, el producto rechaza un socket residual: la intervención explícita del fixture no acredita autorrecuperación. El cierre local de activación, copia de memoria y reconciliación de rutas se registra por separado con decisiones sintéticas y gestos delegados; no cierra A-71 global ni la fase A. B no iniciada.",
+        "remaining": "Distribución autocontenida, autenticidad completa, Developer ID/notarización y actualización remota firmada siguen sin acreditar. La recuperación acotada de un socket muerto bajo lease y la supervisión nativa se acreditan ahora en P-CORE-SERVICE; no certifican procesos arbitrarios. El cierre local previo de activación, copia de memoria y reconciliación de rutas se conserva sin reabrirlo. A-71 global y fase A siguen abiertas; B no iniciada.",
         "detail_file": "PHASE_A_RECOVERY.md",
         "qualification_file": "PHASE_A_RECOVERY_QUALIFICATION.json",
         "wal_qualification_file": "PHASE_A_WAL_RECOVERY_QUALIFICATION.json",
@@ -14336,13 +14445,120 @@
         "native_closeout_file": "PHASE_A_RECOVERY_NATIVE_CLOSEOUT.json",
         "native_matrix_file": "PHASE_A_RECOVERY_NATIVE_MATRIX.json",
         "startup_isolation_file": "PHASE_A_STARTUP_ISOLATION.json"
+      },
+      {
+        "id": "P-CORE-SERVICE",
+        "component": "Identidad local firmada y recuperación supervisada del servicio",
+        "status": "contract_and_bounded_native_verified_partial",
+        "code": [
+          "src/jarvis_core/client_identity.py",
+          "src/jarvis_core/host_profile.py",
+          "src/jarvis_core/service.py",
+          "native/JarvisDesktop/Sources/DesktopCore/RPCClientIdentity.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/ServiceProcess.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/ServiceSupervisionPolicy.swift"
+        ],
+        "tests": [
+          "tests/test_client_identity.py",
+          "tests/test_service_client_revocation.py",
+          "tests/test_service_crash_recovery.py",
+          "tests/test_child_custody.py",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/ClientIdentityIntegrationTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/ServiceSupervisionPolicyTests.swift"
+        ],
+        "capability_ids": [
+          "A-01",
+          "A-02",
+          "A-03",
+          "A-06",
+          "A-08",
+          "A-10",
+          "A-13",
+          "A-59",
+          "A-60",
+          "A-70"
+        ],
+        "verified_scope": "Solicitudes Ed25519 ligadas a perfil/servidor/conexión/secuencia/cuerpo; admisión owner/read y revocación durable con CAS. Custodia flock heredada por hijos controlados, recuperación de socket muerto y supervisión nativa sin replay ni reabrir cuentas. GUI propia admitió/revocó un cliente read y recuperó el servicio tras SIGKILL con Mantenimiento abierto; estado interrupted/unknown y aprobación retirada.",
+        "remaining": "No atestación Apple, aislamiento contra malware del mismo usuario, acceso remoto/multiusuario ni custodia de árboles arbitrarios. Paquete de desarrollo requiere Python y Codex externos; autenticidad/distribución completa pendientes.",
+        "detail_file": "PHASE_A_CORE_SERVICE.md",
+        "qualification_file": "PHASE_A_CORE_CLOSEOUT.json"
+      },
+      {
+        "id": "P-CORE-SESSIONS",
+        "component": "Contexto compacto, ramas y operaciones durables de sesión",
+        "status": "contract_and_bounded_native_verified_partial",
+        "code": [
+          "src/jarvis_core/session_context.py",
+          "src/jarvis_core/state.py",
+          "src/jarvis_core/management.py",
+          "native/JarvisDesktop/Sources/DesktopCore/SessionCoreStore.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Views/SessionCoreView.swift"
+        ],
+        "tests": [
+          "tests/test_session_context.py",
+          "tests/test_service_session_context.py",
+          "tests/test_session_context_protocol.py",
+          "tests/test_session_fork_context.py",
+          "tests/test_session_steering_context.py",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/SessionCoreIntegrationTests.swift"
+        ],
+        "capability_ids": [
+          "A-12",
+          "A-13",
+          "A-14",
+          "A-16",
+          "A-28",
+          "A-59",
+          "A-60"
+        ],
+        "verified_scope": "Compactación extractiva acotada conserva petición inicial elegible, decisiones literales, recibos y steering como datos. Fork completo y rewind crean otra rama sin deshacer efectos, copiar grants/runs o binding. CAS/identidad de operación y catálogo paginado permiten consultar ACK perdido sin reenviar; temporales sólo RAM. GUI sintética compactó, continuó, bifurcó y abrió una rama desde un punto conservando originales.",
+        "remaining": "No compactación semántica por modelo ni retención de todo el texto en la ventana del proveedor. No agrupación/colaboración completas, proyectos/Git/worktrees, rewind de repositorios ni harness universal. La inferencia de estos recorridos usa peer propio sintético.",
+        "detail_file": "PHASE_A_CORE_SESSIONS.md",
+        "qualification_file": "PHASE_A_CORE_CLOSEOUT.json"
+      },
+      {
+        "id": "P-CORE-DELEGATION",
+        "component": "Objetivos locales, subagentes, presupuestos, colas y steering",
+        "status": "contract_and_bounded_native_verified_partial",
+        "code": [
+          "src/jarvis_core/delegation.py",
+          "src/jarvis_core/runtime.py",
+          "src/jarvis_core/codex.py",
+          "native/JarvisDesktop/Sources/DesktopCore/DelegationStore.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Views/DelegationView.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Views/RunInputView.swift"
+        ],
+        "tests": [
+          "tests/test_delegation.py",
+          "tests/test_runtime_budgets.py",
+          "tests/test_codex_steering.py",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/DelegationIntegrationTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/ConversationQueueIntegrationTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/DelegationSelectionRaceTests.swift"
+        ],
+        "capability_ids": [
+          "A-07",
+          "A-08",
+          "A-09",
+          "A-10",
+          "A-13",
+          "A-19",
+          "A-20",
+          "A-59",
+          "A-60",
+          "A-70"
+        ],
+        "verified_scope": "Objetivo de uno a cuatro hijos, un nivel, perfiles/revisiones exactos y sesiones separadas; autoridad central independiente para cada efecto. Presupuestos finitos, padre retenido hasta asentamiento SQL/finalizadores, catálogo durable sin replay. Cola espera recibo/limpieza y bloquea predecesor incierto; corrección oficial exacta de turno sin retry. GUI sintética ejecutó dos hijos, aprobó escritura única verificada por bytes/hash, y comprobó cola/corrección.",
+        "remaining": "No swarm distribuido/recursivo, comunicación remota, tablero de trabajo ni coordinación universal de referencia. Pasos no equivalen a tokens/coste. No se repitió inferencia autenticada de ChatGPT en esta cualificación.",
+        "detail_file": "PHASE_A_CORE_DELEGATION.md",
+        "qualification_file": "PHASE_A_CORE_CLOSEOUT.json"
       }
     ],
-    "detail_file": "PHASE_A_RECOVERY.md",
+    "detail_file": "PHASE_A_CORE_CLOSEOUT.md",
     "rea": {
       "source_file": "REA_COVERAGE.json",
-      "static_batches": 20,
-      "unique_typescript_paths_in_completed_batches": 78,
+      "static_batches": 23,
+      "unique_typescript_paths_in_completed_batches": 88,
       "global_status": "partial",
       "runtime_executed": false,
       "semantic_unknowns_remain": true,
@@ -14366,21 +14582,40 @@
         "OC-17",
         "OC-18",
         "OC-19",
-        "OC-20"
+        "OC-20",
+        "OC-21A",
+        "OC-21B",
+        "OC-21C"
       ],
       "limits": "Contar rutas examinadas no significa comprensión semántica ni revisión global. IDs y evidencias completos en REA_COVERAGE.json/provenance.",
-      "unique_ts_js_paths_in_completed_batches": 80,
+      "unique_ts_js_paths_in_completed_batches": 90,
       "source_count_note": "El contador TypeScript conserva su sentido estricto; el total TS/JS incluye también MJS/CJS."
     },
-    "previous_detail_file": "PHASE_A_CHANNELS_VOICE_WEB.md",
+    "previous_detail_file": "PHASE_A_RECONCILIATION_CLOSEOUT.md",
     "qualification_file": "PHASE_A_RECOVERY_QUALIFICATION.json",
-    "latest_qualification_status": "local_reconciliation_native_verified_publication_requires_gates",
-    "latest_qualification_record": "PHASE_A_RECONCILIATION_CLOSEOUT.json",
+    "latest_qualification_status": "core_sessions_local_contracts_and_bounded_native_verified_publication_requires_gates",
+    "latest_qualification_record": "PHASE_A_CORE_CLOSEOUT.json",
     "completion_increment_file": "PHASE_A_RECOVERY_COMPLETION.md",
     "completion_increment_qualification": "recovery_finite_matrix_and_local_reconciliation_native_verified",
     "previous_qualification_status": "207native_1914python_ci_and_bounded_native_memory_copy_passed_phase_a_open",
     "previous_qualification_record": "PHASE_A_MEMORY_COPY_LIVE.json",
-    "reconciliation_increment_file": "PHASE_A_RECONCILIATION_CLOSEOUT.md"
+    "reconciliation_increment_file": "PHASE_A_RECONCILIATION_CLOSEOUT.md",
+    "core_increment_file": "PHASE_A_CORE_CLOSEOUT.md",
+    "core_contract_files": [
+      "PHASE_A_CORE_SERVICE.md",
+      "PHASE_A_CORE_SESSIONS.md",
+      "PHASE_A_CORE_DELEGATION.md"
+    ],
+    "core_validation_limits": [
+      "2536 pruebas Python y 332 Swift aprobadas en controles locales completos; no contar selecciones focales solapadas como pruebas distintas.",
+      "Nueve decisiones nativas delegadas en perfil propio sintético; filesystem, sockets, SQLite y procesos reales con peer de modelo propio, sin cuenta/historial personal.",
+      "La recuperación automática no reinicia inferencia ni cuentas; reapertura explícita y publicación se registran en el cierre integrado.",
+      "No cierra ninguna familia amplia ni revisión global de OpenClaw."
+    ],
+    "capability_status_counts": {
+      "implementacion_parcial_contratos_probados": 44,
+      "no_implementado": 36
+    }
   },
   "target_decisions": {
     "date": "2026-10-24",

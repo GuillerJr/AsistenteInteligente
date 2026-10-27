@@ -83,7 +83,7 @@ final class SocketIntegrationTests: XCTestCase {
         let child = Process()
         child.executableURL = URL(fileURLWithPath: python)
         child.arguments = ["-c", """
-        import asyncio, json, signal, sys
+        import asyncio, base64, json, signal, sys
         from pathlib import Path
         from jarvis_core.protocol import LocalRpcServer
         root = Path(sys.argv[1])
@@ -95,8 +95,14 @@ final class SocketIntegrationTests: XCTestCase {
             return {'count': count}
         class TracedServer(LocalRpcServer):
             async def _dispatch(self, frame):
+                request = json.loads(frame)
+                method = request['method']
+                if method == 'client.challenge':
+                    return await super()._dispatch(frame)
+                if method == 'client.request':
+                    method = json.loads(base64.b64decode(request['params']['body']))['method']
                 with (root / 'trace').open('a') as log:
-                    log.write(json.loads(frame)['method'] + '\\n')
+                    log.write(method + '\\n')
                 return await super()._dispatch(frame)
         async def main():
             done = asyncio.Event()

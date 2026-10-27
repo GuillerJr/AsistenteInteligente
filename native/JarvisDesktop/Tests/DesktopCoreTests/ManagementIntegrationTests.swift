@@ -101,7 +101,10 @@ final class ManagementIntegrationTests: XCTestCase {
             let sessions = try await transport.call("sessions.list")
             let session = try XCTUnwrap(sessions["sessions"].array?.first(where: { $0["session_id"].string == sessionID }))
             XCTAssertEqual(session["agent_id"].string, agent.id)
-            let fork = try await transport.call("sessions.fork", params: ["session_id": .string(sessionID), "temporary": .bool(false)])
+            let originalContext = try await transport.call("sessions.context", params: ["session_id": .string(sessionID), "temporary": .bool(false)])
+            let operationID = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+            let fork = try await transport.call("sessions.fork", params: ["session_id": .string(sessionID), "temporary": .bool(false),
+                "expected_revision": originalContext["context"]["revision"], "operation_id": .string(operationID)])
             XCTAssertEqual(fork["session"]["parent_session_id"].string, sessionID)
             XCTAssertEqual(fork["session"]["agent_id"].string, agent.id)
             let stopped = try await client.mutate("scheduler.stop", params: [:])

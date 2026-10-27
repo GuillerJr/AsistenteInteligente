@@ -16,7 +16,7 @@ final class RecoveryNegativeIntegrationTests: XCTestCase {
     }
 
     @MainActor private func start(_ identity: String = "wal_absent_all", negative: String? = nil,
-                                  restart: Running? = nil, expectedStartupFailure: Bool = false) async throws -> Running {
+                                  restart: Running? = nil) async throws -> Running {
         let environment = ProcessInfo.processInfo.environment
         guard let python = environment["JARVIS_DESKTOP_PYTHON"],
               let source = environment["JARVIS_DESKTOP_SOURCE"] else {
@@ -66,7 +66,7 @@ final class RecoveryNegativeIntegrationTests: XCTestCase {
             XCTAssertEqual(trace["stores_closed"], .bool(true))
             XCTAssertEqual(trace["provider_calls"], .number(0))
         } catch {
-            if !expectedStartupFailure, let data = try? Data(contentsOf: URL(fileURLWithPath: logs + "/fixture.log")) {
+            if let data = try? Data(contentsOf: URL(fileURLWithPath: logs + "/fixture.log")) {
                 print(String(decoding: data.prefix(8192), as: UTF8.self))
             }
             throw error
@@ -188,44 +188,6 @@ final class RecoveryNegativeIntegrationTests: XCTestCase {
         }
     }
 
-    @MainActor private func retireKnownDeadFixtureSocket(_ running: Running, binding: RPCValue) async throws {
-        let environment = ProcessInfo.processInfo.environment
-        let python = try XCTUnwrap(environment["JARVIS_DESKTOP_PYTHON"])
-        let source = try XCTUnwrap(environment["JARVIS_DESKTOP_SOURCE"])
-        let repository = URL(fileURLWithPath: source).deletingLastPathComponent()
-        let logs = "/private/tmp/jarvis-nc-" + String(UUID().uuidString.prefix(6))
-        try FileManager.default.createDirectory(atPath: logs, withIntermediateDirectories: false,
-                                                attributes: [.posixPermissions: 0o700])
-        let child = Process()
-        child.executableURL = URL(fileURLWithPath: python)
-        let encoded = String(decoding: try JSONEncoder().encode(binding), as: UTF8.self)
-        child.arguments = ["-c", """
-        import json,sys
-        from pathlib import Path
-        import recovery_qualification_matrix as matrix
-        print(json.dumps(matrix.retire_fixture_socket(Path(sys.argv[1]),json.loads(sys.argv[2]),
-            child_exit_confirmed=True)))
-        """, running.root + "/fixture.json", encoded]
-        child.environment = ["PATH": "/usr/bin:/bin", "PYTHONPATH": source + ":" + repository.appendingPathComponent("tests").path + ":" + repository.appendingPathComponent("script").path,
-                             "PYTHONNOUSERSITE": "1", "PYTHONDONTWRITEBYTECODE": "1"]
-        let output = Pipe(), errorOutput = Pipe()
-        child.standardOutput = output; child.standardError = errorOutput
-        let lifecycle = try startFixtureProcess(child, directory: logs)
-        for _ in 0..<300 {
-            if !child.isRunning { break }
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        let stopped = await lifecycle.stop()
-        XCTAssertEqual(stopped, .stopped)
-        let bytes = output.fileHandleForReading.readDataToEndOfFile()
-        if bytes.isEmpty { print(String(decoding: errorOutput.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)) }
-        let report = try JSONDecoder().decode(RPCValue.self, from: bytes)
-        XCTAssertEqual(report["removed_only"], .string("service.sock"))
-        XCTAssertEqual(report["identity_matched"], .bool(true))
-        XCTAssertEqual(report["profile_lease_held"], .bool(true))
-        XCTAssertEqual(report["production_auto_recovery"], .bool(false))
-    }
-
     @MainActor func testActualWorkerCrashRestartKeepsInterruptedUnknownAndNeverReplays() async throws {
         let first = try await start()
         _ = try await first.transport.call("fixture.matrix.control", params: ["action": .string("block_before_publish")])
@@ -253,19 +215,17 @@ final class RecoveryNegativeIntegrationTests: XCTestCase {
         await first.maintenance.close()
         let exited = await first.lifecycle.stop()
         XCTAssertEqual(exited, .stopped)
-        // Production must first reject the stale entry. A distinct marked
-        // fixture intervention retires only this exact socket, after kernel
-        // child-exit confirmation and while holding the real profile lease.
-        do {
-            _ = try await start(restart: first, expectedStartupFailure: true)
-            XCTFail("El producto no debe sustituir automáticamente un socket existente")
-        } catch let error as RPCFailure { XCTAssertEqual(error, .serviceExited) }
-        try await retireKnownDeadFixtureSocket(first, binding: oldSocket)
+        // The owned child has actually exited. Product startup now acquires
+        // the exact profile lease and can reclaim its refused socket. No test
+        // helper unlinks the endpoint or manufactures a successful old receipt.
         let restarted = try await start(restart: first)
         let status = try await restarted.maintenance.status()
         XCTAssertTrue(status.operations.isEmpty)
         XCTAssertEqual(status.previousCount, 1)
         let trace = try await restarted.transport.call("fixture.matrix.trace")
+        XCTAssertEqual(trace["production_socket_recovered"], .bool(true))
+        XCTAssertEqual(trace["socket_binding"]["type"], .string("socket"))
+        XCTAssertNotEqual(trace["socket_binding"], oldSocket)
         let previous = try XCTUnwrap(trace["previous_operations"].array?.first)
         XCTAssertEqual(previous["operation_id"], .string(operation.id))
         XCTAssertEqual(previous["phase"], .string("interrupted_unknown"))

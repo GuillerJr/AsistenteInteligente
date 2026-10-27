@@ -16,6 +16,12 @@ inventory = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(inventory)
 
 
+def test_signed_test_identity_stays_outside_the_corpus_being_inventoried(tmp_path):
+    key = Path(os.environ["JARVIS_RPC_CLIENT_KEY_FILE"])
+    assert key.is_file() and not key.is_relative_to(tmp_path)
+    assert not list(tmp_path.iterdir())
+
+
 def test_inventory_never_executes_source_and_preserves_dynamic_declarations():
     source = '''
 raise RuntimeError("must not execute")

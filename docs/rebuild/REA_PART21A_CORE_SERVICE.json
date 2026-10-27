@@ -1,0 +1,202 @@
+{
+  "schema_version": 1,
+  "partition": "OC-21A",
+  "topic": "Identidad firmada de cliente y recuperación de socket residual",
+  "reference_commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "input_path": "/private/tmp/jarvis-core-service-rea21a",
+  "parent_evidence_id": "ev_ade6f59ec7ea1c09c1f5458558226b3aeabfab54376fd9808062360d4536db7b",
+  "summary_evidence_id": "ev_c14b62ae79fcfc1a01bc296b420cbe07adf22615d9f93f65c89b1314622ac38f",
+  "root_artifact_sha256": "a4e45cbf2d64e9b1eb7223f7bd762186275870a61f0e6281faf927b71a7999ad",
+  "source_selection": {
+    "requested_paths": [
+      "package.json",
+      "src/shared/device-auth.ts",
+      "src/infra/device-identity.ts",
+      "src/infra/gateway-lock-recovery.ts"
+    ],
+    "unselected_files": 1
+  },
+  "statistics": {
+    "relevant_files": 5,
+    "nested_asar_containers": 0,
+    "text_bytes_read": 163523,
+    "invalid_utf8_files": 0,
+    "parsed_javascript_files": 3,
+    "skipped_javascript_files": 0,
+    "visited_ast_nodes": 1220,
+    "findings": 63,
+    "modules": 0,
+    "parse_failures": 0
+  },
+  "coverage": {
+    "application": {
+      "status": "partial",
+      "truncated": false,
+      "omitted_count": null,
+      "limits": []
+    },
+    "semantic": {
+      "status": "unknown",
+      "truncated": false,
+      "omitted_nodes": 0,
+      "omitted_relations": 0,
+      "limits": [],
+      "families": [
+        {
+          "family": "boundary",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "call-flow",
+          "status": "partial",
+          "retained_relations": 27,
+          "omitted_relations": 0,
+          "unknown_count": 61
+        },
+        {
+          "family": "child-process",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "closure",
+          "status": "partial",
+          "retained_relations": 57,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "configuration",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "data-flow",
+          "status": "partial",
+          "retained_relations": 460,
+          "omitted_relations": 0,
+          "unknown_count": 95
+        },
+        {
+          "family": "event",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "object-flow",
+          "status": "partial",
+          "retained_relations": 71,
+          "omitted_relations": 0,
+          "unknown_count": 84
+        },
+        {
+          "family": "promise-ownership",
+          "status": "partial",
+          "retained_relations": 3,
+          "omitted_relations": 0,
+          "unknown_count": 3
+        },
+        {
+          "family": "request",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "resource-lifecycle",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "timer",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        }
+      ]
+    },
+    "application_unknowns": 1,
+    "semantic_unknowns": 243
+  },
+  "execution_observed": false,
+  "limitations": [
+    "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+    "Caller-selected source analysis leaves 1 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+    "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+    "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+    "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+    "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+    "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+    "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+    "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+    "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+    "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+    "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+    "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+    "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+    "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+    "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+    "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+    "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+  ],
+  "analysis_attempts": [
+    {
+      "input": "reference working tree",
+      "result": "integrity_mismatch",
+      "changed_entry": "appcast-x86_64.xml",
+      "continued": false
+    },
+    {
+      "input": "git-blob partition bound to fixed commit",
+      "result": "retained_static_partial"
+    }
+  ],
+  "observations": [
+    "La referencia separa identidad Ed25519, almacenamiento de claves y permisos por rol/ámbito; las dependencias importadas de esa cadena no están incluidas en este lote.",
+    "La recuperación de la referencia fija observación de archivos, confirmación y lease; rechaza dueño vivo antes de recuperar.",
+    "El contrato propio usa firma Ed25519 por solicitud y cliente admitido, desafío por conexión, secuencia estricta y ámbito; bootstrap de clave pública al lanzar, no por bearer.",
+    "La recuperación propia sólo retira un socket de la carpeta elegida bajo flock del perfil, ECONNREFUSED y segunda comprobación de inode; no mata procesos ni repite acciones."
+  ],
+  "residual_unknowns": [
+    "Implementación y comportamiento runtime de las dependencias OpenClaw no seleccionadas.",
+    "La firma de clave local no acredita firma Apple de la aplicación ni aísla de un proceso malicioso del mismo usuario.",
+    "No se ejecutó OpenClaw ni se copió implementación."
+  ],
+  "evidence_bundle": "/private/tmp/jarvis-core-service-rea21a-evidence.json",
+  "sources": [
+    {
+      "path": "package.json",
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "bytes": 153025
+    },
+    {
+      "path": "src/shared/device-auth.ts",
+      "sha256": "c53bc1bfa625ab2529ff57d6f2f47976c42283c8a4467746d1e38421bc9e86e6",
+      "bytes": 1176
+    },
+    {
+      "path": "src/infra/device-identity.ts",
+      "sha256": "3c609e2d0527150aee6e992339f0c8373e7612b8de383057d8af7087d0112d84",
+      "bytes": 3189
+    },
+    {
+      "path": "src/infra/gateway-lock-recovery.ts",
+      "sha256": "4bd5310dd1833ad70da796065c4efe4382c8861948a05e94e57140ee8148e587",
+      "bytes": 6133
+    }
+  ],
+  "evidence_bundle_sha256": "bcfeaf781c03509ca816e9416783bae343586e6bdf8108c6caa83c6904abde9f"
+}

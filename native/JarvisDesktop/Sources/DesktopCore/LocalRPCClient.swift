@@ -2,7 +2,8 @@ import Darwin
 import Foundation
 
 /// Private GCD queue owns the blocking descriptor. No network work runs on the UI actor.
-/// Tokens and POSIX ownership are base authentication, not signed macOS client attestation.
+/// An admitted Ed25519 identity signs every productive request. This identifies
+/// the client key, independently of the discovery token; not Apple code signing.
 public final class LocalRPCClient: @unchecked Sendable {
     private let runtime: ProfileRuntimeGuard
     private let directory: String
@@ -14,15 +15,20 @@ public final class LocalRPCClient: @unchecked Sendable {
     private var nextID = 0
     private var lastResponseAt: TimeInterval?
     private var authorizationFailure: RPCFailure?
+    private var identity: RPCClientIdentity?
+    private var challenge: RPCValue?
+    private var signatureSequence = 0
 
     public init(stateDirectory: String, timeout: TimeInterval = 30,
-                connectionIdleLimit: TimeInterval = 20, runtime: ProfileRuntimeGuard? = nil) {
+                connectionIdleLimit: TimeInterval = 20, runtime: ProfileRuntimeGuard? = nil,
+                identity: RPCClientIdentity? = nil) {
         precondition(timeout.isFinite && timeout > 0 && timeout <= 30)
         precondition(connectionIdleLimit.isFinite && connectionIdleLimit > 0 && connectionIdleLimit <= 30)
         self.runtime = runtime ?? ProfileRuntimeGuard()
         directory = stateDirectory
         self.timeout = timeout
         self.connectionIdleLimit = connectionIdleLimit
+        self.identity = identity
     }
 
     public var isActive: Bool { runtime.isActive }
@@ -48,6 +54,8 @@ public final class LocalRPCClient: @unchecked Sendable {
         if descriptor >= 0 { Darwin.close(descriptor) }
         descriptor = -1
         token = ""
+        challenge = nil
+        signatureSequence = 0
         lastResponseAt = nil
         if clearAuthorization { authorizationFailure = nil }
     }
@@ -158,8 +166,30 @@ public final class LocalRPCClient: @unchecked Sendable {
             disconnect()
         }
         if descriptor < 0 { try runtime.check(); try connect() }
+        do {
+            if identity == nil { identity = try RPCClientIdentity.forProfile(directory) }
+            if challenge == nil, let identity {
+                let value = try exchange("client.challenge", params: ["client_id": .string(identity.clientID)], signed: false)
+                try identity.validateChallenge(value, directory: directory)
+                challenge = value
+            }
+        } catch {
+            disconnect()
+            throw error
+        }
+        return try exchange(method, params: params, signed: true)
+    }
+
+    private func exchange(_ method: String, params: [String: RPCValue], signed: Bool) throws -> RPCValue {
         nextID = nextID % 9_007_199_254_740_991 + 1
-        let frame = try RPCFrame.request(id: nextID, method: method, params: params, token: token)
+        let frame: Data
+        if signed {
+            guard let identity, let challenge else { throw RPCFailure.configuration }
+            let nextSequence = signatureSequence + 1
+            frame = try identity.signedFrame(id: nextID, method: method, params: params, token: token,
+                                             challenge: challenge, sequence: nextSequence)
+            signatureSequence = nextSequence
+        } else { frame = try RPCFrame.request(id: nextID, method: method, params: params, token: token) }
         let deadline = ProcessInfo.processInfo.systemUptime + timeout
         do {
             try runtime.check()

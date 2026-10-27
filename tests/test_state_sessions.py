@@ -21,7 +21,8 @@ def test_fork_copies_completed_text_without_effects_or_bindings(tmp_path, tempor
         assert branch.ref.temporary is temporary
         assert branch.agent_id == "agent_prueba" and branch.parent_session_id == ref.session_id
         assert branch.provider_thread_id is None and branch.title == "Rama de prueba"
-        assert [message.text for message in store.list_messages(branch.ref)] == [
+        assert [message.text for message in store.list_messages(branch.ref)
+                if message.role in {"user", "assistant"}] == [
             "Pregunta completada", "Respuesta completada"]
         assert all(message.run_id is None for message in store.list_messages(branch.ref))
         assert store.list_runs(branch.ref) == ()
@@ -35,7 +36,8 @@ def test_fork_cutoff_and_busy_parent_are_atomic(tmp_path):
         store.append_message(ref, "user", "primero")
         store.append_message(ref, "assistant", "segundo")
         branch = store.fork_session(ref, until_sequence=1)
-        assert [message.text for message in store.list_messages(branch.ref)] == ["primero"]
+        assert [message.text for message in store.list_messages(branch.ref)
+                if message.role in {"user", "assistant"}] == ["primero"]
         before = store.list_sessions()
         with pytest.raises(StateError, match="message_not_found"):
             store.fork_session(ref, until_sequence=999)

@@ -23,6 +23,7 @@ public struct ExpectedRestoreBootstrap: Sendable, Equatable {
 public struct LaunchOptions: Sendable, Equatable {
     public let python: String
     public let source: String
+    public let dependencies: String?
     public let state: String
     public let codex: String
     public let providerState: String?
@@ -30,7 +31,7 @@ public struct LaunchOptions: Sendable, Equatable {
     public let recoveryOnly: Bool
 
     public static func parse(_ arguments: [String]) throws -> Self {
-        let paths = ["--python", "--source", "--state", "--codex", "--provider-state"]
+        let paths = ["--python", "--source", "--dependencies", "--state", "--codex", "--provider-state"]
         var flags: [String: String] = [:]
         var index = 0
         var recoveryOnly = false
@@ -49,10 +50,10 @@ public struct LaunchOptions: Sendable, Equatable {
         let expectedCount = ExpectedRestoreBootstrap.flags.filter { flags[$0] != nil }.count
         guard expectedCount == 0 || expectedCount == 5, expectedCount == 0 || flags["--provider-state"] == nil else { throw RPCFailure.configuration }
         guard !recoveryOnly || expectedCount == 0 else { throw RPCFailure.configuration }
-        return Self(python: python, source: source, state: state, codex: codex, providerState: flags["--provider-state"], expectedRestore: expectedCount == 0 ? nil : try ExpectedRestoreBootstrap(flags: flags), recoveryOnly: recoveryOnly)
+        return Self(python: python, source: source, dependencies: flags["--dependencies"], state: state, codex: codex, providerState: flags["--provider-state"], expectedRestore: expectedCount == 0 ? nil : try ExpectedRestoreBootstrap(flags: flags), recoveryOnly: recoveryOnly)
     }
     public func openingRestored(_ target: ProfileOpenTarget) -> Self {
-        Self(python: python, source: source, state: target.path, codex: codex, providerState: nil, expectedRestore: ExpectedRestoreBootstrap(target: target), recoveryOnly: false)
+        Self(python: python, source: source, dependencies: dependencies, state: target.path, codex: codex, providerState: nil, expectedRestore: ExpectedRestoreBootstrap(target: target), recoveryOnly: false)
     }
     public var serviceArguments: [String] {
         var args = ["-m", "jarvis_core.service", "--state", state, "--codex", codex]

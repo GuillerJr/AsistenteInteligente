@@ -42,6 +42,7 @@ final class StartupIsolationTests: XCTestCase {
         try fm.createSymbolicLink(atPath: root + "/venv/bin/python", withDestinationPath: canonical)
         XCTAssertEqual(mkfifo(root + "/venv/pyvenv.cfg", 0o600), 0)
         let options = try LaunchOptions.parse(["--python", root + "/venv/bin/python", "--source", source,
+                                              "--dependencies", try XCTUnwrap(env["JARVIS_DESKTOP_DEPENDENCIES"]),
                                               "--state", root + "/profile", "--codex", "/usr/bin/false"])
         let plan = try ServiceLaunchPlan(options)
         XCTAssertEqual(plan.executable.path, canonical)

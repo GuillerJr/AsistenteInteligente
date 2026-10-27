@@ -47,6 +47,11 @@ class ManagementAPI:
             "processes.list": self.list_processes,
             "processes.poll": self.poll_process,
             "sessions.fork": self.fork_session,
+            "sessions.context": self.session_context,
+            "sessions.operation": self.session_operation,
+            "sessions.operations": self.session_operations,
+            "sessions.compact": self.compact_session,
+            "sessions.rewind": self.rewind_session,
         }
 
     def _management_idle(self):
@@ -342,13 +347,73 @@ class ManagementAPI:
         }
 
     async def fork_session(self, value):
-        params(value, {"session_id", "temporary", "title", "until_sequence"}, {"session_id"})
+        params(value, {"session_id", "temporary", "title", "expected_revision", "operation_id"},
+               {"session_id", "expected_revision", "operation_id"})
+        if (type(value["expected_revision"]) is not int or value["expected_revision"] < 0
+                or type(value["operation_id"]) is not str):
+            raise RpcError(-32602, "La revisión y la identidad de la rama no son válidas.")
+        if "title" in value:
+            self._title(value["title"])
+        self._management_idle()
         ref = self._ref(value)
         if self._busy(ref):
             raise RpcError(-32011, "Espera a que termine la ejecución antes de ramificar.")
         row = self.store.fork_session(
-            ref, title=value.get("title"), until_sequence=value.get("until_sequence")
+            ref, title=value.get("title"), expected_revision=value["expected_revision"],
+            operation_id=value["operation_id"],
         )
         from jarvis_core.service import _session
 
-        return {"session": _session(row)}
+        operation = self.store.session_operation(ref, value["operation_id"])
+        return {"session": _session(row), "lineage": operation["result"]["lineage"]}
+
+    async def session_context(self, value):
+        params(value, {"session_id", "temporary"}, {"session_id"})
+        return {"context": self.store.context_snapshot(self._ref(value))}
+
+    async def session_operation(self, value):
+        params(value, {"session_id", "temporary", "operation_id"}, {"session_id", "operation_id"})
+        return {"operation": self.store.session_operation(self._ref(value), value["operation_id"])}
+
+    async def session_operations(self, value):
+        params(value, {"session_id", "temporary", "limit", "offset"}, {"session_id"})
+        return self.store.session_operations(
+            self._ref(value), limit=value.get("limit", 20), offset=value.get("offset", 0)
+        )
+
+    async def compact_session(self, value):
+        params(value, {"session_id", "temporary", "expected_revision", "operation_id",
+                       "budget_bytes", "keep_recent", "retained_decisions"},
+               {"session_id", "expected_revision", "operation_id"})
+        self._management_idle()
+        ref = self._ref(value)
+        if self._busy(ref):
+            raise RpcError(-32011, "Espera a que termine la ejecución antes de compactar.")
+        snapshot = self.store.compact_context(
+            ref, expected_revision=value["expected_revision"], operation_id=value["operation_id"],
+            budget_bytes=value.get("budget_bytes", 12000), keep_recent=value.get("keep_recent", 12),
+            retained_decisions=value.get("retained_decisions"),
+        )
+        from jarvis_core.service import _session
+
+        return {"context": snapshot, "session": _session(self.store.get_session(ref))}
+
+    async def rewind_session(self, value):
+        params(value, {"session_id", "temporary", "expected_revision", "operation_id",
+                       "until_sequence", "title"},
+               {"session_id", "expected_revision", "operation_id", "until_sequence"})
+        if "title" in value:
+            self._title(value["title"])
+        self._management_idle()
+        ref = self._ref(value)
+        if self._busy(ref):
+            raise RpcError(-32011, "Espera a que termine la ejecución antes de retroceder.")
+        row, lineage = self.store.rewind_session(
+            ref, expected_revision=value["expected_revision"],
+            operation_id=value["operation_id"],
+            until_sequence=value["until_sequence"],
+            title=value.get("title"),
+        )
+        from jarvis_core.service import _session
+
+        return {"session": _session(row), "lineage": lineage}

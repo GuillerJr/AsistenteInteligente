@@ -11,6 +11,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import os
 import signal
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager, contextmanager
@@ -19,8 +20,10 @@ from dataclasses import asdict
 from pathlib import Path
 
 from jarvis_core.bridge import CodexBridge
+from jarvis_core.client_identity import ClientAuthority, ClientIdentityError
 from jarvis_core.codex import CodexClient, CodexError
 from jarvis_core.config import ConfigError, ProfileConfig
+from jarvis_core.delegation import DelegationAPI
 from jarvis_core.host_profile import (
     READ_RPCS,
     BoundProfileResource,
@@ -42,7 +45,12 @@ from jarvis_core.memory_tools import MemoryTools
 from jarvis_core.private_json import PrivateJsonError
 from jarvis_core.processes import ProcessTools
 from jarvis_core.profiles import ProfileError, ProfilesStore
-from jarvis_core.protocol import LocalRpcServer, RpcError, TransportSecurityError
+from jarvis_core.protocol import (
+    LocalRpcServer,
+    RpcError,
+    TransportSecurityError,
+    authenticated_client,
+)
 from jarvis_core.provider_choice import ProviderChoice, ProviderChoiceError
 from jarvis_core.recovery_fs import FileIdentity
 from jarvis_core.runtime import AgentRuntime, RunContext, RunHandle, ToolResult
@@ -143,15 +151,18 @@ class _ApprovalGate:
                 self.service.store.set_run_status(ref, operation.run_id, "running")
 
 
-class JarvisService(TelegramManagementAPI, ManagementAPI):
+class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI):
     def __init__(self, directory: Path, provider: CodexClient, *,
-                 profile_lease: ProfileLease | None = None) -> None:
+                 profile_lease: ProfileLease | None = None,
+                 bootstrap_public_key: str | None = None) -> None:
         self.profile_lease = profile_lease or ProfileLease.acquire(directory)
         self.profile_lease.assert_current()
         if self.profile_lease.root != directory:
             raise HostProfileError("profile_directory_mismatch")
         try:
             self.profile_lease.check_bootstrap_ready()
+            self.client_authority = ClientAuthority(directory, bootstrap_public_key=(
+                bootstrap_public_key or os.environ.get("JARVIS_RPC_BOOTSTRAP_PUBLIC_KEY")))
             self._initialize(directory, provider)
         except BaseException:
             for name in ("schedule_store", "memory", "store"):
@@ -173,8 +184,10 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
         self._provider_transition = None
         if isinstance(provider, CodexClient):
             provider.before_io = self._provider_io
+            provider.child_custody = self.profile_lease.child_custody_fds
         self.maintenance_coordinator = None
         self._run_writers = {}
+        self._run_clients = {}
         self.profile_gate = ServiceProfileGate(
             self.profile_lease, blockers=lambda: service_blockers(self),
             fingerprint=lambda: service_fingerprint(self),
@@ -189,6 +202,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
         self._errors: dict[str, str] = {}
         self._observers: set[asyncio.Task] = set()
         self._settlers: dict[str, asyncio.Task] = {}
+        self.initialize_delegation()
         self._closing = False
         self._maintenance = False
         self._close_task: asyncio.Task | None = None
@@ -207,7 +221,9 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
         )
         self.scheduler = Scheduler(self.schedule_store, self._dispatch_schedule, close_timeout=10)
         self.authority = ApprovalAuthority()
+        self.client_authority.on_revoke = self._client_revoked
         self.mcp = McpRegistry(directory / "mcp")
+        self.mcp.child_custody = self.profile_lease.child_custody_fds
         self.memory = MemoryStore(
             directory / "memory.sqlite3", limits=MemoryLimits(max_document_bytes=16000)
         )
@@ -228,7 +244,20 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
         self._configure_tools()
         self.initialize_telegram()
         self.maintenance_coordinator = MaintenanceCoordinator(self, self.profile_gate)
-        self.server = LocalRpcServer(directory, self.handlers(), max_frame_bytes=1024 * 1024)
+        self.server = LocalRpcServer(
+            directory, self.handlers(), max_frame_bytes=1024 * 1024,
+            client_authority=self.client_authority,
+            read_methods=READ_RPCS - {"service.status", "clients.status"},
+            recover_stale=self.profile_lease.assert_current,
+            client_control_guard=self._client_control_guard)
+
+    @contextmanager
+    def _client_control_guard(self, name):
+        try:
+            with self.profile_gate.admit(name, mutating=name != "clients.status"):
+                yield
+        except HostProfileError as error:
+            raise RpcError(-32037, error.code) from None
 
     def _configure_tools(self) -> None:
         self.workspace_tools = None
@@ -261,6 +290,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
         specs = list(memory_tools.specs())
         definitions.extend(self.web_tools.definitions())
         specs.extend(self.web_tools.specs())
+        definitions.extend(self.delegation_tools.definitions())
+        specs.extend(self.delegation_tools.specs())
         if self.workspace_tools:
             definitions.extend(self.workspace_tools.definitions())
             specs.extend(self.workspace_tools.specs())
@@ -268,6 +299,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
                 self.process_tools = ProcessTools(
                     self.workspace_tools, lambda: self._active_process_scope()
                 )
+                self.process_tools.child_custody = self.profile_lease.child_custody_fds
             definitions.extend(self.process_tools.definitions())
             specs.extend(self.process_tools.specs())
         definitions.extend(self.mcp.definitions())
@@ -290,6 +322,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
             cleanup=adapter.cleanup,
             execution_scope=self._execution_scope,
             on_tool_result=self._tool_result,
+            before_start=self.before_run_start,
         )
 
     def _memory_scope(self, ref: SessionRef) -> MemoryScope:
@@ -309,9 +342,27 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
             self._errors[context.run_id] = "provider_turn_closed"
             handle.cancel()
 
+    def _client_revoked(self, client_id):
+        for run_id, owner in tuple(self._run_clients.items()):
+            if owner != client_id:
+                continue
+            handle = self._handles.get(run_id)
+            ref = self._refs.get(run_id)
+            if ref is not None:
+                self.authority.revoke(ref.session_id)
+            if handle is not None:
+                self._errors[run_id] = "client_revoked"
+                handle.cancel()
+
+    def _assert_run_client(self, run_id):
+        owner = self._run_clients.get(run_id)
+        if owner is not None:
+            self.client_authority.lookup(owner, scope="owner")
+
     @contextmanager
     def _execution_scope(self, operation, grant):
         with self.profile_gate.admit("run.effect", mutating=True, closing=True):
+            self._assert_run_client(operation.run_id)
             self.provider_choice.assert_current(self._provider_epochs[operation.run_id])
             self._adapter.bridge.assert_can_execute(operation.run_id)
             with self.authority.execution_scope(operation, grant):
@@ -352,6 +403,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
 
     @profile_callback("run.prepare")
     def _prepare_turn(self, context: RunContext) -> dict:
+        self._assert_run_client(context.run_id)
         self.provider_choice.assert_current(self._provider_epochs[context.run_id])
         ref = self._refs[context.run_id]
         if self.config.workspace != self._configured_workspace:
@@ -367,6 +419,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
                     self._catalog_fingerprint,
                     profile.fingerprint,
                     skills.fingerprint,
+                    context.offered_tools,
                 ]
             ).encode()
         ).hexdigest()
@@ -384,32 +437,9 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
         if thread_id is None:
             # Only our own session, with bounded recent context. Never thread/list
             # or external owner history; failed user requests are not replayed.
-            rows = self.store.list_recent_messages(ref, limit=99 if skills.text else 100)
-            budget = 16000
-            for row in reversed(rows):
-                if row.run_id == context.run_id:
-                    continue
-                if row.run_id and self.store.get_run(ref, row.run_id).status != "completed":
-                    continue
-                if row.role not in {"user", "assistant"}:
-                    continue
-                raw = row.text.encode()
-                if len(raw) > budget:
-                    break
-                budget -= len(raw)
-                history.append(
-                    {
-                        "type": "message",
-                        "role": row.role,
-                        "content": [
-                            {
-                                "type": "input_text" if row.role == "user" else "output_text",
-                                "text": row.text,
-                            }
-                        ],
-                    }
-                )
-            history.reverse()
+            history = self.store.context_for_provider(
+                ref, exclude_run_id=context.run_id,
+                max_items=99 if skills.text else 100)
             if history:
                 self._event(
                     context, "context.restored", {"messages": len(history), "budget_bytes": 16000}
@@ -417,7 +447,9 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
         return {
             "thread_id": thread_id,
             "temporary": ref.temporary,
-            "tool_specs": self.catalog.specs(),
+            "tool_specs": [spec for spec in self.catalog.specs()
+                           if context.offered_tools is None
+                           or spec["name"] in context.offered_tools],
             "history": history,
             "instructions": profile.instructions,
             "context_data": skills.text,
@@ -471,6 +503,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
         }
         methods.update(self.management_handlers())
         methods.update(self.telegram_handlers())
+        methods.update(self.delegation_handlers())
 
         def safe(name, callback):
             async def invoke(params):
@@ -861,6 +894,9 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
         if method in {"cleanup.reply", "turn/interrupt", "account/logout"}:
             self.profile_lease.assert_current()
             return
+        owner = authenticated_client.get()
+        if owner is not None:
+            self.client_authority.lookup(owner, scope="owner")
         self.provider_choice.assert_current(self._provider_context.get())
 
     async def local_status(self, params: dict) -> dict:
@@ -1062,7 +1098,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
                 if original is None or original.text != message:
                     raise RpcError(-32012, "La solicitud ya corresponde a otro mensaje.")
                 return {"run_id": previous.run_id, "status": previous.status}
-        if self._busy(ref):
+        if self._busy(ref) and not self._allow_enqueue.get():
             raise RpcError(-32011, "Espera a que termine la ejecución de esta conversación.")
         self.provider_choice.assert_current()
         provider_epoch = self.provider_choice.epoch()
@@ -1073,9 +1109,12 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
             writer.close()
             raise
         self._run_writers[record.run_id] = writer
+        self._run_clients[record.run_id] = authenticated_client.get()
         self._refs[record.run_id] = ref
         self._provider_epochs[record.run_id] = provider_epoch
-        handle = self.runtime.start(ref.session_id, message, run_id=record.run_id)
+        handle = self.runtime.start(ref.session_id, message, run_id=record.run_id,
+                                    budget=self._run_budget.get(),
+                                    offered_tools=self._run_offered_tools.get())
         self._handles[handle.run_id] = handle
         observer = asyncio.create_task(self._settle(ref, handle))
         self._observers.add(observer)
@@ -1132,6 +1171,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI):
             self._refs.pop(handle.run_id, None)
             self._run_fingerprints.pop(handle.run_id, None)
             self._provider_epochs.pop(handle.run_id, None)
+            self._run_clients.pop(handle.run_id, None)
             writer = self._run_writers.pop(handle.run_id, None)
             if writer is not None:
                 writer.close()
@@ -1332,6 +1372,7 @@ def main() -> None:
         CodexError,
         OSError,
         TransportSecurityError,
+        ClientIdentityError,
         HostProfileError,
         ProviderChoiceError,
         ProfileError,

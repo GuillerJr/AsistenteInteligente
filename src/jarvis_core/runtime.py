@@ -34,6 +34,30 @@ class FinalAnswer:
 
 
 @dataclass(frozen=True)
+class RunBudget:
+    """Finite provider-step and elapsed execution budgets; cleanup keeps custody.
+
+    A step is one provider next_step call, not an estimated model token. The
+    elapsed ceiling expires while queued or waiting for approval, but settlement
+    never releases a session before its cleanup has really finished.
+    """
+
+    max_steps: int = 32
+    timeout_seconds: float | None = None
+
+    def __post_init__(self) -> None:
+        if type(self.max_steps) is not int or not 1 <= self.max_steps <= 100:
+            raise ValueError("run_step_budget_invalid")
+        value = self.timeout_seconds
+        if value is not None and (
+            type(value) not in {int, float}
+            or not math.isfinite(value)
+            or not 0 < value <= 3600
+        ):
+            raise ValueError("run_time_budget_invalid")
+
+
+@dataclass(frozen=True)
 class ToolProposal:
     tool_name: str
     arguments: Mapping[str, Any]
@@ -157,7 +181,7 @@ class RunResult:
 
 
 class RunHandle:
-    def __init__(self, context: RunContext) -> None:
+    def __init__(self, context: RunContext, budget: RunBudget | None = None) -> None:
         self._run_id = context.run_id
         self._session_id = context.session_id
         self._phase = RunPhase.QUEUED
@@ -165,6 +189,10 @@ class RunHandle:
         self._settled: asyncio.Future[RunResult] = asyncio.get_running_loop().create_future()
         self._task: asyncio.Task[None] | None = None
         self._entered = False
+        self.budget = budget or RunBudget()
+        self.provider_steps = 0
+        self._deadline = (None if self.budget.timeout_seconds is None else
+                          asyncio.get_running_loop().time() + self.budget.timeout_seconds)
 
     @property
     def run_id(self) -> str:
@@ -244,11 +272,15 @@ class AgentRuntime:
         execution_scope: Callable[[ApprovalRequest, ApprovalGrant], AbstractContextManager]
         | None = None,
         on_tool_result: Callable[[RunContext, ToolResult], None] | None = None,
+        max_concurrent_runs: int = 8,
+        before_start: Callable[[RunContext], Awaitable[None]] | None = None,
     ) -> None:
         if type(max_steps) is not int or not 1 <= max_steps <= 100:
             raise ValueError("max_steps must be between 1 and 100")
         if len({tool.name for tool in tools}) != len(tools):
             raise ValueError("duplicate tool name")
+        if type(max_concurrent_runs) is not int or not 1 <= max_concurrent_runs <= 32:
+            raise ValueError("runtime_concurrency_invalid")
         self._provider = provider
         self._tools = MappingProxyType({tool.name: tool for tool in tools})
         self._approval_gate = approval_gate
@@ -256,9 +288,11 @@ class AgentRuntime:
         self._cleanup = cleanup
         self._execution_scope = execution_scope
         self._on_tool_result = on_tool_result
+        self._before_start = before_start
         self._session_locks: dict[str, asyncio.Lock] = {}
         self._failed_cleanup_sessions: set[str] = set()
         self._tasks: set[asyncio.Task[None]] = set()
+        self._slots = asyncio.Semaphore(max_concurrent_runs)
 
     def start(
         self,
@@ -267,6 +301,7 @@ class AgentRuntime:
         *,
         offered_tools: Sequence[str] | None = None,
         run_id: str | None = None,
+        budget: RunBudget | None = None,
     ) -> RunHandle:
         if not isinstance(session_id, str) or not session_id.strip():
             raise ValueError("session_id must be nonempty")
@@ -280,7 +315,9 @@ class AgentRuntime:
         ):
             raise ValueError("invalid run identity")
         context = RunContext(run_id or uuid4().hex, session_id, message, names)
-        handle = RunHandle(context)
+        if budget is not None and type(budget) is not RunBudget:
+            raise ValueError("run_budget_invalid")
+        handle = RunHandle(context, budget or RunBudget(self._max_steps))
         lock = self._session_locks.setdefault(session_id, asyncio.Lock())
         task = asyncio.create_task(self._run(handle, context, lock))
         handle._task = task
@@ -292,6 +329,8 @@ class AgentRuntime:
     def _check_cancelled(handle: RunHandle) -> None:
         if handle._cancellation.is_set():
             raise asyncio.CancelledError
+        if handle._deadline is not None and asyncio.get_running_loop().time() >= handle._deadline:
+            raise _RunFailure("run_deadline")
 
     async def _run(self, handle: RunHandle, context: RunContext, lock: asyncio.Lock) -> None:
         handle._entered = True
@@ -299,13 +338,19 @@ class AgentRuntime:
         outcome = RunResult(context.run_id, "cancelled", None, ())
         try:
             self._check_cancelled(handle)
-            async with lock:
+            # Session ownership is retained through cleanup; unrelated sessions
+            # are admitted by a separate bounded execution lane.
+            async with lock, self._slots:
                 self._check_cancelled(handle)
                 if context.session_id in self._failed_cleanup_sessions:
                     raise _RunFailure("session_cleanup_failed")
+                if self._before_start is not None:
+                    await self._before_start(context)
+                    self._check_cancelled(handle)
                 handle._phase = RunPhase.RUNNING
                 try:
-                    answer = await self._steps(handle, context, results)
+                    async with asyncio.timeout_at(handle._deadline):
+                        answer = await self._steps(handle, context, results)
                     outcome = RunResult(
                         context.run_id, "completed", answer, tuple(results), answer_source="model"
                     )
@@ -318,7 +363,9 @@ class AgentRuntime:
                         error_type=type(error).__name__,
                     )
                 except Exception as error:
-                    code = error.code if isinstance(error, _RunFailure) else "execution_failed"
+                    code = (error.code if isinstance(error, _RunFailure)
+                            else "run_deadline" if isinstance(error, TimeoutError)
+                            else "execution_failed")
                     error_type = (
                         error.error_type
                         if isinstance(error, _RunFailure) and error.error_type
@@ -372,6 +419,12 @@ class AgentRuntime:
                 error.code,
                 error_type=error.error_type or type(error).__name__,
             )
+        except Exception as error:
+            # A before_start barrier can fail before provider resources exist.
+            # It still needs one failed result, not the default cancellation or
+            # an unobserved task exception. Detailed causes stay in host events.
+            outcome = RunResult(context.run_id, "failed", None, tuple(results),
+                                "run_preparation_failed", error_type=type(error).__name__)
         finally:
             handle._phase = RunPhase.SETTLED
             handle._settled.set_result(outcome)
@@ -396,8 +449,9 @@ class AgentRuntime:
         context: RunContext,
         results: list[ToolResult],
     ) -> str:
-        for _ in range(self._max_steps):
+        for _ in range(handle.budget.max_steps):
             self._check_cancelled(handle)
+            handle.provider_steps += 1
             current = RunContext(
                 context.run_id,
                 context.session_id,
@@ -507,6 +561,9 @@ class AgentRuntime:
             cancellation = asyncio.CancelledError()
             record_uncertain("execution_cancelled", type(cancellation).__name__)
             raise cancellation
+        if handle._deadline is not None and asyncio.get_running_loop().time() >= handle._deadline:
+            record_uncertain("execution_deadline")
+            raise _RunFailure("run_deadline")
         if (
             not isinstance(result, ToolResult)
             or result.tool_name != tool.name

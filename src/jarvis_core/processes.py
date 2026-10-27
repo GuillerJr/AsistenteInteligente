@@ -176,6 +176,7 @@ class ProcessTools:
         self._closing_scopes: set[str] = set()
         self._closed = False
         self._close_task: asyncio.Task | None = None
+        self.child_custody = None
         if sys.platform == "darwin":
             self._backend = "macos_seatbelt"
             self._helper = (
@@ -661,6 +662,7 @@ class ProcessTools:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             start_new_session=True,
+            pass_fds=self.child_custody() if self.child_custody else (),
             limit=16384,
         )
         entry = _Entry(uuid4().hex, owner, process, time.time_ns(), tuple(args["argv"]))

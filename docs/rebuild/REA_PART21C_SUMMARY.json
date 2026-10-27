@@ -1,0 +1,97 @@
+{
+  "id": "OC-21C",
+  "reference_commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "input_path": "/private/tmp/jarvis-rea-core-delegation-767z9zh6",
+  "sources": [
+    {
+      "path": "package.json",
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "bytes": 153025,
+      "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d"
+    },
+    {
+      "path": "src/agents/tools/subagents-tool.ts",
+      "sha256": "3a568b23efd21c93302e88e238433e80a8dc432e1de75c29f922ab849694b44f",
+      "bytes": 17519,
+      "git_blob": "835a3f1dfd2b6e139c66f5ba95d351e9f46622ff"
+    },
+    {
+      "path": "src/agents/subagents/registry/subagent-control-scope.ts",
+      "sha256": "66f3c2abc68e9d7af8339553a21c7ebf93060b748d3858bd94547fd4759dc57a",
+      "bytes": 19752,
+      "git_blob": "91e7b2d3f28ca458a5b812bc92139b0593a3b020"
+    },
+    {
+      "path": "src/agents/sessions/steering-message-identity.ts",
+      "sha256": "a807b7aa7f41a46e6ad8cac3c61ef792155156ddfd6c0532f77fb97a09f4d816",
+      "bytes": 1797,
+      "git_blob": "60b74f2a310d56cf56d174af6d2e5301c66401b4"
+    },
+    {
+      "path": "src/agents/subagents/registry/subagent-registry-restart-recovery-helpers.ts",
+      "sha256": "f90943cc2284aa481c9d73fd71b0feb41cdc12191cd31f52ee10020d4c47e261",
+      "bytes": 2079,
+      "git_blob": "d1e9c71b226055edc653c0e02818519b613431fe"
+    }
+  ],
+  "execution_observed": false,
+  "direct_tree_attempt": {
+    "error": "integrity_mismatch",
+    "detail": "Directory entry changed during read: pnpm-lock.yaml"
+  },
+  "date": "2026-10-26",
+  "topic": "subagent control ownership, restart identity and steering receipt identity",
+  "parent_evidence_id": "ev_972140c5a89a94fce42d281201317c5a5ccf8caf6a32b49ed0291e6914dfbfc0",
+  "summary_evidence_id": "ev_007ef96aa32923f43c50312dc5048ae9285750c436c1ff6b59bb19593259f99a",
+  "module_view_evidence_id": "ev_f1bd3387f2788938b4f1761eee1941af445ca4394e4b4e8d25a53260bb5e3e08",
+  "partition_sha256": "62768b14a95595faecb8ba34f5f325d4bce4d9542c2c723378937fbee760f3a1",
+  "full_evidence_path": "/private/tmp/jarvis-rea-core-delegation-evidence.json",
+  "full_evidence_sha256": "22b391aa04dd96fb33bb4f315bc8c76c54df8037aaf4ba3260cdf4bba18e118f",
+  "coverage": {
+    "application": "partial",
+    "semantic": "unknown",
+    "application_unknowns": 1,
+    "semantic_unknowns": 931,
+    "selected_typescript_sources": 4,
+    "unselected_files": 1,
+    "execution_observed": false
+  },
+  "observations": [
+    {
+      "topic": "subagent controls",
+      "source": "src/agents/tools/subagents-tool.ts",
+      "observed": "Static tool schema and implementation candidates expose list/wait/cancel; wait timeout does not request cancellation. Ownership selectors are consulted for mutation.",
+      "unknown": "Imported registry, runtime enforcement and delivery behavior remain unobserved."
+    },
+    {
+      "topic": "control ownership",
+      "source": "src/agents/subagents/registry/subagent-control-scope.ts",
+      "observed": "Source distinguishes readable completion routing and narrower mutating controller ownership; cancellation captures exact owner selection before yielding.",
+      "unknown": "Dependencies outside the partition and arbitrary dynamic relations remain unresolved."
+    },
+    {
+      "topic": "steering identity",
+      "source": "src/agents/sessions/steering-message-identity.ts",
+      "observed": "A private exact steering identity is associated with persistence-failure listeners, separate from the message text.",
+      "unknown": "Live persistence and provider steering were not observed."
+    },
+    {
+      "topic": "restart",
+      "source": "src/agents/subagents/registry/subagent-registry-restart-recovery-helpers.ts",
+      "observed": "Restart helpers test lifecycle generation and exact run/session owner matches.",
+      "unknown": "No OpenClaw restart was executed or qualified."
+    }
+  ],
+  "own_design": [
+    "One fixed goal controls at most four children; child sessions contain no inherited transcript, tool grant or provider binding.",
+    "Same central runtime, provider, approval authority, profile admission and SQL run receipts for every child.",
+    "A goal reserves a finite sum of provider steps and elapsed execution budget; parent custody outlives child finalizers and durable settlement.",
+    "Durable coordination events survive restart as observations; they never replay interrupted child requests.",
+    "Owner steering uses the official generated TurnSteerParams v0.163.0 expectedTurnId precondition and an exact request identity; ambiguous writes are recorded without retry."
+  ],
+  "limits": [
+    "This is a fixed read-only Git-object partition, not a whole repository review.",
+    "Static source and AST relationships do not prove OpenClaw runtime behavior.",
+    "Code, fixtures and UI implementation are original Jarvis sources; no reference implementation or resource is imported."
+  ]
+}

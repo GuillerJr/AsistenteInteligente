@@ -292,6 +292,7 @@ class McpClient:
         self.request_timeout, self.shutdown_timeout = request_timeout, shutdown_timeout
         self.max_line_bytes, self.max_pages, self.max_items = max_line_bytes, max_pages, max_items
         self._environment = supplied
+        self.child_custody = None
         self._process: asyncio.subprocess.Process | None = None
         self._spawn: asyncio.Task[asyncio.subprocess.Process] | None = None
         self._reader: asyncio.Task[None] | None = None
@@ -336,6 +337,7 @@ class McpClient:
                     *self.command, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE, cwd=self._home, env=environment,
                     limit=self.max_line_bytes + 1, start_new_session=True,
+                    pass_fds=self.child_custody() if self.child_custody else (),
                 ))
                 self._process = await asyncio.shield(self._spawn)
                 if self._closing is not None:

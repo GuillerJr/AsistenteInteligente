@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "id": "OC-21B",
+  "topic": "Contexto compacto, rewind y ramas de conversación",
+  "reference": {
+    "project": "OpenClaw",
+    "commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+    "modified": false,
+    "executed": false
+  },
+  "acquisition": {
+    "method": "git show commit:path into new private temporal partition",
+    "path": "/private/tmp/jarvis-core-sessions-rea-21b",
+    "initial_direct_attempt": {
+      "status": "integrity_mismatch",
+      "detail": "Directory entry changed during read: tsconfig.packages.json",
+      "evidence_accepted": false
+    }
+  },
+  "parent_evidence_id": "ev_228c4036c85e8a8dd6ae45a5ce703e9e52808573bd129e3a197120192e570eaf",
+  "summary_evidence_id": "ev_d6fd5a647c8775b22dc52a369d4c1f9834cc44ac745d4dfd7711a2831803cd71",
+  "modules_view_evidence_id": "ev_54a7a46ec1a023fdd15f73a3d4496a0ef05059726a333271386840aa7d562fc0",
+  "root_artifact_sha256": "8b080865cdec58dc6326300aed3b52d170fb9f74b208f5049775ca5b83697fed",
+  "source_paths": [
+    "package.json",
+    "src/agents/compaction.ts",
+    "src/gateway/server-methods/sessions-rewind.ts",
+    "src/config/sessions/session-parent-fork.ts"
+  ],
+  "statistics": {
+    "relevant_files": 4,
+    "nested_asar_containers": 0,
+    "text_bytes_read": 198616,
+    "invalid_utf8_files": 0,
+    "parsed_javascript_files": 3,
+    "skipped_javascript_files": 0,
+    "visited_ast_nodes": 4732,
+    "findings": 175,
+    "modules": 0,
+    "parse_failures": 0
+  },
+  "coverage": {
+    "application": {
+      "status": "complete",
+      "truncated": false,
+      "omitted_count": 0,
+      "limits": []
+    },
+    "semantic": {
+      "status": "unknown",
+      "truncated": false,
+      "omitted_nodes": 0,
+      "omitted_relations": 0,
+      "limits": [],
+      "families": [
+        {
+          "family": "boundary",
+          "status": "partial",
+          "retained_relations": 1,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "call-flow",
+          "status": "partial",
+          "retained_relations": 139,
+          "omitted_relations": 0,
+          "unknown_count": 178
+        },
+        {
+          "family": "child-process",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "closure",
+          "status": "partial",
+          "retained_relations": 418,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "configuration",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "data-flow",
+          "status": "partial",
+          "retained_relations": 2688,
+          "omitted_relations": 0,
+          "unknown_count": 324
+        },
+        {
+          "family": "event",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "object-flow",
+          "status": "partial",
+          "retained_relations": 322,
+          "omitted_relations": 0,
+          "unknown_count": 322
+        },
+        {
+          "family": "promise-ownership",
+          "status": "partial",
+          "retained_relations": 44,
+          "omitted_relations": 0,
+          "unknown_count": 42
+        },
+        {
+          "family": "request",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "resource-lifecycle",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "timer",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        }
+      ]
+    },
+    "application_unknowns": 0,
+    "semantic_unknowns": 866
+  },
+  "execution_observed": false,
+  "evidence_export": {
+    "path": "/private/tmp/jarvis-core-sessions-rea-21b-evidence-final.json",
+    "bytes": 6333645,
+    "sha256": "f31f3b354292dfc309a45619109c59a121670d8fb7fe8d3d0e29e1a0fff44e76",
+    "records": 3
+  },
+  "sources": [
+    {
+      "path": "package.json",
+      "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+      "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d",
+      "bytes": 153025
+    },
+    {
+      "path": "src/agents/compaction.ts",
+      "sha256": "0d242785bf7203a41b21b3a3fcf89384a3a35e7bf3ef3ae7753e06566070b27a",
+      "git_blob": "c5230ec9cb44d857edee5a7dac4134dfdf701f45",
+      "bytes": 4632
+    },
+    {
+      "path": "src/gateway/server-methods/sessions-rewind.ts",
+      "sha256": "f610eef486d4a2a6926e0517850b55dbde5d24d0b519bfcd5e552ba3597e19ce",
+      "git_blob": "07e78a7614d5e39793b93d06dd1dc6dbbf4bb780",
+      "bytes": 27330
+    },
+    {
+      "path": "src/config/sessions/session-parent-fork.ts",
+      "sha256": "6bcface62005c04031b436ebfefd32c6deebc04669f218ab6d482d35408e0330",
+      "git_blob": "a36d65f53e7cf3943320282c81efa47e0a340be2",
+      "bytes": 13629
+    }
+  ],
+  "findings": [
+    {
+      "id": "OC-21B-F1",
+      "kind": "static_observation",
+      "source": "src/agents/compaction.ts",
+      "detail": "Compaction exposes identifier preservation policy and bounded summary production; static source does not prove a runtime preservation guarantee."
+    },
+    {
+      "id": "OC-21B-F2",
+      "kind": "static_observation",
+      "source": "src/gateway/server-methods/sessions-rewind.ts",
+      "detail": "Rewind/fork mutation passes through ownership, busy and source revalidation boundaries. Project/repository and remote harness dependencies remain outside this partition."
+    },
+    {
+      "id": "OC-21B-F3",
+      "kind": "static_observation",
+      "source": "src/config/sessions/session-parent-fork.ts",
+      "detail": "Fork source ownership and release are distinct from published completion; no source execution observed."
+    },
+    {
+      "id": "OC-21B-D1",
+      "kind": "jarvis_design_decision",
+      "detail": "Use bounded extractive own checkpoints, original transcript retained, mandatory initial request/owner decisions/receipt ledger; never elevate history into authorization."
+    },
+    {
+      "id": "OC-21B-D2",
+      "kind": "jarvis_design_decision",
+      "detail": "Rewind continues in a new same-mode branch, retaining complete source audit and non-executable receipt lineage; no effect rollback or transfer of run identities, grants or provider binding."
+    }
+  ],
+  "limitations": [
+    "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+    "Caller-selected source analysis leaves 0 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+    "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+    "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+    "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+    "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+    "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+    "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+    "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+    "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+    "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+    "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+    "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+    "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+    "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+    "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+    "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code.",
+    "Only these three TypeScript sources plus package manifest are in this frozen partition; complete application coverage describes this four-file artifact only.",
+    "866 semantic unknowns and unresolved dependencies remain; no OpenClaw runtime, accounts, owner data or private history were inspected.",
+    "The extra module view was a first page of unresolved references, not exhaustion of all 70 module-reference rows.",
+    "No implementation, assets, fixtures or package dependencies from OpenClaw were imported into Jarvis."
+  ]
+}

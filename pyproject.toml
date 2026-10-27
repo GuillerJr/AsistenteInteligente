@@ -4,7 +4,9 @@ version = "0.1.0a2"
 description = "Jarvis en construcción: sesiones, servicio local y cliente nativo propios"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
-dependencies = []
+dependencies = [
+    "cryptography==50.0.2",
+]
 
 [dependency-groups]
 dev = [

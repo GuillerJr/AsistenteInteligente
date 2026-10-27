@@ -27,7 +27,9 @@ El dueño aplazó expresamente la app de iPhone; ver [decisiones](rebuild/PHASE_
   La [continuación de gestión](rebuild/PHASE_A_MANAGEMENT.md) añade procesos aislados,
   perfiles de agente, biblioteca local de skills, programador y ramas de conversación.
 - [ ] Completar aislamiento de ejecución y autorizaciones reales del dueño, sin
-  confundir token local con identidad firmada, ni un ACK con cierre de una acción.
+  confundir identidad de clave admitida con atestación Apple, ni un ACK con
+  cierre de una acción. La identidad local firmada ya está implementada en el
+  bloque de núcleo de abajo; el aislamiento completo sigue pendiente.
 - [ ] Distribución nativa autocontenida, actualización, recuperación e instalación
   cualificadas; no reemplazar la app anterior con un bundle de desarrollo.
 - [ ] Acreditar la base completa mediante pruebas por capacidad y recorridos reales.
@@ -66,7 +68,8 @@ Estos recorridos acotados no cierran todas las capacidades del canal, voz o web.
   reteniendo Stores y propietarios ante incertidumbre y sin reconexión/replay.
 - [ ] Completar la investigación semántica pendiente: REA 13–20 amplían respaldo,
   snapshots, actualización, cierre, migración de memoria, custodia SQLite y archivos;
-  veinte lotes y 80 rutas TS/JS seleccionadas no cierran la matriz ni toda la referencia.
+  los lotes OC-21A/B/C añaden núcleo y sesiones; 23 lotes y 90 rutas TS/JS
+  seleccionadas no cierran la matriz ni toda la referencia.
 - [x] Ejecutar Python/Swift/paquetes/bundle y CI para el checkpoint `b03ad7a`:
   2321 pruebas Python y 282 Swift. El [cierre nativo](rebuild/PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md)
   conserva identidades y límites; los controles de incrementos posteriores se registran aparte.
@@ -203,6 +206,40 @@ Las casillas siguientes separan implementación de comprobación nativa final.
   Developer ID/notarización y actualización remota firmada.
 
 A-71 y la fase A siguen abiertos; la fase B no ha comenzado.
+
+### Núcleo y sesiones — contrato finito completado
+
+El [cierre de núcleo y sesiones](rebuild/PHASE_A_CORE_CLOSEOUT.md) conserva
+fuentes, identidades, recorridos nativos y límites. Se completó este bloque
+solicitado; las familias amplias de la matriz y la fase A siguen abiertas.
+
+- [x] Admitir clientes locales con Ed25519, ámbitos de lectura/gestión,
+  revisión exacta, revocación durable y revalidación antes del efecto. El bearer
+  de descubrimiento no concede identidad ni se presenta como firma.
+- [x] Recuperar el servicio propio tras caída comprobada, con perfil físico y
+  lease exactos, custodia de hijos y carga exclusivamente local. Retirar las
+  aprobaciones anteriores y conservar `interrupted/unknown`, sin replay ni
+  reconexión del proveedor por la recuperación automática.
+- [x] Compactar contexto con decisiones literales y recibos históricos,
+  conservar originales y continuar desde otra rama sin deshacer efectos ni
+  heredar permisos. Consultar operaciones durables tras pérdida de ACK/reinicio.
+- [x] Coordinar objetivos de hasta cuatro hijos, con sesiones y aprobaciones
+  separadas, presupuestos, plazos, cancelación y asentamiento durable.
+- [x] Encolar hasta cuatro sucesores y corregir un turno exacto sin reintento
+  implícito; bloquear la cola ante resultados anteriores inciertos.
+- [x] Conectar estos controles a SwiftUI, probar carreras, pérdida de respuestas,
+  revocación, temporales, reinicios y fuentes conservadas. Nueve decisiones
+  nativas delegadas, escritura hija comprobada por bytes/hash, caída con
+  Mantenimiento abierto y reapertura completa del perfil sintético verificadas.
+- [x] Aprobar 2536 pruebas Python y 332 Swift, bundle de desarrollo y paquete
+  aislado. Los hooks repiten los controles antes de publicar; la CI corresponde
+  al commit resultante. El peer de modelo de estos recorridos es propio y
+  sintético; no se repitió inferencia autenticada con la cuenta del dueño.
+
+La investigación REA OC-21A/B/C es estática y conserva incógnitas. No acredita
+la orquestación distribuida, todos los harnesses, agrupación de sesiones,
+acceso remoto o atestación Apple. Esos ámbitos conservan sus estados en la
+matriz; no se trasladan a B ni se vuelven a abrir los cierres anteriores.
 
 ## Fase B — después de acreditar A
 

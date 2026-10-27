@@ -79,6 +79,30 @@ extension XCTestCase {
     func startFixtureProcess(_ process: Process, directory: String,
                              file: StaticString = #filePath, line: UInt = #line) throws -> FixtureProcess {
         try validateFixtureDirectory(directory)
+        // Every synthetic server uses the same signed wire protocol as the app.
+        // Only the fresh test launch pin is forwarded, never its private key.
+        if let pin = ProcessInfo.processInfo.environment["JARVIS_RPC_BOOTSTRAP_PUBLIC_KEY"] {
+            var environment = process.environment ?? [:]
+            environment["JARVIS_RPC_BOOTSTRAP_PUBLIC_KEY"] = pin
+            process.environment = environment
+            if var arguments = process.arguments, let index = arguments.firstIndex(of: "-c"),
+               arguments.indices.contains(index + 1), arguments[index + 1].contains("LocalRpcServer") {
+                let bootstrap = """
+                import os as _jvs_os
+                from jarvis_core.client_identity import ClientAuthority as _JvsAuthority
+                from jarvis_core.protocol import LocalRpcServer as _JvsServer
+                _jvs_original_init = _JvsServer.__init__
+                def _jvs_fixture_init(self, directory, handlers, **options):
+                    options.setdefault('client_authority', _JvsAuthority(directory,
+                        bootstrap_public_key=_jvs_os.environ['JARVIS_RPC_BOOTSTRAP_PUBLIC_KEY']))
+                    _jvs_original_init(self, directory, handlers, **options)
+                _JvsServer.__init__ = _jvs_fixture_init
+
+                """
+                arguments[index + 1] = bootstrap + arguments[index + 1]
+                process.arguments = arguments
+            }
+        }
         let fixture = FixtureProcess(process)
         addTeardownBlock {
             let result = await fixture.stop()

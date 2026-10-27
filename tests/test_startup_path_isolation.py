@@ -10,6 +10,7 @@ import os
 import select
 import subprocess
 import sys
+import sysconfig
 import tempfile
 import termios
 import time
@@ -19,10 +20,13 @@ from jarvis_core.protocol import LocalRpcClient, TransportSecurityError
 
 _PYTHON = os.path.realpath(sys.executable)
 _SOURCE = str(Path(__file__).resolve().parents[1] / "src")
+_DEPENDENCIES = str(Path(sysconfig.get_path("purelib")).resolve())
 _TEMP_ROOT = "/private/tmp" if sys.platform == "darwin" else "/tmp"
 _BOOTSTRAP = (
     "import runpy,sys\n"
-    "sys.path.insert(0,sys.argv.pop(1))\n"
+    "source,dependencies=sys.argv.pop(1),sys.argv.pop(1)\n"
+    "sys.path.insert(0,source)\n"
+    "sys.path.insert(1,dependencies)\n"
     "runpy.run_module('jarvis_core.service',run_name='__main__',alter_sys=True)\n"
 )
 
@@ -186,7 +190,8 @@ async def test_user_site_blocks_health_isolated_argv_skips_hook_and_same_pid_rec
             "PATH": "/usr/bin:/bin",
             "HOME": temporary,
             "PYTHONUSERBASE": str(root / "own-user-base"),
-            "PYTHONPATH": _SOURCE,
+            "PYTHONPATH": os.pathsep.join([_SOURCE, _DEPENDENCIES]),
+            "JARVIS_RPC_BOOTSTRAP_PUBLIC_KEY": os.environ["JARVIS_RPC_BOOTSTRAP_PUBLIC_KEY"],
         }
         site = subprocess.run(
             [_PYTHON, "-S", "-c", "import site;print(site.getusersitepackages())"],
@@ -239,6 +244,7 @@ async def test_user_site_blocks_health_isolated_argv_skips_hook_and_same_pid_rec
                     "-c",
                     _BOOTSTRAP,
                     _SOURCE,
+                    _DEPENDENCIES,
                     "--state",
                     str(root / "isolated"),
                     "--codex",

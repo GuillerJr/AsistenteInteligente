@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Qualify the active stdlib base and its own archives, without loading legacy code.
+"""Qualify the independent base and its own archives, without loading legacy code.
 
 This is a bounded source/metadata check, not proof of arbitrary program behavior or
 of a complete application. Research documents may reference external projects.
@@ -38,6 +38,9 @@ RETIRED_FILES = (
 )
 EXTERNAL_RUNTIMES = {"openclaw", "opencode"}
 STDLIB = sys.stdlib_module_names | {"__future__", "jarvis_core"}
+# A reviewed signature primitive, never a model, agent framework or external runtime.
+# The exact release and its transitive artifacts are hash-bound by uv.lock.
+REVIEWED_DEPENDENCIES = ("cryptography==50.0.2",)
 SDIST_REQUIRED = {
     "PKG-INFO", "pyproject.toml", "README.md", "LICENSE", "uv.lock", "MANIFEST.in",
     "script/check_clean_base.py", "script/research_inventory.py", "script/setup_git_gates.sh",
@@ -110,7 +113,17 @@ class CleanBaseError(ValueError):
     """An active dependency, source or archive violates the base contract."""
 
 
-def _check_imports(data: bytes, name: str) -> None:
+def _dependencies(values) -> tuple[str, ...]:
+    if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
+        raise CleanBaseError("lista de dependencias productivas inválida")
+    requirements = tuple(value.replace(" ", "").lower() for value in values)
+    if requirements not in {(), REVIEWED_DEPENDENCIES}:
+        raise CleanBaseError("dependencias productivas fuera de la lista revisada")
+    return requirements
+
+
+def _check_imports(data: bytes, name: str, dependencies: tuple[str, ...] = ()) -> None:
+    allowed = STDLIB | ({"cryptography"} if dependencies else set())
     tree = ast.parse(data, filename=name)
     dynamic_names = {"eval", "exec", "__import__"}
     for node in ast.walk(tree):
@@ -124,7 +137,7 @@ def _check_imports(data: bytes, name: str) -> None:
         elif isinstance(node, ast.ImportFrom) and not node.level and node.module:
             modules = [node.module]
         for module in modules:
-            if module.split(".")[0] not in STDLIB:
+            if module.split(".")[0] not in allowed:
                 raise CleanBaseError(f"import externo en {name}: {module}")
         if isinstance(node, ast.Call):
             function = node.func
@@ -141,8 +154,9 @@ def _project(root: Path) -> dict:
     project = tomllib.loads((root / "pyproject.toml").read_text())["project"]
     if project.get("name") != "jarvis-core":
         raise CleanBaseError("debe conservarse la distribución jarvis-core")
-    if project.get("dependencies") != [] or project.get("optional-dependencies"):
-        raise CleanBaseError("la base no admite dependencias productivas ni extras heredados")
+    _dependencies(project.get("dependencies"))
+    if project.get("optional-dependencies"):
+        raise CleanBaseError("la base no admite extras heredados")
     if project.get("scripts"):
         raise CleanBaseError("la base todavía no declara un CLI de producto")
     return project
@@ -176,7 +190,7 @@ def check_tree(root: Path) -> dict:
         if any(part.casefold() in EXTERNAL_RUNTIMES | {"legacy", "vendor", "rebuild"}
                for part in relative.parts):
             raise CleanBaseError(f"árbol externo o retirado: {relative}")
-        _check_imports(path.read_bytes(), str(relative))
+        _check_imports(path.read_bytes(), str(relative), _dependencies(project["dependencies"]))
         files.append(relative.as_posix())
     if not files:
         raise CleanBaseError("no hay fuentes propias")
@@ -192,12 +206,15 @@ def _safe_name(name: str) -> PurePosixPath:
     return path
 
 
+def _metadata_dependencies(data: bytes) -> tuple[str, ...]:
+    return _dependencies(email.parser.BytesParser().parsebytes(data).get_all("Requires-Dist") or [])
+
+
 def _metadata(data: bytes) -> dict:
     message = email.parser.BytesParser().parsebytes(data)
     if message.get("Name") != "jarvis-core" or not message.get("Version"):
         raise CleanBaseError("identidad de distribución incorrecta")
-    if message.get_all("Requires-Dist"):
-        raise CleanBaseError("el artefacto declara dependencias productivas")
+    _metadata_dependencies(data)
     return {"name": message["Name"], "version": message["Version"]}
 
 
@@ -217,7 +234,6 @@ def check_wheel(path: Path, root: Path | None = None) -> dict:
             top = name.parts[0]
             if top == "jarvis_core" and name.suffix == ".py":
                 data = archive.read(entry)
-                _check_imports(data, entry.filename)
                 files[entry.filename] = data
             elif top.startswith("jarvis_core-") and top.endswith(".dist-info"):
                 metadata_name = PurePosixPath(*name.parts[1:]).as_posix()
@@ -232,8 +248,13 @@ def check_wheel(path: Path, root: Path | None = None) -> dict:
     if "jarvis_core/__init__.py" not in files or len(metadata) != 1:
         raise CleanBaseError("wheel propio incompleto")
     identity = _metadata(metadata[0])
+    dependencies = _metadata_dependencies(metadata[0])
+    for name, data in files.items():
+        _check_imports(data, name, dependencies)
     if root is not None:
         project = _project(root)
+        if dependencies != _dependencies(project["dependencies"]):
+            raise CleanBaseError("las dependencias del wheel no corresponden al proyecto")
         if identity != {"name": project["name"], "version": project["version"]}:
             raise CleanBaseError("la metadata del wheel no corresponde al proyecto")
         expected = {f"jarvis_core/{p.relative_to(root / 'src/jarvis_core').as_posix()}":
@@ -241,7 +262,8 @@ def check_wheel(path: Path, root: Path | None = None) -> dict:
                     if " 2." not in p.name}
         if files != expected:
             raise CleanBaseError("el wheel no corresponde al árbol cualificado")
-    return {"wheel": path.name, "python_files": len(files), "runtime_dependencies": 0}
+    return {"wheel": path.name, "python_files": len(files),
+            "runtime_dependencies": len(dependencies)}
 
 
 def check_sdist(path: Path, root: Path | None = None) -> dict:
@@ -296,7 +318,6 @@ def check_sdist(path: Path, root: Path | None = None) -> dict:
                 if len(relative.parts) < 3 or relative.parts[1] != "jarvis_core" \
                         or relative.suffix != ".py":
                     raise CleanBaseError(f"fuente ajena en sdist: {relative}")
-                _check_imports(content, relative.as_posix())
                 sources[relative.as_posix()] = content
             elif relative.parts[0] == "tests" and relative.suffix == ".py":
                 test_sources[relative.as_posix()] = content
@@ -306,11 +327,18 @@ def check_sdist(path: Path, root: Path | None = None) -> dict:
     if not SDIST_REQUIRED <= included:
         raise CleanBaseError("el sdist omite archivos necesarios para repetir la cualificación")
     identity = _metadata(metadata[0])
-    if (manifest is None or manifest.get("dependencies") != []
+    if (manifest is None
         or manifest.get("optional-dependencies") or manifest.get("scripts")
         or identity != {"name": manifest.get("name"), "version": manifest.get("version")}):
-        raise CleanBaseError("el manifiesto del sdist no coincide con una base sin dependencias")
+        raise CleanBaseError("el manifiesto del sdist no coincide con la base propia")
+    dependencies = _dependencies(manifest.get("dependencies"))
+    if dependencies != _metadata_dependencies(metadata[0]):
+        raise CleanBaseError("las dependencias del sdist no coinciden con su metadata")
+    for name, data in sources.items():
+        _check_imports(data, name, dependencies)
     if root is not None:
+        if dependencies != _dependencies(_project(root)["dependencies"]):
+            raise CleanBaseError("las dependencias del sdist no corresponden al proyecto")
         if identity != {key: _project(root)[key] for key in ("name", "version")}:
             raise CleanBaseError("la identidad del sdist no corresponde al proyecto")
         expected = {p.relative_to(root).as_posix(): p.read_bytes()
@@ -330,11 +358,28 @@ def smoke_wheel(wheel: Path) -> None:
         raise CleanBaseError("uv es necesario para instalar el wheel sin red")
     with tempfile.TemporaryDirectory(prefix="jarvis-base-smoke-") as temporary:
         sandbox = Path(temporary).resolve()
+        # Cache preparation belongs to uv sync, outside this offline check. Every
+        # dependency is still installed in a new venv and checked against lock hashes.
+        cache = subprocess.run([uv, "--no-config", "cache", "dir"], check=True,
+                               capture_output=True, text=True, timeout=10).stdout.strip()
         environment = {"PATH": os.defpath, "LANG": "C.UTF-8",
-                       "UV_CACHE_DIR": str(sandbox / "cache"), "UV_PYTHON_DOWNLOADS": "never"}
+                       "UV_CACHE_DIR": cache, "UV_PYTHON_DOWNLOADS": "never"}
         target = sandbox / "venv"
         venv.EnvBuilder(with_pip=False).create(target)
         python = target / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+        root = Path(__file__).resolve().parents[1]
+        dependencies = _dependencies(_project(root)["dependencies"])
+        if dependencies:
+            requirements = sandbox / "runtime-requirements.txt"
+            exported = subprocess.run([
+                uv, "--no-config", "export", "--offline", "--locked", "--no-dev",
+                "--no-emit-project", "--format", "requirements.txt", "--project", str(root),
+            ], check=True, env=environment, capture_output=True, timeout=30)
+            requirements.write_bytes(exported.stdout)
+            subprocess.run([
+                uv, "--no-config", "pip", "install", "--offline", "--require-hashes",
+                "--python", str(python), "--requirements", str(requirements),
+            ], check=True, cwd=sandbox, env=environment, capture_output=True, timeout=60)
         subprocess.run([
             uv, "--no-config", "pip", "install", "--offline", "--no-index", "--no-deps",
             "--python", str(python), str(wheel.resolve()),
@@ -343,7 +388,14 @@ def smoke_wheel(wheel: Path) -> None:
             "from pathlib import Path; import jarvis_core; "
             "from jarvis_core import AgentRuntime; "
             f"assert Path(jarvis_core.__file__).resolve().is_relative_to({str(target)!r}); "
-            "assert callable(AgentRuntime); print('installed_base_import=ok')"
+            "assert callable(AgentRuntime); "
+            + ("from cryptography.hazmat.primitives.asymmetric.ed25519 "
+               "import Ed25519PrivateKey; "
+               "key=Ed25519PrivateKey.generate(); "
+               "key.public_key().verify(key.sign(b'jarvis offline smoke'),"
+               "b'jarvis offline smoke'); "
+               if dependencies else "")
+            + "print('installed_base_import=ok')"
         )
         result = subprocess.run([str(python), "-I", "-c", code], check=True,
                                 cwd=sandbox, env=environment, capture_output=True,
@@ -373,7 +425,8 @@ def main() -> int:
             subprocess.SubprocessError, zipfile.BadZipFile, tarfile.TarError) as error:
         print(f"status=failed clean_base reason={error}", file=sys.stderr)
         return 1
-    print("status=ok clean_base runtime_dependencies=0 native_app=development")
+    count = len(_dependencies(_project(root)["dependencies"]))
+    print(f"status=ok clean_base runtime_dependencies={count} native_app=development")
     return 0
 
 

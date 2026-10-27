@@ -20,7 +20,9 @@ final class ProcessBootstrapTests: XCTestCase {
             "time.sleep(0.35)\nos.execv(" + quotedPython + ", [" + quotedPython + ", *sys.argv[1:]])\n"
         try Data(script.utf8).write(to: URL(fileURLWithPath: launcher))
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: launcher)
-        let options = try LaunchOptions.parse(["--python", launcher, "--source", source, "--state", directory + "/state", "--codex", "/usr/bin/false"])
+        let options = try LaunchOptions.parse(["--python", launcher, "--source", source,
+                                               "--dependencies", try XCTUnwrap(env["JARVIS_DESKTOP_DEPENDENCIES"]),
+                                               "--state", directory + "/state", "--codex", "/usr/bin/false"])
         let service = ServiceProcess()
         try service.start(options)
         do {
@@ -59,6 +61,7 @@ final class ProcessBootstrapTests: XCTestCase {
         try Data(script.utf8).write(to: URL(fileURLWithPath: launcher))
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: launcher)
         let options = try LaunchOptions.parse(["--python", launcher, "--source", source,
+                                               "--dependencies", try XCTUnwrap(env["JARVIS_DESKTOP_DEPENDENCIES"]),
                                                "--state", directory + "/state", "--codex", "/usr/bin/false"])
         let service = ServiceProcess()
         try service.start(options)

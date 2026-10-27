@@ -1,7 +1,7 @@
 import Foundation
 
-/// Own zero-dependency service: no venv, user/site hooks or inherited Python path.
-/// The selected source is one argv value; it is never interpolated as Python code.
+/// Source and locked dependencies are explicit argv paths. No site hooks,
+/// .pth files, inherited Python path or implicit venv discovery are executed.
 public struct ServiceLaunchPlan: Sendable {
     public let executable: URL
     public let arguments: [String]
@@ -10,7 +10,10 @@ public struct ServiceLaunchPlan: Sendable {
 
     static let bootstrap = """
     import runpy, sys
-    sys.path.insert(0, sys.argv.pop(1))
+    source, dependencies = sys.argv.pop(1), sys.argv.pop(1)
+    sys.path.insert(0, source)
+    if dependencies:
+        sys.path.insert(1, dependencies)
     runpy.run_module('jarvis_core.service', run_name='__main__', alter_sys=True)
     """
 
@@ -20,7 +23,7 @@ public struct ServiceLaunchPlan: Sendable {
         let selected = URL(fileURLWithPath: options.python).resolvingSymlinksInPath()
         guard selected.path.hasPrefix("/"), FileManager.default.isExecutableFile(atPath: selected.path) else { throw RPCFailure.configuration }
         executable = selected
-        arguments = ["-I", "-S", "-B", "-u", "-c", Self.bootstrap, options.source]
+        arguments = ["-I", "-S", "-B", "-u", "-c", Self.bootstrap, options.source, options.dependencies ?? ""]
             + options.serviceArguments.dropFirst(2)
         let allowed: Set<String> = ["PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "__CF_USER_TEXT_ENCODING"]
         environment = inheritedEnvironment.filter { allowed.contains($0.key) }

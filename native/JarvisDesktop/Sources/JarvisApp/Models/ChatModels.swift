@@ -29,6 +29,10 @@ struct ChatMessage: Identifiable, Equatable {
     let id: String
     let role: String
     let text: String
+    let sequence: Int?
+    init(id: String, role: String, text: String, sequence: Int? = nil) {
+        self.id = id; self.role = role; self.text = text; self.sequence = sequence
+    }
 }
 
 struct RunActivity: Identifiable {

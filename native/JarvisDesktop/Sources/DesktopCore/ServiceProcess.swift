@@ -3,8 +3,20 @@ import Darwin
 
 public enum ServiceProcessFailure: Error, Equatable, LocalizedError {
     case cleanupUnconfirmed
+    case recoveryContextChanged
+    case recoveryResourcesBusy
+    case recoveryThrottled
     public var errorDescription: String? {
-        "El cierre del servicio sigue sin confirmar. Reintenta Salir antes de iniciar otro servicio."
+        switch self {
+        case .cleanupUnconfirmed:
+            "El cierre del servicio sigue sin confirmar. Reintenta Salir antes de iniciar otro servicio."
+        case .recoveryContextChanged:
+            "La identidad del perfil o del arranque cambió. No se reinició el servicio."
+        case .recoveryResourcesBusy:
+            "Un recurso del servicio anterior conserva la custodia del perfil. Espera a que cierre; no se iniciará otro servicio."
+        case .recoveryThrottled:
+            "El servicio falló repetidamente. La recuperación automática se detuvo; revisa el diagnóstico antes de reconectar."
+        }
     }
 }
 
@@ -152,7 +164,12 @@ final class FoundationServiceChild: OwnedServiceChild {
         child.executableURL = plan.executable
         child.arguments = plan.arguments
         child.currentDirectoryURL = plan.workingDirectory
-        child.environment = plan.environment
+        var environment = plan.environment
+        // The launching desktop chooses its own public pin. The private key
+        // remains in the client process and is never passed to the service.
+        let identity = try RPCClientIdentity.forProfile(options.state, create: true)
+        environment["JARVIS_RPC_BOOTSTRAP_PUBLIC_KEY"] = identity.publicKey
+        child.environment = environment
         child.standardInput = FileHandle.nullDevice
         child.standardOutput = FileHandle.nullDevice
         child.standardError = FileHandle.nullDevice
@@ -185,6 +202,10 @@ public final class ServiceProcess {
     private let now: @MainActor () -> TimeInterval
     private let sleep: @MainActor (TimeInterval) async throws -> Void
     private let gracePeriod: TimeInterval
+    private var launchOptions: LaunchOptions?
+    private var readyProfileBinding: String?
+    private var recoveryAttempts: [TimeInterval] = []
+    public private(set) var lastCrashRecoveryReport: ServiceStopReport?
     public private(set) var lastStopReport: ServiceStopReport?
     public private(set) var requiresCleanupConfirmation = false
 
@@ -217,6 +238,58 @@ public final class ServiceProcess {
         guard process == nil else { return }
         let child = try makeChild(options)
         process = child; ownerID = UUID(); killAccepted = false; lastStopReport = nil
+        launchOptions = options
+        readyProfileBinding = nil
+    }
+
+    /// Call only after authenticated readiness for this exact owned child.
+    public func confirmReadyProfile(_ options: LaunchOptions) throws {
+        guard launchOptions == options, process?.isRunning == true,
+              !requiresCleanupConfirmation, stopTask == nil else {
+            throw ServiceProcessFailure.cleanupUnconfirmed
+        }
+        let binding = try RPCClientIdentity.profileBinding(options.state)
+        if let readyProfileBinding, readyProfileBinding != binding {
+            throw ServiceProcessFailure.recoveryContextChanged
+        }
+        readyProfileBinding = binding
+    }
+
+    /// Admit a new launch only after the kernel observed this owned child exit
+    /// and the same physical profile's flock is obtainable. Controlled child
+    /// adapters inherit that open file description across the host's crash.
+    /// This gate does not replay a run, query a provider, or claim old cleanup.
+    @discardableResult
+    public func prepareCrashRecovery(_ options: LaunchOptions) throws -> ServiceStopReport {
+        guard stopTask == nil, !requiresCleanupConfirmation,
+              let child = process, let ownerID, child.observedExit != nil else {
+            throw ServiceProcessFailure.cleanupUnconfirmed
+        }
+        guard launchOptions == options, let readyProfileBinding,
+              try RPCClientIdentity.profileBinding(options.state) == readyProfileBinding else {
+            throw ServiceProcessFailure.recoveryContextChanged
+        }
+        recoveryAttempts.removeAll(where: { now() - $0 >= 60 })
+        guard recoveryAttempts.count < 2 else { throw ServiceProcessFailure.recoveryThrottled }
+        let path = options.state + "/profile.lock"
+        let descriptor = Darwin.open(path, O_RDWR | O_NOFOLLOW | O_NONBLOCK)
+        guard descriptor >= 0 else { throw ServiceProcessFailure.recoveryResourcesBusy }
+        defer { Darwin.close(descriptor) }
+        var info = stat(), named = stat()
+        guard fstat(descriptor, &info) == 0, info.st_mode & S_IFMT == S_IFREG,
+              info.st_mode & 0o777 == 0o600, info.st_uid == getuid(), info.st_nlink == 1,
+              info.st_size == 0, flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
+            throw ServiceProcessFailure.recoveryResourcesBusy
+        }
+        guard lstat(path, &named) == 0, named.st_dev == info.st_dev, named.st_ino == info.st_ino,
+              try RPCClientIdentity.profileBinding(options.state) == readyProfileBinding else {
+            throw ServiceProcessFailure.recoveryContextChanged
+        }
+        let report = finish(child, ownerID: ownerID)
+        guard report.exitConfirmed else { throw ServiceProcessFailure.cleanupUnconfirmed }
+        lastCrashRecoveryReport = report
+        recoveryAttempts.append(now())
+        return report
     }
 
     /// True means the owned child's exit was observed, not that all descendants

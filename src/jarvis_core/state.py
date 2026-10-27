@@ -37,6 +37,8 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from jarvis_core.session_context import SessionContextMixin
+
 _APPLICATION_ID = 0x4A525653  # ASCII JRVS, the identity of this SQLite format.
 _SCHEMA_VERSION = 2
 _ACTIVE = frozenset({"queued", "running", "waiting_approval", "cancelling", "cleaning"})
@@ -207,7 +209,7 @@ class EventRecord:
     created_ns: int
 
 
-class StateStore:
+class StateStore(SessionContextMixin):
     def __init__(self, path: str | Path, *, limits: StateLimits | None = None) -> None:
         self.path = Path(path)
         if not self.path.is_absolute() or ".." in self.path.parts:
@@ -471,58 +473,44 @@ class StateStore:
             raise StateError("capacity_exceeded")
 
     def create_session(self, title: str = "Nueva conversación", *,
-                       temporary: bool = False, agent_id: str = "jarvis") -> SessionRecord:
+                       temporary: bool = False, agent_id: str = "jarvis",
+                       parent_session_id: str | None = None) -> SessionRecord:
         title = self._text(title, nonempty=True)
         if not isinstance(agent_id, str) or re.fullmatch(r"[A-Za-z0-9_-]{1,64}", agent_id) is None:
             raise StateError("invalid_agent_identity")
+        if parent_session_id is not None:
+            _identity(parent_session_id)
         ref = SessionRef(uuid4().hex, temporary)
         with self._transaction(temporary) as connection:
+            if parent_session_id is not None:
+                self._session(connection, SessionRef(parent_session_id, temporary))
             self._capacity(connection, "SELECT count(*) FROM sessions", (),
                            self.limits.max_sessions)
-            connection.execute("INSERT INTO sessions VALUES(?, ?, 0, ?, NULL, ?, NULL)",
-                               (ref.session_id, title, time.time_ns(), agent_id))
+            connection.execute("INSERT INTO sessions VALUES(?, ?, 0, ?, NULL, ?, ?)",
+                               (ref.session_id, title, time.time_ns(), agent_id, parent_session_id))
             return self._session_record(self._session(connection, ref), temporary)
 
     def fork_session(self, ref: SessionRef, *, title: str | None = None,
-                     until_sequence: int | None = None) -> SessionRecord:
-        """Copy a bounded completed context into a new same-mode session.
+                     until_sequence: int | None = None, expected_revision: int | None = None,
+                     operation_id: str | None = None) -> SessionRecord:
+        """Branch with complete context lineage, never inherited action authority.
 
-        Runs, approvals, receipts and provider thread identities never transfer.
-        An original message is a historical datum, not a request to replay.
+        Internal callers may omit an operation identity: that is a new local
+        operation, not a transport retry. Productive RPC requires an explicit
+        identity and revision. A historical direct cutoff delegates to rewind.
         """
         self._ref(ref)
         if until_sequence is not None and (type(until_sequence) is not int or until_sequence < 1):
             raise StateError("invalid_page")
-        if title is not None:
-            title = self._text(title, nonempty=True)
-        with self._transaction(ref.temporary) as connection:
-            parent = self._session(connection, ref)
-            if connection.execute("SELECT 1 FROM runs WHERE session_id=? AND receipt_json IS NULL",
-                                  (ref.session_id,)).fetchone() is not None:
-                raise StateError("session_busy")
-            if until_sequence is not None and connection.execute(
-                "SELECT 1 FROM messages WHERE session_id=? AND sequence=?",
-                (ref.session_id, until_sequence),
-            ).fetchone() is None:
-                raise StateError("message_not_found")
-            self._capacity(connection, "SELECT count(*) FROM sessions", (),
-                           self.limits.max_sessions)
-            rows = connection.execute(
-                "SELECT m.role,m.text FROM messages m LEFT JOIN runs r ON m.run_id=r.run_id "
-                "WHERE m.session_id=? AND (? IS NULL OR m.sequence<=?) "
-                "AND m.role IN ('user','assistant') AND (m.run_id IS NULL OR r.status='completed') "
-                "ORDER BY m.sequence", (ref.session_id, until_sequence, until_sequence),
-            ).fetchall()
-            if len(rows) > 1000 or sum(len(row["text"].encode()) for row in rows) > 262144:
-                raise StateError("fork_context_too_large")
-            new = SessionRef(uuid4().hex, ref.temporary)
-            connection.execute("INSERT INTO sessions VALUES(?, ?, 0, ?, NULL, ?, ?)",
-                               (new.session_id, title or parent["title"], time.time_ns(),
-                                parent["agent_id"], ref.session_id))
-            connection.executemany("INSERT INTO messages VALUES(?,?,?,?,?,NULL,?)", (
-                (uuid4().hex, new.session_id, index, row["role"], row["text"], time.time_ns())
-                for index, row in enumerate(rows, 1)))
-            return self._session_record(self._session(connection, new), ref.temporary)
+        revision = (self.context_snapshot(ref)["revision"] if expected_revision is None
+                    else expected_revision)
+        row, _lineage = self.rewind_session(
+            ref, title=title, expected_revision=revision,
+            operation_id=uuid4().hex if operation_id is None else operation_id,
+            until_sequence=revision if until_sequence is None else until_sequence,
+            _branch_kind="fork" if until_sequence is None else "rewind",
+        )
+        return row
 
     def get_session(self, ref: SessionRef) -> SessionRecord:
         self._ref(ref)
@@ -795,6 +783,21 @@ class StateStore:
             rows = connection.execute(
                 "SELECT * FROM events WHERE run_id=? AND sequence>? ORDER BY sequence LIMIT ?",
                 (run_id, after, limit),
+            ).fetchall()
+            return tuple(EventRecord(**dict(row)) for row in rows)
+
+    def list_coordination_events(self, ref: SessionRef, *, limit: int = 20,
+                                 offset: int = 0) -> tuple[EventRecord, ...]:
+        """Read bounded creation records for this session, without replaying runs."""
+        self._ref(ref)
+        self._page(limit, offset)
+        with self._transaction(ref.temporary) as connection:
+            self._session(connection, ref)
+            rows = connection.execute(
+                "SELECT e.* FROM events e JOIN runs r ON e.run_id=r.run_id "
+                "WHERE r.session_id=? AND e.kind='coordination.created' "
+                "ORDER BY e.created_ns DESC,e.event_id DESC LIMIT ? OFFSET ?",
+                (ref.session_id, limit, offset),
             ).fetchall()
             return tuple(EventRecord(**dict(row)) for row in rows)
 

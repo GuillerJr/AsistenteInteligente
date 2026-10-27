@@ -46,6 +46,8 @@ def main(argv=None):
     parser.add_argument("--profile-pin", type=Path, required=True)
     parser.add_argument("--expected-current-sha256", required=True)
     parser.add_argument("--python", type=Path, required=True)
+    parser.add_argument("--dependencies", type=Path,
+                        help="Directorio explícito de las dependencias Python cualificadas.")
     parser.add_argument("--codex", type=Path, required=True)
     parser.add_argument("--state", type=Path, required=True)
     parser.add_argument(
@@ -97,7 +99,8 @@ def main(argv=None):
             pin,
             expected_current_sha256=args.expected_current_sha256,
         )
-        arguments = plan.arguments(python=args.python, codex=args.codex, state=args.state)
+        arguments = plan.arguments(python=args.python, codex=args.codex, state=args.state,
+                                   dependencies=args.dependencies)
         if not args.launch:
             print(
                 json.dumps(
@@ -135,7 +138,8 @@ def main(argv=None):
             pin,
             expected_current_sha256=args.expected_current_sha256,
         )
-        arguments = plan.arguments(python=args.python, codex=args.codex, state=args.state)
+        arguments = plan.arguments(python=args.python, codex=args.codex, state=args.state,
+                                   dependencies=args.dependencies)
         environment = {
             key: os.environ[key] for key in ("PATH", "HOME", "TMPDIR", "LANG") if key in os.environ
         }

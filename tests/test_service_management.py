@@ -690,7 +690,7 @@ async def test_incomplete_mcp_close_still_stops_processes_and_can_be_explicitly_
 
 
 @pytest.mark.parametrize("temporary", [False, True])
-async def test_fork_copies_completed_text_and_agent_but_never_action_receipts(
+async def test_fork_copies_completed_context_and_history_but_never_action_authority(
     management, temporary
 ):
     service, client, peer, _root = management
@@ -703,7 +703,11 @@ async def test_fork_copies_completed_text_and_agent_but_never_action_receipts(
     decision = await pending(client, original, identity)
     await synthetic_decision(client, original, decision)
     assert (await settled(client, original, identity))["status"] == "completed"
-    forked = (await client.call("sessions.fork", {**original, "title": "Rama de prueba"}))[
+    revision = (await client.call("sessions.context", original))["context"]["revision"]
+    forked = (await client.call("sessions.fork", {
+        **original, "title": "Rama de prueba", "expected_revision": revision,
+        "operation_id": uuid4().hex,
+    }))[
         "session"
     ]
     assert forked["agent_id"] == agent["agent_id"] and forked["temporary"] == temporary
@@ -711,11 +715,13 @@ async def test_fork_copies_completed_text_and_agent_but_never_action_receipts(
     fork_ref = {"session_id": forked["session_id"], "temporary": temporary}
     assert (await client.call("runs.list", fork_ref))["runs"] == []
     data = await client.call("sessions.messages", fork_ref)
-    assert len(data["messages"]) == 2 and not data["runs"]
+    assert len([row for row in data["messages"] if row["role"] != "system"]) == 2
+    assert not data["runs"]
     result = await run(client, fork_ref, "continuar desde la rama")
     assert result["status"] == "completed" and result["action_receipts"] == []
     assert peer.calls[-1][1]["thread_id"] is None and len(peer.calls) == 2
     assert "efecto original" in json.dumps(peer.calls[-1][1]["history"], ensure_ascii=False)
+    assert "historical_receipts" in json.dumps(peer.calls[-1][1]["history"], ensure_ascii=False)
     assert (service._workspace_path / "once.txt").read_text() == "una" and len(peer.replies) == 1
 
 
