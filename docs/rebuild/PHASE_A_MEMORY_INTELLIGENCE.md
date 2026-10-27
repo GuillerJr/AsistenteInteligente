@@ -131,7 +131,10 @@ se retiró ese acceso sin retirar oráculos. La lectura virtual siguió sin publ
 IDs en el fixture. Las filas usan ahora un NSView accesible estable en un overlay
 transparente; SwiftUI conserva el valor y el dibujo. El test consulta el Form
 productivo y comprueba la identidad del mismo NSView al cambiar política y trabajo.
-La cualificación de este puente nativo sigue pendiente. Los dobles geométricos prueban
+El puente pasó la compilación acotada y una lectura AX real de revisión 5→6→7
+en el mismo panel, seguida de cierre confirmado. La CI del test ajusta además
+la nulabilidad distinta de accessibilityIdentifier entre interfaces del SDK.
+Falta confirmar su ejecución completa. Los dobles geométricos prueban
 autoridad y transacciones, no calidad semántica. Los pesos públicos se preparan
 una sola vez por ejecución remota y sus casos CPU reales son obligatorios;
 faltar los artefactos provoca fallo, no una omisión silenciosa.

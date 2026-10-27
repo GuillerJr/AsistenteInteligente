@@ -167,8 +167,11 @@ private final class InspectorLayoutFixture {
             let item = pending[position]; position += 1
             guard visited.insert(ObjectIdentifier(item)).inserted else { continue }
             pending.append(contentsOf: item.subviews)
-            if let row = item as? MemoryMetadataAccessibilityView,
-               let identifier = row.accessibilityIdentifier() {
+            if let row = item as? MemoryMetadataAccessibilityView {
+                // NSView's SDK refinement can return String rather than the
+                // optional String declared by NSAccessibilityProtocol.
+                let candidate: String? = row.accessibilityIdentifier()
+                guard let identifier = candidate else { continue }
                 XCTAssertNil(result[identifier], "Only one production AX element may represent a metadata row")
                 XCTAssertTrue(row.isAccessibilityElement())
                 XCTAssertEqual(row.accessibilityRole(), .staticText)

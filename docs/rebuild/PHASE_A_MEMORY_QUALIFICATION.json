@@ -1,7 +1,7 @@
 {
   "format": "jarvis-memory-qualification/1",
   "date": "2026-10-27",
-  "status": "native_memory_workflow_passed_stable_metadata_bridge_qualification_pending",
+  "status": "native_stable_bridge_passed_final_ci_pending",
   "owner_decisions": {
     "scope": [
       "test_storage",
@@ -143,6 +143,21 @@
         "in_process_virtual_tree_208_nodes_no_metadata_identifiers",
         "other_native_cases_passed",
         "stable_appkit_accessibility_backing_selected_for_metadata_rows"
+      ]
+    },
+    {
+      "head": "b1daf11644e261ba4450a5d59ecf6772f2b4e70a",
+      "run_id": 40581385585,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40581385585",
+      "result": "native_test_sdk_optional_refinement_compile_error",
+      "macos": {
+        "job_id": 122461383098,
+        "failure": "test_let_binding_expected_optional_but_NSView_accessibilityIdentifier_returns_String"
+      },
+      "findings": [
+        "local_product_build_passed",
+        "real_external_ax_policy_revision_5_to_6_to_7_verified",
+        "test_promotes_identifier_to_optional_explicitly_for_sdk_compatibility"
       ]
     }
   ],
@@ -286,5 +301,36 @@
     "fixture_accessibility": "explicitly_enabled_in_test_root_only",
     "oracles": "all_seven_values_retained_same_hosting",
     "ci_order": "native_before_python_on_macos_fail_early_without_repeating_tests"
+  },
+  "stable_native_metadata": {
+    "format": "jarvis-memory-stable-ax-live/1",
+    "ui_source_head": "b1daf11644e261ba4450a5d59ecf6772f2b4e70a",
+    "actual_native_observation": {
+      "policy_revisions": [
+        5,
+        6,
+        7
+      ],
+      "same_memory_panel": true,
+      "read_via_external_accessibility": true,
+      "last_policy_auto_recall": false,
+      "last_policy_auto_index": false
+    },
+    "service_independent_check": "e2e-stableax_policy7.json",
+    "api_evidence_sha256": "2ce8e6c0633d51cae50bbb27cc33f87acef72a7a8518cfd81c9a6d134ac9e3f5",
+    "bundle_id": "com.jarvis.desktop.memoryqualification.stableax.20261027",
+    "binary_sha256": "f6465f8ea7b98ddcb463d0d5f38df13573fb7b44a69effd7d7e052c0532946c7",
+    "profile_lease_free": true,
+    "socket_absent": true,
+    "worker_temporaries_empty": true,
+    "owner_installed_app_untouched": true,
+    "local_build": {
+      "receipt": "/private/tmp/jarvis-test-resource-501-68a1d7e5af41/jarvis-test-evidence-60dp_d9w/receipt.json",
+      "elapsed_seconds": 61.883,
+      "peak_temporary_bytes": 427958272,
+      "source_unchanged": true,
+      "cleanup_confirmed": true,
+      "development_bundle_only": true
+    }
   }
 }
