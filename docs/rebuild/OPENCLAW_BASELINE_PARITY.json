@@ -14607,7 +14607,7 @@
       "PHASE_A_CORE_DELEGATION.md"
     ],
     "core_validation_limits": [
-      "2536 pruebas Python y 332 Swift aprobadas en controles locales completos; no contar selecciones focales solapadas como pruebas distintas.",
+      "2540 pruebas Python y 332 Swift aprobadas en controles locales completos; no contar selecciones focales solapadas como pruebas distintas.",
       "Nueve decisiones nativas delegadas en perfil propio sintético; filesystem, sockets, SQLite y procesos reales con peer de modelo propio, sin cuenta/historial personal.",
       "La recuperación automática no reinicia inferencia ni cuentas; reapertura explícita y publicación se registran en el cierre integrado.",
       "No cierra ninguna familia amplia ni revisión global de OpenClaw."

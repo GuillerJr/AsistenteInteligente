@@ -162,8 +162,11 @@ de hasta cuatro hijos y presupuestos, cola y corrección de turno exacto. Todos
 tienen controles SwiftUI y pruebas Python/Swift integradas. Se comprobaron nueve
 decisiones nativas delegadas, escritura hija por hash, recuperación con
 Mantenimiento abierto y persistencia tras reabrir la app, usando sólo un perfil
-y un peer de modelo sintéticos. Los controles integrados pasaron 2536 pruebas
+y un peer de modelo sintéticos. Los controles integrados incluyen 2540 pruebas
 Python y 332 Swift. Esto no repite la inferencia autenticada del recorrido inicial.
+La CI inicial descubrió un fallo del smoke con caché nueva; el guard usa ahora
+directamente el lock offline y tiene cuatro regresiones causales, sin alterar
+las fuentes productivas ya cualificadas. El cierre conserva ese fallo y su corrección.
 
 La investigación [OC-21A](REA_PART21A_CORE_SERVICE.json),
 [OC-21B](REA_PART21B_SUMMARY.json) y [OC-21C](REA_PART21C_SUMMARY.json)

@@ -231,10 +231,13 @@ solicitado; las familias amplias de la matriz y la fase A siguen abiertas.
   revocación, temporales, reinicios y fuentes conservadas. Nueve decisiones
   nativas delegadas, escritura hija comprobada por bytes/hash, caída con
   Mantenimiento abierto y reapertura completa del perfil sintético verificadas.
-- [x] Aprobar 2536 pruebas Python y 332 Swift, bundle de desarrollo y paquete
+- [x] Aprobar 2540 pruebas Python y 332 Swift, bundle de desarrollo y paquete
   aislado. Los hooks repiten los controles antes de publicar; la CI corresponde
   al commit resultante. El peer de modelo de estos recorridos es propio y
   sintético; no se repitió inferencia autenticada con la cuenta del dueño.
+  La primera CI detectó dependencia accidental de metadatos de índice en el
+  smoke offline; una reproducción con caché nueva y cuatro regresiones fijan
+  la instalación directa desde el lock, sin red ni compilación de dependencias.
 
 La investigación REA OC-21A/B/C es estática y conserva incógnitas. No acredita
 la orquestación distribuida, todos los harnesses, agrupación de sesiones,

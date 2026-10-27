@@ -95,6 +95,37 @@ caída y pérdida de decisiones/recibos en la ruta antigua de fork. Las regresio
 forman parte de las suites finales; no se suman los focales como pruebas distintas.
 Una segunda revisión de solo lectura no encontró bloqueantes nuevos.
 
+### Corrección de la CI con caché nueva
+
+La primera publicación `9a6c5be` aprobó los gates locales. Su CI
+[`40441066936`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40441066936)
+aprobó los contratos Python en ambos sistemas y las 332 pruebas Swift y el bundle
+en macOS, pero rechazó el smoke offline del paquete en ambos runners. El fallo
+queda conservado; no se presenta esa CI como aprobada.
+
+La reproducción con una caché inicialmente vacía confirmó la causa: `uv sync
+--locked` había descargado los artefactos por sus URLs del lock, sin metadatos
+del índice simple. El posterior `pip install --offline --require-hashes` sobre
+requisitos exportados intentaba resolver por nombre y no encontraba `cffi`,
+aunque su artefacto estaba en la caché. Una caché local usada con anterioridad
+había ocultado esa dependencia accidental del índice.
+
+El guard ahora sincroniza directamente el mismo `uv.lock` con `--offline`,
+`--locked`, `--no-build` y sin instalar el proyecto. Fija exclusivamente el venv
+privado del smoke mediante `UV_PROJECT_ENVIRONMENT`; no cambia el entorno del
+repositorio. Después instala el wheel propio sin índice ni dependencias y prueba
+su importación y la firma Ed25519. Un fallo conserva un diagnóstico acotado.
+No se elimina el modo offline ni la identidad de hashes del lock.
+
+Cuatro regresiones nuevas usan un servidor HTTP local que sólo sirve un wheel
+sintético por URL. Preparan una caché vacía sin consultar índices, reproducen el
+fallo anterior y comprueban la instalación nueva sin otra solicitud HTTP. También
+rechazan hash discordante, caché ausente y lock obsoleto, conservando el proyecto.
+El total integrado pasa a **2540 pruebas Python**; Swift mantiene 332. Los hooks
+repiten ambos conjuntos sobre la revisión corregida antes del push. Las 156
+fuentes productivas y los recorridos GUI anteriores conservan sus hashes: esta
+corrección sólo cambia el guard de empaquetado, sus pruebas y la documentación.
+
 ## Lo que este cierre no acredita
 
 La clave local no protege contra un programa malicioso con el mismo usuario;

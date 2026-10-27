@@ -1,13 +1,18 @@
 """Adversarial source/archive checks for the independent foundation."""
 
+import hashlib
 import importlib.util
 import io
+import json
 import os
 import shutil
 import subprocess
 import sys
 import tarfile
+import threading
+import venv
 import zipfile
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -325,3 +330,128 @@ def test_crypto_sdist_metadata_must_match_its_manifest(tmp_path):
                 "Requires-Dist: cryptography==50.0.2\n")
     own = native_sdist(tmp_path / "ok.tar.gz", root, overrides={"PKG-INFO": metadata.encode()})
     assert guard.check_sdist(own, root)["files"]
+
+
+@pytest.fixture
+def locked_smoke_cache(tmp_path):
+    """One synthetic wheel URL, with no package-index metadata or external network."""
+    uv = shutil.which("uv")
+    if uv is None:
+        pytest.skip("uv is required for the offline package boundary")
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "pyproject.toml").write_text(
+        '[project]\nname="jarvis-smoke-root"\nversion="1.0.0"\n'
+        'requires-python=">=3.11"\ndependencies=["jarvis-smoke-dependency==1.0.0"]\n')
+    artifact = io.BytesIO()
+    with zipfile.ZipFile(artifact, "w") as archive:
+        for name, data in {
+            "jarvis_smoke_dependency/__init__.py": "MARKER = 'locked cache fixture'\n",
+            "jarvis_smoke_dependency-1.0.0.dist-info/METADATA":
+                "Metadata-Version: 2.3\nName: jarvis-smoke-dependency\nVersion: 1.0.0\n",
+            "jarvis_smoke_dependency-1.0.0.dist-info/WHEEL":
+                "Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
+            "jarvis_smoke_dependency-1.0.0.dist-info/RECORD": "",
+        }.items():
+            archive.writestr(name, data)
+    payload = artifact.getvalue()
+    requests = []
+    name = "/jarvis_smoke_dependency-1.0.0-py3-none-any.whl"
+
+    class WheelOnly(BaseHTTPRequestHandler):
+        def do_GET(self):
+            requests.append(self.path)
+            if self.path != name:
+                self.send_error(404)
+                return
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), WheelOnly)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url = f"http://127.0.0.1:{server.server_port}{name}"
+        (root / "uv.lock").write_text(
+            'version=1\nrevision=3\nrequires-python=">=3.11"\n'
+            '[[package]]\nname="jarvis-smoke-dependency"\nversion="1.0.0"\n'
+            'source={registry="https://pypi.org/simple"}\n'
+            f'wheels=[{{url={json.dumps(url)},hash="sha256:'
+            f'{hashlib.sha256(payload).hexdigest()}",size={len(payload)}}}]\n'
+            '[[package]]\nname="jarvis-smoke-root"\nversion="1.0.0"\n'
+            'source={virtual="."}\ndependencies=[{name="jarvis-smoke-dependency"}]\n'
+            '[package.metadata]\n'
+            'requires-dist=[{name="jarvis-smoke-dependency",specifier="==1.0.0"}]\n')
+        environment = {"PATH": os.defpath, "LANG": "C.UTF-8",
+                       "UV_CACHE_DIR": str(tmp_path / "cache"), "UV_PYTHON_DOWNLOADS": "never"}
+        subprocess.run([
+            uv, "--no-config", "sync", "--locked", "--no-dev", "--no-build",
+            "--no-install-project", "--project", str(root), "--python", sys.executable,
+        ], env={**environment, "UV_PROJECT_ENVIRONMENT": str(tmp_path / "prepared")},
+            check=True, capture_output=True, text=True, timeout=30)
+        assert requests == [name]  # The lock did not request a simple index.
+        target = tmp_path / "isolated"
+        venv.EnvBuilder(with_pip=False).create(target)
+        yield uv, root, target, environment, requests
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_offline_smoke_uses_lock_artifacts_without_index_metadata(locked_smoke_cache, tmp_path):
+    uv, root, target, environment, requests = locked_smoke_cache
+    original = {path.name: path.read_bytes() for path in root.iterdir()}
+    requirements = tmp_path / "requirements.txt"
+    exported = subprocess.run([
+        uv, "--no-config", "export", "--offline", "--locked", "--no-dev",
+        "--no-emit-project", "--format", "requirements.txt", "--project", str(root),
+        "--python", sys.executable,
+    ], env=environment, check=True, capture_output=True, timeout=30)
+    requirements.write_bytes(exported.stdout)
+    python = target / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    # Causal reproduction: hashes alone do not supply a missing index response.
+    old = subprocess.run([
+        uv, "--no-config", "pip", "install", "--offline", "--require-hashes",
+        "--python", str(python), "--requirements", str(requirements),
+    ], env=environment, capture_output=True, text=True, timeout=30)
+    assert old.returncode != 0 and "No solution found" in old.stderr
+    guard._sync_smoke_dependencies(uv, root, target, tmp_path, environment)
+    check = subprocess.run([
+        str(python), "-I", "-c",
+        "import importlib.util, jarvis_smoke_dependency as dependency; "
+        "assert dependency.MARKER == 'locked cache fixture'; "
+        "assert importlib.util.find_spec('jarvis_smoke_root') is None",
+    ], check=True, env=environment, capture_output=True, timeout=10)
+    assert check.returncode == 0
+    assert {path.name: path.read_bytes() for path in root.iterdir()} == original
+    assert len(requests) == 1  # Both attempts after cache preparation stayed offline.
+    assert "UV_PROJECT_ENVIRONMENT" not in environment
+
+
+@pytest.mark.parametrize("damage", ["hash", "cache", "lock"])
+def test_offline_smoke_fails_closed_with_diagnostic(locked_smoke_cache, tmp_path, damage):
+    uv, root, target, environment, requests = locked_smoke_cache
+    if damage == "hash":
+        lock = root / "uv.lock"
+        content = lock.read_text()
+        start = content.index('hash="sha256:') + len('hash="sha256:')
+        lock.write_text(content[:start] + "0" * 64 + content[start + 64:])
+    elif damage == "cache":
+        environment["UV_CACHE_DIR"] = str(tmp_path / "empty-cache")
+    else:
+        project = root / "pyproject.toml"
+        project.write_text(project.read_text().replace("==1.0.0", "==1.0.1"))
+    before = {path.name: path.read_bytes() for path in root.iterdir()}
+    with pytest.raises(guard.CleanBaseError, match="falló el control offline:") as error:
+        guard._sync_smoke_dependencies(uv, root, target, tmp_path, environment)
+    assert str(error.value) != "falló el control offline: sin diagnóstico"
+    if damage == "hash":
+        assert "Hash mismatch" in str(error.value)
+    assert {path.name: path.read_bytes() for path in root.iterdir()} == before
+    assert len(requests) == 1

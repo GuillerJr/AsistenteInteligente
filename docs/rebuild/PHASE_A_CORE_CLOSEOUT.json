@@ -2658,5 +2658,75 @@
     "Delegation one level, max four children; no distributed swarm or all harnesses",
     "Development app needs external Python and official Codex; no notarization or autonomous distribution",
     "No personal app installation or prior owner profile accessed"
-  ]
+  ],
+  "publication_followup": {
+    "initial_commit": "9a6c5beb31423d0e593b84708494c6a3a529d7d1",
+    "initial_ci": {
+      "run_id": 40441066936,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40441066936",
+      "conclusion": "failure",
+      "failure_step_both_runners": "Validar artefactos e instalación aislada sin red",
+      "python_passed_on": [
+        "ubuntu-24.04",
+        "macos-26"
+      ],
+      "swift_passed": 332,
+      "job_logs": [
+        {
+          "path": "/private/tmp/jarvis-core-ci-ubuntu-job.log",
+          "sha256": "b044ceea29aa8594bba768b7e3603348b2002bebcba9ade7ccca9194ba864888",
+          "bytes": 92039
+        },
+        {
+          "path": "/private/tmp/jarvis-core-ci-macos-job.log",
+          "sha256": "98d06eb3b24ee8ada3bcbc1744144e0da3cef645db0a2308f0d0e4f2805b9419",
+          "bytes": 343607
+        }
+      ]
+    },
+    "cause": "Locked URL artifact cache exists without simple-index metadata. Exported name/version requirements trigger offline index resolution; a prior populated local cache hid the problem.",
+    "causal_reproduction_logs": [
+      {
+        "path": "/private/tmp/jarvis-offline-causal-yycdjhs_/sync.log",
+        "sha256": "4d1c15d2f906c22c35a092e10c12fd3615efe60232c599386b487f571ea99959",
+        "bytes": 351
+      },
+      {
+        "path": "/private/tmp/jarvis-offline-causal-yycdjhs_/pip.log",
+        "sha256": "a243f8bbd1ee063bbc602c81063151b7c0abfc619c4ad3ba8a4322870424c0d1",
+        "bytes": 344
+      },
+      {
+        "path": "/private/tmp/jarvis-offline-causal-yycdjhs_/offline-sync.log",
+        "sha256": "ab0ef9944ad72c605c28f826fde0b5ce44a658e62b300df6936d2a500d25bf08",
+        "bytes": 264
+      }
+    ],
+    "correction": "Use uv sync --offline --locked --no-build --no-install-project with an exact private UV_PROJECT_ENVIRONMENT, then own wheel without index/deps. No source/native mutation.",
+    "new_causal_regressions": 4,
+    "expected_integrated_python_tests": 2540,
+    "production_sources_changed": false,
+    "final_publication_requires_new_gates": true,
+    "focused_verification": {
+      "clean_base_tests": 49,
+      "passed": 49,
+      "test_log": {
+        "path": "/private/tmp/jarvis-core-offline-smoke-tests.log",
+        "sha256": "34885ca5b1ff763fc403eb9bf08eedee994f23728fbc41b590539facb3650164",
+        "bytes": 80
+      },
+      "real_wheel_same_fresh_cache_smoke": "passed",
+      "smoke_log": {
+        "path": "/private/tmp/jarvis-core-offline-smoke-fresh-cache.log",
+        "sha256": "6ef67577c7709dc23571001462e2b66d8b163eb051e849ed747fe0c9928df3ed",
+        "bytes": 67
+      },
+      "collected_python_tests": 2540,
+      "collection_log": {
+        "path": "/private/tmp/jarvis-core-after-ci-collection.log",
+        "sha256": "00acc6858436f2f3c6c9f730eed0bd7b477cdac75bd00ab07516e2babf60a653",
+        "bytes": 577483
+      }
+    }
+  }
 }

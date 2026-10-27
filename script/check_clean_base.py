@@ -352,6 +352,28 @@ def check_sdist(path: Path, root: Path | None = None) -> dict:
     return {"sdist": path.name, "files": count}
 
 
+def _smoke_command(command: list[str], *, cwd: Path, environment: dict[str, str],
+                   timeout: int) -> subprocess.CompletedProcess:
+    try:
+        return subprocess.run(command, check=True, cwd=cwd, env=environment,
+                              capture_output=True, text=True, timeout=timeout)
+    except subprocess.CalledProcessError as error:
+        diagnostic = (error.stderr or error.stdout or "sin diagnóstico").strip()
+        raise CleanBaseError(f"falló el control offline: {diagnostic[-8000:]}") from error
+
+
+def _sync_smoke_dependencies(uv: str, root: Path, target: Path, sandbox: Path,
+                             environment: dict[str, str]) -> None:
+    # A fresh sync cache has URL artifacts from uv.lock, but need not have the
+    # simple-index metadata required to resolve exported name==version entries.
+    # Consume that same hash-bound lock directly; never build/install the project.
+    _smoke_command([
+        uv, "--no-config", "sync", "--offline", "--locked", "--no-dev", "--no-build",
+        "--no-default-groups", "--no-install-project", "--project", str(root),
+        "--python", str(target / ("Scripts/python.exe" if os.name == "nt" else "bin/python")),
+    ], cwd=sandbox, environment={**environment, "UV_PROJECT_ENVIRONMENT": str(target)}, timeout=60)
+
+
 def smoke_wheel(wheel: Path) -> None:
     uv = shutil.which("uv")
     if uv is None:
@@ -370,20 +392,11 @@ def smoke_wheel(wheel: Path) -> None:
         root = Path(__file__).resolve().parents[1]
         dependencies = _dependencies(_project(root)["dependencies"])
         if dependencies:
-            requirements = sandbox / "runtime-requirements.txt"
-            exported = subprocess.run([
-                uv, "--no-config", "export", "--offline", "--locked", "--no-dev",
-                "--no-emit-project", "--format", "requirements.txt", "--project", str(root),
-            ], check=True, env=environment, capture_output=True, timeout=30)
-            requirements.write_bytes(exported.stdout)
-            subprocess.run([
-                uv, "--no-config", "pip", "install", "--offline", "--require-hashes",
-                "--python", str(python), "--requirements", str(requirements),
-            ], check=True, cwd=sandbox, env=environment, capture_output=True, timeout=60)
-        subprocess.run([
+            _sync_smoke_dependencies(uv, root, target, sandbox, environment)
+        _smoke_command([
             uv, "--no-config", "pip", "install", "--offline", "--no-index", "--no-deps",
             "--python", str(python), str(wheel.resolve()),
-        ], check=True, cwd=sandbox, env=environment, capture_output=True, timeout=60)
+        ], cwd=sandbox, environment=environment, timeout=60)
         code = (
             "from pathlib import Path; import jarvis_core; "
             "from jarvis_core import AgentRuntime; "
@@ -397,9 +410,8 @@ def smoke_wheel(wheel: Path) -> None:
                if dependencies else "")
             + "print('installed_base_import=ok')"
         )
-        result = subprocess.run([str(python), "-I", "-c", code], check=True,
-                                cwd=sandbox, env=environment, capture_output=True,
-                                text=True, timeout=10)
+        result = _smoke_command([str(python), "-I", "-c", code], cwd=sandbox,
+                                environment=environment, timeout=10)
         if result.stdout.strip() != "installed_base_import=ok":
             raise CleanBaseError("el paquete aislado no confirmó su importación")
 
