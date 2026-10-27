@@ -240,7 +240,7 @@ def test_sdist_rejects_file_with_only_root_component(tmp_path):
         guard.check_sdist(path)
 
 
-def test_gate_setup_reports_only_the_python_profile(tmp_path):
+def test_gate_setup_reports_static_checks_and_remote_full_qualification(tmp_path):
     repository = tmp_path / "repo"
     (repository / "script").mkdir(parents=True)
     (repository / ".githooks").mkdir()
@@ -259,6 +259,7 @@ def test_gate_setup_reports_only_the_python_profile(tmp_path):
     installed = subprocess.run([str(script), "--install"], cwd=repository, env=environment,
                                capture_output=True, text=True, check=True)
     assert "profile=jarvis_base" in installed.stdout and "native=swiftpm" in installed.stdout
+    assert "pre_commit=static pre_push=static full_qualification=remote_ci" in installed.stdout
     active = subprocess.run([str(script), "--check"], cwd=repository, env=environment,
                             capture_output=True, text=True, check=True)
     assert active.stdout == installed.stdout

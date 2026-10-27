@@ -29,4 +29,4 @@ else
         exit 1
     fi
 fi
-echo "status=active hooks_path=.githooks profile=jarvis_base pre_commit=python pre_push=python_package native=swiftpm"
+echo "status=active hooks_path=.githooks profile=jarvis_base pre_commit=static pre_push=static full_qualification=remote_ci native=swiftpm"

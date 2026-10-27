@@ -32,16 +32,18 @@ jobs:
       - name: Comprobar pureza de la base
         run: uv run --no-sync python script/check_clean_base.py
       - name: Ruff
-        run: uv run --no-sync ruff check src tests script
-      - name: Compilar Python
-        run: uv run --no-sync python -m compileall -q src tests script
+        run: uv run --no-sync ruff check --no-cache src tests script
       - name: Pruebas de contratos propios
-        run: uv run --no-sync pytest -q
+        run: >-
+          .venv/bin/python -B script/test_resource_guard.py run
+          --profile ci --kind python --selection tests --full
+          --budget-mib 12288 --deadline 1800 --
+          .venv/bin/python -B -m pytest -q tests
       - name: Pruebas Swift y bundle nativo de desarrollo
         if: runner.os == 'macOS'
         run: |
-          ./script/test_desktop.sh
-          ./script/build_desktop.sh
+          ./script/test_desktop.sh --full --budget-mib 6144
+          ./script/build_desktop.sh --full --budget-mib 6144
       - name: Construir el paquete propio
         shell: bash
         run: |

@@ -40,21 +40,27 @@ por partes con REA, no un fork, árbol vendorizado ni runtime del producto.
 
 ## Comandos de la base actual
 
+Desde el incidente de almacenamiento del 27-10-2026, las suites completas se
+ejecutan en GitHub Actions (Ubuntu y macOS), por elección expresa del dueño.
+En el Mac sólo se admiten selecciones focales supervisadas, con cuota, plazo y
+recibo. No ejecutar directamente `pytest`, `swift test` ni repetir una suite
+completa desde hooks. No eliminar perfiles, originales ni custodia incierta para
+liberar espacio. Ver `docs/rebuild/TEST_RESOURCE_LIMITS.md`.
+
 ```bash
 uv sync --locked --group dev
-.venv/bin/ruff check src tests script
-.venv/bin/python -m compileall -q src
-PYTHONPATH=src .venv/bin/python -m pytest -p no:warnings
+.venv/bin/ruff check --no-cache src tests script
 .venv/bin/python script/check_clean_base.py
 ./script/setup_git_gates.sh --check
-JARVIS_PACKAGE_DIR="$(mktemp -d /private/tmp/jarvis-base-package.XXXXXX)"
-uv build --offline --sdist --out-dir "$JARVIS_PACKAGE_DIR"
-uv build --offline --wheel "$JARVIS_PACKAGE_DIR"/*.tar.gz --out-dir "$JARVIS_PACKAGE_DIR"
-.venv/bin/python script/check_clean_base.py \
-  --wheel "$JARVIS_PACKAGE_DIR"/*.whl --sdist "$JARVIS_PACKAGE_DIR"/*.tar.gz --smoke
+.venv/bin/python script/test_resource_guard.py run --profile local --kind python \
+  --selection tests/test_test_resource_guard.py --budget-mib 768 --deadline 180 \
+  -- .venv/bin/python -m pytest tests/test_test_resource_guard.py
 ```
 
-Los hooks califican Python y sus paquetes. Los nuevos scripts de escritorio son
+Los hooks locales comprueban fuentes e identidad del árbol; indican expresamente
+que la cualificación completa depende de CI para el commit exacto. No presentan
+una selección focal como suite completa. Python, Swift, wheel/sdist y smoke de
+instalación se califican íntegramente en CI. Los scripts de escritorio son
 `script/test_desktop.sh` y `script/build_desktop.sh`; no recuperar instaladores
 retirados. Un bundle de desarrollo con Python externo no es una distribución
 autocontenida. No afirmar paridad por compilar o por usar un modelo de fixture.

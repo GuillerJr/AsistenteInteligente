@@ -44,6 +44,7 @@ REVIEWED_DEPENDENCIES = ("cryptography==50.0.2",)
 SDIST_REQUIRED = {
     "PKG-INFO", "pyproject.toml", "README.md", "LICENSE", "uv.lock", "MANIFEST.in",
     "script/check_clean_base.py", "script/research_inventory.py", "script/setup_git_gates.sh",
+    "script/test_resource_guard.py",
     ".githooks/pre-commit", ".githooks/pre-push",
 }
 NATIVE_ROOT = PurePosixPath("native/JarvisDesktop")
@@ -111,6 +112,29 @@ def _test_files(root: Path) -> dict[str, bytes]:
 
 class CleanBaseError(ValueError):
     """An active dependency, source or archive violates the base contract."""
+
+
+def check_python_syntax(root: Path) -> int:
+    """Parse own sources in memory: never create compileall bytecode caches."""
+    count = 0
+    for name in ("src", "tests", "script"):
+        folder = root / name
+        if folder.is_symlink():
+            raise CleanBaseError("las fuentes de Python no admiten enlaces")
+        if not folder.exists():
+            continue
+        for parent, directories, files in os.walk(folder, followlinks=False):
+            directories[:] = [part for part in directories
+                              if part != "__pycache__" and not part.endswith(".egg-info")]
+            for item in [*directories, *files]:
+                if (Path(parent) / item).is_symlink():
+                    raise CleanBaseError("fuente de Python enlazada fuera del árbol")
+            for item in files:
+                path = Path(parent) / item
+                if path.suffix == ".py" and " 2." not in item:
+                    ast.parse(path.read_bytes(), filename=str(path.relative_to(root)))
+                    count += 1
+    return count
 
 
 def _dependencies(values) -> tuple[str, ...]:
@@ -427,6 +451,7 @@ def main() -> int:
     root = Path(__file__).resolve().parents[1]
     try:
         check_tree(root)
+        syntax_count = check_python_syntax(root)
         if args.wheel is not None:
             check_wheel(args.wheel, root)
         if args.sdist is not None:
@@ -438,7 +463,8 @@ def main() -> int:
         print(f"status=failed clean_base reason={error}", file=sys.stderr)
         return 1
     count = len(_dependencies(_project(root)["dependencies"]))
-    print(f"status=ok clean_base runtime_dependencies={count} native_app=development")
+    print(f"status=ok clean_base runtime_dependencies={count} native_app=development "
+          f"python_syntax_files={syntax_count} bytecode_written=no")
     return 0
 
 

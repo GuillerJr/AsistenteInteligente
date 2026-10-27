@@ -15,6 +15,11 @@ del primer prototipo. Un chat funcional no cierra esta fase.
 El árbol anterior fue retirado por petición del dueño. Ver [inicio limpio](CLEAN_START.md).
 Los inventarios históricos están congelados; el código previo vive en Git.
 
+Desde el 27-10-2026 las suites completas se cualifican en CI remota por elección
+del dueño. Las comprobaciones locales requieren selección y presupuesto; los
+hooks verifican fuentes e identidad sin repetir suites ni builds completos.
+Ver [límites de pruebas y evidencia](TEST_RESOURCE_LIMITS.md).
+
 Se conservan el nombre de producto Jarvis, los identificadores técnicos `jarvis`,
 la interfaz en español y las reglas de privacidad/aprobación. La primera conexión
 de inferencia continúa siendo Codex con ChatGPT; NVIDIA está retirado del producto.

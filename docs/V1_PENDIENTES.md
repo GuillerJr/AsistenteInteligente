@@ -320,13 +320,21 @@ los bloques históricos ni declara completa una familia amplia de la fase A.
   un servidor HTTP numérico explícito. Dos regresiones distinguen DNS bloqueado
   y ausente; la selección focal de 26 casos pasó con Chrome real y el bootstrap.
   [Diagnóstico y límites](rebuild/PHASE_A_CI_STARTUP.md). Los hooks y la CI del
-  commit que contiene esta corrección registran el resultado global posterior;
-  no se anticipa su resultado en esta fotografía previa al propio commit.
+  commit que contiene esta corrección registran el resultado global posterior.
 - [x] Eliminar la espera circular del executor en las dos pruebas Python de
   cancelación de activación/limpieza: notificación asíncrona, escenarios con pool
   normal y un solo hilo, sin relajar recibos, custodia o comprobaciones de replay.
   El archivo focal completo pasó 28 casos; el diagnóstico enlazado conserva
   las reproducciones anteriores a la corrección.
+- [x] Confirmar la corrección `89021c6` en CI Ubuntu y macOS: 2674 pruebas Python
+  y 399 Swift, con una omisión declarada de Chrome opt-in, paquetes y bundle.
+  [Ejecución aprobada](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40546090306).
+- [x] Retirar las suites completas automáticas de los hooks locales por elección
+  del dueño. Selecciones explícitas con cuota APFS, plazo, diagnóstico acotado,
+  identidad completa de fuentes y custodia incierta conservada; admisión pytest
+  antes de fixtures. Los 65 focales pasaron con cierre físico comprobado.
+  [Contrato y evidencia](rebuild/TEST_RESOURCE_LIMITS.md). La cualificación global
+  del nuevo supervisor se comprueba en CI para su commit exacto.
 
 La lectura pública única de `https://example.com/` pasó por el proxy privado,
 sin excepción sintética, y cerró su binding; conserva contenido externo no

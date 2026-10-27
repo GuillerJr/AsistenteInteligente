@@ -5,9 +5,10 @@ JARVIS_REPOSITORY_ROOT="$(git rev-parse --show-toplevel)"
 cd "$JARVIS_REPOSITORY_ROOT"
 JARVIS_PYTHON="$JARVIS_REPOSITORY_ROOT/.venv/bin/python"
 JARVIS_RUFF="$JARVIS_REPOSITORY_ROOT/.venv/bin/ruff"
+export PYTHONDONTWRITEBYTECODE=1
 
 if [[ "$(git branch --show-current)" != "main" ]]; then
-    echo "[jarvis-pre-commit] Trabaja en main; no se crean ramas para esta base." >&2
+    echo "[jarvis-pre-commit] Solo se trabaja y publica desde main." >&2
     exit 1
 fi
 if [[ ! -x "$JARVIS_PYTHON" || ! -x "$JARVIS_RUFF" ]]; then
@@ -15,14 +16,18 @@ if [[ ! -x "$JARVIS_PYTHON" || ! -x "$JARVIS_RUFF" ]]; then
     exit 1
 fi
 
+JARVIS_CHECKED_HEAD="$(git rev-parse HEAD)"
+JARVIS_SOURCE_BEFORE="$("$JARVIS_PYTHON" -B script/test_resource_guard.py fingerprint \
+    --repo-root "$JARVIS_REPOSITORY_ROOT")"
 git diff --cached --check
-"$JARVIS_PYTHON" script/check_clean_base.py
-"$JARVIS_RUFF" check src tests script
-"$JARVIS_PYTHON" -m compileall -q src tests script
-(
-    while IFS= read -r JARVIS_GIT_VARIABLE; do
-        unset "$JARVIS_GIT_VARIABLE"
-    done < <(git rev-parse --local-env-vars)
-    "$JARVIS_PYTHON" -m pytest -q
-)
-echo "[jarvis-pre-commit] Base Python aprobada; Swift se comprueba en pre-push de macOS."
+git diff --check
+"$JARVIS_RUFF" check --no-cache src tests script
+"$JARVIS_PYTHON" -B script/check_clean_base.py
+JARVIS_SOURCE_AFTER="$("$JARVIS_PYTHON" -B script/test_resource_guard.py fingerprint \
+    --repo-root "$JARVIS_REPOSITORY_ROOT")"
+if [[ "$(git rev-parse HEAD)" != "$JARVIS_CHECKED_HEAD" \
+      || "$JARVIS_SOURCE_BEFORE" != "$JARVIS_SOURCE_AFTER" ]]; then
+    echo "[jarvis-pre-commit] HEAD, el índice o las fuentes cambiaron durante los controles; repítelos." >&2
+    exit 1
+fi
+echo "[jarvis-pre-commit] Controles estáticos aprobados; validación completa pendiente de CI remota."
