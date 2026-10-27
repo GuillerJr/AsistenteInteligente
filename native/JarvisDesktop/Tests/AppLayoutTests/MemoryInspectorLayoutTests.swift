@@ -57,8 +57,13 @@ private final class InspectorLayoutFixture {
     let wire: LayoutMetadataWire
     let hosting: NSHostingView<ContentView>
     let window: NSWindow
-    init(width: CGFloat = 1040, height: CGFloat = 720) throws {
+    private let accessibilityWindow: Bool
+    private let previousActivationPolicy: NSApplication.ActivationPolicy
+    private(set) var accessibilityDiagnostic = "not queried"
+    init(width: CGFloat = 1040, height: CGFloat = 720, accessibilityWindow: Bool = false) throws {
         _ = NSApplication.shared
+        self.accessibilityWindow = accessibilityWindow
+        previousActivationPolicy = NSApp.activationPolicy()
         let currentStore = ChatStore()
         let currentPresentation = InspectorPresentation(selection: "memory")
         let currentWire = LayoutMetadataWire()
@@ -81,9 +86,14 @@ private final class InspectorLayoutFixture {
         window.identifier = NSUserInterfaceItemIdentifier("jarvis.layout.fixture")
         window.title = "Jarvis · layout sintético"
         window.contentView = hosting
-        // Offscreen and never key: the production side panel is actually presented,
-        // while no owner window, screenshot, accessibility data or account is used.
-        window.orderBack(nil)
+        if accessibilityWindow {
+            // Only the AX test uses an active, on-screen synthetic window. No
+            // application account, process enumeration or TCC grant is involved.
+            NSApp.setActivationPolicy(.regular)
+            window.setFrameOrigin(NSPoint(x: 40, y: 40))
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+        } else { window.orderBack(nil) }
     }
     func close() async {
         closeWindow()
@@ -92,6 +102,7 @@ private final class InspectorLayoutFixture {
     func closeWindow() {
         presentation.isPresented = false
         window.orderOut(nil); window.contentView = nil; window.close()
+        if accessibilityWindow { NSApp.setActivationPolicy(previousActivationPolicy) }
         store.runtime.retire()
     }
     func notes(_ count: Int) throws {
@@ -117,30 +128,65 @@ private final class InspectorLayoutFixture {
         XCTAssertEqual(first.width, second.width, accuracy: 1, "Unchanged layout must reach a size fixed point")
         XCTAssertEqual(first.height, second.height, accuracy: 1)
         XCTAssertGreaterThan(hosting.bounds.width, 0); XCTAssertGreaterThan(hosting.bounds.height, 0)
-        XCTAssertFalse(window.isKeyWindow)
+        if !accessibilityWindow { XCTAssertFalse(window.isKeyWindow) }
         return second
     }
     /// Only this synthetic hosting tree, using public in-process AppKit AX APIs;
     /// no AX process enumeration, TCC request or owner window is involved.
     func metadataAXValues() throws -> [String: Set<String>] {
-        var pending: [Any] = [hosting]
+        var pending: [Any] = NSAccessibility.unignoredChildrenForOnlyChild(from: hosting) + [hosting]
         var visited = Set<ObjectIdentifier>(), result: [String: Set<String>] = [:]
-        var position = 0
+        var position = 0, formal = 0, bridged = 0, identifiers = 0
+        func text(_ value: Any?) -> String? {
+            if let string = value as? String { return string }
+            if let attributed = value as? NSAttributedString { return attributed.string }
+            if let number = value as? NSNumber { return number.stringValue }
+            return nil
+        }
+        func record(id: String?, value: Any?) {
+            guard let id, id.hasPrefix("jarvis.memory.") else { return }
+            identifiers += 1
+            if let value = text(value) { result[id, default: []].insert(value) }
+        }
         while position < pending.count {
             guard position < 4_000 else { throw RPCFailure.oversized }
             let item = pending[position]; position += 1
             let object = item as AnyObject
             guard visited.insert(ObjectIdentifier(object)).inserted else { continue }
             if let accessible = item as? NSAccessibilityProtocol {
-                if let id = accessible.accessibilityIdentifier(), id.hasPrefix("jarvis.memory."),
-                   let value = accessible.accessibilityValue() as? String {
-                    result[id, default: []].insert(value)
-                }
+                formal += 1
+                record(id: accessible.accessibilityIdentifier(), value: accessible.accessibilityValue())
                 pending.append(contentsOf: accessible.accessibilityChildren() ?? [])
+                pending.append(contentsOf: (accessible.accessibilityChildrenInNavigationOrder() ?? []).map { $0 as Any })
+            }
+            if let legacy = item as? NSObject {
+                // Public AppKit compatibility API, needed for virtual AX
+                // elements which do not advertise the full formal protocol.
+                let names = legacy.accessibilityAttributeNames()
+                if !names.isEmpty { bridged += 1 }
+                record(id: names.contains(.identifier) ? text(legacy.accessibilityAttributeValue(.identifier)) : nil,
+                       value: names.contains(.value) ? legacy.accessibilityAttributeValue(.value) : nil)
+                if names.contains(.children), let children = legacy.accessibilityAttributeValue(.children) as? [Any] {
+                    pending.append(contentsOf: NSAccessibility.unignoredChildren(from: children))
+                }
             }
             if let view = item as? NSView { pending.append(contentsOf: view.subviews) }
         }
+        accessibilityDiagnostic = "nodes=\(visited.count), formal=\(formal), bridge=\(bridged), metadataIDs=\(identifiers), keys=\(result.keys.sorted())"
         return result
+    }
+    func waitForMetadataAX(_ expected: [String: String]) async throws -> [String: Set<String>] {
+        var latest: [String: Set<String>] = [:]
+        for _ in 0..<50 {
+            latest = try metadataAXValues()
+            if expected.allSatisfy({ latest[$0.key] == Set([$0.value]) }) { return latest }
+            // AX nodes can be materialized after layout. Reading is the only
+            // operation here: no AX valueChanged is injected to mask staleness.
+            try await Task.sleep(for: .milliseconds(40))
+            hosting.layoutSubtreeIfNeeded()
+        }
+        XCTFail("Synthetic AX tree did not publish current metadata: \(accessibilityDiagnostic)")
+        return latest
     }
 }
 
@@ -199,7 +245,7 @@ final class MemoryInspectorLayoutTests: XCTestCase {
         XCTAssertLessThanOrEqual(hosting.fittingSize.width, hosting.bounds.width + 1)
     }
     @MainActor func testActualFormAccessibilityValuesTrackPolicyAndJobWithoutRecreatingHostingView() async throws {
-        let fixture = try InspectorLayoutFixture(height: 1600)
+        let fixture = try InspectorLayoutFixture(height: 1600, accessibilityWindow: true)
         defer { fixture.closeWindow() }
         fixture.presentation.memoryPage = .intelligence
         fixture.presentation.isPresented = true
@@ -207,13 +253,13 @@ final class MemoryInspectorLayoutTests: XCTestCase {
         await fixture.store.memoryIntelligence.refresh()
         _ = try await fixture.settle()
         let hostingIdentity = ObjectIdentifier(fixture.hosting)
-        let before = try fixture.metadataAXValues()
+        let before = try await fixture.waitForMetadataAX(["jarvis.memory.policy.revision": "1", "jarvis.memory.job.phase": "En cola"])
         XCTAssertEqual(before["jarvis.memory.policy.revision"], Set(["1"]))
         XCTAssertEqual(before["jarvis.memory.job.phase"], Set(["En cola"]))
         await fixture.wire.update(revision: 2, jobPhase: "complete", modelReady: true)
         await fixture.store.memoryIntelligence.refresh()
         _ = try await fixture.settle()
-        let after = try fixture.metadataAXValues()
+        let after = try await fixture.waitForMetadataAX(["jarvis.memory.policy.revision": "2", "jarvis.memory.job.phase": "Terminado", "jarvis.memory.model.state": "Disponible"])
         XCTAssertEqual(ObjectIdentifier(fixture.hosting), hostingIdentity)
         XCTAssertEqual(fixture.store.memoryIntelligence.status?.policy.revision, 2)
         XCTAssertEqual(fixture.store.memoryIntelligence.job?.phase, .complete)
@@ -224,7 +270,7 @@ final class MemoryInspectorLayoutTests: XCTestCase {
         await fixture.wire.update(revision: 2, jobPhase: "queued", modelReady: true, jobID: nextID, jobKind: "index_rebuild", jobPolicyRevision: 2)
         await fixture.store.memoryIntelligence.refresh()
         _ = try await fixture.settle()
-        let next = try fixture.metadataAXValues()
+        let next = try await fixture.waitForMetadataAX(["jarvis.memory.policy.revision": "2", "jarvis.memory.job.phase": "En cola"])
         XCTAssertEqual(fixture.store.memoryIntelligence.job?.id, nextID)
         XCTAssertEqual(next["jarvis.memory.job.phase"], Set(["En cola"]), "A new job must not keep the previous job's AX value Terminado")
         XCTAssertEqual(next["jarvis.memory.policy.revision"], Set(["2"]))
