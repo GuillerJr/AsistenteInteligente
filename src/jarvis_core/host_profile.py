@@ -850,8 +850,17 @@ def freeze_sources(service, cut: ProfileCut) -> FrozenSources:
                       in {"owned", "unavailable", "cold_delete"}
                       else (len(row.data) if isinstance(row, _JsonState) and row.data else 0))
                      for row in (*sql, *docs))
+    # Derived indices, model generations and grants are never portable sources
+    # or suitable destinations nested under a host's private runtime state.
+    memory_roots = tuple(service.directory.with_name(service.directory.name + suffix)
+                         for suffix in (".memory-control", ".memory-cache", ".memory-jobs",
+                                        ".memory-model"))
+    intelligence = getattr(service, "memory_intelligence", None)
+    if intelligence is not None:
+        memory_roots += (intelligence.model_directory,)
     return FrozenSources(service, cut.scope, cut.cut_id, fingerprint, metadata,
-                         (service.directory, service._workspace_path), sql, docs, configuration)
+                         (service.directory, service._workspace_path, *memory_roots),
+                         sql, docs, configuration)
 
 
 class BoundProfileResource:
@@ -918,6 +927,9 @@ def service_blockers(service):
         codes.add("service_closing")
     if service._maintenance:
         codes.add("configuration_change_active")
+    intelligence = getattr(service, "memory_intelligence", None)
+    if intelligence is not None:
+        codes.update(intelligence.blockers)
     if service._handles or service._refs:
         codes.add("runs_active")
     if any(not item.done() for item in service._observers):
@@ -954,6 +966,8 @@ def service_blockers(service):
 # Reads may initialize SQLite or provider/pairing state, so ALL handlers are
 # admitted. This set only avoids false generation bumps for unchanged polling.
 READ_RPCS = frozenset({
+    "memory.intelligence.status", "memory.intelligence.policy.review",
+    "memory.intelligence.job.get", "memory.intelligence.index.verify",
     "automation.status", "automation.poll", "automation.check", "automation.permissions.list",
     "sessions.context", "sessions.operation", "sessions.operations",
     "delegations.get", "delegations.lookup",

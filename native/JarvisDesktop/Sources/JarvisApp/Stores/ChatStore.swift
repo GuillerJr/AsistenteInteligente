@@ -37,6 +37,7 @@ final class ChatStore {
     let restored = RestoreProfileStore()
     let channelRestoration = ChannelReconciliationStore()
     let memoryRestoration: RestoredMemoryStore
+    let memoryIntelligence: MemoryIntelligenceStore
     let recovery: RecoveryExtensionStore
     let runtime: ProfileRuntimeGuard
     var localProfileStatus: LocalProfileStatus?
@@ -54,6 +55,8 @@ final class ChatStore {
     @ObservationIgnored private var monitor: Task<Void, Never>?
     @ObservationIgnored private var monitorReadActive = false
     @ObservationIgnored private var polling: Task<Void, Never>?
+    @ObservationIgnored private var memoryRecallRefresh: Task<Void, Never>?
+    @ObservationIgnored private var memoryRecallRequestedContext: String?
     @ObservationIgnored private var started = false
     @ObservationIgnored private var options: LaunchOptions?
     @ObservationIgnored private var pendingSubmission: PendingSubmission?
@@ -78,29 +81,34 @@ final class ChatStore {
     var hasUnconfirmedQueue: Bool { pendingQueue != nil }
     var canSupplyRunInput: Bool { !lifecycleBlocksInteraction && ready && connected && !busy && !handoffPreparing && !coldRecovery
         && activeRunID != nil && selected?.scope == activeSession?.scope && !coreBlocksHost && !lostTemporaryRun
-        && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction
+        && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction
         && !recovery.blocksInteraction && !restored.blocksInteraction }
     var launchOptions: LaunchOptions? { options }
     var isRecoveryOnly: Bool { (options ?? suppliedOptions)?.recoveryOnly == true }
     var serviceOwner: ServiceOwnerIdentity? { service.ownedIdentity }
     var durableDraftSnapshot: SessionDrafts { drafts.durableOnly }
-    var mayHandoff: Bool { !lifecycleBlocksInteraction && !isRecoveryOnly && ready && !handoffPreparing && !busy && activeRunID == nil && !voice.canStopDictation && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction && !restored.isRequesting && !restored.responseUnconfirmed && restored.operation?.workerPending != true && restored.operation?.cleanupOwnerPending != true }
+    var mayHandoff: Bool { !lifecycleBlocksInteraction && !isRecoveryOnly && ready && !handoffPreparing && !busy && activeRunID == nil && !voice.canStopDictation && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.isRequesting && !restored.responseUnconfirmed && restored.operation?.workerPending != true && restored.operation?.cleanupOwnerPending != true }
     var shutdownWarning: String? { service.lastStopReport?.warning }
 
     var selected: ChatSession? { sessions.first { $0.id == selectedID } }
-    var canSend: Bool { !lifecycleBlocksInteraction && !isRecoveryOnly && ready && connected && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil && selected != nil
+    var canSend: Bool { !lifecycleBlocksInteraction && !isRecoveryOnly && ready && connected && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil && selected != nil
                        && selected?.archived == false
                        && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    private var sessionChangeEligible: Bool { !isRecoveryOnly && ready && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil }
+    private var sessionChangeEligible: Bool { !isRecoveryOnly && ready && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil }
     var canChangeSession: Bool { !lifecycleBlocksInteraction && sessionChangeEligible }
     private var canInitializeSession: Bool {
         starting && !stopping && !recoveringCrash && !nativeCleanupPending && !automation.lifecycleBusy && sessionChangeEligible
     }
     var selectedAgentName: String { management.agents.first(where: { $0.id == selected?.agentID })?.name ?? selected?.agentID ?? "Jarvis" }
+    var memoryRecallNotice: String? {
+        guard let current = memoryIntelligence.status, current.scope == selected?.scope,
+              current.policy.settings.autoRecallEnabled else { return nil }
+        return current.lastRecall?.notice(for: observedConversationRunID)
+    }
     var canUseVoice: Bool { canChangeSession && connected && selected?.archived == false && selected != nil }
 
     init(voice: LocalVoiceController? = nil, options: LaunchOptions? = nil, target: ProfileOpenTarget? = nil, runtime: ProfileRuntimeGuard = ProfileRuntimeGuard()) {
-        self.runtime = runtime; memoryRestoration = RestoredMemoryStore(runtime: runtime); recovery = RecoveryExtensionStore(runtime: runtime); suppliedOptions = options; openTarget = target
+        self.runtime = runtime; memoryRestoration = RestoredMemoryStore(runtime: runtime); memoryIntelligence = MemoryIntelligenceStore(runtime: runtime); recovery = RecoveryExtensionStore(runtime: runtime); suppliedOptions = options; openTarget = target
         self.voice = voice ?? LocalVoiceController(driver: MacLocalVoiceDriver())
         self.voice.onTranscript = { [weak self] transcript in self?.acceptDictation(transcript) }
         maintenance.waitForSupervisionIdle = { [weak self] in
@@ -113,6 +121,15 @@ final class ChatStore {
         memoryRestoration.waitForSupervisionIdle = { [weak self] in
             guard let self else { throw RPCFailure.configuration }
             try await self.waitForMonitorSettlement()
+        }
+        memoryIntelligence.waitForSupervisionIdle = { [weak self] in
+            guard let self else { throw RPCFailure.configuration }
+            try await self.waitForMonitorSettlement()
+        }
+        memoryIntelligence.isContextCurrent = { [weak self] scope, key in
+            guard let self else { return false }
+            return runtime.isActive && !stopping && !starting && !recoveringCrash && !handoffPreparing
+                && !access.isChangingWorkspace && selected?.scope == scope && memoryIntelligenceContextKey == key
         }
         recovery.waitForSupervisionIdle = { [weak self] in
             guard let self else { throw RPCFailure.configuration }
@@ -177,6 +194,7 @@ final class ChatStore {
             else if let first = sessions.first { await selectSession(first.id, duringStartup: true) }
             startupRead = "el catálogo de herramientas"
             try await access.refreshCatalog()
+            synchronizeMemoryIntelligenceContext()
             startupRead = "las conexiones MCP"
             try await mcp.refresh()
             startMonitor()
@@ -209,7 +227,44 @@ final class ChatStore {
         restored.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
         channelRestoration.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
         memoryRestoration.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+        memoryIntelligence.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
         recovery.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+    }
+
+    /// Hashes local context metadata only. Physical policy/workspace authority is revalidated by the service.
+    private var memoryIntelligenceContextKey: String {
+        let components = [runtime.id.uuidString, options?.state ?? "", localProfileStatus?.identity.device ?? "",
+            localProfileStatus?.identity.inode ?? "", selected?.agentID ?? "", access.workspacePath ?? "",
+            access.workspacePrivateDefault ? "private" : "selected", access.workspaceAvailable ? "available" : "unavailable",
+            access.workspaceError ?? ""]
+        return ManagementValidation.digest(components.map { "\($0.utf8.count):\($0)" }.joined())
+    }
+    var memoryIntelligenceSelectionKey: String { memoryIntelligenceContextKey + ":" + (selected?.id ?? "none") }
+    func synchronizeMemoryIntelligenceContext() {
+        memoryIntelligence.select(scope: isRecoveryOnly ? nil : selected?.scope, contextKey: memoryIntelligenceContextKey)
+    }
+    /// Only current-chat metadata. Run/provider polling never waits for this read.
+    private func requestMemoryRecallStatus(for session: ChatSession) {
+        guard !isRecoveryOnly, !stopping, !handoffPreparing, selected?.scope == session.scope else { return }
+        synchronizeMemoryIntelligenceContext()
+        let key = memoryIntelligenceContextKey
+        let requestKey = key + ":" + session.id + ":" + (observedConversationRunID ?? "none")
+        if memoryRecallRequestedContext == requestKey, memoryIntelligence.status?.scope == session.scope { return }
+        memoryRecallRefresh?.cancel()
+        memoryRecallRefresh = Task { [weak self] in
+            guard let self else { return }
+            let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+            while starting || recoveringCrash || memoryIntelligence.isBusy {
+                guard !Task.isCancelled, !stopping, runtime.isActive, selected?.scope == session.scope,
+                      memoryIntelligenceContextKey == key, ContinuousClock.now < deadline else { return }
+                do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+            }
+            guard !Task.isCancelled, !stopping, runtime.isActive, selected?.scope == session.scope,
+                  memoryIntelligenceContextKey == key else { return }
+            memoryRecallRequestedContext = requestKey
+            await memoryIntelligence.refresh()
+            if memoryIntelligence.status?.scope != session.scope { memoryRecallRequestedContext = nil }
+        }
     }
 
     private func startMonitor() {
@@ -223,7 +278,7 @@ final class ChatStore {
                     lifecycleChanging: self.lifecycleBlocksInteraction || self.handoffPreparing,
                     recoveryBlocked: self.crashRecoveryBlocked,
                     readersPaused: self.maintenance.monitorPaused || self.channelRestoration.monitorPaused
-                        || self.memoryRestoration.monitorPaused || self.recovery.monitorPaused || self.restored.monitorPaused)
+                        || self.memoryRestoration.monitorPaused || self.memoryIntelligence.monitorPaused || self.recovery.monitorPaused || self.restored.monitorPaused)
                 if supervision == .recover { _ = await self.recoverCrashedService(); continue }
                 if supervision != .read { continue }
                 do {
@@ -263,7 +318,7 @@ final class ChatStore {
     }
 
     private func refreshMonitoredState() async throws {
-        guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
+        guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !memoryIntelligence.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         monitorReadActive = true
         defer { monitorReadActive = false }
         guard service.isRunning else { throw RPCFailure.disconnected }
@@ -271,7 +326,7 @@ final class ChatStore {
             try await ServiceBootstrap.waitForHealth(stateDirectory: options.state, timeout: 1) { service.isRunning }
             try service.confirmReadyProfile(options)
             if !isRecoveryOnly { await automation.start() }
-        guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
+        guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !memoryIntelligence.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         }
         if isRecoveryOnly {
             try await refreshRecoveryStatus()
@@ -283,19 +338,20 @@ final class ChatStore {
             return
         }
         try await refreshStatus()
-        guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
+        guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !memoryIntelligence.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         try await access.refreshCatalog()
-        guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
+        synchronizeMemoryIntelligenceContext()
+        guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !memoryIntelligence.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         try await mcp.refresh()
-        guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
+        guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !memoryIntelligence.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         try await management.refresh()
-        guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
+        guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !memoryIntelligence.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         if canChangeSession { try await refreshSessions() }
-        guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
+        guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !memoryIntelligence.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         try await refreshSelectedConversation()
-        guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
+        guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !memoryIntelligence.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         if activeRunID == nil { try await access.refreshApprovals(runID: nil) }
-        guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
+        guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !memoryIntelligence.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         if runPhase == "disconnected", activeRunID != nil { resumeStatus() }
         // Recovery performs only reads. It never selects/creates a
         // conversation, relaunches a child, or resends an operation.
@@ -327,11 +383,11 @@ final class ChatStore {
             nativeCleanupPending = true
             guard await automation.stop(handshake: false) else { throw ServiceProcessFailure.cleanupUnconfirmed }
             nativeCleanupPending = false
-            polling?.cancel(); conversationRefresh?.setScope(nil)
+            polling?.cancel(); memoryRecallRefresh?.cancel(); conversationRefresh?.setScope(nil)
             await client?.close(); await access.close(); await mcp.close(); await management.close()
             await sessionCore.close(); await clientIdentities.close(); await delegation.close(); await telegram.close()
             await maintenance.close(); await restored.close(); await channelRestoration.close()
-            await memoryRestoration.close(); await recovery.close()
+            await memoryRestoration.close(); await memoryIntelligence.close(); await recovery.close()
             guard !stopping, runtime.isActive else { return false }
             configureConnections(options)
             try service.start(options)
@@ -349,6 +405,7 @@ final class ChatStore {
             }
             access.setContext(selected?.scope); management.setContext(selected?.scope)
             sessionCore.setScope(selected?.scope); delegation.setScope(selected?.scope)
+            synchronizeMemoryIntelligenceContext()
             conversationRefresh?.setScope(selected?.scope)
             if isRecoveryOnly { try await refreshRecoveryStatus() }
             else { try await refreshColdRecoveryState() }
@@ -367,7 +424,7 @@ final class ChatStore {
 
     private func refreshColdRecoveryState() async throws {
         localProfileStatus = try await readLocalStatus()
-        try await management.refresh(); try await access.refreshCatalog(); try await mcp.refresh()
+        try await management.refresh(); try await access.refreshCatalog(); synchronizeMemoryIntelligenceContext(); try await mcp.refresh()
         try await refreshSessions()
         try await refreshSelectedConversation()
         ready = true; connected = false
@@ -429,6 +486,7 @@ final class ChatStore {
         guard complete else { throw RPCFailure.oversized }
         let temporary = sessions.filter(\.temporary)
         sessions = persistent + temporary.filter { candidate in !persistent.contains { $0.id == candidate.id } }
+        synchronizeMemoryIntelligenceContext()
     }
 
     func createSession(temporary: Bool) async {
@@ -454,6 +512,7 @@ final class ChatStore {
             management.setContext(session.scope)
             sessionCore.setScope(session.scope)
             delegation.setScope(session.scope)
+            synchronizeMemoryIntelligenceContext()
             messages = []; activities = []; draft = ""; streamingText = ""; errorMessage = nil
             receipts = []
             observedConversationRunID = nil
@@ -478,6 +537,7 @@ final class ChatStore {
             management.setContext(session.scope)
             sessionCore.setScope(session.scope)
             delegation.setScope(session.scope)
+            synchronizeMemoryIntelligenceContext()
             messages = try decodeMessages(rows, scope: session.scope)
             activities = []; streamingText = ""; errorMessage = nil
             receipts = []
@@ -532,6 +592,7 @@ final class ChatStore {
             if let error = run.errorCode, !error.isEmpty { errorMessage = RunPresentation.errorMessage(error) }
             else if run.outcome == "unknown" { errorMessage = "El resultado de una ejecución anterior quedó sin confirmar. No se repetirá automáticamente." }
         }
+        if !run.active { requestMemoryRecallStatus(for: session) }
     }
 
     private func fetchMessages(_ session: ChatSession) async throws -> [RPCValue] {
@@ -695,6 +756,9 @@ final class ChatStore {
         } else if latest["outcome"].string == "unknown" {
             errorMessage = "El resultado de una ejecución anterior quedó sin confirmar. No se repetirá automáticamente."
         }
+        if !["queued", "running", "waiting_approval", "cancelling", "cleaning"].contains(phase) {
+            requestMemoryRecallStatus(for: session)
+        }
     }
 
     private func applyReceipts(_ run: RPCValue) throws {
@@ -709,7 +773,7 @@ final class ChatStore {
             crashRecoveryBlocked = false; nextCrashAttempt = .now
             _ = await recoverCrashedService(); startMonitor(); return
         }
-        guard runtime.isActive, !stopping, !starting, !automation.lifecycleBusy, !handoffPreparing, !maintenance.blocksInteraction, !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction, !restored.blocksInteraction, !sessionCore.blocksInteraction, !clientIdentities.blocksInteraction, !delegation.blocksInteraction, !hasUnconfirmedQueue, let options else { return }
+        guard runtime.isActive, !stopping, !starting, !automation.lifecycleBusy, !handoffPreparing, !maintenance.blocksInteraction, !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction, !restored.blocksInteraction, !sessionCore.blocksInteraction, !clientIdentities.blocksInteraction, !delegation.blocksInteraction, !hasUnconfirmedQueue, let options else { return }
         starting = true
         ready = false; connected = false
         nativeCleanupPending = true
@@ -724,7 +788,7 @@ final class ChatStore {
         }
         nativeCleanupPending = false
         guard !stopping, runtime.isActive else { return }
-        polling?.cancel()
+        polling?.cancel(); memoryRecallRefresh?.cancel()
         await client?.close()
         await access.close()
         await mcp.close()
@@ -737,11 +801,13 @@ final class ChatStore {
         await restored.close()
         await channelRestoration.close()
         await memoryRestoration.close()
+        await memoryIntelligence.close()
         await recovery.close()
         guard !stopping, runtime.isActive else { return }
         configureConnections(options)
         sessionCore.setScope(selected?.scope)
         delegation.setScope(selected?.scope)
+        synchronizeMemoryIntelligenceContext()
         guard !stopping else { return }
         do {
             let restarted = !service.isRunning
@@ -759,6 +825,7 @@ final class ChatStore {
                 management.setContext(nil)
                 sessionCore.setScope(nil)
                 delegation.setScope(nil)
+                synchronizeMemoryIntelligenceContext()
             }
             try await ServiceBootstrap.waitForHealth(stateDirectory: options.state) { service.isRunning }
             try service.confirmReadyProfile(options)
@@ -776,6 +843,7 @@ final class ChatStore {
             try await refreshStatus()
             try await refreshSessions()
             try await access.refreshCatalog()
+            synchronizeMemoryIntelligenceContext()
             try await mcp.refresh()
             try await management.refresh()
             finishStartupRecovery()
@@ -788,6 +856,7 @@ final class ChatStore {
                 management.setContext((activeSession ?? selected)?.scope)
                 sessionCore.setScope((activeSession ?? selected)?.scope)
                 delegation.setScope((activeSession ?? selected)?.scope)
+                synchronizeMemoryIntelligenceContext()
                 conversationRefresh?.setScope((activeSession ?? selected)?.scope)
                 runPhase = "disconnected"
                 resumeStatus()
@@ -806,6 +875,7 @@ final class ChatStore {
         management.setContext(nil)
         sessionCore.setScope(nil)
         delegation.setScope(nil)
+        synchronizeMemoryIntelligenceContext()
         runPhase = "interrupted"
     }
 
@@ -878,6 +948,7 @@ final class ChatStore {
                 management.setContext(nil)
                 sessionCore.setScope(nil)
                 delegation.setScope(nil)
+                synchronizeMemoryIntelligenceContext()
             }
         } catch { report(error) }
         busy = false
@@ -886,7 +957,7 @@ final class ChatStore {
     }
 
     func login() async {
-        guard !isRecoveryOnly, !coreBlocksHost, !handoffPreparing, !maintenance.blocksInteraction, !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction, runtime.isActive else { return }
+        guard !isRecoveryOnly, !coreBlocksHost, !handoffPreparing, !maintenance.blocksInteraction, !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction, runtime.isActive else { return }
         do {
             let result = try await rpc("provider.login")
             guard let raw = result["url"].string, let url = URL(string: raw), url.scheme == "https",
@@ -902,7 +973,7 @@ final class ChatStore {
     }
 
     func logout() async {
-        guard !isRecoveryOnly, activeRunID == nil, !coreBlocksHost, !maintenance.blocksInteraction, !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !recovery.blocksInteraction else { return }
+        guard !isRecoveryOnly, activeRunID == nil, !coreBlocksHost, !maintenance.blocksInteraction, !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction else { return }
         voice.cancel(); dictationNotice = nil
         do { _ = try await rpc("provider.logout"); try await refreshStatus() }
         catch { report(error) }
@@ -930,11 +1001,12 @@ final class ChatStore {
         // A failed attempt leaves the same runtime alive for a shutdown retry.
         runtime.retire()
         statusText = "Cerrando el servicio y asentando las ejecuciones…"
-        monitor?.cancel(); polling?.cancel()
+        monitor?.cancel(); polling?.cancel(); memoryRecallRefresh?.cancel()
         access.setContext(nil)
         management.setContext(nil)
         sessionCore.setScope(nil)
         delegation.setScope(nil)
+        synchronizeMemoryIntelligenceContext()
         // Stopping the owned service wakes blocked RPC readers. Waiting for a
         // socket queue before sending SIGTERM could otherwise delay shutdown.
         let confirmed = await service.stop()
@@ -955,6 +1027,7 @@ final class ChatStore {
         await restored.close()
         await channelRestoration.close()
         await memoryRestoration.close()
+        await memoryIntelligence.close()
         await recovery.close()
         return true
     }
@@ -1009,6 +1082,7 @@ final class ChatStore {
     func refreshDelegation() async {
         guard ready, !stopping, !handoffPreparing else { return }
         delegation.setScope(selected?.scope)
+        synchronizeMemoryIntelligenceContext()
         await delegation.reloadCatalogue()
         await delegation.refresh()
         if delegation.goal?.settled == false { delegation.resumePolling() }
@@ -1061,6 +1135,7 @@ final class ChatStore {
         guard ready, !busy, !stopping, !handoffPreparing else { return }
         sessionCore.setScope(selected?.scope)
         delegation.setScope(selected?.scope)
+        synchronizeMemoryIntelligenceContext()
         await sessionCore.refresh()
     }
 

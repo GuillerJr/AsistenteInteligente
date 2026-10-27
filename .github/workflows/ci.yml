@@ -33,10 +33,18 @@ jobs:
         run: uv run --no-sync python script/check_clean_base.py
       - name: Ruff
         run: uv run --no-sync ruff check --no-cache src tests script
+      - name: Preparar el modelo CPU público fijado para cualificación real
+        shell: bash
+        run: |
+          JARVIS_MODEL_TEST_ROOT="$(mktemp -d "$RUNNER_TEMP/jarvis-minilm.XXXXXX")"
+          echo "JARVIS_MINILM_TEST_ASSETS=$JARVIS_MODEL_TEST_ROOT/artifacts" >> "$GITHUB_ENV"
+          .venv/bin/python -B script/prepare_memory_model.py \
+            --directory "$JARVIS_MODEL_TEST_ROOT/artifacts"
       - name: Pruebas de contratos propios
         run: >-
           .venv/bin/python -B script/test_resource_guard.py run
           --profile ci --kind python --selection tests --full
+          --minilm-test-assets "$JARVIS_MINILM_TEST_ASSETS"
           --budget-mib 12288 --deadline 1800 --
           .venv/bin/python -B -m pytest -o addopts= -q tests
       - name: Pruebas Swift y bundle nativo de desarrollo

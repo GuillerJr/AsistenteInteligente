@@ -16,17 +16,21 @@ if [[ "${1:-}" == --guard-child ]]; then
   export JARVIS_DESKTOP_SOURCE="$JARVIS_REPO_DIR/src"
   export JARVIS_DESKTOP_DEPENDENCIES="$("$JARVIS_PYTHON" -B -c 'import sysconfig; print(sysconfig.get_path("purelib"))')"
   export JARVIS_RPC_CLIENT_KEY_FILE="$JARVIS_TEST_GUARD_RUN_ROOT/synthetic-client.key"
-  export JARVIS_RPC_BOOTSTRAP_PUBLIC_KEY="$("$JARVIS_PYTHON" -B - "$JARVIS_RPC_CLIENT_KEY_FILE" <<'PY'
+  export JARVIS_RPC_BOOTSTRAP_PUBLIC_KEY="$("$JARVIS_PYTHON" -B -c '
 import os, sys
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 key = Ed25519PrivateKey.generate()
 fd = os.open(sys.argv[1], os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-with os.fdopen(fd, 'wb') as output:
+with os.fdopen(fd, "wb") as output:
     output.write(key.private_bytes_raw())
 print(key.public_key().public_bytes_raw().hex())
-PY
-)"
-  exec swift test --disable-sandbox --package-path "$JARVIS_REPO_DIR/native/JarvisDesktop" \
+' "$JARVIS_RPC_CLIENT_KEY_FILE")"
+  JARVIS_SDK_ARGUMENTS=()
+  if [[ -n "${SDKROOT:-}" ]]; then JARVIS_SDK_ARGUMENTS+=(--sdk "$SDKROOT"); fi
+  if [[ -n "${JARVIS_TEST_GUARD_TOOLCHAIN:-}" ]]; then
+    JARVIS_SDK_ARGUMENTS+=(--toolchain "$JARVIS_TEST_GUARD_TOOLCHAIN")
+  fi
+  exec swift test --build-system native --disable-sandbox ${JARVIS_SDK_ARGUMENTS[@]+"${JARVIS_SDK_ARGUMENTS[@]}"} --package-path "$JARVIS_REPO_DIR/native/JarvisDesktop" \
     --scratch-path "$JARVIS_TEST_GUARD_RUN_ROOT/swift" \
     --cache-path "$JARVIS_TEST_GUARD_RUN_ROOT/cache" \
     --config-path "$JARVIS_TEST_GUARD_RUN_ROOT/config" \

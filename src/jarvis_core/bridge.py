@@ -8,8 +8,9 @@ Cleanup owns the Codex task and every pending response until they settle.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
 
 from jarvis_core.runtime import FinalAnswer, RunContext, ToolProposal
@@ -30,7 +31,7 @@ class CodexBridge:
         self,
         provider,
         *,
-        prepare: Callable[[RunContext], dict],
+        prepare: Callable[[RunContext], dict | Awaitable[dict]],
         on_event: Callable[[RunContext, str, dict], None],
         on_thread: Callable[[RunContext, str], None],
         on_turn_closed: Callable[[RunContext], None] | None = None,
@@ -48,6 +49,8 @@ class CodexBridge:
         turn = self._turns.get(context.run_id)
         if turn is None:
             params = self.prepare(context)
+            if inspect.isawaitable(params):
+                params = await params
             proposals: asyncio.Queue = asyncio.Queue(maxsize=16)
             futures: set[asyncio.Future] = set()
 

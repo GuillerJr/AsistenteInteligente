@@ -1,8 +1,19 @@
+import DesktopCore
 import SwiftUI
 
 struct MemoryView: View {
     let store: ChatStore
     @Bindable var access: AccessStore
+    @State private var page = Page.notes
+    private enum Page: Hashable { case notes, intelligence }
+    private var semanticAvailable: Bool {
+        guard let status = store.memoryIntelligence.status else { return false }
+        return status.scope == store.selected?.scope && status.model.available && status.model.runtimeAvailable
+    }
+    private var maySearch: Bool {
+        !access.isLoadingMemory && !access.memoryQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && access.memoryQuery.utf8.count <= 512 && (access.memoryQueryMode == .lexical || semanticAvailable)
+    }
 
     init(store: ChatStore) {
         self.store = store
@@ -10,6 +21,36 @@ struct MemoryView: View {
     }
 
     var body: some View {
+        VStack(spacing: 0) {
+            Picker("Panel de memoria", selection: $page) {
+                Text("Notas").tag(Page.notes)
+                Text("Uso automático").tag(Page.intelligence)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding(.horizontal, 20)
+            .padding(.top, 14)
+            if page == .notes { notes }
+            else { MemoryIntelligenceView(store: store.memoryIntelligence) }
+        }
+        .frame(minWidth: 380, idealWidth: 460)
+        .task(id: store.memoryIntelligenceSelectionKey) {
+            store.synchronizeMemoryIntelligenceContext()
+            await store.memoryIntelligence.refresh()
+            if !Task.isCancelled, page == .notes {
+                await store.access.loadDocuments()
+                if !Task.isCancelled { await store.memoryIntelligence.refresh() }
+            }
+        }
+        .onChange(of: page) { _, selectedPage in
+            store.synchronizeMemoryIntelligenceContext()
+            if selectedPage == .notes {
+                Task { await store.access.loadDocuments(); await store.memoryIntelligence.refresh() }
+            }
+        }
+    }
+
+    private var notes: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 Text(store.selected?.temporary == true ? "Memoria temporal de esta conversación"
@@ -21,6 +62,7 @@ struct MemoryView: View {
                         if store.access.memoryQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             await store.access.loadDocuments()
                         } else { await store.access.searchMemory() }
+                        await store.memoryIntelligence.refresh()
                     }
                 }.disabled(store.access.isLoadingMemory || !store.access.memoryEnabled)
             }
@@ -28,11 +70,26 @@ struct MemoryView: View {
                 ContentUnavailableView("Memoria no disponible", systemImage: "tray",
                                        description: Text("El servicio no ha habilitado esta capacidad."))
             } else {
+                Picker("Buscar por", selection: $access.memoryQueryMode) {
+                    Text("Palabras").tag(MemoryRecallMode.lexical)
+                    Text("Significado").tag(MemoryRecallMode.semanticLocal).disabled(!semanticAvailable)
+                    Text("Combinada").tag(MemoryRecallMode.hybridLocal).disabled(!semanticAvailable)
+                }
+                .pickerStyle(.segmented)
+                .disabled(access.isLoadingMemory)
                 HStack {
-                    TextField("Buscar texto en la memoria", text: $access.memoryQuery)
-                        .onSubmit { Task { await store.access.searchMemory() } }
+                    TextField("Buscar en las notas aprobadas", text: $access.memoryQuery)
+                        .onSubmit { if maySearch { Task { await store.access.searchMemory() } } }
                     Button("Buscar") { Task { await store.access.searchMemory() } }
-                        .disabled(store.access.isLoadingMemory || store.access.memoryQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(!maySearch)
+                }
+                if access.memoryQuery.utf8.count > 512 {
+                    Text(MemoryManualSearchPresentation.queryTooLarge).font(.caption).foregroundStyle(.red)
+                } else if !semanticAvailable {
+                    Text("Para buscar por significado, prepara el modelo local en Uso automático. No hace falta activar la recuperación automática.")
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    Text("Esta búsqueda es local y no activa el envío automático de contexto.").font(.caption).foregroundStyle(.secondary)
                 }
                 if store.access.isLoadingMemory { ProgressView().controlSize(.small) }
                 ScrollView {
@@ -56,8 +113,11 @@ struct MemoryView: View {
                                     }
                                 }.padding(12).background(.quaternary, in: .rect(cornerRadius: 10))
                             }
-                            if store.access.matches.isEmpty && !store.access.isLoadingMemory {
+                            if store.access.matches.isEmpty && !store.access.isLoadingMemory && access.memorySearchHasResponse {
                                 Text("No hay coincidencias para esta búsqueda.").foregroundStyle(.secondary)
+                            }
+                            if access.memorySearchHasMore {
+                                Text("Hay más coincidencias. Afina la consulta para acotar los resultados.").font(.caption).foregroundStyle(.secondary)
                             }
                         } else {
                             ForEach(store.access.documents) { document in
@@ -82,9 +142,6 @@ struct MemoryView: View {
                 }
             }
         }
-        .padding(20).frame(minWidth: 380, idealWidth: 440)
-        .task { await store.access.loadDocuments() }
-        .onChange(of: store.selectedID) { _, _ in Task { await store.access.loadDocuments() } }
-        .onChange(of: store.access.workspacePath) { _, _ in Task { await store.access.loadDocuments() } }
+        .padding(20)
     }
 }

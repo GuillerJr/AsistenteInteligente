@@ -38,12 +38,16 @@ from jarvis_core.host_profile import (
     service_blockers,
     service_fingerprint,
 )
+from jarvis_core.local_embeddings import EngineError
 from jarvis_core.maintenance import MaintenanceCoordinator
 from jarvis_core.maintenance_journal import wire
 from jarvis_core.management import ManagementAPI
 from jarvis_core.mcp_registry import McpRegistry, McpRegistryError, ServerSpec
 from jarvis_core.memory import Citation, MemoryError, MemoryLimits, MemoryScope, MemoryStore
+from jarvis_core.memory_intelligence import MemoryIntelligence, MemoryIntelligenceError
+from jarvis_core.memory_policy import MemoryPolicyError
 from jarvis_core.memory_tools import MemoryTools
+from jarvis_core.model_artifacts import ArtifactError
 from jarvis_core.native_automation import NativeAutomationBroker
 from jarvis_core.native_tools import NativeAutomationTools
 from jarvis_core.private_json import PrivateJsonError
@@ -124,6 +128,11 @@ class _ProviderAdapter:
             SkillError,
             PrivateJsonError,
             ProviderChoiceError,
+            MemoryError,
+            MemoryIntelligenceError,
+            MemoryPolicyError,
+            EngineError,
+            ArtifactError,
         ) as error:
             service._errors[context.run_id] = str(error)
             raise
@@ -136,6 +145,7 @@ class _ProviderAdapter:
         finally:
             self.service.native_tools.clear_run(context.run_id)
             self.service._active_ref.set(None)
+            self.service._memory_run_id.set(None)
 
 
 class _ApprovalGate:
@@ -189,6 +199,9 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         self._provider_context = ContextVar("jarvis_provider_epoch", default=None)
         self._provider_epochs = {}
         self._provider_transition = None
+        self._memory_run_id = ContextVar("jarvis_memory_run", default=None)
+        self._memory_leases = {}
+        self._memory_epochs = {}
         if isinstance(provider, CodexClient):
             provider.before_io = self._provider_io
             provider.child_custody = self.profile_lease.child_custody_fds
@@ -253,6 +266,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         )
         self._configure_tools()
         self.initialize_telegram()
+        self.memory_intelligence = MemoryIntelligence(self)
         self.maintenance_coordinator = MaintenanceCoordinator(self, self.profile_gate)
         self.server = LocalRpcServer(
             directory, self.handlers(), max_frame_bytes=1024 * 1024,
@@ -295,7 +309,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 ]
             ).encode()
         ).hexdigest()
-        memory_tools = MemoryTools(self.memory, self._active_memory_scope)
+        memory_tools = MemoryTools(self.memory, self._active_memory_scope,
+                                   search=self._recall_tool_search)
         definitions = list(memory_tools.definitions())
         specs = list(memory_tools.specs())
         definitions.extend(self.web_tools.definitions())
@@ -396,6 +411,15 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         self.store.get_session(ref)
         return ref.session_id
 
+    async def _recall_tool_search(self, scope, query, *, mode, limit):
+        ref = self._active_ref.get()
+        if ref is None or scope != self._memory_scope(ref):
+            raise MemoryError("memory_run_scope_required")
+        if mode == "lexical":
+            return self.memory.search(scope, query, limit=limit)
+        client = self._run_clients.get(self._memory_run_id.get())
+        return await self.memory_intelligence.search(ref, client, query, mode=mode, limit=limit)
+
     @profile_callback("run.event")
     def _event(self, context: RunContext, kind: str, payload: dict) -> None:
         if kind in {"answer.delta", "tool.requested"}:
@@ -417,7 +441,13 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         self._event(context, "tool.completed", {"receipt": self._receipt(result)})
 
     @profile_callback("run.prepare")
-    def _prepare_turn(self, context: RunContext) -> dict:
+    def _prepare_turn(self, context: RunContext) -> Awaitable[dict]:
+        # The synchronous outer admission also rejects a callback captured
+        # before an exclusive host cut. The inner admission owns every await.
+        return self._prepare_memory_turn(context)
+
+    @profile_background("run.prepare.memory")
+    async def _prepare_memory_turn(self, context: RunContext) -> dict:
         self._assert_run_client(context.run_id)
         self.provider_choice.assert_current(self._provider_epochs[context.run_id])
         ref = self._refs[context.run_id]
@@ -428,6 +458,18 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         session = self.store.get_session(ref)
         profile = self.agent_profiles.get(session.agent_id)
         skills = self.skills.context(session.agent_id)
+        memory_scope = self._memory_scope(ref)
+        client = self._run_clients.get(context.run_id)
+        lease = None
+        if client is not None:
+            lease = await self.memory_intelligence.prepare_recall(context, ref, client)
+            self._assert_run_client(context.run_id)
+            self.provider_choice.assert_current(self._provider_epochs[context.run_id])
+            self._assert_workspace_current()
+            self._memory_leases[context.run_id] = lease
+        memory_epoch = self.memory.binding_epoch(memory_scope)
+        self._memory_epochs[context.run_id] = memory_epoch
+        self._memory_run_id.set(context.run_id)
         fingerprint = hashlib.sha256(
             json.dumps(
                 [
@@ -435,6 +477,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                     profile.fingerprint,
                     skills.fingerprint,
                     context.offered_tools,
+                    memory_epoch,
+                    lease.fingerprint if lease is not None else None,
                 ]
             ).encode()
         ).hexdigest()
@@ -459,7 +503,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 self._event(
                     context, "context.restored", {"messages": len(history), "budget_bytes": 16000}
                 )
-        return {
+        result = {
             "thread_id": thread_id,
             "temporary": ref.temporary,
             "tool_specs": [spec for spec in self.catalog.specs()
@@ -469,6 +513,9 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             "instructions": profile.instructions,
             "context_data": skills.text,
         }
+        if lease is not None and lease.text:
+            result["memory_context"] = lease.text
+        return result
 
     def _assert_workspace_current(self) -> None:
         current = WorkspaceTools(self._workspace_path)
@@ -520,6 +567,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         methods.update(self.telegram_handlers())
         methods.update(self.delegation_handlers())
         methods.update(self.automation_handlers())
+        methods.update(self.memory_intelligence.handlers())
 
         def safe(name, callback, *, closing=False):
             async def invoke(params):
@@ -531,6 +579,20 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                     raise RpcError(-32037, error.code) from None
                 except ClientIdentityError:
                     raise RpcError(-32003, "Este cliente no posee el permiso requerido.") from None
+                except (MemoryIntelligenceError, MemoryPolicyError, EngineError,
+                        ArtifactError) as error:
+                    code = getattr(error, "code", "memory_intelligence_unavailable")
+                    if "changed" in code or "conflict" in code:
+                        message = "La memoria cambió. Actualiza y revisa de nuevo."
+                    elif "cleanup" in code or "unknown" in code:
+                        message = "El cierre de memoria sigue pendiente. Consulta su estado."
+                    elif code in {"missing_model", "unavailable_runtime"}:
+                        message = "Prepara el modelo local desde Uso automático de la memoria."
+                    elif "capacity" in code:
+                        message = "La consulta o el índice excede el límite de memoria local."
+                    else:
+                        message = "No se pudo completar la operación de memoria local."
+                    raise RpcError(-32038, message) from None
                 except StateError as error:
                     raise RpcError(-32010, error.code) from None
                 except CodexError as error:
@@ -605,6 +667,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 "tools": True,
                 "memory": True,
                 "memory_mode": "local_lexical",
+                "memory_search_modes": ["lexical", "semantic_local", "hybrid_local"],
+                "memory_intelligence": True,
                 "mcp": True,
                 "agents": True,
                 "skills": True,
@@ -660,6 +724,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             or self._retiring_sessions
             or (self.process_tools and self.process_tools.has_running)
             or self.telegram_blocks_workspace_change()
+            or self.memory_intelligence.blockers
         ):
             raise RpcError(
                 -32011, "Espera a que terminen las ejecuciones antes de cambiar de carpeta."
@@ -668,10 +733,15 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         if not isinstance(value, str) or len(value.encode()) > 4096:
             raise RpcError(-32602, "La ruta de la carpeta no es válida.")
         path = Path(value)
+        try:
+            private_part = path.relative_to(self.directory.parent).parts[0]
+        except (ValueError, IndexError):
+            private_part = ""
         if (
             path == self.directory
             or self.directory.is_relative_to(path)
             or (path.is_relative_to(self.directory) and path != self.directory / "workspace")
+            or private_part.startswith(self.directory.name + ".memory-")
         ):
             raise RpcError(
                 -32602, "El perfil privado de Jarvis no puede usarse como carpeta de trabajo."
@@ -884,21 +954,31 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         }
 
     async def search_memory(self, params: dict) -> dict:
-        _params(params, _BASE | {"query", "offset", "generation"}, {"session_id", "query"})
-        result = self.memory.search(
-            self._memory_scope(self._ref(params)),
-            params["query"],
-            limit=10,
-            offset=params.get("offset", 0),
-            expected_generation=params.get("generation"),
-        )
-        return {
+        _params(params, _BASE | {"query", "offset", "generation", "mode", "index_fingerprint"},
+                {"session_id", "query"})
+        ref = self._ref(params)
+        mode = params.get("mode", "lexical")
+        if not isinstance(mode, str) or mode not in {"lexical", "semantic_local", "hybrid_local"}:
+            raise RpcError(-32602, "El modo de búsqueda no es válido.")
+        if mode == "lexical":
+            result = self.memory.search(self._memory_scope(ref), params["query"], limit=10,
+                                        offset=params.get("offset", 0),
+                                        expected_generation=params.get("generation"))
+        else:
+            result = await self.memory_intelligence.search(
+                ref, authenticated_client.get(), params["query"], mode=mode, limit=10,
+                offset=params.get("offset", 0), expected_generation=params.get("generation"),
+                expected_index_fingerprint=params.get("index_fingerprint"))
+        response = {
             "matches": [asdict(hit) for hit in result.hits],
             "mode": result.mode,
             "generation": result.generation,
             "next_offset": result.next_offset,
             "has_more": result.has_more,
         }
+        if hasattr(result, "index_fingerprint"):
+            response["index_fingerprint"] = result.index_fingerprint
+        return response
 
     async def resolve_memory(self, params: dict) -> dict:
         _params(params, _BASE | {"citation"}, {"session_id", "citation"})
@@ -933,6 +1013,15 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         if owner is not None:
             self.client_authority.lookup(owner, scope="owner")
         self.provider_choice.assert_current(self._provider_context.get())
+        if method == "turn/start":
+            run_id = self._memory_run_id.get()
+            lease = self._memory_leases.get(run_id)
+            if lease is not None:
+                lease.assert_current()
+            ref = self._refs.get(run_id)
+            if ref is not None and self.memory.binding_epoch(self._memory_scope(ref)) != (
+                    self._memory_epochs.get(run_id)):
+                raise MemoryError("memory_context_changed")
 
     async def local_status(self, params: dict) -> dict:
         _params(params, set())
@@ -1063,6 +1152,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         finally:
             self._retiring_sessions.discard(ref)
         if ref.temporary:
+            await self.memory_intelligence.forget_temporary(ref)
             self._memory_scope(ref)
             for scope in self._temporary_memory_scopes.get(ref.session_id, ()):
                 self.memory.clear_scope(scope)
@@ -1209,6 +1299,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             self._run_fingerprints.pop(handle.run_id, None)
             self._provider_epochs.pop(handle.run_id, None)
             self._run_clients.pop(handle.run_id, None)
+            self._memory_leases.pop(handle.run_id, None)
+            self._memory_epochs.pop(handle.run_id, None)
             writer = self._run_writers.pop(handle.run_id, None)
             if writer is not None:
                 writer.close()
@@ -1277,6 +1369,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 "mcp_cleanup_incomplete", "codex_cleanup_incomplete",
                 "telegram_cleanup_incomplete", "service_cleanup_incomplete",
                 "scheduler_cleanup_incomplete", "maintenance_cleanup_incomplete",
+                "memory_cleanup_incomplete",
             }
         ):
             # An explicit new close may finish resources retained after a
@@ -1346,6 +1439,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         # Close every independent owner even when one provider cannot settle.
         # Retain the stores while any child, channel or callback is unconfirmed.
         for closer in (
+            self._close_memory_resources,
             self.native_broker.aclose,
             self.process_tools.aclose if self.process_tools else None,
             self.web_tools.aclose,
@@ -1362,6 +1456,17 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         self.schedule_store.close()
         self.memory.close()
         self.store.close()
+
+    async def _close_memory_resources(self):
+        task = getattr(self, "_memory_close_task", None)
+        if task is None or (task.done() and (task.cancelled() or task.exception() is not None)):
+            task = self._memory_close_task = asyncio.create_task(self.memory_intelligence.close())
+        try:
+            result = await asyncio.wait_for(asyncio.shield(task), 15)
+            if result.get("closed") is not True:
+                raise TimeoutError("memory_cleanup_incomplete")
+        except Exception as error:
+            raise TimeoutError("memory_cleanup_incomplete") from error
 
 
 async def _serve(args: argparse.Namespace) -> None:

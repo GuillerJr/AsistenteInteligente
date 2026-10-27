@@ -50,35 +50,36 @@ JARVIS_BUILD_DIR="$JARVIS_TEST_GUARD_RUN_ROOT"
 JARVIS_OUTPUT_DIR="$JARVIS_BUILD_DIR/output"
 JARVIS_APP_PATH="$JARVIS_OUTPUT_DIR/Jarvis.app"
 export CLANG_MODULE_CACHE_PATH="$JARVIS_BUILD_DIR/clang-cache"
-swift build --disable-sandbox --package-path "$JARVIS_REPO_DIR/native/JarvisDesktop" \
+JARVIS_SDK_ARGUMENTS=()
+if [[ -n "${SDKROOT:-}" ]]; then JARVIS_SDK_ARGUMENTS+=(--sdk "$SDKROOT"); fi
+if [[ -n "${JARVIS_TEST_GUARD_TOOLCHAIN:-}" ]]; then
+  JARVIS_SDK_ARGUMENTS+=(--toolchain "$JARVIS_TEST_GUARD_TOOLCHAIN")
+fi
+swift build --build-system native --disable-sandbox ${JARVIS_SDK_ARGUMENTS[@]+"${JARVIS_SDK_ARGUMENTS[@]}"} --package-path "$JARVIS_REPO_DIR/native/JarvisDesktop" \
   --scratch-path "$JARVIS_BUILD_DIR/swift" --cache-path "$JARVIS_BUILD_DIR/cache" \
   --config-path "$JARVIS_BUILD_DIR/config" --security-path "$JARVIS_BUILD_DIR/security" \
   --arch arm64 --product Jarvis
-JARVIS_BIN_DIR="$(swift build --disable-sandbox --package-path "$JARVIS_REPO_DIR/native/JarvisDesktop" \
+JARVIS_BIN_DIR="$(swift build --build-system native --disable-sandbox ${JARVIS_SDK_ARGUMENTS[@]+"${JARVIS_SDK_ARGUMENTS[@]}"} --package-path "$JARVIS_REPO_DIR/native/JarvisDesktop" \
   --scratch-path "$JARVIS_BUILD_DIR/swift" --cache-path "$JARVIS_BUILD_DIR/cache" \
   --config-path "$JARVIS_BUILD_DIR/config" --security-path "$JARVIS_BUILD_DIR/security" \
   --arch arm64 --show-bin-path)"
 mkdir -p "$JARVIS_APP_PATH/Contents/MacOS"
 cp "$JARVIS_BIN_DIR/Jarvis" "$JARVIS_APP_PATH/Contents/MacOS/Jarvis"
-cat > "$JARVIS_APP_PATH/Contents/Info.plist" <<'PLIST'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-<key>CFBundleIdentifier</key><string>com.jarvis.desktop.baseline</string>
-<key>CFBundleName</key><string>Jarvis</string>
-<key>CFBundleDisplayName</key><string>Jarvis</string>
-<key>CFBundleExecutable</key><string>Jarvis</string>
-<key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.1.0</string>
-<key>CFBundleVersion</key><string>1</string>
-<key>LSMinimumSystemVersion</key><string>14.0</string>
-<key>NSPrincipalClass</key><string>NSApplication</string>
-<key>LSUIElement</key><false/>
-<key>NSHighResolutionCapable</key><true/>
-<key>NSMicrophoneUsageDescription</key><string>Jarvis usa el micrófono solo cuando inicias el dictado. El audio permanece en memoria y se exige reconocimiento en este Mac.</string>
-<key>NSSpeechRecognitionUsageDescription</key><string>Jarvis convierte tu voz a texto únicamente al iniciar el dictado y si el reconocimiento local está disponible.</string>
-</dict></plist>
-PLIST
+"$JARVIS_PYTHON" -B -c '
+import plistlib, sys
+data = {
+    "CFBundleIdentifier": "com.jarvis.desktop.baseline",
+    "CFBundleName": "Jarvis", "CFBundleDisplayName": "Jarvis",
+    "CFBundleExecutable": "Jarvis", "CFBundlePackageType": "APPL",
+    "CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "1",
+    "LSMinimumSystemVersion": "14.0", "NSPrincipalClass": "NSApplication",
+    "LSUIElement": False, "NSHighResolutionCapable": True,
+    "NSMicrophoneUsageDescription": "Jarvis usa el micrófono solo cuando inicias el dictado. El audio permanece en memoria y se exige reconocimiento en este Mac.",
+    "NSSpeechRecognitionUsageDescription": "Jarvis convierte tu voz a texto únicamente al iniciar el dictado y si el reconocimiento local está disponible.",
+}
+with open(sys.argv[1], "wb") as stream:
+    plistlib.dump(data, stream)
+' "$JARVIS_APP_PATH/Contents/Info.plist"
 /usr/bin/plutil -lint "$JARVIS_APP_PATH/Contents/Info.plist"
 /usr/bin/codesign --force --sign - --timestamp=none "$JARVIS_APP_PATH"
 /usr/bin/codesign --verify --strict "$JARVIS_APP_PATH"

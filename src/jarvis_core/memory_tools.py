@@ -8,19 +8,25 @@ import re
 from collections.abc import Callable, Mapping
 from dataclasses import asdict
 
+from jarvis_core.local_embeddings import EngineError
 from jarvis_core.memory import MemoryError, MemoryScope, MemoryStore
+from jarvis_core.memory_intelligence import MemoryIntelligenceError
+from jarvis_core.memory_policy import MemoryPolicyError
+from jarvis_core.model_artifacts import ArtifactError
 from jarvis_core.runtime import ToolDefinition, ToolResult
 from jarvis_core.tools import ToolSpec, check_tool_authority
 
 
 class MemoryTools:
-    def __init__(self, store: MemoryStore, scope: Callable[[], MemoryScope]) -> None:
+    def __init__(self, store: MemoryStore, scope: Callable[[], MemoryScope], *,
+                 search=None) -> None:
         self.store, self.scope = store, scope
+        self.search = search
 
     @staticmethod
     def _validate(name: str, arguments: Mapping) -> None:
         allowed = {
-            "memory_recall": {"query"},
+            "memory_recall": {"query", "mode"},
             "memory_store": {"key", "text", "title", "source_uri", "expected_revision"},
             "memory_forget": {"key", "expected_revision"},
         }[name]
@@ -47,6 +53,9 @@ class MemoryTools:
             type(arguments["expected_revision"]) is not int or arguments["expected_revision"] < 1
         ):
             raise ValueError("memory_revision_invalid")
+        if "mode" in arguments and (not isinstance(arguments["mode"], str)
+                or arguments["mode"] not in {"lexical", "semantic_local", "hybrid_local"}):
+            raise ValueError("memory_search_mode_invalid")
 
     def definitions(self) -> tuple[ToolDefinition, ...]:
         return tuple(
@@ -64,6 +73,7 @@ class MemoryTools:
     def specs(self) -> tuple[ToolSpec, ...]:
         properties = {
             "query": {"type": "string", "maxLength": 512},
+            "mode": {"type": "string", "enum": ["lexical", "semantic_local", "hybrid_local"]},
             "key": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"},
             "text": {"type": "string", "maxLength": 8000},
             "title": {"type": "string", "maxLength": 256},
@@ -74,9 +84,11 @@ class MemoryTools:
             (
                 "memory_recall",
                 "Busca memoria local de esta carpeta; devuelve citas del snapshot. "
-                "La búsqueda es léxica, no semántica. "
+                "El modo predeterminado es léxico; semantic_local y hybrid_local usan "
+                "únicamente MiniLM local preparado por el dueño. "
+                "Si falta, se informa sin cambiar de motor. "
                 "Una etiqueta de fuente no prueba su origen.",
-                ("query",),
+                ("query", "mode"),
                 ("query",),
             ),
             (
@@ -119,7 +131,16 @@ class MemoryTools:
         mutation_dispatched = False
         try:
             if name == "memory_recall":
-                result = asdict(self.store.search(scope, arguments["query"], limit=5))
+                mode = arguments.get("mode", "lexical")
+                if self.search is not None:
+                    found = await self.search(scope, arguments["query"], mode=mode, limit=5)
+                elif mode == "lexical":
+                    found = self.store.search(scope, arguments["query"], limit=5)
+                else:
+                    raise MemoryError("memory_semantic_unavailable")
+                if cancellation.is_set():
+                    raise asyncio.CancelledError
+                result = asdict(found)
             else:
                 check_tool_authority(name, arguments)
                 if name == "memory_store":
@@ -177,7 +198,8 @@ class MemoryTools:
                             error="memory_verification_failed",
                         )
             return ToolResult(name, True, True, output=json.dumps(result, ensure_ascii=False))
-        except MemoryError as error:
+        except (MemoryError, MemoryIntelligenceError, MemoryPolicyError,
+                EngineError, ArtifactError) as error:
             deterministic = error.code in {
                 "revision_conflict",
                 "memory_capacity_exceeded",

@@ -38,13 +38,16 @@ RETIRED_FILES = (
 )
 EXTERNAL_RUNTIMES = {"openclaw", "opencode"}
 STDLIB = sys.stdlib_module_names | {"__future__", "jarvis_core"}
-# A reviewed signature primitive, never a model, agent framework or external runtime.
-# The exact release and its transitive artifacts are hash-bound by uv.lock.
-REVIEWED_DEPENDENCIES = ("cryptography==50.0.2",)
+# Signature primitive plus the owner's explicitly selected CPU embedding engine.
+# No agent framework, GPU runtime or inference fallback; uv.lock binds artifacts.
+SIGNING_DEPENDENCIES = ("cryptography==50.0.2",)
+REVIEWED_DEPENDENCIES = (*SIGNING_DEPENDENCIES, "numpy==2.3.5", "onnxruntime==1.31.1",
+                         "tokenizers==0.22.1")
 SDIST_REQUIRED = {
     "PKG-INFO", "pyproject.toml", "README.md", "LICENSE", "uv.lock", "MANIFEST.in",
     "script/check_clean_base.py", "script/research_inventory.py", "script/setup_git_gates.sh",
     "script/test_resource_guard.py",
+    "script/prepare_memory_model.py",
     ".githooks/pre-commit", ".githooks/pre-push",
 }
 NATIVE_ROOT = PurePosixPath("native/JarvisDesktop")
@@ -141,13 +144,15 @@ def _dependencies(values) -> tuple[str, ...]:
     if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
         raise CleanBaseError("lista de dependencias productivas inválida")
     requirements = tuple(value.replace(" ", "").lower() for value in values)
-    if requirements not in {(), REVIEWED_DEPENDENCIES}:
+    if requirements not in {(), SIGNING_DEPENDENCIES, REVIEWED_DEPENDENCIES}:
         raise CleanBaseError("dependencias productivas fuera de la lista revisada")
     return requirements
 
 
 def _check_imports(data: bytes, name: str, dependencies: tuple[str, ...] = ()) -> None:
     allowed = STDLIB | ({"cryptography"} if dependencies else set())
+    if dependencies == REVIEWED_DEPENDENCIES:
+        allowed |= {"numpy", "onnxruntime", "tokenizers"}
     tree = ast.parse(data, filename=name)
     dynamic_names = {"eval", "exec", "__import__"}
     for node in ast.walk(tree):
@@ -432,6 +437,9 @@ def smoke_wheel(wheel: Path) -> None:
                "key.public_key().verify(key.sign(b'jarvis offline smoke'),"
                "b'jarvis offline smoke'); "
                if dependencies else "")
+            + ("import numpy, onnxruntime, tokenizers; "
+               "assert 'CPUExecutionProvider' in onnxruntime.get_available_providers(); "
+               if dependencies == REVIEWED_DEPENDENCIES else "")
             + "print('installed_base_import=ok')"
         )
         result = _smoke_command([str(python), "-I", "-c", code], cwd=sandbox,

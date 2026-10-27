@@ -13,8 +13,26 @@ final class AccessStore {
     var workspaceError: String?
     var documents: [MemoryDocument] = []
     var matches: [MemoryMatch] = []
-    var memoryQuery = ""
+    var memoryQuery = "" {
+        didSet {
+            if memoryQuery != oldValue {
+                matches = []; verifiedCitations = []; memorySearchHasMore = false
+                memorySearchHasResponse = false; errorMessage = nil
+            }
+        }
+    }
     var memoryMode = ""
+    var memoryQueryMode = MemoryRecallMode.lexical {
+        didSet {
+            if memoryQueryMode != oldValue {
+                memoryGeneration += 1; matches = []; verifiedCitations = []
+                memorySearchHasMore = false; isLoadingMemory = false; errorMessage = nil
+                memorySearchHasResponse = false
+            }
+        }
+    }
+    var memorySearchHasMore = false
+    var memorySearchHasResponse = false
     var verifiedCitations: Set<String> = []
     var errorMessage: String?
     var isLoadingMemory = false
@@ -38,7 +56,7 @@ final class AccessStore {
             approvals = []; documents = []; matches = []; verifiedCitations = []
             documentOffset = 0; memoryGeneration += 1
             isLoadingMemory = false
-            memoryQuery = ""; errorMessage = nil
+            memoryQuery = ""; memoryQueryMode = .lexical; memorySearchHasMore = false; memorySearchHasResponse = false; errorMessage = nil
         }
     }
 
@@ -71,6 +89,7 @@ final class AccessStore {
         if path != workspacePath {
             documents = []; matches = []; verifiedCitations = []; memoryQuery = ""
             documentOffset = 0; memoryGeneration += 1; isLoadingMemory = false
+            memoryQueryMode = .lexical; memorySearchHasMore = false; memorySearchHasResponse = false
         }
         workspacePath = path
     }
@@ -146,6 +165,7 @@ final class AccessStore {
             let result = try await rpc("workspace.set", ["path": .string(chosenPath)])
             guard let path = result["workspace"]["path"].string, path.hasPrefix("/") else { throw RPCFailure.invalidResponse }
             workspacePath = path; documents = []; matches = []; verifiedCitations = []
+            memoryQueryMode = .lexical; memorySearchHasMore = false; memorySearchHasResponse = false
             documentOffset = 0; memoryGeneration += 1
             isLoadingMemory = false
             try await refreshCatalog()
@@ -178,21 +198,27 @@ final class AccessStore {
     func searchMemory() async {
         guard let scope = context, memoryEnabled, !isLoadingMemory else { return }
         let query = memoryQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { matches = []; return }
+        guard !query.isEmpty else { matches = []; memorySearchHasMore = false; memorySearchHasResponse = false; return }
+        guard query.utf8.count <= 512 else { errorMessage = MemoryManualSearchPresentation.queryTooLarge; return }
+        let requestedMode = memoryQueryMode
         let generation = memoryGeneration
+        let workspace = workspacePath
         isLoadingMemory = true
+        memorySearchHasMore = false; memorySearchHasResponse = false; errorMessage = nil
         defer { if generation == memoryGeneration { isLoadingMemory = false } }
         do {
-            var parameters = scope.params
-            parameters["query"] = .string(query); parameters["offset"] = .number(0)
-            let result = try await rpc("memory.search", parameters)
-            guard let values = result["matches"].array,
-                  let mode = result["mode"].string,
-                  ["fts5_lexical", "lexical_scan"].contains(mode) else { throw RPCFailure.invalidResponse }
-            let hits = try values.map(MemoryMatch.init)
-            guard context == scope, generation == memoryGeneration else { return }
-            matches = hits; memoryMode = mode; verifiedCitations = []
-        } catch { if context == scope, generation == memoryGeneration { report(error) } }
+            let request = try MemoryManualSearchRequest(scope: scope, query: query, mode: requestedMode)
+            let result = try await MemoryManualSearchResponse(rpc("memory.search", request.params), requested: requestedMode)
+            guard context == scope, generation == memoryGeneration, workspacePath == workspace,
+                  memoryQueryMode == requestedMode, memoryQuery.trimmingCharacters(in: .whitespacesAndNewlines) == query else { return }
+            matches = result.matches; memoryMode = result.mode; verifiedCitations = []
+            memorySearchHasMore = result.hasMore; memorySearchHasResponse = true
+        } catch {
+            if context == scope, generation == memoryGeneration, workspacePath == workspace,
+               memoryQueryMode == requestedMode, memoryQuery.trimmingCharacters(in: .whitespacesAndNewlines) == query {
+                errorMessage = MemoryManualSearchPresentation.error(error)
+            }
+        }
     }
 
     func verifyCitation(_ match: MemoryMatch) async {

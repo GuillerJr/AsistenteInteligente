@@ -637,6 +637,21 @@ class MemoryStore:
             self._assert_text(row)
             return DocumentContent(self._record(row), row["text"])
 
+    def snapshot(self, scope: MemoryScope, *, cancellation=None, deadline=None):
+        from jarvis_core.memory_snapshot import snapshot_scope
+
+        return snapshot_scope(self, scope, cancellation=cancellation, deadline=deadline)
+
+    def generation(self, scope: MemoryScope, *, cancellation=None, deadline=None) -> int:
+        from jarvis_core.memory_snapshot import scope_generation
+
+        return scope_generation(self, scope, cancellation=cancellation, deadline=deadline)
+
+    def binding_epoch(self, scope: MemoryScope) -> str:
+        from jarvis_core.memory_snapshot import binding_epoch
+
+        return binding_epoch(self, scope)
+
     def delete(self, scope: MemoryScope, key: str, *,
                expected_revision: int | None = None) -> DeleteReceipt:
         key = self._key(key)

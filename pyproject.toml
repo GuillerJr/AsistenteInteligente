@@ -6,6 +6,9 @@ readme = "README.md"
 requires-python = ">=3.11,<3.14"
 dependencies = [
     "cryptography==50.0.2",
+    "numpy==2.3.5",
+    "onnxruntime==1.31.1",
+    "tokenizers==0.22.1",
 ]
 
 [dependency-groups]

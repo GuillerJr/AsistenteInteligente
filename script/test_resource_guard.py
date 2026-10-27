@@ -299,18 +299,24 @@ def detach_volume(volume: Volume):
     return True
 
 
-def sandbox_policy(source: Path, control: Path, mount: Path):
+def sandbox_policy(source: Path, control: Path, mount: Path, *, extra_reads=()):
     reads = [source, control, mount, Path("/System"), Path("/usr"), Path("/bin"),
              Path("/sbin"), Path("/opt/homebrew"), Path("/Library/Frameworks/Python.framework"),
              Path("/Library/Developer"), Path("/Applications/Xcode.app"),
              Path("/private/var/db/dyld"), Path("/private/etc"), Path("/dev")]
+    reads.extend(extra_reads)
+    # Descriptor-based custody walks from '/' without following symlinks.
+    # Opening each ancestor needs read-data for that directory itself. Literal
+    # grants permit the walk, never a recursive read of its other descendants.
+    ancestors = sorted({str(parent) for path in reads for parent in path.parents})
+    literals = " ".join(f"(literal {json.dumps(path)})" for path in ancestors)
     filters = " ".join(f"(subpath {json.dumps(str(path))})" for path in reads)
     quote = json.dumps(str(mount))
     return "\n".join([
         "(version 1)", "(deny default)",
         "(allow process-exec process-fork sysctl-read file-read-metadata)",
         "(allow signal (target same-sandbox))",
-        f'(allow file-read* (literal "/") {filters})',
+        f'(allow file-read* {literals} {filters})',
         f"(allow file-read* file-write* (subpath {quote}))",
         f"(deny file-write-mode file-write-owner file-write-unlink (literal {quote}))",
         '(allow file-write-data (literal "/dev/null"))',
@@ -321,7 +327,8 @@ def sandbox_policy(source: Path, control: Path, mount: Path):
     ]) + "\n"
 
 
-def child_environment(root: Path, control: Path, admission, original, source: Path):
+def child_environment(root: Path, control: Path, admission, original, source: Path,
+                      *, qualification_data=None):
     environment = {key: original[key] for key in ("PATH", "LANG", "LC_ALL", "SDKROOT",
         "DEVELOPER_DIR", "GITHUB_ACTIONS", "GITHUB_SHA", "GITHUB_WORKSPACE", "RUNNER_OS")
                    if key in original}
@@ -344,7 +351,29 @@ def child_environment(root: Path, control: Path, admission, original, source: Pa
     for key in ("JARVIS_DESKTOP_DEPENDENCIES", "JARVIS_RPC_BOOTSTRAP_PUBLIC_KEY"):
         if key in original:
             environment[key] = original[key]
+    if qualification_data is not None:
+        environment["JARVIS_MINILM_TEST_ASSETS"] = qualification_data["path"]
+        environment["JARVIS_MINILM_REQUIRE_REAL"] = "1"
     return environment
+
+
+def qualify_minilm_assets(path):
+    """Admit only the selected public model, never an arbitrary read directory."""
+    path = Path(path)
+    if not path.is_absolute() or ".." in path.parts or path.resolve(strict=True) != path:
+        raise GuardError("El modelo de pruebas exige una ruta física absoluta.")
+    from jarvis_core.model_artifacts import ArtifactError, inspect_model
+
+    try:
+        value = inspect_model(path, deadline=time.monotonic() + 15)
+    except ArtifactError as error:
+        raise GuardError("Los artefactos públicos de MiniLM no coinciden con sus pins.") from error
+    if (value.get("ready") is not True or value.get("dimension") != 384
+            or type(value.get("bytes")) is not int or not 0 < value["bytes"] <= 256_000_000):
+        raise GuardError("El modelo de pruebas no cumple el contrato aprobado.")
+    return {"kind": "approved_public_minilm_cpu", "path": str(path),
+            "model_fingerprint": value["model_fingerprint"], "bytes": value["bytes"],
+            "revision": value["revision"]}
 
 
 def resolve_local_git(environment):
@@ -363,6 +392,31 @@ def resolve_local_git(environment):
             or not executable.is_file() or not os.access(executable, os.X_OK)):
         raise GuardError("El Git instalado queda fuera de las rutas de desarrollo admitidas.")
     environment["JARVIS_TEST_GUARD_GIT"] = str(executable)
+    environment["PATH"] = str(executable.parent) + ":" + environment.get("PATH", os.defpath)
+
+
+def resolve_local_swift(environment):
+    # The /usr/bin shim queries host licence/preferences services denied by the
+    # quota sandbox. Use the already installed toolchain; never accept licences
+    # or change global developer settings as part of a test.
+    result = subprocess.run(["/usr/bin/xcrun", "--find", "swift"], capture_output=True,
+                            timeout=10, check=False)
+    if result.returncode:
+        raise GuardError("No se pudo resolver Swift para el focal aislado.")
+    executable = Path(os.fsdecode(result.stdout).strip()).resolve(strict=True)
+    allowed = (Path("/Applications/Xcode.app"), Path("/Library/Developer"))
+    if (not any(executable.is_relative_to(base) for base in allowed)
+            or not executable.is_file() or not os.access(executable, os.X_OK)):
+        raise GuardError("Swift queda fuera de las rutas de desarrollo admitidas.")
+    result = subprocess.run(["/usr/bin/xcrun", "--sdk", "macosx", "--show-sdk-path"],
+                            capture_output=True, timeout=10, check=False)
+    if result.returncode:
+        raise GuardError("No se pudo resolver el SDK de macOS instalado.")
+    sdk = Path(os.fsdecode(result.stdout).strip()).resolve(strict=True)
+    if not any(sdk.is_relative_to(base) for base in allowed) or not sdk.is_dir():
+        raise GuardError("El SDK queda fuera de las rutas de desarrollo admitidas.")
+    environment["SDKROOT"] = str(sdk)
+    environment["JARVIS_TEST_GUARD_TOOLCHAIN"] = str(executable.parent.parent)
     environment["PATH"] = str(executable.parent) + ":" + environment.get("PATH", os.defpath)
 
 
@@ -676,7 +730,8 @@ def reject_orphaned_evidence(registry: Path):
 
 
 def finalize_evidence(*, control, pending_path, pending_identity, options, before, after,
-                      volume, run_root, run_identity, closed, result, tail):
+                      volume, run_root, run_identity, closed, result, tail,
+                      qualification_data=None, inputs_unchanged=True):
     """Cleanup failure is evidence, never a replacement for the child's output."""
     bounded_tail = tail[-LOG_LIMIT:]
     descriptor = os.open(control / "tail.log",
@@ -716,6 +771,9 @@ def finalize_evidence(*, control, pending_path, pending_identity, options, befor
         "full_qualification": "pending_remote_ci" if options.profile == "local" else
             "ci_job_result_requires_workflow_completion", "result": result,
         "created_ns": time.time_ns()}
+    if qualification_data is not None:
+        receipt["qualification_data"] = qualification_data
+        receipt["inputs_unchanged"] = inputs_unchanged
     try:
         write_json(control / "receipt.json", receipt)
     except OSError:
@@ -739,6 +797,8 @@ def run(options):
     root = options.repo_root.resolve(strict=True)
     before = fingerprint(root)
     validate_options(options, os.environ, before, root)
+    asset_path = getattr(options, "minilm_test_assets", None)
+    qualification_data = qualify_minilm_assets(asset_path) if asset_path is not None else None
     data_root = Path("/System/Volumes/Data" if sys.platform == "darwin" else "/")
     free_floor = (10 if options.profile == "local" else 2) * GIB
     if available_bytes(data_root) < free_floor:
@@ -785,11 +845,15 @@ def run(options):
                 "run_root": str(run_root), "guard_pid": os.getpid()}
             write_json(control / "admission.json", admission)
             command = [part.replace("@RUN_ROOT@", str(run_root)) for part in options.command]
-            environment = child_environment(run_root, control, admission, os.environ, root)
+            environment = child_environment(run_root, control, admission, os.environ, root,
+                                            qualification_data=qualification_data)
             if options.profile == "local":
                 resolve_local_git(environment)
+                if options.kind in {"swift", "build"}:
+                    resolve_local_swift(environment)
                 policy = control / "quota.sb"
-                policy.write_text(sandbox_policy(root, control, run_root))
+                extra_reads = () if qualification_data is None else (Path(asset_path),)
+                policy.write_text(sandbox_policy(root, control, run_root, extra_reads=extra_reads))
                 policy.chmod(0o600)
                 command = ["/usr/bin/sandbox-exec", "-f", str(policy), *command]
             result, tail = supervise(command, environment=environment, cwd=root,
@@ -819,11 +883,18 @@ def run(options):
             except (GuardError, OSError, subprocess.SubprocessError):
                 after = {"fingerprint_error": "source_identity_unconfirmed"}
             source_same = before == after
+            inputs_unchanged = True
+            if qualification_data is not None:
+                try:
+                    inputs_unchanged = qualify_minilm_assets(asset_path) == qualification_data
+                except (OSError, GuardError):
+                    inputs_unchanged = False
             closed = finalize_evidence(control=control, pending_path=pending_path,
                 pending_identity=pending_identity, options=options, before=before, after=after,
                 volume=volume, run_root=run_root, run_identity=run_identity, closed=closed,
-                result=result, tail=tail)
-        passed = closed and source_same and result["exit_code"] == 0
+                result=result, tail=tail, qualification_data=qualification_data,
+                inputs_unchanged=inputs_unchanged)
+        passed = closed and source_same and inputs_unchanged and result["exit_code"] == 0
         return 0 if passed and not result.get("interrupted", False) else 1
     finally:
         os.close(lock_fd)
@@ -860,6 +931,11 @@ def verify_receipt(path: Path, root: Path):
             or value.get("result", {}).get("interrupted", False)
             or value.get("source_after") != fingerprint(root)):
         raise GuardError("El recibo no acredita un focal cerrado del árbol actual.")
+    if value.get("qualification_data") is not None:
+        extra = value["qualification_data"]
+        if (value.get("inputs_unchanged") is not True or not isinstance(extra, dict)
+                or qualify_minilm_assets(extra.get("path", "")) != extra):
+            raise GuardError("Los datos públicos de cualificación cambiaron.")
     log = path.parent / "tail.log"
     descriptor = os.open(log, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
@@ -919,6 +995,7 @@ def parser():
     execute.add_argument("--full", action="store_true")
     execute.add_argument("--export-relative")
     execute.add_argument("--export-destination", type=Path)
+    execute.add_argument("--minilm-test-assets", type=Path)
     execute.add_argument("command", nargs=argparse.REMAINDER)
     return result
 

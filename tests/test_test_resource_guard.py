@@ -186,11 +186,25 @@ def test_environment_is_private_and_does_not_inherit_account_secrets(tmp_path):
     admission = {"profile": "local", "selection": "tests/test_own.py", "nonce": "a" * 48}
     value = guard.child_environment(tmp_path, tmp_path, admission,
         {"PATH": os.defpath, "OPENAI_API_KEY": "SYNTHETIC_NEVER_FORWARD",
-         "GITHUB_TOKEN": "SYNTHETIC_NEVER_FORWARD"}, tmp_path)
+         "GITHUB_TOKEN": "SYNTHETIC_NEVER_FORWARD",
+         "JARVIS_MINILM_TEST_ASSETS": "/not/an/admitted/input",
+         "JARVIS_MINILM_REQUIRE_REAL": "1"}, tmp_path)
     assert "OPENAI_API_KEY" not in value and "GITHUB_TOKEN" not in value
+    assert "JARVIS_MINILM_TEST_ASSETS" not in value and "JARVIS_MINILM_REQUIRE_REAL" not in value
     assert Path(value["HOME"]).is_relative_to(tmp_path)
     assert value["PYTHONDONTWRITEBYTECODE"] == "1"
     assert "--basetemp=" + str(tmp_path / "p") in value["PYTEST_ADDOPTS"]
+
+
+def test_qualification_asset_path_cannot_admit_a_symlink_or_arbitrary_directory(tmp_path):
+    other = tmp_path / "public"
+    other.mkdir()
+    link = tmp_path / "alias"
+    link.symlink_to(other, target_is_directory=True)
+    with pytest.raises(guard.GuardError, match="física"):
+        guard.qualify_minilm_assets(link)
+    with pytest.raises(guard.GuardError, match="pins"):
+        guard.qualify_minilm_assets(other)
 
 
 def test_policy_blocks_writes_and_chmod_outside_private_volume(tmp_path):
@@ -198,6 +212,9 @@ def test_policy_blocks_writes_and_chmod_outside_private_volume(tmp_path):
     assert '(allow file-read* file-write* (subpath ' + json.dumps(str(tmp_path / "volume")) in value
     assert '(deny file-write-mode file-write-owner file-write-unlink (literal ' in value
     assert '(subpath "/private/tmp")' not in value
+    for ancestor in (tmp_path / "volume").parents:
+        assert '(literal ' + json.dumps(str(ancestor)) + ')' in value
+    assert '(subpath "/private")' not in value
     assert '(remote ip "localhost:*")' in value
 
 
@@ -205,20 +222,31 @@ def test_policy_blocks_writes_and_chmod_outside_private_volume(tmp_path):
     ("/Applications/Xcode.app/Contents/Developer/usr/bin/git", True),
     ("/private/tmp/not-an-admitted-developer/git", False),
 ])
-def test_git_resolution_is_explicit_and_does_not_broaden_sandbox(monkeypatch, chosen, accepted):
-    monkeypatch.setattr(guard.subprocess, "run", lambda *a, **k:
-                        SimpleNamespace(returncode=0, stdout=(chosen + "\n").encode()))
+@pytest.mark.parametrize("resolver,tool", [(guard.resolve_local_git, "git"),
+                                          (guard.resolve_local_swift, "swift")])
+def test_tool_resolution_is_explicit_and_does_not_broaden_sandbox(
+    monkeypatch, chosen, accepted, resolver, tool,
+):
+    chosen = str(Path(chosen).with_name(tool))
+    sdk = "/Applications/Xcode.app/Contents/Developer/SDKs/MacOSX.sdk"
+    monkeypatch.setattr(guard.subprocess, "run", lambda arguments, **k:
+                        SimpleNamespace(returncode=0, stdout=(
+                            sdk if "--show-sdk-path" in arguments else chosen).encode()))
     monkeypatch.setattr(guard.Path, "resolve", lambda self, **_kwargs: self)
     monkeypatch.setattr(guard.Path, "is_file", lambda _self: True)
+    monkeypatch.setattr(guard.Path, "is_dir", lambda _self: True)
     monkeypatch.setattr(guard.os, "access", lambda *_args: True)
     environment = {"PATH": "/usr/bin:/bin"}
     if accepted:
-        guard.resolve_local_git(environment)
-        assert environment["JARVIS_TEST_GUARD_GIT"] == chosen
+        resolver(environment)
+        if tool == "git":
+            assert environment["JARVIS_TEST_GUARD_GIT"] == chosen
+        else:
+            assert environment["SDKROOT"] == sdk
         assert environment["PATH"].startswith(str(Path(chosen).parent) + ":")
     else:
         with pytest.raises(guard.GuardError, match="fuera de las rutas"):
-            guard.resolve_local_git(environment)
+            resolver(environment)
 
 
 def test_receipt_requires_same_tree_success_cleanup_and_log_identity(source, tmp_path):

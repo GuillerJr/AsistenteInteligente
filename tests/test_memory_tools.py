@@ -7,6 +7,7 @@ from dataclasses import asdict, replace
 
 import pytest
 
+from jarvis_core.local_embeddings import EngineError
 from jarvis_core.memory import Citation, MemoryError, MemoryScope, MemoryStore
 from jarvis_core.memory_tools import MemoryTools
 from jarvis_core.tools import ApprovalAuthority, ToolCatalog, ToolError
@@ -73,6 +74,22 @@ async def test_denial_and_revocation_never_store_text(bundle):
     revoked = await invoke(bundle, "memory_store", {"key": "revoked", "text": "no"}, revoke=True)
     assert not revoked.succeeded and not path.parent.exists()
     assert memory.list_documents(scopes[0]) == ()
+    await authority.close()
+
+
+async def test_semantic_engine_error_is_visible_without_lexical_fallback(bundle):
+    memory, _scopes, tools, authority, _, path = bundle
+    calls = []
+
+    async def unavailable(scope, query, **options):
+        calls.append((scope, query, options))
+        raise EngineError("unavailable_runtime")
+
+    tools.search = unavailable
+    result = await invoke(bundle, "memory_recall", {"query": "auto", "mode": "semantic_local"})
+    assert not result.succeeded and result.error == "unavailable_runtime"
+    assert result.effect_status == "known" and len(calls) == 1
+    assert not path.exists() and memory._disk is None
     await authority.close()
 
 

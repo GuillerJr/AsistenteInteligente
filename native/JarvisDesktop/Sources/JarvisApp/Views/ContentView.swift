@@ -45,6 +45,17 @@ struct ContentView: View {
                     }
                 }.padding(.horizontal, 24).padding(.vertical, 12)
                 Divider()
+                if let notice = store.memoryRecallNotice {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "exclamationmark.bubble")
+                        Text(notice)
+                        Spacer(minLength: 8)
+                        Button("Ver memoria") { inspectorTab = "memory"; showInspector = true }
+                    }
+                    .font(.caption).foregroundStyle(.secondary)
+                    .padding(.horizontal, 24).padding(.vertical, 8)
+                    .background(.quaternary)
+                }
                 MessageListView(messages: store.messages, temporary: store.selected?.temporary ?? false,
                                 streamingText: store.streamingText, canRead: store.canUseVoice && !store.voice.canStopDictation,
                                 onRead: store.readMessage)
