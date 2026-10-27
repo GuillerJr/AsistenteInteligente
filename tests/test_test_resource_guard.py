@@ -254,3 +254,33 @@ def test_orphaned_admission_blocks_another_run_without_dispatch(tmp_path, monkey
     (evidence / "quota.sparseimage").write_bytes(b"OWN_UNCONFIRMED_IMAGE")
     with pytest.raises(guard.GuardError, match="conserva recursos"):
         guard.reject_orphaned_evidence(tmp_path)
+
+
+@pytest.mark.parametrize("wrapper,arguments,full", [
+    ("test_desktop.sh", ["--filter", "OwnFixtureTests", "--budget-mib", "32"], False),
+    ("test_desktop.sh", ["--full"], True),
+    ("build_desktop.sh", ["--budget-mib", "32"], False),
+    ("build_desktop.sh", ["--full"], True),
+])
+def test_wrappers_forward_empty_optional_arrays_on_system_bash(
+        tmp_path, wrapper, arguments, full):
+    """macOS /bin/bash 3.2 rejects an empty array expansion under nounset."""
+    repository = tmp_path / "own-wrapper-repo"
+    scripts, binaries = repository / "script", repository / ".venv/bin"
+    scripts.mkdir(parents=True)
+    binaries.mkdir(parents=True)
+    source = Path(__file__).resolve().parents[1] / "script" / wrapper
+    selected = scripts / wrapper
+    selected.write_bytes(source.read_bytes())
+    python = binaries / "python"
+    python.write_text("#!" + sys.executable + "\nimport json,sys\n"
+                      "print(json.dumps(sys.argv[1:]))\n")
+    python.chmod(0o700)
+    result = subprocess.run(["/bin/bash", str(selected), *arguments],
+        capture_output=True, text=True, timeout=10, check=False)
+    assert result.returncode == 0, result.stderr
+    forwarded = json.loads(result.stdout)
+    assert "" not in forwarded
+    assert ("--full" in forwarded) is full
+    assert forwarded[forwarded.index("--profile") + 1] == ("ci" if full else "local")
+    assert "admitted-exec" in forwarded and "--guard-child" in forwarded

@@ -346,6 +346,16 @@ autenticada; las credenciales y perfiles personales siguen fuera de la delegaci�
 REA OC-22A/B1/B2/C mantiene manifiestos, blobs, hashes e incógnitas. La cobertura
 acumulada es parcial: **27 lotes, 105 rutas TS/JS únicas**, 47 familias con avance
 parcial y 33 sin implementación. No son porcentajes de producto terminado.
+OC-23 añade cuatro particiones de memoria: **31 lotes y 118 rutas TS/JS únicas**
+en el registro actual. Estudia búsqueda híbrida, sincronización, recuperación
+activa y mantenimiento con REA, sin ejecutar la referencia ni copiar su código.
+Conserva 2.907 incógnitas semánticas de estos nuevos grafos.
+[Fuentes, Evidence IDs y contratos propuestos](rebuild/REA_OC23_MEMORY.md).
+La nueva implementación semántica/híbrida sigue pendiente de elegir explícitamente
+el motor de embeddings, como exige A-25; no se ha activado uno por defecto.
+La indexación léxica de notas aprobadas ya es transaccional; los nuevos recorridos
+semánticos, el índice derivado y la recuperación activa todavía no están acreditados.
+
 La distribución autocontenida, Developer ID/notarización y actualización remota
 firmada siguen pendientes. La fase A sigue abierta y la fase B no ha comenzado.
 

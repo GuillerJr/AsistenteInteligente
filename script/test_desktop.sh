@@ -69,6 +69,6 @@ fi
 exec "$JARVIS_PYTHON" -B "$JARVIS_REPO_DIR/script/test_resource_guard.py" run \
   --repo-root "$JARVIS_REPO_DIR" --profile "$JARVIS_PROFILE" --kind swift \
   --selection "$JARVIS_SELECTION" --budget-mib "$JARVIS_BUDGET" --deadline "$JARVIS_DEADLINE" \
-  "${JARVIS_FULL_ARGUMENTS[@]}" -- "$JARVIS_PYTHON" -B \
+  ${JARVIS_FULL_ARGUMENTS[@]+"${JARVIS_FULL_ARGUMENTS[@]}"} -- "$JARVIS_PYTHON" -B \
   "$JARVIS_REPO_DIR/script/test_resource_guard.py" admitted-exec --kind swift -- \
-  /bin/bash "$JARVIS_REPO_DIR/script/test_desktop.sh" --guard-child "${JARVIS_SWIFT_ARGUMENTS[@]}"
+  /bin/bash "$JARVIS_REPO_DIR/script/test_desktop.sh" --guard-child ${JARVIS_SWIFT_ARGUMENTS[@]+"${JARVIS_SWIFT_ARGUMENTS[@]}"}

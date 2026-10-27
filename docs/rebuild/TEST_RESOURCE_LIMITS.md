@@ -87,3 +87,13 @@ El tercer problema hizo que un cálculo leyera involuntariamente bytes de
 La ruta quedó excluida canónicamente en `.gitignore`; si aparece versionada, el
 supervisor la rechaza antes de abrirla. Una regresión exige explícitamente cero
 lecturas de ese archivo sintético. No se abrió de nuevo la configuración privada.
+
+La revisión posterior encontró una incompatibilidad de arrays opcionales con
+`/bin/bash` 3.2 de macOS. Se corrigieron ambos wrappers y pasaron **cuatro casos
+adicionales** que ejecutan ese shell con un supervisor de stub, sin Swift real.
+Su ejecución supervisada terminó en 1,636 s, pico de 57.344 bytes y cierre
+confirmado. Recibo `jarvis-test-evidence-o8ii8v1h/receipt.json` en el mismo
+registro privado; SHA-256
+`1bc57adf71751c8a8726f0d43b41e0cc5308bd5cd4a530dca2370ad298b7f171`.
+La salida ya acotada del supervisor se publica en el log de CI para poder
+diagnosticar fallos después de limpiar el directorio de trabajo de ese runner.

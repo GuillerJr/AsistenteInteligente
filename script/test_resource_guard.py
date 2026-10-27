@@ -681,6 +681,11 @@ def run(options):
                 "cleanup_status": receipt["cleanup_status"], "result": result,
                 "source_unchanged": source_same,
                 "full_qualification": receipt["full_qualification"]}))
+            if options.profile == "ci":
+                # CI runs only the synthetic corpus in a fresh checkout. Keep
+                # failures diagnosable after its private work directory closes;
+                # never dump local corpus/logs automatically to the terminal.
+                print(tail[-LOG_LIMIT:].decode("utf-8", errors="replace"), end="")
         passed = closed and source_same and result["exit_code"] == 0
         return 0 if passed and not result.get("interrupted", False) else 1
     finally:

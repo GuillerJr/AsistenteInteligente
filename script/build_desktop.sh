@@ -36,7 +36,7 @@ if [[ "${1:-}" != --guard-child ]]; then
   exec "$JARVIS_PYTHON" -B "$JARVIS_REPO_DIR/script/test_resource_guard.py" run \
     --repo-root "$JARVIS_REPO_DIR" --profile "$JARVIS_PROFILE" --kind build --selection Jarvis \
     --budget-mib "$JARVIS_BUDGET" --deadline "$JARVIS_DEADLINE" \
-    "${JARVIS_FULL_ARGUMENTS[@]}" "${JARVIS_EXPORT_ARGUMENTS[@]}" -- \
+    ${JARVIS_FULL_ARGUMENTS[@]+"${JARVIS_FULL_ARGUMENTS[@]}"} ${JARVIS_EXPORT_ARGUMENTS[@]+"${JARVIS_EXPORT_ARGUMENTS[@]}"} -- \
     "$JARVIS_PYTHON" -B "$JARVIS_REPO_DIR/script/test_resource_guard.py" \
     admitted-exec --kind build -- /bin/bash "$JARVIS_REPO_DIR/script/build_desktop.sh" --guard-child
 fi

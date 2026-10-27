@@ -38,7 +38,7 @@ jobs:
           .venv/bin/python -B script/test_resource_guard.py run
           --profile ci --kind python --selection tests --full
           --budget-mib 12288 --deadline 1800 --
-          .venv/bin/python -B -m pytest -q tests
+          .venv/bin/python -B -m pytest -o addopts= -q tests
       - name: Pruebas Swift y bundle nativo de desarrollo
         if: runner.os == 'macOS'
         run: |

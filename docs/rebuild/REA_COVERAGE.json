@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "decision_date": "2026-10-26",
+  "decision_date": "2026-10-27",
   "reference": {
     "project": "OpenClaw",
     "revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
@@ -3445,6 +3445,349 @@
         "Inert source/AST observations do not establish reference runtime behavior.",
         "Original Jarvis code uses own contracts; no OpenClaw implementation or resources are imported."
       ]
+    },
+    {
+      "id": "OC-23A",
+      "topic": "Hybrid and semantic search orchestration, eligibility and embedding-call policy",
+      "source_paths": [
+        "package.json",
+        "extensions/memory-core/package.json",
+        "extensions/memory-core/src/memory/hybrid.ts",
+        "extensions/memory-core/src/memory/manager-search-orchestration.ts",
+        "extensions/memory-core/src/memory/manager-embedding-policy.ts"
+      ],
+      "parent_evidence_id": "ev_b530db2ea6e25d3a7d7978517e5908806a2edfcf34c3704ecfde2c577837d17e",
+      "summary_evidence_id": "ev_66482b15d81c61bee743cd1779b9440b12c5f9911ad1f0be34be4480b923c21f",
+      "trace_evidence_id": "ev_9c90a57a9732c90269f08e1288bfe6bde047de3508af62d7c064fc4bb67981ca",
+      "partition_sha256": "5af90f3e30d13e82e84de25c637d437a2b5644ae918804e728c54f73e1879515",
+      "coverage": {
+        "application": "complete within the selected partition only",
+        "semantic": "unknown",
+        "semantic_unknowns": 1156,
+        "selected_typescript_sources": 3,
+        "parse_failures": 0,
+        "unselected_files": 0,
+        "whole_reference_complete": false,
+        "execution_observed": false
+      },
+      "execution_observed": false,
+      "provenance_file": "REA_OC23_MEMORY.md",
+      "acquisition_method": "Read-only git ls-tree and git show exact pinned blobs into private immutable selected partitions; original clone unchanged.",
+      "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "acquisition_manifest_path": "/private/tmp/jarvis-rea-oc23-memory-rbu8pjpw/acquisition.json",
+      "acquisition_manifest_sha256": "306efe6135fe6e5a4f09b2cecbb6f6a713d3117114f12c3f15765ecbdee58970",
+      "source_provenance": [
+        {
+          "path": "package.json",
+          "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d",
+          "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+          "bytes": 153025
+        },
+        {
+          "path": "extensions/memory-core/package.json",
+          "git_blob": "e2d2e826c228b9de2982e5b7a78596f374e61ac7",
+          "sha256": "3bce8cac3582d74800871a31582faa3b3ae0252a8c938bf40849308241c9466b",
+          "bytes": 1600
+        },
+        {
+          "path": "extensions/memory-core/src/memory/hybrid.ts",
+          "git_blob": "a1a9ec1787933cd2eb8a10e5c380afe66edc32bf",
+          "sha256": "b22b8c9fe3a88e0da9ebc3c2f16e9b0db61a9df618785c5091560dd3b7bceef6",
+          "bytes": 11368
+        },
+        {
+          "path": "extensions/memory-core/src/memory/manager-search-orchestration.ts",
+          "git_blob": "0b3ff669ac46a9ed3e28d992b36f6984ad733627",
+          "sha256": "07ba2fa8a09f5b0649ad50c320f73525bdb2edf216b0ba5b701744913f81237c",
+          "bytes": 27384
+        },
+        {
+          "path": "extensions/memory-core/src/memory/manager-embedding-policy.ts",
+          "git_blob": "310d81957d096a8b4ed6a5e1b164786db12e68d3",
+          "sha256": "6ce6c1cbf17b8e655d3dc381d0230a5c23a8ddd44f668f294a190ffd10feb007",
+          "bytes": 10888
+        }
+      ],
+      "semantic_unknowns": 1156,
+      "full_evidence_path": "/private/tmp/jarvis-rea-oc23-memory-rbu8pjpw/evidence.json",
+      "export_sha256": "b265b41078e5a4d614970f2634301dcb09378faafc6cf143aace52f40bc3ad03",
+      "analysis_request_limits": {
+        "max_heap_mb": 512,
+        "analysis_timeout_ms_per_source": 60000,
+        "max_semantic_nodes": 30000,
+        "max_semantic_nodes_per_file": 10000,
+        "max_semantic_unknowns": 18000,
+        "max_semantic_unknowns_per_file": 6000,
+        "integrity_policy": "fail",
+        "detail": "summary"
+      },
+      "embedding_engine_choice": "pending_explicit_owner_selection",
+      "implementation_status": "research_only_not_implemented",
+      "limitations": [
+        "Exact selected Git blobs only; unselected dependencies and the whole reference repository remain unqualified.",
+        "Inert source/AST and graph traces do not establish reference runtime behavior.",
+        "Semantic graph unknowns remain open; the zero registered residual-unknown ledger entries are a separate count.",
+        "Own Jarvis contracts are proposed; no OpenClaw implementation/resources are imported, and no embedding engine, model acquisition or hidden fallback is enabled."
+      ]
+    },
+    {
+      "id": "OC-23B",
+      "topic": "Automatic index dirty queues, watcher retirement and published generation leases",
+      "source_paths": [
+        "package.json",
+        "extensions/memory-core/package.json",
+        "extensions/memory-core/src/memory/manager-watch-ops.ts",
+        "extensions/memory-core/src/memory/manager-sync-control.ts",
+        "extensions/memory-core/src/memory/manager-index-generation-lease.ts"
+      ],
+      "parent_evidence_id": "ev_b3ed8cd797c9756d358ddcbe7fa4b441e6d159b0dd4b0a63b43a2661a762c92e",
+      "summary_evidence_id": "ev_680f84b7b42f8d5fab1a8d8070731759817358d0d25da37c25d74588dde8e817",
+      "trace_evidence_id": "ev_6641884c1a16c3f9faa3cd7a77f95b330538ced5005805b2cde765371234a7b1",
+      "partition_sha256": "37ae70659011849af95c6f8c96c85f3c80d0e6455d0159946b8919a3ac29056b",
+      "coverage": {
+        "application": "partial within the selected partition only",
+        "semantic": "unknown",
+        "semantic_unknowns": 361,
+        "selected_typescript_sources": 3,
+        "parse_failures": 0,
+        "unselected_files": 0,
+        "whole_reference_complete": false,
+        "execution_observed": false
+      },
+      "execution_observed": false,
+      "provenance_file": "REA_OC23_MEMORY.md",
+      "acquisition_method": "Read-only git ls-tree and git show exact pinned blobs into private immutable selected partitions; original clone unchanged.",
+      "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "acquisition_manifest_path": "/private/tmp/jarvis-rea-oc23-memory-rbu8pjpw/acquisition.json",
+      "acquisition_manifest_sha256": "306efe6135fe6e5a4f09b2cecbb6f6a713d3117114f12c3f15765ecbdee58970",
+      "source_provenance": [
+        {
+          "path": "package.json",
+          "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d",
+          "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+          "bytes": 153025
+        },
+        {
+          "path": "extensions/memory-core/package.json",
+          "git_blob": "e2d2e826c228b9de2982e5b7a78596f374e61ac7",
+          "sha256": "3bce8cac3582d74800871a31582faa3b3ae0252a8c938bf40849308241c9466b",
+          "bytes": 1600
+        },
+        {
+          "path": "extensions/memory-core/src/memory/manager-watch-ops.ts",
+          "git_blob": "fe184e3ee613191142b0735196dbd7cc250ec4be",
+          "sha256": "391240211b8247018158170d0cca450b25b41ed46a0b95ded1a80dce88bb9944",
+          "bytes": 5360
+        },
+        {
+          "path": "extensions/memory-core/src/memory/manager-sync-control.ts",
+          "git_blob": "0e79e9833bdbcf93c84561ed7cd9bc1320ede400",
+          "sha256": "24b9bf580b01470f292f08d571f8cf4b9ed5f807bf4b734e809d21a695324305",
+          "bytes": 5230
+        },
+        {
+          "path": "extensions/memory-core/src/memory/manager-index-generation-lease.ts",
+          "git_blob": "49844fc63668f63d5454214976cd0a3f8d690e02",
+          "sha256": "e2b1c0649b0c56c3950887cc14a154d9678be72e61df3bf76f1d8d281d75b158",
+          "bytes": 3150
+        }
+      ],
+      "semantic_unknowns": 361,
+      "full_evidence_path": "/private/tmp/jarvis-rea-oc23-memory-rbu8pjpw/evidence.json",
+      "export_sha256": "b265b41078e5a4d614970f2634301dcb09378faafc6cf143aace52f40bc3ad03",
+      "analysis_request_limits": {
+        "max_heap_mb": 512,
+        "analysis_timeout_ms_per_source": 60000,
+        "max_semantic_nodes": 30000,
+        "max_semantic_nodes_per_file": 10000,
+        "max_semantic_unknowns": 18000,
+        "max_semantic_unknowns_per_file": 6000,
+        "integrity_policy": "fail",
+        "detail": "summary"
+      },
+      "embedding_engine_choice": "pending_explicit_owner_selection",
+      "implementation_status": "research_only_not_implemented",
+      "limitations": [
+        "Exact selected Git blobs only; unselected dependencies and the whole reference repository remain unqualified.",
+        "Inert source/AST and graph traces do not establish reference runtime behavior.",
+        "Semantic graph unknowns remain open; the zero registered residual-unknown ledger entries are a separate count.",
+        "Own Jarvis contracts are proposed; no OpenClaw implementation/resources are imported, and no embedding engine, model acquisition or hidden fallback is enabled."
+      ]
+    },
+    {
+      "id": "OC-23C",
+      "topic": "Per-run recall, audience-scoped cache, session eligibility and opt-in transcript retention",
+      "source_paths": [
+        "package.json",
+        "extensions/active-memory/openclaw.plugin.json",
+        "extensions/active-memory/recall-run.ts",
+        "extensions/active-memory/recall-state.ts",
+        "extensions/active-memory/session-policy.ts",
+        "extensions/active-memory/config.ts"
+      ],
+      "parent_evidence_id": "ev_9bcfd8202741ec92f7b58e4d3bcecbe9fd07809480934bdd0d1c764fc72314f9",
+      "summary_evidence_id": "ev_b6454145ed0e8daafb6267fda02a7fb5fc557724ec4971958c3c12c48e1923d8",
+      "trace_evidence_id": "ev_b9d854af7c416d3244a96259733d33ff198e7de744bface6f4982b0c45575eff",
+      "partition_sha256": "145bd9a336ce8d980a67f18064d5615ee514f071498aaf9246fe0c5dc980dd8d",
+      "coverage": {
+        "application": "partial within the selected partition only",
+        "semantic": "unknown",
+        "semantic_unknowns": 1049,
+        "selected_typescript_sources": 4,
+        "parse_failures": 0,
+        "unselected_files": 0,
+        "whole_reference_complete": false,
+        "execution_observed": false
+      },
+      "execution_observed": false,
+      "provenance_file": "REA_OC23_MEMORY.md",
+      "acquisition_method": "Read-only git ls-tree and git show exact pinned blobs into private immutable selected partitions; original clone unchanged.",
+      "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "acquisition_manifest_path": "/private/tmp/jarvis-rea-oc23-memory-rbu8pjpw/acquisition.json",
+      "acquisition_manifest_sha256": "306efe6135fe6e5a4f09b2cecbb6f6a713d3117114f12c3f15765ecbdee58970",
+      "source_provenance": [
+        {
+          "path": "package.json",
+          "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d",
+          "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+          "bytes": 153025
+        },
+        {
+          "path": "extensions/active-memory/openclaw.plugin.json",
+          "git_blob": "159c39e01b0fd1f4ebee35e5ec7b3edd9c3946ac",
+          "sha256": "0b1672f3cd8dd4d16049fad6eff551224a43d2972a21bc888bd4589490216acd",
+          "bytes": 10598
+        },
+        {
+          "path": "extensions/active-memory/recall-run.ts",
+          "git_blob": "054fbded93a410157a6f38710725c82c5267392b",
+          "sha256": "7fcd958b6ab14eae2813914fcf378b46619d159126fea85d3afad34dfd1f9fa5",
+          "bytes": 14673
+        },
+        {
+          "path": "extensions/active-memory/recall-state.ts",
+          "git_blob": "fbf2fff27135fa308a70bfc8c2baa55b09c1ea39",
+          "sha256": "57c3d2565a254659ae5b06847ee84983a1e4fb0faff12db92da1bfe4eaa763be",
+          "bytes": 7841
+        },
+        {
+          "path": "extensions/active-memory/session-policy.ts",
+          "git_blob": "81ad71ee74a0ef3af8052483a52a3f60d174add6",
+          "sha256": "28242048b0b703ebc4b5ee38d6eddd3c92ac99d359828bbd1747fd632d4b66f6",
+          "bytes": 10484
+        },
+        {
+          "path": "extensions/active-memory/config.ts",
+          "git_blob": "1cace3446ef27f2d63b843fc121fcf684a788dc3",
+          "sha256": "461941ef4d6c3721d8e55b95d1f4d922417a9bb35346acbd37a2b1e5b1730327",
+          "bytes": 9830
+        }
+      ],
+      "semantic_unknowns": 1049,
+      "full_evidence_path": "/private/tmp/jarvis-rea-oc23-memory-rbu8pjpw/evidence.json",
+      "export_sha256": "b265b41078e5a4d614970f2634301dcb09378faafc6cf143aace52f40bc3ad03",
+      "analysis_request_limits": {
+        "max_heap_mb": 512,
+        "analysis_timeout_ms_per_source": 60000,
+        "max_semantic_nodes": 30000,
+        "max_semantic_nodes_per_file": 10000,
+        "max_semantic_unknowns": 18000,
+        "max_semantic_unknowns_per_file": 6000,
+        "integrity_policy": "fail",
+        "detail": "summary"
+      },
+      "embedding_engine_choice": "pending_explicit_owner_selection",
+      "implementation_status": "research_only_not_implemented",
+      "limitations": [
+        "Exact selected Git blobs only; unselected dependencies and the whole reference repository remain unqualified.",
+        "Inert source/AST and graph traces do not establish reference runtime behavior.",
+        "Semantic graph unknowns remain open; the zero registered residual-unknown ledger entries are a separate count.",
+        "Own Jarvis contracts are proposed; no OpenClaw implementation/resources are imported, and no embedding engine, model acquisition or hidden fallback is enabled."
+      ]
+    },
+    {
+      "id": "OC-23D",
+      "topic": "Detached maintenance, shadow reconstruction and publication ownership",
+      "source_paths": [
+        "package.json",
+        "extensions/memory-core/package.json",
+        "extensions/memory-core/src/memory/manager-search-maintenance.ts",
+        "extensions/memory-core/src/memory/manager-reindex-ops.ts",
+        "extensions/memory-core/src/memory/manager-reindex-lock.ts"
+      ],
+      "parent_evidence_id": "ev_0d8e3689321c4a12717190ecc51e004f1e4fc6cf9f614969925f5d3879a9f810",
+      "summary_evidence_id": "ev_01d742b6a068bc9aebf793519f1f3be7a9da5b360c0e7344f429957cbd11fb10",
+      "trace_evidence_id": "ev_add94b76f717a13b70ef82f57c26db305d59aa40b6493ca66b03a9eef0626c6a",
+      "partition_sha256": "e6b9bda47ff12de8df014eb7e4891041a89548800b940686d7a4bf77e93b4482",
+      "coverage": {
+        "application": "complete within the selected partition only",
+        "semantic": "unknown",
+        "semantic_unknowns": 341,
+        "selected_typescript_sources": 3,
+        "parse_failures": 0,
+        "unselected_files": 0,
+        "whole_reference_complete": false,
+        "execution_observed": false
+      },
+      "execution_observed": false,
+      "provenance_file": "REA_OC23_MEMORY.md",
+      "acquisition_method": "Read-only git ls-tree and git show exact pinned blobs into private immutable selected partitions; original clone unchanged.",
+      "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "acquisition_manifest_path": "/private/tmp/jarvis-rea-oc23-memory-rbu8pjpw/acquisition.json",
+      "acquisition_manifest_sha256": "306efe6135fe6e5a4f09b2cecbb6f6a713d3117114f12c3f15765ecbdee58970",
+      "source_provenance": [
+        {
+          "path": "package.json",
+          "git_blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d",
+          "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5",
+          "bytes": 153025
+        },
+        {
+          "path": "extensions/memory-core/package.json",
+          "git_blob": "e2d2e826c228b9de2982e5b7a78596f374e61ac7",
+          "sha256": "3bce8cac3582d74800871a31582faa3b3ae0252a8c938bf40849308241c9466b",
+          "bytes": 1600
+        },
+        {
+          "path": "extensions/memory-core/src/memory/manager-search-maintenance.ts",
+          "git_blob": "8f63256cc2539dce63c36526c60023a3d51f4e0b",
+          "sha256": "8aa8543b6c884b016e74bc1d6a8f71d1f9129c4ee50573c27971a527aa531fa6",
+          "bytes": 3211
+        },
+        {
+          "path": "extensions/memory-core/src/memory/manager-reindex-ops.ts",
+          "git_blob": "701ae705a27e95189fbe73a53bc5feeaa679c7d9",
+          "sha256": "64064e6df32c0c532d233b9849ef40a167495b86093a781216bd29e93a8daf18",
+          "bytes": 11660
+        },
+        {
+          "path": "extensions/memory-core/src/memory/manager-reindex-lock.ts",
+          "git_blob": "03c5774b420f0187acb5c886f99f0b7be2dd0631",
+          "sha256": "bf6aa745b3c2a5fed1043062f66e96c79630637da408f42665c5aa4d13370515",
+          "bytes": 1928
+        }
+      ],
+      "semantic_unknowns": 341,
+      "full_evidence_path": "/private/tmp/jarvis-rea-oc23-memory-rbu8pjpw/evidence.json",
+      "export_sha256": "b265b41078e5a4d614970f2634301dcb09378faafc6cf143aace52f40bc3ad03",
+      "analysis_request_limits": {
+        "max_heap_mb": 512,
+        "analysis_timeout_ms_per_source": 60000,
+        "max_semantic_nodes": 30000,
+        "max_semantic_nodes_per_file": 10000,
+        "max_semantic_unknowns": 18000,
+        "max_semantic_unknowns_per_file": 6000,
+        "integrity_policy": "fail",
+        "detail": "summary"
+      },
+      "embedding_engine_choice": "pending_explicit_owner_selection",
+      "implementation_status": "research_only_not_implemented",
+      "limitations": [
+        "Exact selected Git blobs only; unselected dependencies and the whole reference repository remain unqualified.",
+        "Inert source/AST and graph traces do not establish reference runtime behavior.",
+        "Semantic graph unknowns remain open; the zero registered residual-unknown ledger entries are a separate count.",
+        "Own Jarvis contracts are proposed; no OpenClaw implementation/resources are imported, and no embedding engine, model acquisition or hidden fallback is enabled."
+      ]
     }
   ],
   "remaining_parts": [
@@ -3574,10 +3917,14 @@
       "original_plan_id": "OC-11"
     }
   ],
-  "rea_parsed_unique_source_files": 105,
+  "rea_parsed_unique_source_files": 118,
   "remaining_parts_id_note": "Los scopes restantes usan SCOPE para no confundir etiquetas del plan inicial con lotes OC completados. Un lote estático no cierra un scope.",
   "rea_parsed_unique_source_paths": [
     "cli-parent-lifetime.mjs",
+    "extensions/active-memory/config.ts",
+    "extensions/active-memory/recall-run.ts",
+    "extensions/active-memory/recall-state.ts",
+    "extensions/active-memory/session-policy.ts",
     "extensions/browser/src/browser-tool-binding.ts",
     "extensions/browser/src/browser-tool.snapshot.ts",
     "extensions/browser/src/browser/cdp-target-filter.ts",
@@ -3589,10 +3936,19 @@
     "extensions/cua-computer/src/action-targets.ts",
     "extensions/cua-computer/src/execution-state.ts",
     "extensions/cua-computer/src/frame.ts",
+    "extensions/memory-core/src/memory/hybrid.ts",
     "extensions/memory-core/src/memory/manager-chunk-writer.ts",
+    "extensions/memory-core/src/memory/manager-embedding-policy.ts",
+    "extensions/memory-core/src/memory/manager-index-generation-lease.ts",
+    "extensions/memory-core/src/memory/manager-reindex-lock.ts",
+    "extensions/memory-core/src/memory/manager-reindex-ops.ts",
+    "extensions/memory-core/src/memory/manager-search-maintenance.ts",
+    "extensions/memory-core/src/memory/manager-search-orchestration.ts",
     "extensions/memory-core/src/memory/manager-search-schema.ts",
     "extensions/memory-core/src/memory/manager-search-scorer.ts",
     "extensions/memory-core/src/memory/manager-search.ts",
+    "extensions/memory-core/src/memory/manager-sync-control.ts",
+    "extensions/memory-core/src/memory/manager-watch-ops.ts",
     "extensions/memory-core/src/memory/manager.ts",
     "extensions/telegram/session-key-api.ts",
     "extensions/telegram/src/api-fetch.ts",
