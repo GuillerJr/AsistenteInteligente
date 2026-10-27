@@ -370,8 +370,8 @@ permanecen locales y no existe fallback externo.
   cancelación, reparación derivada, recibos y custodia ante cierre incierto.
 - [x] Panel nativo estable y valores de accesibilidad actualizados;
   revocación comprobada mientras la nota permanecía guardada.
-- [ ] Confirmar la CI del ajuste final del lector AX. Python ya pasó en ambos
-  sistemas para `075b9dd`; no se omite la regresión nativa.
+- [ ] Confirmar la CI y el recorrido nativo del elemento AX estable. Python ya
+  pasó en ambos sistemas para `075b9dd`; no se omite la regresión nativa.
 
 [Contrato y límites](rebuild/PHASE_A_MEMORY_INTELLIGENCE.md) ·
 [Registro de cualificación](rebuild/PHASE_A_MEMORY_QUALIFICATION.json).

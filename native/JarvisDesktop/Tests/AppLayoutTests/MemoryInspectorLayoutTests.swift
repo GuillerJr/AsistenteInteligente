@@ -55,9 +55,15 @@ private struct InspectorLayoutRoot: View {
     let store: ChatStore
     let presentation: InspectorPresentation
     let accessibilityEnabled: Bool
+    let metadataFormOnly: Bool
 
     @ViewBuilder var body: some View {
-        if accessibilityEnabled {
+        if metadataFormOnly {
+            // Exercise the production Form and production row updateNSView;
+            // the other three tests cover the complete ContentView layout.
+            MemoryIntelligenceView(store: store.memoryIntelligence)
+                .environment(\.accessibilityEnabled, true)
+        } else if accessibilityEnabled {
             // XCTest is not an external assistive client. Request the public
             // SwiftUI accessibility representation for this fixture only.
             ContentView(store: store, inspector: presentation)
@@ -76,7 +82,8 @@ private final class InspectorLayoutFixture {
     private let accessibilityWindow: Bool
     private let previousActivationPolicy: NSApplication.ActivationPolicy
     private(set) var accessibilityDiagnostic = "not queried"
-    init(width: CGFloat = 1040, height: CGFloat = 720, accessibilityWindow: Bool = false) throws {
+    init(width: CGFloat = 1040, height: CGFloat = 720, accessibilityWindow: Bool = false,
+         metadataFormOnly: Bool = false) throws {
         _ = NSApplication.shared
         self.accessibilityWindow = accessibilityWindow
         previousActivationPolicy = NSApp.activationPolicy()
@@ -94,7 +101,8 @@ private final class InspectorLayoutFixture {
             request: { try await currentWire.request($0, $1) }))
         currentStore.synchronizeMemoryIntelligenceContext()
         let currentHosting = NSHostingView(rootView: InspectorLayoutRoot(store: currentStore,
-            presentation: currentPresentation, accessibilityEnabled: accessibilityWindow))
+            presentation: currentPresentation, accessibilityEnabled: accessibilityWindow,
+            metadataFormOnly: metadataFormOnly))
         let currentWindow = NSWindow(contentRect: NSRect(x: -20_000, y: -20_000, width: width, height: height),
             styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: true)
         store = currentStore; presentation = currentPresentation; wire = currentWire
@@ -148,59 +156,42 @@ private final class InspectorLayoutFixture {
         if !accessibilityWindow { XCTAssertFalse(window.isKeyWindow) }
         return second
     }
-    /// Only this synthetic hosting tree, using public in-process AppKit AX APIs;
-    /// no AX process enumeration, TCC request or owner window is involved.
-    func metadataAXValues() throws -> [String: Set<String>] {
-        var pending: [Any] = NSAccessibility.unignoredChildrenForOnlyChild(from: hosting) + [hosting]
-        var visited = Set<ObjectIdentifier>(), result: [String: Set<String>] = [:]
-        var position = 0, formal = 0, bridged = 0, identifiers = 0
-        func text(_ value: Any?) -> String? {
-            if let string = value as? String { return string }
-            if let attributed = value as? NSAttributedString { return attributed.string }
-            if let number = value as? NSNumber { return number.stringValue }
-            return nil
-        }
-        func record(id: String?, value: Any?) {
-            guard let id, id.hasPrefix("jarvis.memory.") else { return }
-            identifiers += 1
-            if let value = text(value) { result[id, default: []].insert(value) }
-        }
+    /// Traverse only NSViews belonging to this synthetic window. These are the
+    /// production AX backing elements; no virtual-array bridge or owner AX API.
+    func metadataAXNodes() throws -> [String: MemoryMetadataAccessibilityView] {
+        var pending: [NSView] = [hosting]
+        var visited = Set<ObjectIdentifier>(), result: [String: MemoryMetadataAccessibilityView] = [:]
+        var position = 0
         while position < pending.count {
             guard position < 4_000 else { throw RPCFailure.oversized }
             let item = pending[position]; position += 1
-            let object = item as AnyObject
-            guard visited.insert(ObjectIdentifier(object)).inserted else { continue }
-            if let accessible = item as? NSAccessibilityProtocol {
-                formal += 1
-                record(id: accessible.accessibilityIdentifier(), value: accessible.accessibilityValue())
-                pending.append(contentsOf: accessible.accessibilityChildren() ?? [])
-                // Do not use accessibilityChildrenInNavigationOrder(): its
-                // imported typed array can contain an NSSplitViewSplitter,
-                // trapping during the SDK's NSArray bridge before we inspect it.
+            guard visited.insert(ObjectIdentifier(item)).inserted else { continue }
+            pending.append(contentsOf: item.subviews)
+            if let row = item as? MemoryMetadataAccessibilityView,
+               let identifier = row.accessibilityIdentifier() {
+                XCTAssertNil(result[identifier], "Only one production AX element may represent a metadata row")
+                XCTAssertTrue(row.isAccessibilityElement())
+                XCTAssertEqual(row.accessibilityRole(), .staticText)
+                result[identifier] = row
             }
-            if let legacy = item as? NSObject {
-                // Public AppKit compatibility API, needed for virtual AX
-                // elements which do not advertise the full formal protocol.
-                let names = legacy.accessibilityAttributeNames()
-                if !names.isEmpty { bridged += 1 }
-                record(id: names.contains(.identifier) ? text(legacy.accessibilityAttributeValue(.identifier)) : nil,
-                       value: names.contains(.value) ? legacy.accessibilityAttributeValue(.value) : nil)
-                if names.contains(.children), let children = legacy.accessibilityAttributeValue(.children) as? [Any] {
-                    pending.append(contentsOf: NSAccessibility.unignoredChildren(from: children))
-                }
-            }
-            if let view = item as? NSView { pending.append(contentsOf: view.subviews) }
         }
-        accessibilityDiagnostic = "nodes=\(visited.count), formal=\(formal), bridge=\(bridged), metadataIDs=\(identifiers), keys=\(result.keys.sorted())"
+        accessibilityDiagnostic = "nativeViews=\(visited.count), metadataIDs=\(result.count), keys=\(result.keys.sorted())"
         return result
+    }
+    func metadataAXValues() throws -> [String: Set<String>] {
+        try metadataAXNodes().reduce(into: [:]) { result, entry in
+            if let value = entry.value.accessibilityValue() as? String {
+                result[entry.key] = Set([value])
+            }
+        }
     }
     func waitForMetadataAX(_ expected: [String: String]) async throws -> [String: Set<String>] {
         var latest: [String: Set<String>] = [:]
         for _ in 0..<50 {
             latest = try metadataAXValues()
             if expected.allSatisfy({ latest[$0.key] == Set([$0.value]) }) { return latest }
-            // AX nodes can be materialized after layout. Reading is the only
-            // operation here: no AX valueChanged is injected to mask staleness.
+            // AppKit backing elements can be materialized after layout. The
+            // fixture never injects values or accessibility notifications.
             try await Task.sleep(for: .milliseconds(40))
             hosting.layoutSubtreeIfNeeded()
         }
@@ -264,7 +255,7 @@ final class MemoryInspectorLayoutTests: XCTestCase {
         XCTAssertLessThanOrEqual(hosting.fittingSize.width, hosting.bounds.width + 1)
     }
     @MainActor func testActualFormAccessibilityValuesTrackPolicyAndJobWithoutRecreatingHostingView() async throws {
-        let fixture = try InspectorLayoutFixture(height: 1600, accessibilityWindow: true)
+        let fixture = try InspectorLayoutFixture(height: 1600, accessibilityWindow: true, metadataFormOnly: true)
         defer { fixture.closeWindow() }
         fixture.presentation.memoryPage = .intelligence
         fixture.presentation.isPresented = true
@@ -273,6 +264,11 @@ final class MemoryInspectorLayoutTests: XCTestCase {
         _ = try await fixture.settle()
         let hostingIdentity = ObjectIdentifier(fixture.hosting)
         let before = try await fixture.waitForMetadataAX(["jarvis.memory.policy.revision": "1", "jarvis.memory.job.phase": "En cola"])
+        let originalRows = try fixture.metadataAXNodes()
+        let originalPolicyRow = try XCTUnwrap(originalRows["jarvis.memory.policy.revision"])
+        let originalJobRow = try XCTUnwrap(originalRows["jarvis.memory.job.phase"])
+        XCTAssertEqual(originalPolicyRow.accessibilityLabel(), "Revisión de política")
+        XCTAssertNil(originalPolicyRow.hitTest(.zero), "AX overlay must not intercept input")
         XCTAssertEqual(before["jarvis.memory.policy.revision"], Set(["1"]))
         XCTAssertEqual(before["jarvis.memory.job.phase"], Set(["En cola"]))
         await fixture.wire.update(revision: 2, jobPhase: "complete", modelReady: true)
@@ -285,6 +281,9 @@ final class MemoryInspectorLayoutTests: XCTestCase {
         XCTAssertEqual(after["jarvis.memory.policy.revision"], Set(["2"]))
         XCTAssertEqual(after["jarvis.memory.job.phase"], Set(["Terminado"]))
         XCTAssertEqual(after["jarvis.memory.model.state"], Set(["Disponible"]))
+        let updatedRows = try fixture.metadataAXNodes()
+        XCTAssertTrue(updatedRows["jarvis.memory.policy.revision"] === originalPolicyRow)
+        XCTAssertTrue(updatedRows["jarvis.memory.job.phase"] === originalJobRow)
         let nextID = String(repeating: "9", count: 32)
         await fixture.wire.update(revision: 2, jobPhase: "queued", modelReady: true, jobID: nextID, jobKind: "index_rebuild", jobPolicyRevision: 2)
         await fixture.store.memoryIntelligence.refresh()
@@ -293,6 +292,9 @@ final class MemoryInspectorLayoutTests: XCTestCase {
         XCTAssertEqual(fixture.store.memoryIntelligence.job?.id, nextID)
         XCTAssertEqual(next["jarvis.memory.job.phase"], Set(["En cola"]), "A new job must not keep the previous job's AX value Terminado")
         XCTAssertEqual(next["jarvis.memory.policy.revision"], Set(["2"]))
+        let nextRows = try fixture.metadataAXNodes()
+        XCTAssertTrue(nextRows["jarvis.memory.policy.revision"] === originalPolicyRow)
+        XCTAssertTrue(nextRows["jarvis.memory.job.phase"] === originalJobRow)
         await fixture.close()
     }
 }

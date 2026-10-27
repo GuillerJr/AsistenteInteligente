@@ -127,7 +127,11 @@ no constituye una distribución autocontenida ni reemplaza la app del dueño.
 
 La CI de `075b9dd` aprobó Python (2885 casos macOS; 2839 y 46 omisiones
 Ubuntu). El lector AX del test encontró un bridge tipado inválido de AppKit;
-se corrigió sin retirar oráculos. Su CI final sigue pendiente. Los dobles geométricos prueban
+se retiró ese acceso sin retirar oráculos. La lectura virtual siguió sin publicar
+IDs en el fixture. Las filas usan ahora un NSView accesible estable en un overlay
+transparente; SwiftUI conserva el valor y el dibujo. El test consulta el Form
+productivo y comprueba la identidad del mismo NSView al cambiar política y trabajo.
+La cualificación de este puente nativo sigue pendiente. Los dobles geométricos prueban
 autoridad y transacciones, no calidad semántica. Los pesos públicos se preparan
 una sola vez por ejecución remota y sus casos CPU reales son obligatorios;
 faltar los artefactos provoca fallo, no una omisión silenciosa.

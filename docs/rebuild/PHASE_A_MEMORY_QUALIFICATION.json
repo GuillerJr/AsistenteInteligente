@@ -1,7 +1,7 @@
 {
   "format": "jarvis-memory-qualification/1",
   "date": "2026-10-27",
-  "status": "native_passed_ax_test_fix_ci_pending",
+  "status": "native_memory_workflow_passed_stable_metadata_bridge_qualification_pending",
   "owner_decisions": {
     "scope": [
       "test_storage",
@@ -122,6 +122,28 @@
         "job_result": "success"
       },
       "real_cpu_assets": "mandatory_no_silent_skip"
+    },
+    {
+      "head": "75ff58e4e3bbac9eabaeb15cf594ae188ba236c0",
+      "run_id": 40580138548,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40580138548",
+      "result": "failed_only_virtual_ax_metadata_case",
+      "macos": {
+        "job_id": 122457004854,
+        "swift_total": 429,
+        "swift_skipped": 1,
+        "failed_case_count": 1,
+        "failed_assertions": 10
+      },
+      "ubuntu": {
+        "job_id": 122457005472,
+        "job_result": "success"
+      },
+      "findings": [
+        "in_process_virtual_tree_208_nodes_no_metadata_identifiers",
+        "other_native_cases_passed",
+        "stable_appkit_accessibility_backing_selected_for_metadata_rows"
+      ]
     }
   ],
   "native_attempts": [
