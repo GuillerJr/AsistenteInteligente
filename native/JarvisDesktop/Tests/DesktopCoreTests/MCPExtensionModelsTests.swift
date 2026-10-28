@@ -4,7 +4,7 @@ import XCTest
 @testable import DesktopCore
 
 final class MCPExtensionModelsTests: XCTestCase {
-    private let hash = String(repeating: "a", count: 64)
+    private let fixtureDigest = String(repeating: "a", count: 64)
     func testRemoteConfigurationPreservesTransportAndNeverUsesShellOrCredentialURL() throws {
         for transport in [MCPTransport.streamableHTTP, .sse] {
             let value = try MCPConfiguration(serverID: "fixture", endpoint: "https://example.com/mcp", transport: transport, protocolVersion: .modern)
@@ -40,7 +40,7 @@ final class MCPExtensionModelsTests: XCTestCase {
         let document = try MCPAppDocument(id: String(repeating: "1", count: 32), serverID: "fixture", resourceURI: "ui://fixture/view", html: html,
             sha256: ManagementValidation.digest(html), policy: policy)
         XCTAssertEqual(document.html, html)
-        XCTAssertThrowsError(try MCPAppDocument(id: document.id, serverID: "fixture", resourceURI: "ui://fixture/view", html: html, sha256: hash, policy: policy))
+        XCTAssertThrowsError(try MCPAppDocument(id: document.id, serverID: "fixture", resourceURI: "ui://fixture/view", html: html, sha256: fixtureDigest, policy: policy))
         let tooLarge = String(repeating: "x", count: 98305)
         XCTAssertThrowsError(try MCPAppDocument(id: document.id, serverID: "fixture", resourceURI: "ui://fixture/view", html: tooLarge,
             sha256: ManagementValidation.digest(tooLarge), policy: policy))
@@ -68,7 +68,7 @@ final class MCPExtensionModelsTests: XCTestCase {
             "sha256": .string(digest), "content_base64": .string(data.base64EncodedString())])
         XCTAssertEqual(try ExtensionResource(value, expectedPath: "docs/nota.txt").data, data)
         XCTAssertThrowsError(try ExtensionResource(value, expectedPath: "other.txt"))
-        var changed = value.object!; changed["sha256"] = .string(hash)
+        var changed = value.object!; changed["sha256"] = .string(fixtureDigest)
         XCTAssertThrowsError(try ExtensionResource(.object(changed), expectedPath: "docs/nota.txt"))
         for path in ["/owner/file", "../escape", "a/../b", "a//b", "a\\b", "", "./file"] {
             XCTAssertFalse(ExtensionFileDescriptor.validPath(path))
@@ -104,11 +104,11 @@ final class MCPExtensionModelsTests: XCTestCase {
         }
     }
     func testHookMetadataSeparatesExplicitMCPActionFromPromptContext() throws {
-        let mcp: RPCValue = .object(["event": .string("before_turn"), "sha256": .string(hash),
+        let mcp: RPCValue = .object(["event": .string("before_turn"), "sha256": .string(fixtureDigest),
             "mcp_server_id": .string("fixture"), "tool": .string("echo"), "arguments": .object(["text": .string("Dato propio")])])
         let hook = try PluginHookDescriptor(mcp)
         XCTAssertEqual(hook.serverID, "fixture"); XCTAssertNil(hook.promptID)
-        let prompt = try PluginHookDescriptor(.object(["event": .string("enable"), "sha256": .string(hash), "prompt_id": .string("contexto")]))
+        let prompt = try PluginHookDescriptor(.object(["event": .string("enable"), "sha256": .string(fixtureDigest), "prompt_id": .string("contexto")]))
         XCTAssertNil(prompt.serverID); XCTAssertEqual(prompt.promptID, "contexto")
         var invalid = mcp.object!; invalid["sha256"] = .string("not-a-bound-hook")
         XCTAssertThrowsError(try PluginHookDescriptor(.object(invalid)))
