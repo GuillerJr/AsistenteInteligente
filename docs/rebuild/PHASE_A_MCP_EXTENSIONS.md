@@ -40,7 +40,7 @@ implementación ni como dependencia del producto.
   revisable; no envía un turno ni ejecuta archivos automáticamente.
 - Respaldo/doctor/restauración incluyen el registro de plugins y los recursos e
   historiales de skills. La restauración mantiene plugins y skills desactivados;
-  conserva compatibilidad con inventarios históricos de seis roles.
+  conserva compatibilidad con inventarios históricos de siete roles.
 
 ## Límites explícitos
 
@@ -71,6 +71,19 @@ una reconciliación separada del desmontaje confirmado. Se retiró únicamente s
 imagen propia de 383 782 912 bytes. No se atribuye a ella la caída global de espacio
 libre ni se desactiva el guard. La compilación y XCTest completos se trasladan a
 CI; ésta conserva un bundle de desarrollo trazable para la comprobación local.
+
+El diagnóstico posterior identificó un temporal SQLite de `dasd` creciendo a
+125,58 MB/s; tras el cierre normal autorizado del proceso cesó el llenado
+acelerado durante el intervalo medido. La causa que disparó esa actividad aún
+no se conoce. Se conservan medidas, límites y la distinción frente al consumo
+propio de la compilación en el [informe de almacenamiento](INCIDENTE_ALMACENAMIENTO_20261028.md).
+
+El primer arranque del bundle de CI detectó además una incompatibilidad real:
+el servicio anuncia la versión SSE 2024-11-05 y el cliente sólo reconocía las
+dos posteriores. Se corrigió el catálogo nativo, se restringió esa versión al
+transporte SSE y se añadieron regresiones de arranque y compatibilidad. La
+ejecución de esas regresiones y el nuevo recorrido nativo siguen pendientes;
+la comprobación sintáctica no se presenta como compilación ni prueba funcional.
 
 La fase A global continúa abierta: distribución autocontenida y otras familias
 se cualifican por separado. Este documento no declara revisión exhaustiva de

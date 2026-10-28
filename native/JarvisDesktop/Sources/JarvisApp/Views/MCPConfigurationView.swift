@@ -61,9 +61,11 @@ struct MCPConfigurationView: View {
             }
             Picker("Versión del protocolo", selection: $protocolVersion) {
                 Text("Selecciona una versión").tag("")
-                ForEach(mcp.supportedProtocols) { version in Text(version.rawValue).tag(version.rawValue) }
+                ForEach(mcp.supportedProtocols.filter { $0.supports(transport) }) { version in
+                    Text(version.rawValue).tag(version.rawValue)
+                }
             }
-            Text("Jarvis no cambia de protocolo automáticamente si la conexión falla.")
+            Text("La versión 2024-11-05 sólo está disponible con HTTP + SSE. Jarvis no cambia de protocolo automáticamente si la conexión falla.")
                 .font(.caption).foregroundStyle(.secondary)
             if let error = errorMessage ?? mcp.errorMessage { Text(error).foregroundStyle(.red).textSelection(.enabled) }
             HStack {
@@ -73,6 +75,11 @@ struct MCPConfigurationView: View {
                     .disabled(!canManage || mcp.isChanging || serverID.isEmpty || (transport == .stdio ? executable.isEmpty : endpoint.isEmpty) || protocolVersion.isEmpty)
             }
         }.padding(24).frame(width: 620)
+            .onChange(of: transport) { _, newTransport in
+                if let selected = MCPProtocolVersion(rawValue: protocolVersion), !selected.supports(newTransport) {
+                    protocolVersion = ""
+                }
+            }
     }
 
     private func chooseExecutable() {
@@ -94,7 +101,7 @@ struct MCPConfigurationView: View {
 
     private func save() async {
         guard canManage, let version = MCPProtocolVersion(rawValue: protocolVersion),
-              mcp.supportedProtocols.contains(version) else { return }
+              mcp.supportedProtocols.contains(version), version.supports(transport) else { return }
         do {
             let configuration: MCPConfiguration
             if transport == .stdio {

@@ -1,9 +1,14 @@
 import Foundation
 
 public enum MCPProtocolVersion: String, CaseIterable, Identifiable, Sendable {
+    case sseLegacy = "2024-11-05"
     case legacy = "2025-11-25"
     case modern = "2026-07-28"
     public var id: String { rawValue }
+
+    public func supports(_ transport: MCPTransport) -> Bool {
+        self != .sseLegacy || transport == .sse
+    }
 }
 
 public enum MCPTransport: String, CaseIterable, Identifiable, Sendable {
@@ -36,7 +41,7 @@ public enum MCPConfigurationError: Error, LocalizedError, Equatable {
         case .identifier: return "Usa un identificador de hasta 24 caracteres: una letra minúscula seguida de letras, números o guiones bajos."
         case .command: return "Elige un ejecutable mediante una ruta absoluta. No se admiten intérpretes de shell ni argumentos vacíos."
         case .arguments: return "Los argumentos deben ser un array JSON de texto, sin claves ni contraseñas. Se admiten hasta 63 argumentos, 8 KiB por elemento y 32 KiB en total."
-        case .protocolVersion: return "Elige una versión del protocolo publicada por el servicio. No hay cambio automático de versión."
+        case .protocolVersion: return "Elige una versión del protocolo publicada por el servicio y compatible con el transporte. La versión 2024-11-05 requiere HTTP + SSE. No hay cambio automático de versión."
         case .endpoint: return "Usa una dirección HTTPS sin usuario, contraseña, consulta ni fragmento. HTTP requiere una excepción explícita para el servidor local."
         }
     }
@@ -52,6 +57,7 @@ public struct MCPConfiguration: Equatable, Sendable {
     public let allowLoopback: Bool
 
     public init(serverID: String, command: [String], protocolVersion: MCPProtocolVersion) throws {
+        guard protocolVersion.supports(.stdio) else { throw MCPConfigurationError.protocolVersion }
         guard serverID.range(of: "^[a-z][a-z0-9_]{0,23}\\z", options: .regularExpression) != nil else {
             throw MCPConfigurationError.identifier
         }
@@ -66,6 +72,7 @@ public struct MCPConfiguration: Equatable, Sendable {
 
     public init(serverID: String, endpoint: String, transport: MCPTransport, protocolVersion: MCPProtocolVersion,
                 oauth: MCPOAuthConfiguration? = nil, allowLoopback: Bool = false) throws {
+        guard protocolVersion.supports(transport) else { throw MCPConfigurationError.protocolVersion }
         guard serverID.range(of: "^[a-z][a-z0-9_]{0,23}$", options: .regularExpression) != nil else { throw MCPConfigurationError.identifier }
         guard transport != .stdio, ManagementValidation.text(endpoint, limit: 4096),
               let parts = URLComponents(string: endpoint), let host = parts.host?.lowercased(), !host.isEmpty,

@@ -84,6 +84,46 @@ final class MCPModelsTests: XCTestCase {
         }
     }
 
+    func testEmptyStartupCatalogAcceptsAllThreePublishedProtocols() throws {
+        let catalog = try MCPCatalog(.object([
+            "servers": .array([]),
+            "supported_protocols": .array([
+                .string("2024-11-05"), .string("2025-11-25"), .string("2026-07-28")
+            ])
+        ]))
+        XCTAssertTrue(catalog.servers.isEmpty)
+        XCTAssertEqual(catalog.supportedProtocols, [.sseLegacy, .legacy, .modern])
+    }
+
+    func testProtocol2024RequiresSSEWithoutChangingLaterVersionCompatibility() throws {
+        for version in MCPProtocolVersion.allCases {
+            for transport in MCPTransport.allCases {
+                let compatible = version != .sseLegacy || transport == .sse
+                XCTAssertEqual(version.supports(transport), compatible)
+                let configuration = {
+                    if transport == .stdio {
+                        return try MCPConfiguration(serverID: "fixture", command: ["/private/tmp/jarvis-fixture"],
+                                                    protocolVersion: version)
+                    }
+                    return try MCPConfiguration(serverID: "fixture", endpoint: "https://example.com/mcp",
+                                                transport: transport, protocolVersion: version)
+                }
+                if compatible {
+                    let configured = try configuration()
+                    XCTAssertEqual(configured.protocolVersion, version)
+                    XCTAssertEqual(try MCPConfiguration(spec: .object(configured.params)), configured)
+                } else {
+                    XCTAssertThrowsError(try configuration()) {
+                        XCTAssertEqual($0 as? MCPConfigurationError, .protocolVersion)
+                    }
+                }
+            }
+        }
+        var incompatibleWire = snapshot().object!
+        incompatibleWire["protocol_version"] = .string("2024-11-05")
+        XCTAssertThrowsError(try MCPServerSnapshot(.object(incompatibleWire)))
+    }
+
     func testProviderStateIsOnlyAnExplicitOptionalLaunchFlag() throws {
         let base = ["--python", "/python", "--source", "/source", "--state", "/new-state", "--codex", "/codex"]
         XCTAssertNil(try LaunchOptions.parse(base).providerState)
