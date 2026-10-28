@@ -314,9 +314,15 @@ class ProfileConfig:
     def set_server(self, server_id: str, command: tuple[str, ...], protocol_version: str, *,
                    transport: str = "stdio", endpoint: str | None = None,
                    oauth: dict | None = None, allow_loopback: bool = False) -> None:
-        from jarvis_core.mcp_registry import ServerSpec
-        spec = ServerSpec(server_id, command, protocol_version, transport, endpoint, oauth,
-                          allow_loopback)
+        from jarvis_core.mcp import McpError
+        from jarvis_core.mcp_registry import McpRegistryError, ServerSpec
+        try:
+            spec = ServerSpec(server_id, command, protocol_version, transport, endpoint, oauth,
+                              allow_loopback)
+        except (McpRegistryError, McpError):
+            # Keep the settings API's public error boundary. Validation happens
+            # before _update can lock, create or replace configuration.json.
+            raise ConfigError("invalid_mcp_configuration") from None
         record = spec.public()
         record.pop("server_id")
         self._update(

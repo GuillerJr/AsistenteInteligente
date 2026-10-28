@@ -321,6 +321,20 @@ def test_invalid_mcp_settings_never_commit(profile, server_id, command, version)
     with pytest.raises(ConfigError):
         profile.set_server(server_id, tuple(command), version)
     assert profile.server_specs == ()
+    assert not profile.path.exists()
+
+
+def test_invalid_remote_mcp_settings_preserve_the_existing_public_configuration(profile):
+    profile.set_server("kept", ("/usr/bin/fixture",), "2025-11-25")
+    original = profile.path.read_bytes()
+    with pytest.raises(ConfigError, match="invalid_mcp_configuration"):
+        profile.set_server("remote", (), "2026-07-28", transport="streamable_http",
+                           endpoint="https://example.com/mcp", oauth={
+                               "resource": "https://example.com/mcp", "client_id": "own-client",
+                               "scopes": [float("nan")],
+                           })
+    assert profile.path.read_bytes() == original
+    assert [spec["server_id"] for spec in profile.server_specs] == ["kept"]
 
 
 def test_mcp_server_limit_rejects_without_changing_existing_settings(profile):

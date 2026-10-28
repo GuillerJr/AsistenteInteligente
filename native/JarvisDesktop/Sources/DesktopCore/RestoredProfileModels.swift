@@ -49,8 +49,10 @@ public struct RestoreProfileReview: Identifiable, Sendable {
               metadata["policy"] == .string("local_admission_only_no_automatic_effects"), metadata["workspace_policy"] == .string("new_private_empty"),
               metadata["credentials_included"] == .bool(false), metadata["authenticity"] == .string("not_established"),
               ManagementValidation.digest(try MaintenanceValidation.canonical(metadata)) == hash else { throw RPCFailure.invalidResponse }
-        let resources = try ManagementValidation.rows(metadata["resources"], limit: 7, parse: RestoreResource.init)
-        guard resources.count == 7, Set(resources.map(\.role)) == MaintenanceValidation.roles,
+        let resources = try ManagementValidation.rows(metadata["resources"], limit: 8, parse: RestoreResource.init)
+        let roles = Set(resources.map(\.role))
+        guard resources.count == roles.count,
+              roles == MaintenanceValidation.legacyRoles || roles == MaintenanceValidation.roles,
               resources.reduce(0, { $0 + $1.bytes }) <= 134_217_728 else { throw RPCFailure.invalidResponse }
         let lifetime = try MaintenanceValidation.integer(value["expires_in_seconds"], max: 120)
         self.id = id; digest = hash; self.metadata = metadata; self.path = path; markerHash = marker; restoredID = restored

@@ -57,6 +57,9 @@ final class MaintenanceIntegrationTests: XCTestCase {
               'MARCADOR SINTÉTICO MEMORIA SIN CUENTA', source_uri='jarvis://fixture-maintenance')
             service.schedule_store.create('Tarea sintética deshabilitada', 'Sin despacho', 'fixture',
               'fixture_workspace', ScheduleSpec('interval', interval_seconds=3600), enabled=False)
+          # Seed the new empty plugin registry through an actual, validated
+          # fixture revision. A no-op update intentionally creates no file.
+          service.plugins.document.update(lambda value: {**value,'revision':value['revision']+1})
           # Explicit initial fixture files: a no-op document.update correctly
           # avoids persistence in production, so it cannot seed these files.
           for document in (service.skills.document, service._telegram_journal.document):
@@ -68,7 +71,7 @@ final class MaintenanceIntegrationTests: XCTestCase {
           (service._workspace_path/'EXCLUDED_FIXTURE.txt').write_text('WORKSPACE NO INCLUIDO')
           names=tuple(name+suffix for name in ('jarvis.sqlite3','memory.sqlite3','schedules.sqlite3')
                       for suffix in ('','-wal','-shm','-journal'))+('profiles/agents.json',
-                 'profiles/skills.json','telegram/telegram.json')
+                 'profiles/skills.json','profiles/plugins.json','telegram/telegram.json')
           def fingerprint():
             value=[]
             for name in names:
