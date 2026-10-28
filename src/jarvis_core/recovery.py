@@ -23,6 +23,7 @@ from typing import Protocol
 from uuid import uuid4
 
 from jarvis_core import plugins, profiles, skills, telegram
+from jarvis_core.automation_flows import validate_automation_document
 from jarvis_core.recovery_fs import (
     Directory,
     FileIdentity,
@@ -44,12 +45,14 @@ from jarvis_core.tools import ToolError
 FORMAT = "jarvis-backup/1"
 _LEGACY_ROLES = ("state", "memory", "schedules", "agents", "skills", "telegram",
                  "configuration_portable")
-_ROLES = (*_LEGACY_ROLES, "plugins")
+_EXTENSION_ROLES = (*_LEGACY_ROLES, "plugins")
+_ROLES = (*_EXTENSION_ROLES, "automations")
 _SQL = frozenset({"state", "memory", "schedules"})
 _JSON_LIMITS = {
     "agents": 524_288,
     "skills": 4_194_304,
     "plugins": 4_194_304,
+    "automations": 4_194_304,
     "telegram": 1_048_576,
     "configuration_portable": 1024,
 }
@@ -61,6 +64,7 @@ _PROFILE_NAMES = {
     "agents": ("profiles", "agents.json"),
     "skills": ("profiles", "skills.json"),
     "plugins": ("profiles", "plugins.json"),
+    "automations": (".", "automation.json"),
     "telegram": ("telegram", "telegram.json"),
     "configuration_portable": (".", "configuration.json"),
 }
@@ -82,6 +86,7 @@ DISARMS = (
     "schedules_disabled",
     "telegram_routes_disabled",
     "skills_disabled",
+    "automation_hooks_disabled_and_checkpoints_disarmed",
     "unfinished_records_interrupted_unknown_no_replay",
     "fresh_transport_required",
     "fresh_channel_pairing_and_delivery_cutoff_required",
@@ -307,6 +312,8 @@ def _json(role, data):
             skills._validate(value)
         elif role == "plugins":
             plugins._validate(value)
+        elif role == "automations":
+            validate_automation_document(value)
         elif role == "telegram":
             telegram._journal_validate(value)
             if value["version"] != 2:
@@ -351,6 +358,12 @@ def _cross_references(images, documents, context, limits, *, settled=False):
     for row in documents.get("plugins", {}).get("plugins", {}).values():
         if row["agent_id"] not in agents:
             raise RecoveryError("recovery_cross_reference_invalid")
+    for collection in ("hooks", "flows"):
+        for row in documents.get("automations", {}).get(collection, []):
+            if row["agent_id"] not in agents:
+                raise RecoveryError("recovery_cross_reference_invalid")
+            if collection == "flows" and settled and row["status"] in {"queued", "running"}:
+                raise RecoveryError("recovery_source_unsettled")
     session_agents = dict(inspections["state"].session_agents) if "state" in inspections else {}
     journal = documents.get("telegram", {})
     for row in journal.get("routes", {}).values():
@@ -613,7 +626,7 @@ def _validate_manifest(value):
         any(not isinstance(role, str) or role not in _ROLES for role in absent)
         or len(set(absent)) != len(absent)
         or set(absent) & seen
-        or (set(absent) | seen not in (set(_ROLES), set(_LEGACY_ROLES)))
+        or (set(absent) | seen not in (set(_ROLES), set(_EXTENSION_ROLES), set(_LEGACY_ROLES)))
         or not {"agents", "configuration_portable"} <= seen
     ):
         raise RecoveryError("recovery_manifest_inventory_invalid")
@@ -818,13 +831,14 @@ def create_backup(bundle, target, context, *, limits=None, publish=no_replace):
                 len(source_roles) != len(set(source_roles))
                 or any(role not in _SQL for role in [s.role for s in bundle.sqlite])
                 or any(
-                    role not in {"agents", "skills", "telegram", "plugins"}
+                    role not in {"agents", "skills", "telegram", "plugins", "automations"}
                     for role in [s.role for s in bundle.json]
                 )
                 or len(set(bundle.absent)) != len(bundle.absent)
                 or set(source_roles) & set(bundle.absent)
                 or (set(source_roles) | set(bundle.absent)) not in (
                     set(_ROLES) - {"configuration_portable"},
+                    set(_EXTENSION_ROLES) - {"configuration_portable"},
                     set(_LEGACY_ROLES) - {"configuration_portable"})
                 or "agents" not in source_roles
             ):
@@ -952,6 +966,9 @@ def _restore_json(role, data):
                     outcome="unknown",
                     error_code="restore_interrupted_no_replay",
                 )
+    elif role == "automations":
+        from jarvis_core.automation_flows import disarm_automation_document
+        value = disarm_automation_document(value)
     elif role == "configuration_portable":
         value = dict(PORTABLE_CONFIG)
     encoded = canonical(value)

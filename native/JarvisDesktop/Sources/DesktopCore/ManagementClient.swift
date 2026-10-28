@@ -41,6 +41,37 @@ public final class ManagementClient: Sendable {
         return text
     }
     public func schedules() async throws -> SchedulerSnapshot { try await SchedulerSnapshot(call("schedules.list")) }
+    public func automation(offset: Int = 0) async throws -> AutomationSnapshot {
+        guard (0...256).contains(offset) else { throw RPCFailure.configuration }
+        let snapshot = try await AutomationSnapshot(call("automation.list", params: ["offset": .number(Double(offset))]))
+        guard snapshot.offset == offset else { throw RPCFailure.invalidResponse }; return snapshot
+    }
+    public func mutateAutomation(_ method: String, params: [String: RPCValue]) async throws -> RPCValue {
+        guard ["automation.hooks.create", "automation.hooks.update", "automation.hooks.remove", "automation.hooks.emit",
+               "automation.flows.pause", "automation.flows.resume", "automation.flows.cancel", "automation.start", "automation.stop",
+               "automation.webhook.start", "automation.webhook.stop"].contains(method) else { throw RPCFailure.configuration }
+        let result = try await call(method, params: params)
+        switch method {
+        case "automation.hooks.create", "automation.hooks.update":
+            let hook = try AutomationHook(result["hook"])
+            if let id = params["hook_id"]?.string, hook.id != id { throw RPCFailure.invalidResponse }
+        case "automation.hooks.emit":
+            let flows = try ManagementValidation.rows(result["flows"], limit: 256, parse: AutomationFlow.init)
+            guard flows.allSatisfy({ $0.hookID == params["hook_id"]?.string }) else { throw RPCFailure.invalidResponse }
+        case "automation.flows.pause", "automation.flows.resume", "automation.flows.cancel":
+            let flow = try AutomationFlow(result["flow"])
+            guard flow.id == params["flow_id"]?.string else { throw RPCFailure.invalidResponse }
+        case "automation.hooks.remove":
+            guard result["removed"].bool == true else { throw RPCFailure.invalidResponse }
+        case "automation.start", "automation.stop":
+            guard result["running"].bool == (method == "automation.start") else { throw RPCFailure.invalidResponse }
+        default:
+            let listener = try AutomationListener(result["listener"])
+            guard listener.running == (method == "automation.webhook.start"),
+                  method != "automation.webhook.start" || listener.hookID == params["hook_id"]?.string else { throw RPCFailure.invalidResponse }
+        }
+        return result
+    }
     public func history(scheduleID: String) async throws -> [ScheduleOccurrenceSnapshot] {
         let result = try await call("schedules.history", params: ["schedule_id": .string(scheduleID)])
         let rows = try ManagementValidation.rows(result["occurrences"], limit: 100, parse: ScheduleOccurrenceSnapshot.init)
@@ -59,7 +90,7 @@ public final class ManagementClient: Sendable {
     }
     public func mutate(_ method: String, params: [String: RPCValue], successKey: String? = nil) async throws -> RPCValue {
         guard ["agents.create", "agents.update", "agents.delete", "skills.import", "skills.update", "skills.enable", "skills.remove", "skills.rollback", "skills.retire_version", "skills.import_library",
-               "schedules.create", "schedules.update", "schedules.remove", "scheduler.start", "scheduler.stop"].contains(method) else {
+               "schedules.create", "schedules.update", "schedules.remove", "schedules.wake", "schedules.cancel", "scheduler.start", "scheduler.stop", "scheduler.suspend", "scheduler.resume"].contains(method) else {
             throw RPCFailure.configuration
         }
         let result = try await call(method, params: params)

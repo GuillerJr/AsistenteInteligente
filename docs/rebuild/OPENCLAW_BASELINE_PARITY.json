@@ -1555,6 +1555,10 @@
         {
           "progress_id": "P-CLEANUP-OWNERS",
           "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
+        },
+        {
+          "progress_id": "P-AUTOMATION-EVENTS",
+          "scope": "Implementación conectada; validación y recorrido nativo pendientes de registrar."
         }
       ],
       "acceptance": {
@@ -1576,8 +1580,13 @@
       "family": "automation",
       "name": "Hooks, webhooks y flujos reanudables",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-AUTOMATION-EVENTS",
+          "scope": "Implementación conectada; validación y recorrido nativo pendientes de registrar."
+        }
+      ],
       "acceptance": {
         "observable_success": "Evento local y webhook autenticado disparan flujo correcto; pausa/aprobación/reanudación conserva correlación.",
         "observable_failure_or_revocation": "Firma inválida, replay y aprobación caducada se rechazan; evento externo no concede autoridad.",
@@ -14404,7 +14413,7 @@
           "A-70"
         ],
         "verified_scope": "SQLite real, claims de dos stores, runner único, once/interval/daily IANA/DST, coalesce, CAS, recuperación incierta sin replay, start revisado por hash32jobs. Despacho por Runtime común; herramientas programadas esperan aprobación.",
-        "remaining": "Cron universal, heartbeat/hook/webhook/wake y reanudación automática de sistema. Bot/canal nunca aprueba herramientas."
+        "remaining": "Cualificación integral y recorrido nativo del nuevo incremento en PHASE_A_AUTOMATION.md; no daemon OS, puerto Internet, notificación push ni paridad universal de sintaxis cron."
       },
       {
         "id": "P-TELEGRAM",
@@ -14997,6 +15006,19 @@
         "qualification_file": "PHASE_A_MCP_EXTENSIONS_QUALIFICATION.json",
         "source_commit": "d935bfc208e298828ed40445bf46b17073c9c3cc",
         "ci_run_id": "40759557092"
+      },
+      {
+        "id": "P-AUTOMATION-EVENTS",
+        "status": "implemented_awaiting_remote_and_native_qualification",
+        "implementation": "src/jarvis_core/automation_events.py, automation_flows.py, automation_schedule.py y controles SwiftUI propios",
+        "scope": "Cron IANA/DST, heartbeat, wake durable, hooks declarativos, entrada HMAC loopback y flujos pausables con autoridad normal.",
+        "evidence": [
+          "PHASE_A_AUTOMATION.md",
+          "REA_PART25A_SUMMARY.json",
+          "REA_PART25B_SUMMARY.json",
+          "REA_PART25C_SUMMARY.json"
+        ],
+        "remaining": "CI remota del commit exacto y cualificación nativa; no se declara cierre por estas fuentes o pruebas todavía no ejecutadas."
       }
     ],
     "detail_file": "PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md",
@@ -15073,8 +15095,8 @@
       "No cierra ninguna familia amplia ni revisión global de OpenClaw."
     ],
     "capability_status_counts": {
-      "implementacion_parcial_contratos_probados": 51,
-      "no_implementado": 29
+      "implementacion_parcial_contratos_probados": 52,
+      "no_implementado": 28
     },
     "mac_browser_increment_file": "PHASE_A_MAC_BROWSER_CLOSEOUT.md",
     "mac_browser_contract_files": [
@@ -15097,7 +15119,9 @@
     "mcp_previous_qualification_record": "PHASE_A_MAC_BROWSER_CLOSEOUT.json",
     "mcp_extensions_increment_file": "PHASE_A_MCP_EXTENSIONS.md",
     "mcp_extensions_selected_scope_status": "qualified_selected_increment",
-    "mcp_extensions_qualification_file": "PHASE_A_MCP_EXTENSIONS_QUALIFICATION.json"
+    "mcp_extensions_qualification_file": "PHASE_A_MCP_EXTENSIONS_QUALIFICATION.json",
+    "automation_increment_file": "PHASE_A_AUTOMATION.md",
+    "automation_selected_scope_status": "implemented_awaiting_remote_and_native_qualification"
   },
   "target_decisions": {
     "date": "2026-10-24",

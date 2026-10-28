@@ -507,7 +507,7 @@ def test_actual_sqlite_schema_and_integrity_without_vfs_or_store_constructors(
     assert report.status == "ok"
     check = next(check for check in report.checks if check.role == role)
     assert check.integrity == "ok" and check.application_id > 0
-    assert check.schema_version == (2 if role == "state" else 1)
+    assert check.schema_version == (2 if role in {"state", "schedules"} else 1)
     assert opened and set(opened) == {":memory:"}
     assert fingerprint(root) == before
 

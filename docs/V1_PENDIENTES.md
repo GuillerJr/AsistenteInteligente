@@ -17,6 +17,13 @@ acumula 38 lotes y 144 rutas TS/JS seleccionadas; no es cobertura exhaustiva.
 
 ## Fase A — base completa primero
 
+El [incremento de automatización](rebuild/PHASE_A_AUTOMATION.md) conecta cron,
+heartbeat, wake, hooks, webhook local y flujos con checkpoints. Está implementado
+y pendiente de cualificación remota/nativa del nuevo commit; no se presenta como
+cerrado por los controles estáticos. La matriz pasa a 52 familias parciales y 28
+sin implementar, sin declarar completa ninguna familia amplia. REA conserva 41
+lotes y 155 rutas TS/JS únicas, con cobertura global todavía parcial.
+
 - [x] Limpiar el árbol de trabajo y conservar puntos de recuperación.
 - [x] Conservar inventarios de capacidades del Jarvis anterior para la fase posterior.
 - [x] Fijar la referencia de OpenClaw y empezar su análisis REA por bloques.

@@ -125,17 +125,8 @@ public struct ScheduleDescriptor: Identifiable, Equatable, Sendable {
               let workspace = value["workspace_id"].string, ManagementValidation.hash(workspace),
               let enabled = value["enabled"].bool,
               let revision = value["revision"].integer, revision > 0,
-              let kind = value["spec"]["kind"].string, ["once", "interval", "daily"].contains(kind),
-              let zone = value["spec"]["timezone"].string, ManagementValidation.text(zone, limit: 128)
+              ScheduleRuleValidation.valid(value["spec"])
         else { throw RPCFailure.invalidResponse }
-        if kind == "once", ManagementValidation.timestamp(value["spec"]["at"]) == nil { throw RPCFailure.invalidResponse }
-        if kind == "interval" {
-            guard let interval = value["spec"]["interval_seconds"].integer, (1...31_536_000).contains(interval) else { throw RPCFailure.invalidResponse }
-        }
-        if kind == "daily" {
-            guard let time = value["spec"]["local_time"].string,
-                  time.range(of: "^([01][0-9]|2[0-3]):[0-5][0-9]$", options: .regularExpression) != nil else { throw RPCFailure.invalidResponse }
-        }
         if value["next_at"] != .null && ManagementValidation.timestamp(value["next_at"]) == nil { throw RPCFailure.invalidResponse }
         self.id = id; self.title = title; self.prompt = prompt; agentID = agent; workspaceID = workspace
         spec = value["spec"]; self.enabled = enabled; self.revision = revision
@@ -146,7 +137,10 @@ public struct ScheduleDescriptor: Identifiable, Equatable, Sendable {
         switch spec["kind"].string {
         case "once": return "Una vez · UTC"
         case "interval": return "Cada \(spec["interval_seconds"].integer ?? 0) segundos"
-        default: return "Diaria · \(spec["local_time"].string ?? "") · \(spec["timezone"].string ?? "")"
+        case "daily": return "Diaria · \(spec["local_time"].string ?? "") · \(spec["timezone"].string ?? "")"
+        case "cron": return "Cron · \(spec["cron_expression"].string ?? "") · \(spec["timezone"].string ?? "")"
+        case "heartbeat": return "Comprobación periódica · cada \(spec["interval_seconds"].integer ?? 0) segundos"
+        default: return "Por evento · sin ejecución periódica"
         }
     }
 }
@@ -155,6 +149,7 @@ public struct SchedulerSnapshot: Sendable {
     public let schedules: [ScheduleDescriptor]
     public let configurationHash: String
     public let running: Bool
+    public let suspended: Bool
     public let workspaceID: String
     public let errorCode: String?
     public let rawSchedules: RPCValue
@@ -165,7 +160,8 @@ public struct SchedulerSnapshot: Sendable {
               let running = value["runner_running"].bool,
               let workspace = value["workspace_id"].string, ManagementValidation.hash(workspace)
         else { throw RPCFailure.invalidResponse }
-        configurationHash = hash; self.running = running; workspaceID = workspace
+        if value["suspended"] != .null && value["suspended"].bool == nil { throw RPCFailure.invalidResponse }
+        configurationHash = hash; self.running = running; suspended = value["suspended"].bool ?? false; workspaceID = workspace
         errorCode = value["error"].string; rawSchedules = value["schedules"]
     }
 }

@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "id": "OC-25B",
+  "topic": "Hooks, autenticación y correlación de eventos",
+  "reference_commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "reference_role": "read_only_static_reference_no_runtime_dependency",
+  "analysis_root": "/private/tmp/jarvis-automation-rea-20261028/39B",
+  "partition_sha256": "582bd5a07e15c1820579f48bf4b8669fcea14d32f7305a56ef323100b69f7509",
+  "parent_evidence_id": "ev_70a2c97da022ae821d1b30de33d2b4f825860a2a5387e62a06f5ef7560cd99a2",
+  "summary_evidence_id": "ev_5bd93421774afccadbc53a7a00b1b363b93a647da2985c30ddb0ddd62c520ad7",
+  "sources": [
+    {
+      "reference_path": "src/hooks/internal-hooks.ts",
+      "analysis_path": "src/hooks/internal-hooks.ts",
+      "sha256": "61bf91c8550df413a95d632919c9ce474f9882b1abbed4c9fb4a1116469e7404",
+      "bytes": 7525
+    },
+    {
+      "reference_path": "src/hooks/policy.ts",
+      "analysis_path": "src/hooks/policy.ts",
+      "sha256": "735800be26fb3e12fcba6457c5e3b02ce15a64294ed7bc376343584c31c1271a",
+      "bytes": 2504
+    },
+    {
+      "reference_path": "src/gateway/server/hooks-request-handler.ts",
+      "analysis_path": "src/gateway/server/hooks-request-handler.ts",
+      "sha256": "b9cb946f630f38c1a81224d82531426c15675f2153350603df5cd63930ff35d6",
+      "bytes": 27057
+    },
+    {
+      "reference_path": "src/gateway/server/hooks-event-dispatch.ts",
+      "analysis_path": "src/gateway/server/hooks-event-dispatch.ts",
+      "sha256": "24172761d0c87d49860ea6f9009ef125f4255cfd4b9a867ef58ee1dbc50ff1e9",
+      "bytes": 7159
+    }
+  ],
+  "statistics": {
+    "relevant_files": 4,
+    "nested_asar_containers": 0,
+    "text_bytes_read": 44245,
+    "invalid_utf8_files": 0,
+    "parsed_javascript_files": 4,
+    "skipped_javascript_files": 0,
+    "visited_ast_nodes": 5071,
+    "findings": 145,
+    "modules": 0,
+    "parse_failures": 0
+  },
+  "coverage": {
+    "application": {
+      "status": "complete",
+      "truncated": false,
+      "omitted_count": 0,
+      "limits": []
+    },
+    "semantic": {
+      "status": "unknown",
+      "truncated": false,
+      "omitted_nodes": 0,
+      "omitted_relations": 0,
+      "limits": [],
+      "families": [
+        {
+          "family": "boundary",
+          "status": "partial",
+          "retained_relations": 2,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "call-flow",
+          "status": "partial",
+          "retained_relations": 168,
+          "omitted_relations": 0,
+          "unknown_count": 192
+        },
+        {
+          "family": "child-process",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "closure",
+          "status": "partial",
+          "retained_relations": 275,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "configuration",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "data-flow",
+          "status": "partial",
+          "retained_relations": 2300,
+          "omitted_relations": 0,
+          "unknown_count": 280
+        },
+        {
+          "family": "event",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "object-flow",
+          "status": "partial",
+          "retained_relations": 305,
+          "omitted_relations": 0,
+          "unknown_count": 332
+        },
+        {
+          "family": "promise-ownership",
+          "status": "partial",
+          "retained_relations": 29,
+          "omitted_relations": 0,
+          "unknown_count": 19
+        },
+        {
+          "family": "request",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "resource-lifecycle",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "timer",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        }
+      ]
+    },
+    "application_unknowns": 0,
+    "semantic_unknowns": 823
+  },
+  "limitations": [
+    "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+    "Caller-selected source analysis leaves 0 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+    "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+    "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+    "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+    "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+    "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+    "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+    "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+    "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+    "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+    "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+    "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+    "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+    "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+    "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+    "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code."
+  ],
+  "findings": [
+    "La entrada HTTP separa autenticación, configuración y despacho; rechaza tokens en query.",
+    "La caché de idempotencia distingue pending/active/terminal y liga la identidad al destino.",
+    "Los eventos de hook conservan destino de sesión; el evento no concede permisos de herramientas."
+  ],
+  "own_design": [
+    "Entrada propia loopback HMAC con timestamp/nonce/cuerpo y dedupe durable.",
+    "Hooks declarativos propios con checkpoint, pausa/reanudación CAS, revocación y recibos; no carga código externo."
+  ],
+  "unknowns": [
+    "Análisis estático: OpenClaw no se ejecutó ni se acredita equivalencia global.",
+    "Importaciones y servicios fuera de estas cuatro rutas no se analizaron en este lote."
+  ],
+  "full_evidence_path": "/private/tmp/jarvis-automation-rea-20261028/evidence-39abc.json",
+  "initial_failed_attempt": null
+}

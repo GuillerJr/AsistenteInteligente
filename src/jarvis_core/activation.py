@@ -56,6 +56,7 @@ _ROLES = {
     "agents": ("profiles", "agents.json", 524_288),
     "skills": ("profiles", "skills.json", 4_194_304),
     "plugins": ("profiles", "plugins.json", 4_194_304),
+    "automations": (".", "automation.json", 4_194_304),
     "telegram": ("telegram", "telegram.json", 1_048_576),
     "configuration_portable": (".", "configuration.json", 1024),
 }
@@ -202,7 +203,10 @@ def _marker(data, maximum):
             or type(value["source_generation"]) is not int
             or not 0 <= value["source_generation"] <= (1 << 52) - 1
             or value["activation_required"] is not True or value["replay_allowed"] is not False
-            or value["disarms"] != list(DISARMS) or value["excluded"] != list(EXCLUSIONS)
+            or value["disarms"] not in (
+                list(DISARMS), [item for item in DISARMS
+                                if item != "automation_hooks_disabled_and_checkpoints_disarmed"])
+            or value["excluded"] != list(EXCLUSIONS)
             or canonical(value) != data):
         _fail("activation_restore_record_invalid")
     return value
@@ -326,7 +330,7 @@ def _read_prepared(directory, context, limits, *, owner=None):
     directory.check()
     root_entries = directory_entries(directory)
     known = {MARKER_NAME, "profile.lock", "profiles", "telegram", "configuration.json",
-             "jarvis.sqlite3", "memory.sqlite3", "schedules.sqlite3"}
+             "jarvis.sqlite3", "memory.sqlite3", "schedules.sqlite3", "automation.json"}
     if owner is not None:
         owner.assert_current()
         known.add(owner.pending_name)
@@ -390,6 +394,10 @@ def _read_prepared(directory, context, limits, *, owner=None):
         if (any(row["enabled"] for row in documents.get("skills", {}).get("skills", {}).values())
                 or any(row["enabled"]
                        for row in documents.get("plugins", {}).get("plugins", {}).values())
+                or any(row["enabled"]
+                       for row in documents.get("automations", {}).get("hooks", []))
+                or any(row["status"] in {"queued", "running", "paused"}
+                       for row in documents.get("automations", {}).get("flows", []))
                 or any(row["enabled"] for row in documents.get("telegram", {}).get("routes", {})
                        .values())):
             _fail("activation_profile_not_disarmed")

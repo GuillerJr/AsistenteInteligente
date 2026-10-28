@@ -139,4 +139,55 @@ final class ManagementIntegrationTests: XCTestCase {
             XCTAssertEqual(trace["runner_running"].bool, false)
         }
     }
+
+    @MainActor
+    func testAutomationFlowUsesActualServiceAndPausesBetweenReviewedSteps() async throws {
+        try await withFixture { client, transport, _ in
+            let initial = try await client.automation()
+            XCTAssertFalse(initial.running); XCTAssertFalse(initial.webhook.running)
+            let created = try await client.mutateAutomation("automation.hooks.create", params: [
+                "title": .string("Flujo propio de CI"), "event": .string("manual"), "agent_id": .string("jarvis"),
+                "steps": .array([
+                    .object(["prompt": .string("JARVIS PASO UNO SIN HERRAMIENTAS"), "pause_after": .bool(true)]),
+                    .object(["prompt": .string("JARVIS PASO DOS SIN HERRAMIENTAS"), "pause_after": .bool(false)])])])
+            let disabled = try AutomationHook(created["hook"])
+            XCTAssertFalse(disabled.enabled)
+            var enable = disabled.revisionParams; enable["enabled"] = .bool(true)
+            let enabledResponse = try await client.mutateAutomation("automation.hooks.update", params: enable)
+            let enabled = try AutomationHook(enabledResponse["hook"])
+            var emit = enabled.revisionParams
+            emit["event_id"] = .string("jarvis-swift-automation-" + UUID().uuidString)
+            emit["payload"] = .object([:])
+            let emitted = try await client.mutateAutomation("automation.hooks.emit", params: emit)
+            let row = try XCTUnwrap(emitted["flows"].array?.first)
+            let queued = try AutomationFlow(row)
+            let before = try await transport.call("fixture.trace")
+            XCTAssertEqual(before["calls"].integer, 0)
+            let configured = try await client.automation()
+            _ = try await client.mutateAutomation("automation.start", params: ["configuration_hash": .string(configured.configurationHash)])
+            var flow: AutomationFlow?
+            for _ in 0..<200 {
+                flow = try await client.automation().flows.first { $0.id == queued.id }
+                if flow?.status == "paused" { break }
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            let paused = try XCTUnwrap(flow)
+            XCTAssertEqual(paused.status, "paused"); XCTAssertEqual(paused.cursor, 1)
+            XCTAssertTrue(paused.canResume)
+            let first = try await transport.call("fixture.trace")
+            XCTAssertEqual(first["calls"].integer, 1)
+            _ = try await client.mutateAutomation("automation.flows.resume", params: paused.revisionParams)
+            for _ in 0..<200 {
+                flow = try await client.automation().flows.first { $0.id == queued.id }
+                if flow?.status == "completed" { break }
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            XCTAssertEqual(flow?.status, "completed"); XCTAssertEqual(flow?.cursor, 2)
+            XCTAssertEqual(flow?.outcome, "known")
+            XCTAssertEqual(flow?.receipts.count, 2); XCTAssertEqual(flow?.runIDs.count, 2)
+            let final = try await transport.call("fixture.trace")
+            XCTAssertEqual(final["calls"].integer, 2)
+            _ = try await client.mutateAutomation("automation.stop", params: [:])
+        }
+    }
 }

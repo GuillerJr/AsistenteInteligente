@@ -25,7 +25,7 @@ def main(argv=None):
     parser.add_argument("--version-key", required=True)
     parser.add_argument("--state-schema-max", type=int, default=2)
     parser.add_argument("--memory-schema-max", type=int, default=2)
-    parser.add_argument("--schedules-schema-max", type=int, default=1)
+    parser.add_argument("--schedules-schema-max", type=int, default=2)
     args = parser.parse_args(argv)
     context = RecoveryContext(
         uuid4().hex, "local-package", 0, lambda *_: None, threading.Event(), time.monotonic() + 120

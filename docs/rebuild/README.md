@@ -1,5 +1,10 @@
 # Variante propia inspirada en OpenClaw — base limpia
 
+La [continuación de automatización](PHASE_A_AUTOMATION.md) implementa cron,
+heartbeat, wake y eventos con flujos reanudables propios. Su cualificación remota
+y nativa debe registrarse por separado; no se declara completa por implementar
+el código. El registro REA vigente tiene 41 lotes y 155 rutas TS/JS seleccionadas.
+
 Decisión del dueño, 24-10-2026: construir la nueva variante de Jarvis **en este
 repositorio**, con implementación propia y arquitectura informada por el estudio
 de OpenClaw. El clon externo es material de referencia. El producto nuevo no será

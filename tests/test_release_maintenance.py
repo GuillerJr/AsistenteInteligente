@@ -46,7 +46,7 @@ async def verification(coordinator, parent):
 
 def source(parent, version):
     return artifact(
-        parent / version, version, {"state": [0, 2], "memory": [0, 2], "schedules": [0, 1]}
+        parent / version, version, {"state": [0, 2], "memory": [0, 2], "schedules": [0, 2]}
     )
 
 

@@ -26,6 +26,12 @@ struct SchedulesView: View {
                         Button("Activar programador…") { Task { await store.management.startScheduler() } }
                             .disabled(!store.canChangeSession)
                     }
+                    if snapshot.running {
+                        Button(snapshot.suspended ? "Reanudar admisión…" : "Suspender y cancelar ejecuciones…") {
+                            Task { await store.management.suspendScheduler(!snapshot.suspended) }
+                        }.disabled(!store.canChangeSession)
+                        if snapshot.suspended { Text("Admisión suspendida; las tareas nuevas esperan.").font(.caption).foregroundStyle(.secondary) }
+                    }
                     ForEach(snapshot.schedules) { schedule in
                         VStack(alignment: .leading, spacing: 10) {
                             Text(schedule.title).font(.headline)
@@ -48,6 +54,8 @@ struct SchedulesView: View {
                             }
                             HStack {
                                 Button(schedule.enabled ? "Pausar…" : "Habilitar…") { Task { await store.management.enableSchedule(schedule) } }
+                                Button("Ejecutar ahora…") { Task { await store.management.wakeSchedule(schedule) } }
+                                    .disabled(!schedule.enabled || !snapshot.running || snapshot.suspended || schedule.workspaceID != snapshot.workspaceID)
                                 Button("Editar…") { editing = schedule; showEditor = true }
                                 Button("Quitar…", role: .destructive) { Task { await store.management.removeSchedule(schedule) } }
                             }.disabled(!store.canChangeSession)
@@ -57,6 +65,7 @@ struct SchedulesView: View {
                     if snapshot.schedules.isEmpty { Text("No hay tareas configuradas.").foregroundStyle(.secondary) }
                     if snapshot.errorCode != nil { Text("El programador se detuvo por un error. Revisa sus ejecuciones antes de activarlo otra vez.").foregroundStyle(.red) }
                 }
+                AutomationFlowsView(store: store.management, mayChange: store.canChangeSession)
                 Text("Los intervalos y días perdidos se agrupan en una ocurrencia. Una hora inexistente por horario de verano se omite; una hora duplicada usa su primera aparición. Al cerrar Jarvis se detiene el programador; no se activa al reiniciar.")
                     .font(.caption).foregroundStyle(.secondary)
                 if let error = store.management.errorMessage { Text(error).foregroundStyle(.red).textSelection(.enabled) }
@@ -80,6 +89,10 @@ private struct ScheduleEditorView: View {
     @State private var interval: String
     @State private var dailyTime: String
     @State private var timezone: String
+    @State private var cronExpression: String
+    @State private var activeHours: Bool
+    @State private var activeStart: String
+    @State private var activeEnd: String
 
     init(schedule: ScheduleDescriptor?, store: ChatStore) {
         self.schedule = schedule; self.store = store
@@ -91,20 +104,26 @@ private struct ScheduleEditorView: View {
         _interval = State(initialValue: String(schedule?.spec["interval_seconds"].integer ?? 3600))
         _dailyTime = State(initialValue: schedule?.spec["local_time"].string ?? "09:00")
         _timezone = State(initialValue: schedule?.spec["timezone"].string ?? TimeZone.current.identifier)
+        _cronExpression = State(initialValue: schedule?.spec["cron_expression"].string ?? "0 9 * * 1-5")
+        _activeHours = State(initialValue: schedule?.spec["active_start"].string != nil)
+        _activeStart = State(initialValue: schedule?.spec["active_start"].string ?? "09:00")
+        _activeEnd = State(initialValue: schedule?.spec["active_end"].string ?? "18:00")
     }
     private var spec: RPCValue? {
         var fields: [String: RPCValue] = ["kind": .string(kind), "timezone": .string(timezone)]
-        guard TimeZone(identifier: timezone) != nil else { return nil }
         if kind == "once" { fields["at"] = .number(date.timeIntervalSince1970) }
-        else if kind == "interval" {
-            guard let seconds = Int(interval), (1...31_536_000).contains(seconds) else { return nil }
+        else if kind == "interval" || kind == "heartbeat" {
+            guard let seconds = Int(interval) else { return nil }
             fields["interval_seconds"] = .number(Double(seconds))
-        } else {
-            guard dailyTime.range(of: "^([01][0-9]|2[0-3]):[0-5][0-9]$", options: .regularExpression) != nil else { return nil }
-            fields["local_time"] = .string(dailyTime)
-        }
-        return .object(fields)
+            if kind == "heartbeat", activeHours {
+                fields["active_start"] = .string(activeStart); fields["active_end"] = .string(activeEnd)
+            }
+        } else if kind == "daily" { fields["local_time"] = .string(dailyTime) }
+        else if kind == "cron" { fields["cron_expression"] = .string(cronExpression) }
+        let value = RPCValue.object(fields)
+        return ScheduleRuleValidation.valid(value) ? value : nil
     }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(schedule == nil ? "Nueva tarea deshabilitada" : "Editar tarea").font(.title2.weight(.semibold))
@@ -114,12 +133,25 @@ private struct ScheduleEditorView: View {
             TextEditor(text: $prompt).frame(height: 160).border(.quaternary).accessibilityLabel("Prompt completo de la tarea")
             Picker("Frecuencia", selection: $kind) {
                 Text("Una vez").tag("once"); Text("Intervalo").tag("interval"); Text("Diaria").tag("daily")
+                Text("Cron").tag("cron"); Text("Comprobación periódica").tag("heartbeat"); Text("Por evento").tag("event")
             }
             if kind == "once" {
                 DatePicker("Fecha y hora UTC", selection: $date, displayedComponents: [.date, .hourAndMinute])
                     .environment(\.timeZone, TimeZone(secondsFromGMT: 0)!)
-            } else if kind == "interval" { TextField("Intervalo en segundos", text: $interval) }
-            else { TextField("Hora local (HH:MM)", text: $dailyTime) }
+            } else if kind == "interval" || kind == "heartbeat" {
+                TextField("Intervalo en segundos", text: $interval)
+                if kind == "heartbeat" {
+                    Toggle("Limitar a una franja horaria", isOn: $activeHours)
+                    if activeHours {
+                        HStack { TextField("Desde HH:MM", text: $activeStart); TextField("Hasta HH:MM", text: $activeEnd) }
+                    }
+                }
+            } else if kind == "daily" { TextField("Hora local (HH:MM)", text: $dailyTime) }
+            else if kind == "cron" {
+                TextField("Minuto hora día mes día-semana", text: $cronExpression)
+                Text("Cinco campos. Admite *, listas, rangos, pasos y nombres de mes/día en inglés; domingo es 0 o 7. La zona horaria se conserva con la regla.")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else { Text("Esta tarea espera un evento explícito. No tiene una hora periódica.").font(.caption).foregroundStyle(.secondary) }
             TextField("Zona horaria IANA", text: $timezone)
             Text((schedule == nil ? "Se vincula a la carpeta actual. " : "Conserva la carpeta vinculada al crearla. ") + "Cambiar de carpeta no cambia ese vínculo. Los prompts usan Codex; cada herramienta mantiene su aprobación.")
                 .font(.caption).foregroundStyle(.secondary)
@@ -157,6 +189,10 @@ private struct ScheduleHistoryView: View {
                             if let session = occurrence.sessionID {
                                 Button("Abrir conversación") { dismiss(); Task { await store.openScheduledSession(session) } }
                                     .disabled(!store.canChangeSession)
+                            }
+                            if ["claimed", "running"].contains(occurrence.status) {
+                                Button("Cancelar esta ejecución…", role: .destructive) { Task { await store.management.cancelOccurrence(occurrence) } }
+                                    .disabled(store.management.isChanging)
                             }
                             if occurrence.errorCode != nil { Text("La ejecución conserva un error; no se repite automáticamente.").foregroundStyle(.secondary) }
                         }.padding(12).background(.quaternary, in: .rect(cornerRadius: 8))

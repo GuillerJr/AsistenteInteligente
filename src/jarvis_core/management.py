@@ -13,8 +13,8 @@ from dataclasses import asdict
 from pathlib import Path
 
 from jarvis_core.host_profile import profile_background
-from jarvis_core.protocol import RpcError
-from jarvis_core.scheduler import DispatchResult, Scheduler, ScheduleSpec
+from jarvis_core.protocol import RpcError, authenticated_client
+from jarvis_core.scheduler import DispatchResult, Scheduler, SchedulerError, ScheduleSpec
 from jarvis_core.workspace import WorkspaceError
 
 
@@ -44,6 +44,10 @@ class ManagementAPI:
             "schedules.history": self.schedule_history,
             "scheduler.start": self.start_scheduler,
             "scheduler.stop": self.stop_scheduler,
+            "scheduler.suspend": self.suspend_scheduler,
+            "scheduler.resume": self.resume_scheduler,
+            "schedules.wake": self.wake_schedule,
+            "schedules.cancel": self.cancel_schedule_occurrence,
             "processes.list": self.list_processes,
             "processes.poll": self.poll_process,
             "sessions.fork": self.fork_session,
@@ -106,6 +110,8 @@ class ManagementAPI:
             or (getattr(self, "plugins", None) is not None and self.plugins.list(agent.agent_id))
             or self.memory.agent_has_documents(agent.agent_id)
             or any(row.agent_id == agent.agent_id for row in self.schedule_store.list())
+            or any(row["agent_id"] == agent.agent_id
+                   for row in self.automation_flows.list_hooks())
         ):
             raise RpcError(
                 -32032, "El agente conserva skills, plugins, memoria o tareas. Retíralas primero."
@@ -201,6 +207,7 @@ class ManagementAPI:
             "schedules": rows,
             "configuration_hash": digest,
             "runner_running": self.scheduler.running,
+            "suspended": self.scheduler.suspended,
             "workspace_id": self._workspace_id,
             "error": self.scheduler.error_code,
         }
@@ -264,6 +271,8 @@ class ManagementAPI:
                 self.scheduler = Scheduler(
                     self.schedule_store, self._dispatch_schedule, close_timeout=10
                 )
+                self._scheduler_owner = authenticated_client.get()
+                self.client_authority.lookup(self._scheduler_owner, scope="owner")
                 self.scheduler.start()
             finally:
                 self._maintenance = False
@@ -280,6 +289,34 @@ class ManagementAPI:
             self._maintenance = False
         return {"running": self.scheduler.running}
 
+    async def wake_schedule(self, value):
+        params(value, {"schedule_id", "expected_revision", "event_id"},
+               {"schedule_id", "expected_revision", "event_id"})
+        self._automation_control()
+        if not self.scheduler.running or self.scheduler.suspended:
+            raise RpcError(-32033, "Activa el programador antes de ejecutar una tarea.")
+        row = self.schedule_store.wake(**value)
+        self.scheduler.wake()
+        return {"occurrence": asdict(row)}
+
+    async def cancel_schedule_occurrence(self, value):
+        params(value, {"occurrence_id"}, {"occurrence_id"})
+        self._automation_control()
+        return {"occurrence": asdict(await self.scheduler.cancel_occurrence(
+            value["occurrence_id"]))}
+
+    async def suspend_scheduler(self, value):
+        params(value, set())
+        self._automation_control()
+        await self.scheduler.suspend()
+        return {"suspended": self.scheduler.suspended}
+
+    async def resume_scheduler(self, value):
+        params(value, set())
+        self._automation_control()
+        self.scheduler.resume()
+        return {"suspended": self.scheduler.suspended}
+
     @profile_background("scheduler.dispatch")
     async def _dispatch_schedule(self, occurrence):
         # Workspace identity is pinned at creation, not retargeted by a later UI
@@ -292,6 +329,22 @@ class ManagementAPI:
             return DispatchResult(None, "failed", "known", "scheduled_workspace_unavailable")
         self.agent_profiles.get(occurrence.agent_id)
         session = self.store.create_session(occurrence.title, agent_id=occurrence.agent_id)
+        self._automation_origins.add(occurrence.occurrence_id)
+        def guard():
+            owner = getattr(self, "_scheduler_owner", None)
+            self.client_authority.lookup(owner, scope="owner")
+            if not self.scheduler.running or self.scheduler.suspended:
+                raise SchedulerError("scheduled_runner_not_active")
+            schedule = self.schedule_store.get(occurrence.schedule_id)
+            current = self.schedule_store.occurrence(occurrence.occurrence_id)
+            consumed_once = (schedule.spec.kind == "once" and schedule.next_at is None
+                             and current.status == "running"
+                             and current.run_id == occurrence.occurrence_id)
+            if ((not schedule.enabled and not consumed_once)
+                    or schedule.revision != occurrence.schedule_revision):
+                raise SchedulerError("scheduled_revision_revoked")
+        self._automation_run_guards[occurrence.occurrence_id] = guard
+        owner_token = authenticated_client.set(self._scheduler_owner)
         try:
             run = await self.start_run(
                 {
@@ -301,7 +354,11 @@ class ManagementAPI:
                 }
             )
         except RpcError:
+            self._automation_origins.discard(occurrence.occurrence_id)
+            self._automation_run_guards.pop(occurrence.occurrence_id, None)
             return DispatchResult(None, "failed", "known", "scheduled_dispatch_unavailable")
+        finally:
+            authenticated_client.reset(owner_token)
         run_id = run["run_id"]
         handle = self._handles.get(run_id)
         if handle is None:
@@ -321,6 +378,14 @@ class ManagementAPI:
             raise
         if result is None:
             return DispatchResult(run_id, "interrupted", "unknown", "scheduled_receipt_unavailable")
+        if result["status"] == "completed":
+            try:
+                self._emit_automation_event("scheduler.completed", occurrence.occurrence_id,
+                    {"schedule_id": occurrence.schedule_id, "run_id": run_id,
+                     "session_id": session.ref.session_id})
+                self.automation_runner.wake()
+            except Exception:
+                self.automation_runner.error_code = "automation_event_not_enqueued"
         return DispatchResult(
             run_id,
             result["status"],

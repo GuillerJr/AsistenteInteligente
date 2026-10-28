@@ -5199,6 +5199,396 @@
           "sha256": "677a02ce127bef64952ce86fa46a6a86431e408762bb0bbcbbb254145295744d"
         }
       ]
+    },
+    {
+      "id": "OC-25A",
+      "topic": "Calendarios, horarios activos y recuperación de ejecuciones",
+      "source_paths": [
+        "src/cron/schedule.ts",
+        "src/cron/active-hours.ts",
+        "src/cron/service/one-shot-schedule.ts",
+        "src/cron/store/run-recovery.kernel.ts"
+      ],
+      "parent_evidence_id": "ev_9ab05089d56abec6bb715d1051ebee0e41ec9b49ad120935345f0a5b502c7b52",
+      "summary_evidence_id": "ev_b91d13734151f6b0d6f86aa37060be0bffaacb6673a96963d20dc2609e483fa4",
+      "partition_sha256": "1241cae6dc1c5ee350dcbb5f09b654df8842fb9e6ebb215cb2836709739a2a9c",
+      "statistics": {
+        "relevant_files": 4,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 27621,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 4,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 3336,
+        "findings": 84,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "complete",
+          "truncated": false,
+          "omitted_count": 0,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 5,
+              "omitted_relations": 0,
+              "unknown_count": 1
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 221,
+              "omitted_relations": 0,
+              "unknown_count": 130
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 137,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 1562,
+              "omitted_relations": 0,
+              "unknown_count": 235
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 175,
+              "omitted_relations": 0,
+              "unknown_count": 219
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 0,
+        "semantic_unknowns": 585
+      },
+      "summary_file": "REA_PART25A_SUMMARY.json",
+      "reference_executed": false
+    },
+    {
+      "id": "OC-25B",
+      "topic": "Hooks, autenticación y correlación de eventos",
+      "source_paths": [
+        "src/hooks/internal-hooks.ts",
+        "src/hooks/policy.ts",
+        "src/gateway/server/hooks-request-handler.ts",
+        "src/gateway/server/hooks-event-dispatch.ts"
+      ],
+      "parent_evidence_id": "ev_70a2c97da022ae821d1b30de33d2b4f825860a2a5387e62a06f5ef7560cd99a2",
+      "summary_evidence_id": "ev_5bd93421774afccadbc53a7a00b1b363b93a647da2985c30ddb0ddd62c520ad7",
+      "partition_sha256": "582bd5a07e15c1820579f48bf4b8669fcea14d32f7305a56ef323100b69f7509",
+      "statistics": {
+        "relevant_files": 4,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 44245,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 4,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 5071,
+        "findings": 145,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "complete",
+          "truncated": false,
+          "omitted_count": 0,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 2,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 168,
+              "omitted_relations": 0,
+              "unknown_count": 192
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 275,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 2300,
+              "omitted_relations": 0,
+              "unknown_count": 280
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 305,
+              "omitted_relations": 0,
+              "unknown_count": 332
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 29,
+              "omitted_relations": 0,
+              "unknown_count": 19
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 0,
+        "semantic_unknowns": 823
+      },
+      "summary_file": "REA_PART25B_SUMMARY.json",
+      "reference_executed": false
+    },
+    {
+      "id": "OC-25C",
+      "topic": "Heartbeat, despertares y cola de trabajo",
+      "source_paths": [
+        "src/cron/service/wake.ts",
+        "src/cron/service/run-queue-wake.ts",
+        "src/gateway/server-methods/cron-wake.ts",
+        "src/auto-reply/heartbeat.ts"
+      ],
+      "parent_evidence_id": "ev_9c93d74b2d164522eea0e825db31868aa93a0d17b2a1fb303e21cc66370a2e71",
+      "summary_evidence_id": "ev_afd88112113e4ee956d91c5b9fdfca5f7005fe92beb3723487ede4524deee973",
+      "partition_sha256": "d07f47c3531e115d0affc73f18af9eaa3c394b5501416ed9d9a84d76d6b94056",
+      "statistics": {
+        "relevant_files": 4,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 24528,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 4,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 2751,
+        "findings": 83,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "complete",
+          "truncated": false,
+          "omitted_count": 0,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 1,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 42,
+              "omitted_relations": 0,
+              "unknown_count": 136
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 109,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 975,
+              "omitted_relations": 0,
+              "unknown_count": 175
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 174,
+              "omitted_relations": 0,
+              "unknown_count": 199
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 12,
+              "omitted_relations": 0,
+              "unknown_count": 9
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 0,
+        "semantic_unknowns": 519
+      },
+      "summary_file": "REA_PART25C_SUMMARY.json",
+      "reference_executed": false
     }
   ],
   "remaining_parts": [
@@ -5328,7 +5718,7 @@
       "original_plan_id": "OC-11"
     }
   ],
-  "rea_parsed_unique_source_files": 144,
+  "rea_parsed_unique_source_files": 155,
   "remaining_parts_id_note": "Los scopes restantes usan SCOPE para no confundir etiquetas del plan inicial con lotes OC completados. Un lote estático no cierra un scope.",
   "rea_parsed_unique_source_paths": [
     "cli-parent-lifetime.mjs",
@@ -5411,22 +5801,33 @@
     "src/agents/tools/nodes-tool-invoke.ts",
     "src/agents/tools/screen-tool.ts",
     "src/agents/tools/subagents-tool.ts",
+    "src/auto-reply/heartbeat.ts",
     "src/commands/backup-restore.ts",
     "src/commands/backup-sqlite.ts",
     "src/commands/backup-verify.ts",
     "src/commands/doctor-sqlite-maintenance-lock.ts",
     "src/config/sessions/session-parent-fork.ts",
+    "src/cron/active-hours.ts",
     "src/cron/schedule.ts",
     "src/cron/scheduled-tool-policy.ts",
     "src/cron/service/jobs-scheduling.ts",
+    "src/cron/service/one-shot-schedule.ts",
+    "src/cron/service/run-queue-wake.ts",
     "src/cron/service/startup-run-repair.ts",
+    "src/cron/service/wake.ts",
+    "src/cron/store/run-recovery.kernel.ts",
     "src/gateway/server-close.ts",
     "src/gateway/server-methods/chat.ts",
+    "src/gateway/server-methods/cron-wake.ts",
     "src/gateway/server-methods/health.ts",
     "src/gateway/server-methods/sessions-rewind.ts",
     "src/gateway/server-shutdown.ts",
     "src/gateway/server.ts",
+    "src/gateway/server/hooks-event-dispatch.ts",
+    "src/gateway/server/hooks-request-handler.ts",
     "src/gateway/session-observer.ts",
+    "src/hooks/internal-hooks.ts",
+    "src/hooks/policy.ts",
     "src/infra/backup-tar-walk.ts",
     "src/infra/device-identity.ts",
     "src/infra/ed25519-signature.ts",

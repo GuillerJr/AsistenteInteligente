@@ -20,6 +20,8 @@ from contextvars import ContextVar
 from dataclasses import asdict
 from pathlib import Path
 
+from jarvis_core.automation_events import AutomationEventsAPI
+from jarvis_core.automation_flows import AutomationFlowError
 from jarvis_core.automation_management import AutomationAPI
 from jarvis_core.automation_permissions import AutomationPermissions
 from jarvis_core.bridge import CodexBridge
@@ -149,6 +151,7 @@ class _ProviderAdapter:
             MemoryPolicyError,
             EngineError,
             ArtifactError,
+            AutomationFlowError,
         ) as error:
             service._errors[context.run_id] = str(error)
             raise
@@ -186,6 +189,7 @@ class _ApprovalGate:
 
 
 class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, AutomationAPI,
+                    AutomationEventsAPI,
                     ExtensionManagementAPI, MCPNetworkManagementAPI):
     def __init__(self, directory: Path, provider: CodexClient, *,
                  profile_lease: ProfileLease | None = None,
@@ -287,6 +291,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         )
         self.host_tools = HostToolRuns(self)
         self.extension_hooks = ExtensionHooks(self)
+        self.initialize_automation_events(directory)
         from jarvis_core.mcp_product import McpProduct
         self.mcp_product = McpProduct(self)
         self.mcp.app_result_handler = self.mcp_product.capture_tool_result
@@ -417,6 +422,9 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 handle.cancel()
 
     def _assert_run_client(self, run_id):
+        guard = self._automation_run_guards.get(run_id)
+        if guard is not None:
+            guard()
         owner = self._run_clients.get(run_id)
         if owner is not None:
             self.client_authority.lookup(owner, scope="owner")
@@ -639,6 +647,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         methods.update(self.telegram_handlers())
         methods.update(self.delegation_handlers())
         methods.update(self.automation_handlers())
+        methods.update(self.automation_event_handlers())
         methods.update(self.memory_intelligence.handlers())
         methods.update(self.extension_handlers())
         methods.update(self.mcp_product.handlers())
@@ -675,7 +684,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 except TelegramError as error:
                     raise RpcError(-32036, error.code) from None
                 except (ProfileError, SkillError, PluginError,
-                        PrivateJsonError, SchedulerError) as error:
+                        PrivateJsonError, SchedulerError, AutomationFlowError) as error:
                     raise RpcError(-32035, str(error)) from None
                 except (ConfigError, WorkspaceError, ToolError, McpRegistryError) as error:
                     message = (
@@ -1421,6 +1430,18 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 clear_provider_thread=result.status != "completed",
                 outcome="known" if result.status == "completed" or known_host_denial else "unknown",
             )
+            if handle.run_id not in self._automation_origins and not ref.temporary:
+                try:
+                    self._emit_automation_event(
+                        "run.completed" if result.status == "completed" else "run.failed",
+                        handle.run_id, {"run_id": handle.run_id,
+                                        "session_id": ref.session_id,
+                                        "status": result.status})
+                    self.automation_runner.wake()
+                except (AutomationFlowError, PrivateJsonError, HostProfileError):
+                    # A hook capacity/revocation error cannot rewrite a settled
+                    # conversation or replay its effects. Surface it on the runner.
+                    self.automation_runner.error_code = "automation_event_not_enqueued"
         except StateError:
             # Do not forge a successful receipt if persistence failed. The active
             # record remains recoverable as interrupted on the next process start.
@@ -1428,6 +1449,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         finally:
             self.host_tools.settle(handle.run_id, error=error)
             self.extension_hooks.clear(handle.run_id)
+            self._automation_origins.discard(handle.run_id)
+            self._automation_run_guards.pop(handle.run_id, None)
             self._handles.pop(handle.run_id, None)
             self._refs.pop(handle.run_id, None)
             self._run_fingerprints.pop(handle.run_id, None)
@@ -1498,13 +1521,15 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             and not self._close_task.cancelled()
             and isinstance(
                 self._close_task.exception(),
-                (McpRegistryError, CodexError, TelegramError, SchedulerError, TimeoutError),
+                (McpRegistryError, CodexError, TelegramError, SchedulerError,
+                 AutomationFlowError, TimeoutError),
             )
             and str(self._close_task.exception()) in {
                 "mcp_cleanup_incomplete", "codex_cleanup_incomplete",
                 "telegram_cleanup_incomplete", "service_cleanup_incomplete",
                 "scheduler_cleanup_incomplete", "maintenance_cleanup_incomplete",
                 "memory_cleanup_incomplete",
+                "automation_cleanup_pending",
             }
         ):
             # An explicit new close may finish resources retained after a
@@ -1583,6 +1608,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             self.mcp_product.aclose,
             self.close_mcp_network,
             self._close_extensions,
+            self.close_automation_events,
         ):
             if closer is not None:
                 try:

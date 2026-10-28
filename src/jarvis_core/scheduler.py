@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import fcntl
+import hashlib
 import json
 import math
 import os
@@ -34,14 +35,15 @@ from pathlib import Path
 from uuid import uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from jarvis_core.automation_schedule import CronRuleError, cron_calendar
 from jarvis_core.state import StateError, ensure_private_directory
 
 _APPLICATION_ID = 0x4A525343  # JRSC, independent of conversation/memory formats.
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
 _ACTIVE = {"claimed", "running"}
 _TERMINAL = {"completed", "failed", "cancelled", "interrupted"}
 _MAX_TIMESTAMP = 253402214400.0  # Leaves room for next-date arithmetic in year 9999.
-_SCHEMA = """
+_SCHEMA_V1 = """
 CREATE TABLE schedules (
  schedule_id TEXT PRIMARY KEY, title TEXT NOT NULL, prompt TEXT NOT NULL,
  agent_id TEXT NOT NULL, workspace_id TEXT NOT NULL, spec_json TEXT NOT NULL,
@@ -64,6 +66,15 @@ CREATE TABLE occurrences (
 );
 CREATE INDEX occurrences_schedule ON occurrences(schedule_id,created_at,occurrence_id);
 """
+_WAKE_SCHEMA = """
+CREATE TABLE wake_events (
+ schedule_id TEXT NOT NULL, event_digest TEXT NOT NULL,
+ schedule_revision INTEGER NOT NULL, occurrence_id TEXT NOT NULL UNIQUE,
+ PRIMARY KEY(schedule_id,event_digest),
+ FOREIGN KEY(occurrence_id) REFERENCES occurrences(occurrence_id)
+);
+"""
+_SCHEMA = _SCHEMA_V1 + _WAKE_SCHEMA
 
 
 class SchedulerError(Exception):
@@ -123,9 +134,14 @@ class ScheduleSpec:
     at: float | None = None
     interval_seconds: int | None = None
     local_time: str | None = None
+    cron_expression: str | None = None
+    active_start: str | None = None
+    active_end: str | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.kind, str) or self.kind not in {"once", "interval", "daily"}:
+        if not isinstance(self.kind, str) or self.kind not in {
+            "once", "interval", "daily", "cron", "heartbeat", "event"
+        }:
             raise SchedulerError("scheduler_rule_invalid")
         if (
             not isinstance(self.timezone, str)
@@ -140,23 +156,44 @@ class ScheduleSpec:
             raise SchedulerError("scheduler_timezone_invalid") from None
         if self.at is not None:
             _timestamp(self.at)
+        if self.cron_expression is not None and self.kind != "cron":
+            raise SchedulerError("scheduler_rule_invalid")
+        if self.active_start is not None or self.active_end is not None:
+            if self.kind != "heartbeat" or not all(
+                isinstance(value, str)
+                and re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", value)
+                for value in (self.active_start, self.active_end)
+            ) or self.active_start == self.active_end:
+                raise SchedulerError("scheduler_rule_invalid")
         if self.kind == "once":
             if self.at is None or self.interval_seconds is not None or self.local_time is not None:
                 raise SchedulerError("scheduler_rule_invalid")
-        elif self.kind == "interval":
+        elif self.kind in {"interval", "heartbeat"}:
             if (
                 type(self.interval_seconds) is not int
                 or not 1 <= self.interval_seconds <= 31_536_000
                 or self.local_time is not None
             ):
                 raise SchedulerError("scheduler_rule_invalid")
-        elif (
+        elif self.kind == "daily" and (
             self.at is not None
             or self.interval_seconds is not None
             or not isinstance(self.local_time, str)
             or re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", self.local_time) is None
         ):
             raise SchedulerError("scheduler_rule_invalid")
+        elif self.kind in {"cron", "event"}:
+            if any(value is not None for value in (
+                self.at, self.interval_seconds, self.local_time
+            )):
+                raise SchedulerError("scheduler_rule_invalid")
+            if self.kind == "cron":
+                if not isinstance(self.cron_expression, str):
+                    raise SchedulerError("scheduler_rule_invalid")
+                try:
+                    cron_calendar(self.cron_expression)
+                except CronRuleError:
+                    raise SchedulerError("scheduler_rule_invalid") from None
 
     @classmethod
     def from_dict(cls, value: dict) -> ScheduleSpec:
@@ -166,6 +203,9 @@ class ScheduleSpec:
             "at",
             "interval_seconds",
             "local_time",
+            "cron_expression",
+            "active_start",
+            "active_end",
         }:
             raise SchedulerError("scheduler_rule_invalid")
         try:
@@ -182,18 +222,60 @@ class ScheduleSpec:
             return None
         return candidate.timestamp()
 
-    def first_at(self, now: float) -> float:
+    def _active(self, instant: float) -> bool:
+        if self.active_start is None:
+            return True
+        current = datetime.fromtimestamp(instant, ZoneInfo(self.timezone)).strftime("%H:%M")
+        if self.active_start < self.active_end:
+            return self.active_start <= current < self.active_end
+        return current >= self.active_start or current < self.active_end
+
+    def _active_slot(self, instant: float, anchor: float, *, forward: bool) -> float:
+        """Skip closed wall minutes, preserving the UTC interval grid.
+
+        The loop is bounded even for an interval whose grid never intersects
+        the selected window. DST transitions are checked in UTC, so a missing
+        minute is never fabricated and a repeated minute keeps the true grid.
+        """
+        candidate = instant
+        for _ in range(3000):
+            _timestamp(candidate)
+            if self._active(candidate):
+                return candidate
+            if forward:
+                boundary = (math.floor(candidate / 60) + 1) * 60
+                steps = max(1, math.ceil((boundary - candidate) / self.interval_seconds))
+                candidate += steps * self.interval_seconds
+            else:
+                boundary = math.nextafter(math.floor(candidate / 60) * 60, -math.inf)
+                steps = max(1, math.ceil((candidate - boundary) / self.interval_seconds))
+                candidate -= steps * self.interval_seconds
+                if candidate < anchor:
+                    return anchor
+        raise SchedulerError("scheduler_calendar_exhausted")
+
+    def first_at(self, now: float) -> float | None:
         now = _timestamp(now)
+        if self.kind == "event":
+            return None
         if self.kind == "once":
             return float(self.at)
-        if self.kind == "interval":
-            return (
+        if self.kind in {"interval", "heartbeat"}:
+            candidate = (
                 float(self.at) if self.at is not None else _timestamp(now + self.interval_seconds)
             )
+            return self._active_slot(candidate, candidate, forward=True)
         return self.after(now)
 
     def after(self, after: float) -> float:
         after = _timestamp(after)
+        if self.kind == "cron":
+            try:
+                return _timestamp(cron_calendar(self.cron_expression).next_after(
+                    after, ZoneInfo(self.timezone)
+                ))
+            except CronRuleError:
+                raise SchedulerError("scheduler_time_invalid") from None
         if self.kind != "daily":
             raise SchedulerError("scheduler_rule_invalid")
         local_day = datetime.fromtimestamp(after, ZoneInfo(self.timezone)).date()
@@ -210,11 +292,26 @@ class ScheduleSpec:
         due, now = _timestamp(due), _timestamp(now)
         if self.kind == "once":
             return due, None
-        if self.kind == "interval":
+        if self.kind in {"interval", "heartbeat"}:
             latest = (
                 due + math.floor(max(0, now - due) / self.interval_seconds) * self.interval_seconds
             )
-            return latest, _timestamp(latest + self.interval_seconds)
+            latest = self._active_slot(latest, due, forward=False)
+            following = _timestamp(latest + self.interval_seconds)
+            # Advance from the same grid, including after coalescing a quiet
+            # window. Floating "now" must never re-anchor the periodic rule.
+            if self.kind == "heartbeat":
+                next_grid = due + (math.floor(max(0, now - due) / self.interval_seconds) + 1) \
+                    * self.interval_seconds
+                following = self._active_slot(_timestamp(next_grid), due, forward=True)
+            return latest, following
+        if self.kind == "cron":
+            try:
+                return cron_calendar(self.cron_expression).latest(
+                    due, now, ZoneInfo(self.timezone)
+                ), self.after(now)
+            except CronRuleError:
+                raise SchedulerError("scheduler_time_invalid") from None
         local_day = datetime.fromtimestamp(now, ZoneInfo(self.timezone)).date()
         for offset in range(370):
             candidate = self._daily_at(local_day - timedelta(days=offset))
@@ -414,10 +511,17 @@ class ScheduleStore:
                 )
             elif (
                 connection.execute("PRAGMA application_id").fetchone()[0] != _APPLICATION_ID
-                or connection.execute("PRAGMA user_version").fetchone()[0] != _SCHEMA_VERSION
+                or connection.execute("PRAGMA user_version").fetchone()[0] not in {1, 2}
                 or connection.execute("PRAGMA quick_check(1)").fetchone()[0] != "ok"
             ):
                 raise SchedulerError("scheduler_database_invalid")
+            elif connection.execute("PRAGMA user_version").fetchone()[0] == 1:
+                # This is an additive, atomic upgrade. Existing occurrence
+                # slots and their uncertainty are preserved without dispatch.
+                connection.executescript(
+                    "BEGIN IMMEDIATE;" + _WAKE_SCHEMA
+                    + f"PRAGMA user_version={_SCHEMA_VERSION};COMMIT;"
+                )
             if connection.execute("PRAGMA journal_mode=DELETE").fetchone()[0] != "delete":
                 raise SchedulerError("scheduler_database_invalid")
             connection.execute("PRAGMA secure_delete=ON")
@@ -630,7 +734,7 @@ class ScheduleStore:
                 is not None
             ):
                 raise SchedulerError("scheduler_slot_already_claimed")
-            if enabled is True and not old.enabled and next_at is None:
+            if enabled is True and not old.enabled and next_at is None and rule.kind != "event":
                 raise SchedulerError("scheduler_finished_once")
             db.execute(
                 "UPDATE schedules SET title=?,prompt=?,agent_id=?,workspace_id=?,"
@@ -689,12 +793,18 @@ class ScheduleStore:
                 (instant, limit),
             ).fetchall()
             count = db.execute("SELECT count(*) FROM occurrences").fetchone()[0]
-            if count + len(due) > self.limits.max_occurrences:
-                raise SchedulerError("scheduler_capacity_exceeded")
             claims = []
             for row in due:
                 record = self._record(row)
                 scheduled_at, next_at = record.spec.coalesce(record.next_at, instant)
+                if record.spec.kind == "heartbeat" and not record.spec._active(instant):
+                    db.execute(
+                        "UPDATE schedules SET next_at=? WHERE schedule_id=?",
+                        (next_at, record.schedule_id),
+                    )
+                    continue
+                if count + len(claims) >= self.limits.max_occurrences:
+                    raise SchedulerError("scheduler_capacity_exceeded")
                 identity = uuid4().hex
                 db.execute(
                     "INSERT INTO occurrences VALUES(?,?,?,?,?,?,?,?,?,"
@@ -723,6 +833,96 @@ class ScheduleStore:
                     )
                 )
             return tuple(claims)
+
+    def wake(
+        self, schedule_id: str, expected_revision: int, *, event_id: str,
+        now: float | None = None,
+    ) -> JobOccurrence:
+        """Durably admit one event, never an implicit model/tool authorization.
+
+        The same source event cannot be replayed after a restart, cancellation,
+        or history cleanup. The scheduler runner must still be explicitly
+        active before dispatch. Event bodies are not stored in the dedupe key.
+        """
+        _uuid(schedule_id), self._revision(expected_revision), _text(event_id, 256)
+        event_digest = hashlib.sha256(event_id.encode()).hexdigest()
+        instant = _timestamp(self.clock() if now is None else now)
+        with self._transaction() as db:
+            row = db.execute(
+                "SELECT * FROM schedules WHERE schedule_id=?", (schedule_id,)
+            ).fetchone()
+            if row is None:
+                raise SchedulerError("scheduler_not_found")
+            record = self._record(row)
+            if record.revision != expected_revision:
+                raise SchedulerError("scheduler_revision_conflict")
+            existing = db.execute(
+                "SELECT o.*,w.schedule_revision AS event_revision FROM wake_events w"
+                " JOIN occurrences o ON o.occurrence_id=w.occurrence_id"
+                " WHERE w.schedule_id=? AND w.event_digest=?",
+                (schedule_id, event_digest),
+            ).fetchone()
+            if existing is not None:
+                if existing["event_revision"] != expected_revision:
+                    raise SchedulerError("scheduler_event_conflict")
+                return self._occurrence(db.execute(
+                    "SELECT * FROM occurrences WHERE occurrence_id=?",
+                    (existing["occurrence_id"],),
+                ).fetchone())
+            if not record.enabled:
+                raise SchedulerError("scheduler_schedule_paused")
+            if record.spec.kind == "heartbeat" and not record.spec._active(instant):
+                raise SchedulerError("scheduler_outside_active_window")
+            if db.execute(
+                "SELECT 1 FROM occurrences WHERE schedule_id=?"
+                " AND status IN ('claimed','running')", (schedule_id,),
+            ).fetchone() is not None:
+                raise SchedulerError("scheduler_schedule_busy")
+            if db.execute("SELECT count(*) FROM occurrences").fetchone()[0] \
+                    >= self.limits.max_occurrences:
+                raise SchedulerError("scheduler_capacity_exceeded")
+            # The event key is independent of wall time. Concurrent events at
+            # the same clock tick keep distinct slots; every probe is bounded.
+            scheduled_at = _timestamp(math.nextafter(instant, math.inf))
+            for _ in range(self.limits.max_occurrences + 1):
+                if scheduled_at != record.next_at and db.execute(
+                    "SELECT 1 FROM occurrences WHERE schedule_id=? AND scheduled_at=?",
+                    (schedule_id, scheduled_at),
+                ).fetchone() is None:
+                    break
+                scheduled_at = _timestamp(math.nextafter(scheduled_at, math.inf))
+            else:
+                raise SchedulerError("scheduler_capacity_exceeded")
+            identity = uuid4().hex
+            db.execute(
+                "INSERT INTO occurrences VALUES(?,?,?,?,?,?,?,?,?,'claimed','pending',NULL,NULL)",
+                (identity, schedule_id, record.revision, record.title, record.prompt,
+                 record.agent_id, record.workspace_id, scheduled_at, instant),
+            )
+            db.execute("INSERT INTO wake_events VALUES(?,?,?,?)",
+                       (schedule_id, event_digest, record.revision, identity))
+            return self._occurrence(db.execute(
+                "SELECT * FROM occurrences WHERE occurrence_id=?", (identity,),
+            ).fetchone())
+
+    def pending(self, *, limit: int = 1) -> tuple[JobOccurrence, ...]:
+        """Admitted manual/hook claims, before new calendar slots are acquired."""
+        self._page(limit)
+        with self._transaction() as db:
+            return tuple(self._occurrence(row) for row in db.execute(
+                "SELECT * FROM occurrences WHERE status='claimed'"
+                " ORDER BY created_at,occurrence_id LIMIT ?", (limit,),
+            ))
+
+    def occurrence(self, occurrence_id: str) -> JobOccurrence:
+        _uuid(occurrence_id)
+        with self._transaction() as db:
+            row = db.execute(
+                "SELECT * FROM occurrences WHERE occurrence_id=?", (occurrence_id,),
+            ).fetchone()
+            if row is None:
+                raise SchedulerError("scheduler_occurrence_not_found")
+            return self._occurrence(row)
 
     def begin_dispatch(self, occurrence_id: str) -> JobOccurrence | None:
         _uuid(occurrence_id)
@@ -822,7 +1022,9 @@ class ScheduleStore:
         with self._transaction() as db:
             return db.execute(
                 "DELETE FROM occurrences WHERE schedule_id=?"
-                " AND status NOT IN ('claimed','running')",
+                " AND status NOT IN ('claimed','running')"
+                " AND NOT EXISTS (SELECT 1 FROM wake_events w"
+                " WHERE w.occurrence_id=occurrences.occurrence_id)",
                 (schedule_id,),
             ).rowcount
 
@@ -902,8 +1104,12 @@ class Scheduler:
         self.dispatch_timeout, self.close_timeout = dispatch_timeout, close_timeout
         self._pump_task: asyncio.Task | None = None
         self._tasks: set[asyncio.Task] = set()
+        self._occurrence_tasks: dict[str, asyncio.Task] = {}
+        self._cancel_requested: set[str] = set()
         self._lease: int | None = None
         self._stop = asyncio.Event()
+        self._wake = asyncio.Event()
+        self._suspended = False
         self._closed = False
         self.error_code: str | None = None
 
@@ -916,6 +1122,74 @@ class Scheduler:
     @property
     def active_count(self) -> int:
         return len(self._tasks)
+
+    @property
+    def suspended(self) -> bool:
+        return self._suspended
+
+    def wake(self) -> bool:
+        """Idempotent polling signal. It never creates a job or grants consent."""
+        if self._closed or self._stop.is_set():
+            raise SchedulerError("scheduler_runner_closed")
+        changed = not self._wake.is_set()
+        self._wake.set()
+        return changed
+
+    def resume(self) -> bool:
+        if self._closed or self._stop.is_set() or not self.running:
+            raise SchedulerError("scheduler_runner_closed")
+        if self._suspended and self._tasks:
+            raise SchedulerError("scheduler_cleanup_incomplete")
+        changed = self._suspended
+        self._suspended = False
+        self.wake()
+        return changed
+
+    async def suspend(self) -> None:
+        """Pause claims and settle cancellation, retaining the runner's lease."""
+        if self._closed or self._stop.is_set() or not self.running:
+            raise SchedulerError("scheduler_runner_closed")
+        self._suspended = True
+        self.wake()
+        owned = tuple(self._occurrence_tasks.items())
+        self._cancel_requested.update(identity for identity, _ in owned)
+        tasks = tuple(self._tasks)
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            _, pending = await asyncio.wait(tasks, timeout=self.close_timeout)
+            if pending:
+                raise SchedulerError("scheduler_cleanup_incomplete")
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._cancel_undispatched(owned)
+
+    def _cancel_undispatched(self, owned: tuple[tuple[str, asyncio.Task], ...]) -> None:
+        for identity, task in owned:
+            if task.done() and self.store.occurrence(identity).status == "claimed":
+                self.store.finish(
+                    identity, "cancelled", "known",
+                    error_code="scheduler_cancelled_before_dispatch",
+                )
+
+    async def cancel_occurrence(self, occurrence_id: str) -> JobOccurrence:
+        receipt = self.store.occurrence(occurrence_id)
+        if receipt.status not in _ACTIVE:
+            return receipt
+        if receipt.status == "claimed":
+            return self.store.finish(
+                occurrence_id, "cancelled", "known",
+                error_code="scheduler_cancelled_before_dispatch",
+            )
+        task = self._occurrence_tasks.get(occurrence_id)
+        if task is None:
+            raise SchedulerError("scheduler_occurrence_unowned")
+        self._cancel_requested.add(occurrence_id)
+        task.cancel()
+        _, pending = await asyncio.wait((task,), timeout=self.close_timeout)
+        if pending:
+            raise SchedulerError("scheduler_cleanup_incomplete")
+        await asyncio.gather(task, return_exceptions=True)
+        return self.store.occurrence(occurrence_id)
 
     def start(self) -> bool:
         if self._closed or self._stop.is_set():
@@ -935,14 +1209,23 @@ class Scheduler:
     async def _pump(self) -> None:
         try:
             while not self._stop.is_set():
-                capacity = self.max_parallel - len(self._tasks)
+                self._wake.clear()
+                capacity = 0 if self._suspended else self.max_parallel - len(self._tasks)
                 if capacity:
-                    for occurrence in self.store.claim_due(limit=capacity):
+                    pending = tuple(
+                        item for item in self.store.pending(limit=self.max_parallel)
+                        if item.occurrence_id not in self._occurrence_tasks
+                    )[:capacity]
+                    claims = pending
+                    if len(pending) < capacity:
+                        claims += self.store.claim_due(limit=capacity - len(pending))
+                    for occurrence in claims:
                         task = asyncio.create_task(self._dispatch(occurrence))
                         self._tasks.add(task)
+                        self._occurrence_tasks[occurrence.occurrence_id] = task
                         task.add_done_callback(self._task_done)
                 try:
-                    await asyncio.wait_for(self._stop.wait(), self.poll_interval)
+                    await asyncio.wait_for(self._wake.wait(), self.poll_interval)
                 except TimeoutError:
                     pass
         except SchedulerError as error:
@@ -957,9 +1240,14 @@ class Scheduler:
 
     def _task_done(self, task: asyncio.Task) -> None:
         self._tasks.discard(task)
+        for key, value in tuple(self._occurrence_tasks.items()):
+            if value is task:
+                del self._occurrence_tasks[key]
+                self._cancel_requested.discard(key)
         if not task.cancelled() and task.exception() is not None:
             self.error_code = "scheduler_receipt_unconfirmed"
             self._stop.set()
+        self._wake.set()
 
     async def _dispatch(self, claim: JobOccurrence) -> None:
         occurrence = self.store.begin_dispatch(claim.occurrence_id)
@@ -968,7 +1256,7 @@ class Scheduler:
         try:
             async with asyncio.timeout(self.dispatch_timeout) as deadline:
                 result = await self.dispatch(occurrence)
-            if self._stop.is_set():
+            if self._stop.is_set() or occurrence.occurrence_id in self._cancel_requested:
                 # A host callback may suppress Task.cancel(). Closing is still
                 # cancellation, never a late successful confirmation of effects.
                 raise asyncio.CancelledError
@@ -1000,8 +1288,10 @@ class Scheduler:
 
     async def aclose(self) -> None:
         self._stop.set()
+        self._wake.set()
         if self._pump_task is not None:
             await asyncio.gather(self._pump_task, return_exceptions=True)
+        owned = tuple(self._occurrence_tasks.items())
         tasks = tuple(self._tasks)
         for task in tasks:
             task.cancel()
@@ -1010,6 +1300,7 @@ class Scheduler:
             if pending:
                 raise SchedulerError("scheduler_cleanup_incomplete")
             await asyncio.gather(*tasks, return_exceptions=True)
+        self._cancel_undispatched(owned)
         if self._lease is not None:
             os.close(self._lease)
             self._lease = None

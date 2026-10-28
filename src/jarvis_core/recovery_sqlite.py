@@ -13,7 +13,7 @@ import math
 import re
 import sqlite3
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 from jarvis_core import memory, scheduler, state
 
@@ -125,7 +125,11 @@ def _expected(role, fts, version=None):
     template = sqlite3.connect(":memory:")
     try:
         template.execute("PRAGMA temp_store=MEMORY")
-        template.executescript(_MODULES[role]._SCHEMA)
+        schema = (
+            scheduler._SCHEMA_V1 if role == "schedules" and version == 1
+            else _MODULES[role]._SCHEMA
+        )
+        template.executescript(schema)
         if role == "memory" and version == 2:
             extension = getattr(memory, "_COPY_SCHEMA", None)
             if not isinstance(extension, str):
@@ -182,13 +186,14 @@ def _match(pattern, value):
     return value
 
 
-def _check_schedule_shape(value):
+def _check_schedule_shape(value, version=2):
     if not isinstance(value, dict) or set(value) - {
         "kind",
         "timezone",
         "at",
         "interval_seconds",
         "local_time",
+        *( {"cron_expression", "active_start", "active_end"} if version == 2 else set() ),
     }:
         raise SnapshotError("snapshot_data_invalid")
     kind = value.get("kind")
@@ -202,10 +207,30 @@ def _check_schedule_shape(value):
         raise SnapshotError("snapshot_data_invalid")
     if at is not None and (type(at) not in {int, float} or not 0 <= at < 253402214400):
         raise SnapshotError("snapshot_data_invalid")
+    cron, start, end = (value.get(key) for key in (
+        "cron_expression", "active_start", "active_end"
+    ))
+    if cron is not None and kind != "cron":
+        raise SnapshotError("snapshot_data_invalid")
+    if start is not None or end is not None:
+        if kind != "heartbeat" or start == end or not all(
+            isinstance(item, str) and re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", item)
+            for item in (start, end)
+        ):
+            raise SnapshotError("snapshot_data_invalid")
     if kind == "once":
         valid = at is not None and interval is None and local is None
-    elif kind == "interval":
+    elif kind in ({"interval", "heartbeat"} if version == 2 else {"interval"}):
         valid = type(interval) is int and 1 <= interval <= 31_536_000 and local is None
+    elif kind in {"cron", "event"} and version == 2:
+        valid = at is None and interval is None and local is None
+        if kind == "cron":
+            if not isinstance(cron, str):
+                raise SnapshotError("snapshot_data_invalid")
+            try:
+                scheduler.cron_calendar(cron)
+            except scheduler.CronRuleError:
+                raise SnapshotError("snapshot_data_invalid") from None
     else:
         valid = (
             kind == "daily"
@@ -216,6 +241,69 @@ def _check_schedule_shape(value):
         )
     if not valid:
         raise SnapshotError("snapshot_data_invalid")
+
+
+def _check_wake_history(connection, check_current):
+    """Validate durable admission facts, never revive jobs or permissions."""
+    for row in connection.execute(
+        "SELECT w.schedule_id,w.event_digest,w.schedule_revision,w.occurrence_id,"
+        "o.schedule_id,o.schedule_revision FROM wake_events w"
+        " JOIN occurrences o ON o.occurrence_id=w.occurrence_id"
+    ):
+        check_current()
+        schedule, digest, revision, occurrence, actual_schedule, actual_revision = row
+        _match(_UUID, schedule)
+        _match(_HASH, digest)
+        _match(_UUID, occurrence)
+        if (type(revision) is not int or not 1 <= revision <= _MAX_SAFE
+                or revision != actual_revision or schedule != actual_schedule):
+            raise SnapshotError("snapshot_data_invalid")
+
+
+def _check_schedule_records(connection, check_current):
+    for identity, title, prompt, agent, workspace, enabled, revision, next_at, created, updated \
+            in connection.execute(
+                "SELECT schedule_id,title,prompt,agent_id,workspace_id,enabled,revision,"
+                "next_at,created_at,updated_at FROM schedules"
+            ):
+        check_current()
+        _match(_UUID, identity)
+        try:
+            scheduler._text(title, 512)
+            scheduler._text(prompt, 32000)
+            scheduler._scope(agent), scheduler._scope(workspace)
+            scheduler._timestamp(created), scheduler._timestamp(updated)
+            if next_at is not None:
+                scheduler._timestamp(next_at)
+        except scheduler.SchedulerError:
+            raise SnapshotError("snapshot_data_invalid") from None
+        if (type(enabled) is not int or enabled not in {0, 1}
+                or type(revision) is not int or not 1 <= revision <= _MAX_SAFE):
+            raise SnapshotError("snapshot_data_invalid")
+    columns = tuple(field.name for field in fields(scheduler.JobOccurrence))
+    for row in connection.execute("SELECT * FROM occurrences"):
+        check_current()
+        occurrence = scheduler.JobOccurrence(**dict(zip(columns, row, strict=True)))
+        _match(_UUID, occurrence.occurrence_id)
+        _match(_UUID, occurrence.schedule_id)
+        if occurrence.run_id is not None:
+            _match(_UUID, occurrence.run_id)
+        if (type(occurrence.schedule_revision) is not int
+                or not 1 <= occurrence.schedule_revision <= _MAX_SAFE):
+            raise SnapshotError("snapshot_data_invalid")
+        try:
+            scheduler._text(occurrence.title, 512)
+            scheduler._text(occurrence.prompt, 32000)
+            scheduler._scope(occurrence.agent_id), scheduler._scope(occurrence.workspace_id)
+            scheduler._timestamp(occurrence.scheduled_at)
+            scheduler._timestamp(occurrence.created_at)
+            if occurrence.status in scheduler._ACTIVE:
+                if occurrence.outcome != "pending" or occurrence.error_code is not None:
+                    raise SnapshotError("snapshot_data_invalid")
+            else:
+                scheduler._result(occurrence.status, occurrence.outcome, occurrence.error_code)
+        except scheduler.SchedulerError:
+            raise SnapshotError("snapshot_data_invalid") from None
 
 
 def _history_integer(value, low=0, high=_MAX_SAFE):
@@ -408,7 +496,7 @@ def inspect_sqlite_snapshot(
         module = _MODULES[role]
         app_id = connection.execute("PRAGMA application_id").fetchone()[0]
         version = connection.execute("PRAGMA user_version").fetchone()[0]
-        versions = {1, 2} if role == "memory" else {module._SCHEMA_VERSION}
+        versions = {1, 2} if role in {"memory", "schedules"} else {module._SCHEMA_VERSION}
         if app_id != module._APPLICATION_ID or version not in versions:
             raise SnapshotError("snapshot_schema_unsupported")
         schema = _schema(connection)
@@ -425,6 +513,8 @@ def inspect_sqlite_snapshot(
         tables = _TABLES[role]
         if role == "memory" and version == 2:
             tables += ("memory_scope_copies", "memory_scope_copy_documents")
+        if role == "schedules" and version == 2:
+            tables += ("wake_events",)
         for table in tables:
             check_current()
             # Names are constants, never caller-controlled SQL identifiers.
@@ -537,10 +627,13 @@ def inspect_sqlite_snapshot(
             if version == 2:
                 _check_memory_copy_history(connection, check_current)
         else:
+            _check_schedule_records(connection, check_current)
             for (agent,) in connection.execute("SELECT agent_id FROM schedules"):
                 agents.add(_match(_AGENT, agent))
             for (spec,) in connection.execute("SELECT spec_json FROM schedules"):
-                _check_schedule_shape(_safe_json(spec))
+                _check_schedule_shape(_safe_json(spec), version)
+            if version == 2:
+                _check_wake_history(connection, check_current)
             counts.append(
                 (
                     "unsettled_occurrences",

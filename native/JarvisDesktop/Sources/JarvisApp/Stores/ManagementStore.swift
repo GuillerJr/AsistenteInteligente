@@ -9,6 +9,9 @@ final class ManagementStore {
     var selectedAgentID = "jarvis"
     var skills: [SkillDescriptor] = []
     var scheduler: SchedulerSnapshot?
+    var automationSnapshot: AutomationSnapshot?
+    var automationLoading = false
+    var automationOffset = 0
     var occurrences: [ScheduleOccurrenceSnapshot] = []
     var processCatalog: ProcessCatalogSnapshot?
     var processOutput: [String: String] = [:]
@@ -25,7 +28,7 @@ final class ManagementStore {
 
     func configure(client: LocalRPCClient) { configure(ManagementClient(transport: client), runtimeIsActive: { client.isActive }) }
     func configure(_ client: ManagementClient, runtimeIsActive: @escaping @Sendable () -> Bool) {
-        generation += 1; self.client = client; self.runtimeIsActive = runtimeIsActive
+        generation += 1; self.client = client; self.runtimeIsActive = runtimeIsActive; automationSnapshot = nil; automationOffset = 0
     }
     func close() async { generation += 1; await client?.close() }
     func setContext(_ value: SessionScope?) {
@@ -154,7 +157,7 @@ final class ManagementStore {
     }
     func saveSchedule(_ schedule: ScheduleDescriptor?, title: String, prompt: String,
                       agentID: String, spec: RPCValue) async -> Bool {
-        guard ManagementValidation.text(title, limit: 512), ManagementValidation.text(prompt, limit: 8000) else {
+        guard ManagementValidation.text(title, limit: 512), ManagementValidation.text(prompt, limit: 8000), ScheduleRuleValidation.valid(spec) else {
             errorMessage = "El título o las instrucciones de la tarea no son válidos."; return false
         }
         var params = schedule?.revisionParams ?? ["agent_id": .string(agentID), "enabled": .bool(false)]
@@ -182,6 +185,119 @@ final class ManagementStore {
         _ = await change("scheduler.stop", [:], title: "Detener programador", action: "Detener",
                          detail: "Se detendrá la supervisión y se cancelarán sus ejecuciones activas. Un efecto ya despachado puede quedar sin confirmar.")
     }
+    func suspendScheduler(_ suspend: Bool) async {
+        _ = await change(suspend ? "scheduler.suspend" : "scheduler.resume", [:],
+                         title: suspend ? "Suspender y cancelar ejecuciones" : "Reanudar el programador", action: "Confirmar cambio",
+                         detail: suspend ? "Se suspenderá la admisión de nuevas ocurrencias y se solicitará cancelar las ejecuciones activas. Un efecto en vuelo puede quedar sin confirmar; conservará su recibo y no se repetirá."
+                            : "Se reanudará la admisión y se agruparán las horas perdidas. Ninguna herramienta adquiere permiso.")
+    }
+    func wakeSchedule(_ schedule: ScheduleDescriptor) async {
+        var params = schedule.revisionParams
+        params["event_id"] = .string(UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased())
+        _ = await change("schedules.wake", params, title: "Ejecutar tarea ahora", action: "Registrar esta ocurrencia",
+                         detail: scheduleReview(schedule) + "\n\nRegistrará un único evento explícito; no concede permisos a herramientas ni repetirá un resultado incierto.")
+    }
+    func cancelOccurrence(_ occurrence: ScheduleOccurrenceSnapshot) async {
+        _ = await change("schedules.cancel", ["occurrence_id": .string(occurrence.id)],
+                         title: "Cancelar ejecución", action: "Cancelar esta ejecución",
+                         detail: "Ocurrencia exacta: \(occurrence.id)\nTarea: \(occurrence.scheduleID)\n\nSolicitará su cancelación. No deshace efectos ya despachados y conservará cualquier incertidumbre.")
+        if let schedule = scheduler?.schedules.first(where: { $0.id == occurrence.scheduleID }) { await loadHistory(schedule) }
+    }
+    func refreshAutomation(offset: Int? = nil) async {
+        guard runtimeIsActive(), !isChanging, !automationLoading, !Task.isCancelled, let client else { return }
+        let version = generation, page = offset ?? automationOffset
+        automationLoading = true; defer { automationLoading = false }
+        do {
+            let snapshot = try await client.automation(offset: page)
+            guard version == generation, runtimeIsActive(), !Task.isCancelled else { return }
+            automationSnapshot = snapshot; automationOffset = page; errorMessage = nil
+        } catch { if version == generation { report(error) } }
+    }
+    func saveAutomationHook(_ hook: AutomationHook?, title: String, event: String, agentID: String,
+                            steps: [RPCValue]) async -> Bool {
+        guard ManagementValidation.text(title, limit: 512), AutomationHook.validEvent(event),
+              ManagementValidation.identifier(agentID, agent: true),
+              (try? AutomationStep.parse(.array(steps))) != nil else {
+            errorMessage = "Revisa el título, el evento y los pasos del flujo."; return false
+        }
+        var params = hook?.revisionParams ?? ["agent_id": .string(agentID)]
+        params["title"] = .string(title); params["event"] = .string(event); params["steps"] = .array(steps)
+        return await changeAutomation(hook == nil ? "automation.hooks.create" : "automation.hooks.update", params: params,
+                                      title: hook == nil ? "Crear automatización deshabilitada" : "Editar automatización",
+                                      action: "Guardar estos pasos")
+    }
+    func setAutomationHookEnabled(_ hook: AutomationHook) async {
+        var params = hook.revisionParams; params["enabled"] = .bool(!hook.enabled)
+        _ = await changeAutomation("automation.hooks.update", params: params,
+            title: hook.enabled ? "Deshabilitar automatización" : "Habilitar automatización", action: "Confirmar cambio",
+            detail: ManagementValidation.json(hook.reviewValue) + "\n\nHabilitada después del cambio: \(!hook.enabled). Cada herramienta conserva su autorización.")
+    }
+    func removeAutomationHook(_ hook: AutomationHook) async {
+        _ = await changeAutomation("automation.hooks.remove", params: hook.revisionParams,
+            title: "Quitar automatización", action: "Quitar este disparador", detail: ManagementValidation.json(hook.reviewValue))
+    }
+    func emitAutomationHook(_ hook: AutomationHook) async {
+        var params = hook.revisionParams
+        params["event_id"] = .string(UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased())
+        params["payload"] = .object([:])
+        _ = await changeAutomation("automation.hooks.emit", params: params, title: "Disparar automatización",
+            action: "Registrar este evento", detail: ManagementValidation.json(hook.reviewValue)
+                + "\n\nRegistrará un evento manual con payload vacío para este disparador exacto. No aprueba herramientas.")
+    }
+    func changeAutomationFlow(_ flow: AutomationFlow, action: String) async {
+        guard ["pause", "resume", "cancel"].contains(action),
+              automationSnapshot?.flows.contains(flow) == true else { return }
+        _ = await changeAutomation("automation.flows." + action, params: flow.revisionParams,
+            title: action == "pause" ? "Pausar flujo" : action == "resume" ? "Reanudar flujo" : "Cancelar flujo",
+            action: "Confirmar este cambio", detail: "Flujo: \(flow.id)\nRevisión: \(flow.revision)\nPaso: \(flow.cursor) de \(flow.steps.count)\n"
+                + "\nLas operaciones en vuelo pueden quedar sin confirmar al detenerlas. Un paso incierto nunca se reanuda ni repite automáticamente.")
+    }
+    func setAutomationRunning(_ running: Bool) async {
+        guard let snapshot = automationSnapshot else { return }
+        _ = await changeAutomation(running ? "automation.start" : "automation.stop",
+            params: running ? ["configuration_hash": .string(snapshot.configurationHash)] : [:],
+            title: running ? "Activar automatizaciones" : "Detener automatizaciones", action: "Confirmar cambio",
+            detail: "Los pasos habilitados usan Codex cuando recibe un evento. No hay activación automática tras reiniciar. Cada herramienta conserva su aprobación.\n\n"
+                + ManagementValidation.json(.array(snapshot.hooks.map(\.reviewValue))))
+    }
+    func setAutomationWebhook(hook: AutomationHook?, secret: String = "") async {
+        guard let snapshot = automationSnapshot else { return }
+        var params: [String: RPCValue] = [:]
+        if let hook {
+            guard hook.enabled, hook.event == "webhook", snapshot.hooks.contains(hook), AutomationWebhookInput.validSecret(secret) else { return }
+            params = hook.revisionParams
+            params["configuration_hash"] = .string(snapshot.configurationHash); params["secret"] = .string(secret)
+        }
+        _ = await changeAutomation(hook == nil ? "automation.webhook.stop" : "automation.webhook.start", params: params,
+            title: hook == nil ? "Cerrar entrada webhook" : "Abrir entrada webhook local", action: "Confirmar este cambio",
+            detail: hook.map { "Se abrirá una dirección 127.0.0.1 para este disparador exacto. Exige HMAC, fecha y nonce; el secreto sólo permanece en memoria y se retira al cerrar. No se publica en Internet.\n\n"
+                + ManagementValidation.json($0.reviewValue) + "\n\nHuella del secreto revisado: " + ManagementValidation.digest(secret) } ?? "Se cerrará la entrada local y se retirará el secreto de memoria. No se deshacen eventos ya admitidos.")
+    }
+    private func changeAutomation(_ method: String, params: [String: RPCValue], title: String,
+                                  action: String, detail: String? = nil) async -> Bool {
+        guard runtimeIsActive(), !isChanging, let client else { return false }
+        isChanging = true; generation += 1
+        let version = generation
+        defer { isChanging = false }
+        let current = { self.runtimeIsActive() && self.generation == version }
+        guard OwnerManagementReview.confirm(title: title, action: action,
+            detail: detail ?? "Revisa esta operación exacta. No autoriza herramientas ni scripts.\n\n" + ManagementValidation.json(.object(params)),
+            isCurrent: current) else { return false }
+        var succeeded = false
+        do {
+            let result = try await client.mutateAutomation(method, params: params)
+            guard current() else { return false }
+            if let receipt = result.object?["receipt"] {
+                guard receipt.object != nil, try JSONEncoder().encode(receipt).count <= 65536 else { throw RPCFailure.invalidResponse }
+                lastMutationReceipt = receipt
+            }
+            errorMessage = nil; succeeded = true
+        } catch { if current() { report(error) } }
+        // Only re-read after failure: a lost response never resends an effect.
+        do { let snapshot = try await client.automation(offset: automationOffset); if current() { automationSnapshot = snapshot } }
+        catch { if current(), errorMessage == nil { report(error) } }
+        return succeeded
+    }
     private func scheduleReview(_ row: ScheduleDescriptor) -> String {
         ManagementValidation.json(.object(["schedule_id": .string(row.id), "title": .string(row.title),
             "prompt": .string(row.prompt), "agent_id": .string(row.agentID), "workspace_id": .string(row.workspaceID),
@@ -191,12 +307,15 @@ final class ManagementStore {
                         action: String, detail: String? = nil) async -> Bool {
         guard runtimeIsActive(), !isChanging, let client else { return false }
         isChanging = true; generation += 1
+        let version = generation
         defer { isChanging = false }
         guard OwnerManagementReview.confirm(title: title, action: action,
-            detail: detail ?? "Revisa esta operación exacta. No autoriza herramientas ni ejecución de scripts.\n\n" + ManagementValidation.json(.object(params)), isCurrent: runtimeIsActive) else { return false }
+            detail: detail ?? "Revisa esta operación exacta. No autoriza herramientas ni ejecución de scripts.\n\n" + ManagementValidation.json(.object(params)),
+            isCurrent: { self.runtimeIsActive() && self.generation == version }) else { return false }
         var success = false
         do {
             let result = try await client.mutate(method, params: params)
+            guard generation == version, runtimeIsActive() else { return false }
             if let receipt = result.object?["receipt"] {
                 guard receipt.object != nil, try JSONEncoder().encode(receipt).count <= 65536 else { throw RPCFailure.invalidResponse }
                 lastMutationReceipt = receipt
@@ -207,20 +326,32 @@ final class ManagementStore {
             } else {
             if method.hasPrefix("agents."), method != "agents.delete" { _ = try AgentDescriptor(result["agent"]) }
             else if method.hasPrefix("skills."), method != "skills.remove" { _ = try SkillDescriptor(result["skill"]) }
+            else if method == "schedules.wake" || method == "schedules.cancel" {
+                let occurrence = try ScheduleOccurrenceSnapshot(result["occurrence"])
+                guard method == "schedules.wake" ? occurrence.scheduleID == params["schedule_id"]?.string : occurrence.id == params["occurrence_id"]?.string else { throw RPCFailure.invalidResponse }
+            }
             else if method.hasPrefix("schedules."), method != "schedules.remove" { _ = try ScheduleDescriptor(result["schedule"]) }
+            else if method == "scheduler.suspend" || method == "scheduler.resume" {
+                guard result["suspended"].bool == (method == "scheduler.suspend") else { throw RPCFailure.invalidResponse }
+            }
             else {
                 let key = method == "agents.delete" ? "deleted" : method == "scheduler.start" || method == "scheduler.stop" ? "running" : "removed"
                 guard result[key].bool == (method != "scheduler.stop") else { throw RPCFailure.invalidResponse }
             }
             errorMessage = nil; success = true
             }
-        } catch { report(error) }
+        } catch { if generation == version { report(error) } }
         // Read-side reconciliation only; a failed mutation is never resent.
         do {
-            agents = try await client.agents(); scheduler = try await client.schedules()
+            let agents = try await client.agents(), schedules = try await client.schedules()
+            guard generation == version, runtimeIsActive() else { return false }
+            self.agents = agents; scheduler = schedules
             if !agents.contains(where: { $0.id == selectedAgentID }) { selectedAgentID = "jarvis" }
-            skills = try await client.skills(agentID: selectedAgentID)
-        } catch { if errorMessage == nil { report(error) } }
+            let currentAgent = selectedAgentID
+            let skills = try await client.skills(agentID: currentAgent)
+            guard generation == version, currentAgent == selectedAgentID else { return false }
+            self.skills = skills
+        } catch { if generation == version, errorMessage == nil { report(error) } }
         return success
     }
     private func report(_ error: Error) { errorMessage = ManagementPresentation.errorMessage(error) }

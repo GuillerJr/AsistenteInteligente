@@ -513,6 +513,8 @@ def _json_staging(service, staging):
     resources = (service.agent_profiles, service.skills, service._telegram_journal)
     if getattr(service, "plugins", None) is not None:
         resources += (service.plugins,)
+    if getattr(service, "automation_flows", None) is not None:
+        resources += (service.automation_flows,)
     if any(type(resource) is not BoundProfileResource for resource in resources):
         raise HostProfileError("profile_registry_staging_invalid")
     documents = tuple(resource._resource.document for resource in resources)
@@ -539,6 +541,10 @@ def _inventory(service, *, full_admission=True, staging=None):
                     "maintenance.json", "maintenance.json.lock", "transport.token", "service.sock",
                     "provider", "mcp", "workspace", "profiles", "telegram", "auth.json",
                     "restore_record.json", "restore_admission.json", "provider_choice.json"}
+    if getattr(service, "automation_flows", None) is not None:
+        root_allowed.update({"automation.json", "automation.json.lock", "automation.runner.lock"})
+        if staged is not None and staged[0].directory == service.profile_lease.root:
+            root_allowed.add(staged[1])
     for name in ("jarvis.sqlite3", "memory.sqlite3", "schedules.sqlite3"):
         root_allowed.update(name + suffix for suffix in (
             "", ".lock", ".init.lock", ".runner.lock", "-journal", "-wal", "-shm",
@@ -578,6 +584,8 @@ def _states(service, *, staging=None):
     )
     if getattr(service, "plugins", None) is not None:
         documents += (("plugins", service.plugins.document),)
+    if getattr(service, "automation_flows", None) is not None:
+        documents += (("automations", service.automation_flows.document),)
     docs = tuple(_json_state(role, document) for role, document in documents)
     return sql, docs
 
@@ -952,6 +960,14 @@ def service_blockers(service):
     product = getattr(service, "mcp_product", None)
     if product is not None:
         codes.update(product.blockers)
+    flows = getattr(service, "automation_flows", None)
+    runner = getattr(service, "automation_runner", None)
+    inbox = getattr(service, "automation_webhook", None)
+    if ((flows is not None and flows.pending_cleanup)
+            or (runner is not None and (runner._lease is not None or runner.active_count))
+            or (inbox is not None and (inbox.status()["running"]
+                                      or inbox.active_count or inbox.pending_cleanup))):
+        codes.add("automation_active_or_cleanup")
     if service.scheduler._lease is not None or service.scheduler.active_count:
         codes.add("scheduler_active_or_cleanup")
     if service.process_tools and service.process_tools.has_running:
@@ -982,6 +998,7 @@ def service_blockers(service):
 # Reads may initialize SQLite or provider/pairing state, so ALL handlers are
 # admitted. This set only avoids false generation bumps for unchanged polling.
 READ_RPCS = frozenset({
+    "automation.list", "automation.webhook.status",
     "plugins.list", "plugins.inspect", "plugins.review", "plugins.versions",
     "plugins.catalog", "plugins.resource", "plugins.mcp.review",
     "skills.metadata", "skills.versions", "skills.resource", "skills.invoke",

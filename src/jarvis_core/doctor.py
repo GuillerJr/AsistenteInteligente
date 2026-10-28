@@ -22,6 +22,7 @@ from types import MappingProxyType
 from typing import Protocol
 from uuid import uuid4
 
+from jarvis_core.automation_flows import validate_automation_document
 from jarvis_core.plugins import _validate as validate_plugins
 from jarvis_core.profiles import _validate as validate_agents
 from jarvis_core.skills import _validate as validate_skills
@@ -31,7 +32,7 @@ _MAX_SAFE = (1 << 52) - 1
 _SQLITE = {
     "state": (0x4A525653, 2),
     "memory": (0x4A524D4D, 1),
-    "schedules": (0x4A525343, 1),
+    "schedules": (0x4A525343, 2),
 }
 _PATHS = {
     "state": ("jarvis.sqlite3",),
@@ -41,6 +42,7 @@ _PATHS = {
     "skills": ("profiles", "skills.json"),
     "plugins": ("profiles", "plugins.json"),
     "telegram": ("telegram", "telegram.json"),
+    "automations": ("automation.json",),
 }
 _ROLES = (*_PATHS, "configuration_portable", "restore_record")
 _COUNTS = frozenset(
@@ -57,6 +59,12 @@ _COUNTS = frozenset(
         "memory_scope_copy_documents",
         "schedules",
         "occurrences",
+        "wake_events",
+        "automation_hooks",
+        "enabled_automation_hooks",
+        "automation_flows",
+        "paused_automation_flows",
+        "unsettled_automation_flows",
         "unsettled_runs",
         "unsettled_occurrences",
     }
@@ -507,6 +515,7 @@ def _json_check(role, data, context):
             "skills": validate_skills,
             "plugins": validate_plugins,
             "telegram": validate_telegram,
+            "automations": validate_automation_document,
         }[role](value)
     except (ValueError, UnicodeError, RecursionError, KeyError, TypeError):
         raise DoctorError("doctor_json_invalid") from None
@@ -521,6 +530,15 @@ def _json_check(role, data, context):
     elif role == "plugins":
         counts = (("plugins", len(value["plugins"])),
                   ("enabled_plugins", sum(row["enabled"] for row in value["plugins"].values())))
+    elif role == "automations":
+        counts = (
+            ("automation_hooks", len(value["hooks"])),
+            ("enabled_automation_hooks", sum(row["enabled"] for row in value["hooks"])),
+            ("automation_flows", len(value["flows"])),
+            ("paused_automation_flows", sum(row["status"] == "paused" for row in value["flows"])),
+            ("unsettled_automation_flows", sum(row["status"] in {"queued", "running"}
+                                               for row in value["flows"])),
+        )
     else:
         counts = (
             ("routes", len(value["routes"])),
@@ -540,6 +558,8 @@ def _json_check(role, data, context):
         references = frozenset(row["agent_id"] for row in value["skills"].values())
     elif role == "plugins":
         references = frozenset(row["agent_id"] for row in value["plugins"].values())
+    elif role == "automations":
+        references = frozenset(row["agent_id"] for row in value["hooks"] + value["flows"])
     else:
         references = tuple(
             (row["agent_id"], row["session_id"]) for row in value["routes"].values()
@@ -563,7 +583,7 @@ def _sqlite_check(role, data, context, inspector):
         raise DoctorError("doctor_sqlite_identity_missing")
     if application_id != expected_app:
         raise DoctorError("doctor_sqlite_identity_invalid")
-    accepted_versions = {1, 2} if role == "memory" else {expected_version}
+    accepted_versions = {1, 2} if role in {"memory", "schedules"} else {expected_version}
     if version not in accepted_versions:
         raise DoctorError("doctor_schema_unsupported")
     if inspector is None:
@@ -895,6 +915,7 @@ def _cross_references(facts):
     agents = facts.get("agents")
     required = set(facts.get("skills", ()))
     required.update(facts.get("plugins", ()))
+    required.update(facts.get("automations", ()))
     state = facts.get("state")
     if state is not None:
         required.update(state.agent_ids)
