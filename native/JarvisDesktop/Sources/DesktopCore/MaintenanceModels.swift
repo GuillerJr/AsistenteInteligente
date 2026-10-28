@@ -377,7 +377,7 @@ public struct MaintenanceVerification: Sendable {
         try MaintenanceValidation.keys(result["verification"], ["artifact_id", "profile_id", "generation", "manifest_sha256", "root_identity", "resource_hashes", "excluded", "authenticity"])
         _ = try MaintenanceScope(result["verification"])
         _ = try MaintenanceValidation.strings(result["verification"]["excluded"], exact: MaintenanceValidation.exclusions)
-        guard let hashes = result["verification"]["resource_hashes"].array, !hashes.isEmpty, hashes.count <= 7 else { throw RPCFailure.invalidResponse }
+        guard let hashes = result["verification"]["resource_hashes"].array, !hashes.isEmpty, hashes.count <= MaintenanceValidation.roles.count else { throw RPCFailure.invalidResponse }
         var seen = Set<String>()
         for hash in hashes {
             guard let pair = hash.array, pair.count == 2, let role = pair[0].string, MaintenanceValidation.roles.contains(role), seen.insert(role).inserted, let digest = pair[1].string, ManagementValidation.hash(digest) else { throw RPCFailure.invalidResponse }

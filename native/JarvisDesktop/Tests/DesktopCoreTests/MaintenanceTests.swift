@@ -117,6 +117,38 @@ final class MaintenanceTests: XCTestCase {
         XCTAssertEqual(try MaintenanceVerification(settled.result).id, String(repeating: "d", count: 32))
         XCTAssertThrowsError(try MaintenanceOperation(operation(phase: "complete", pending: false, kind: "backup.verify")))
     }
+    private func verificationWithHashes(_ hashes: [RPCValue]) -> RPCValue {
+        changed(verification, ["verification": changed(verification["verification"], ["resource_hashes": .array(hashes)])])
+    }
+    private func resourceHash(_ role: String, digest: String = String(repeating: "f", count: 64)) -> RPCValue {
+        .array([.string(role), .string(digest)])
+    }
+    func testVerificationAcceptsHistoricalSevenAndCurrentEightResourceHashesAfterSettlement() throws {
+        let historical = ["state", "memory", "schedules", "agents", "skills", "telegram", "configuration_portable"]
+        for roles in [historical, historical + ["plugins"]] {
+            let result = verificationWithHashes(roles.map { resourceHash($0) })
+            XCTAssertEqual(try MaintenanceVerification(result).artifactID, String(repeating: "e", count: 32))
+            let completed = try MaintenanceOperation(operation(phase: "complete", pending: false, kind: "backup.verify", result: result))
+            XCTAssertTrue(completed.settled)
+            XCTAssertTrue(completed.success)
+            XCTAssertEqual(completed.result, result)
+        }
+    }
+    func testVerificationStillRejectsOversizedDuplicateUnknownAndMalformedResourceHashes() {
+        let current = ["state", "memory", "schedules", "agents", "skills", "telegram", "configuration_portable", "plugins"]
+            .map { resourceHash($0) }
+        let invalid: [[RPCValue]] = [
+            [], current + [resourceHash("agents")],
+            Array(current.dropLast()) + [resourceHash("agents")],
+            Array(current.dropLast()) + [resourceHash("unrecognized_resource")],
+            Array(current.dropLast()) + [resourceHash("plugins", digest: "not_a_sha256")]
+        ]
+        for hashes in invalid {
+            let result = verificationWithHashes(hashes)
+            XCTAssertThrowsError(try MaintenanceVerification(result))
+            XCTAssertThrowsError(try MaintenanceOperation(operation(phase: "complete", pending: false, kind: "backup.verify", result: result)))
+        }
+    }
     func testPublishedEffectsRequireDurableReceiptAndNoCleanupUncertainty() {
         XCTAssertThrowsError(try MaintenanceOperation(operation(phase: "complete", pending: false)))
         XCTAssertThrowsError(try MaintenanceOperation(operation(phase: "staged_disarmed", pending: false)))
