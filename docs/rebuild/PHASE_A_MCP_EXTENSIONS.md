@@ -74,6 +74,17 @@ acepta ahora los ocho roles actuales, manteniendo compatibilidad histórica y
 rechazo de entradas inválidas. Esta CI no sustituye los recorridos de la app
 frente a servicios externos ni cierra la fase A global.
 
+La [CI posterior del checkpoint documental `770c7b0`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40737432237)
+aprobó Ubuntu, el bundle macOS y Swift (452 pruebas/1 omitida/0 fallos), pero
+Python macOS terminó con 3 054 aprobadas y un fallo de cierre en
+`test_failed_or_disconnected_turn_is_not_success[disconnect-codex_disconnected]`.
+La aserción de desconexión pasó; `aclose()` falló después al señalizar el grupo
+del proceso con `os.killpg`, convertido en `codex_cleanup_incomplete`. El log no
+conserva el errno original: no permite atribuirlo a una carrera, a permisos ni a
+infraestructura. Paquete y smoke macOS quedaron sin ejecutar. Este resultado
+posterior queda pendiente de investigar y no se presenta como CI aprobada ni
+como consecuencia del incidente local de `dasd`. No se repitió la suite en el Mac.
+
 La compilación local se detuvo por `global_storage_guard` tras 13,667 s y un pico
 de 103 165 952 bytes dentro de su volumen. Se conservaron el resultado fallido y
 una reconciliación separada del desmontaje confirmado. Se retiró únicamente su

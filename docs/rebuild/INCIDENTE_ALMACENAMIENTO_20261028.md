@@ -2,6 +2,10 @@
 
 ## Resultado observado
 
+Tras instalar macOS 27.2 y reiniciar, el consumo sostenido de CPU de `dasd` y
+el llenado acelerado no se reprodujeron en los cinco minutos de control directo.
+Las medidas y sus límites se registran al final de este informe.
+
 El llenado acelerado coincidió con un temporal SQLite `etilqs_*` abierto por
 `/usr/libexec/dasd`, PID 594, del sistema Apple. La identidad Apple del ejecutable
 se comprobó mediante su firma. No se leyeron contenidos del temporal ni de las
@@ -114,9 +118,10 @@ seguía activo. No se repitió la descarga ni se lanzó otra en paralelo.
 
 El intento de instalación con `sudo -n softwareupdate --install --no-scan`,
 etiqueta exacta y usuario propietario, terminó antes de instalar con
-`sudo: a password is required`. La autenticación e instalación/reinicio del
-dueño y las mediciones posteriores siguen pendientes. El checkpoint local
-`download-complete.json` conserva ese estado; no afirma que 27.2 esté instalada.
+`sudo: a password is required`. En ese punto quedaron pendientes la autenticación,
+la instalación/reinicio del dueño y las mediciones posteriores. El checkpoint
+local `download-complete.json` conserva ese estado histórico; por sí solo no
+afirma que 27.2 esté instalada. La comprobación posterior se registra abajo.
 No se acepta una licencia automáticamente ni se fuerza el reinicio. Las notas
 de Apple no acreditan una corrección específica de DASD/PowerLog:
 [versión publicada](https://developer.apple.com/news/releases/?id=10262026d),
@@ -126,8 +131,8 @@ La reparación manual reversible queda sin ejecutar. Requeriría parar sus
 servicios sin desactivar protecciones, confirmar ausencia de conexiones y
 conservar la familia completa antes de permitir su regeneración. SQLite
 [advierte sobre renombrar bases todavía abiertas](https://sqlite.org/howtocorrupt.html#unlinking_or_renaming_a_database_file_while_in_use).
-La actualización autorizada no se presenta como solución comprobada hasta
-observar su resultado en este Mac.
+La autorización y la descarga, por sí solas, no acreditaban una solución; el
+resultado observado tras instalar se registra por separado.
 
 Durante la descarga, Monitor de Actividad mostró menos de 1 MB de escritura
 acumulada del nuevo PID 404 y la familia PowerLog conservó sus tamaños e
@@ -137,3 +142,41 @@ intervalo también hubo escritura de servicios Apple de extracción y assets;
 sus contadores acumulados no equivalen al espacio asignado ni permiten atribuir
 toda la caída del espacio libre a una sola causa. Las mediciones parciales del
 actualizador no se presentan como inventario completo del almacenamiento.
+
+## Comprobación después de instalar macOS 27.2
+
+El dueño completó la instalación y el reinicio. `sw_vers` confirmó macOS 27.2
+(26B123); `kern.boottime` cambió al 28-10-2026 a las 13:21:26 de Ecuador
+(UTC−5). La nueva instancia de `dasd` tiene PID 599. Esto acredita una
+actualización instalada y un arranque nuevo, además de la descarga previa.
+
+Se recogieron once muestras directas, separadas aproximadamente 30 s, entre
+las 13:29:40 y las 13:34:40 de Ecuador: 300,659 s en total. El diagnóstico tenía
+un plazo de 340 s y salida limitada a 1 MiB; terminó con código 0. Sólo recogió
+CPU, espacio libre y metadatos de la familia PowerLog identificada.
+
+| Medida | Primera muestra | Última muestra | Resultado |
+| --- | ---: | ---: | --- |
+| Tiempo acumulado de CPU de `dasd` | 8,93 s | 9,40 s | +0,47 s; media del 0,16 % de un núcleo |
+| `%CPU` mostrado por `ps` | 0,0 % | 0,0 % | 0,0 % en las once muestras |
+| Espacio libre del volumen Data | 214 582 108 160 B | 214 603 034 624 B | +20 926 464 B netos; unos 199,86 GiB libres al final |
+| Tamaño lógico de DB/WAL/SHM de PowerLog | 17 239 480 B | 17 400 160 B | +160 680 B; identidades conservadas |
+
+El espacio libre osciló entre 214 148 878 336 y 214 826 065 920 B. Esa oscilación
+incluye el trabajo del resto del Mac; no se atribuye íntegramente a `dasd`.
+Monitor de Actividad, filtrado al PID 599, mostró 287 KB escritos y después
+328 KB acumulados desde su arranque. Ese contador no equivale al espacio
+asignado, pero tampoco reproduce las escrituras masivas del episodio anterior.
+
+Evidencia local en `/private/tmp/jarvis-dasd-diagnostico-20261028/`:
+
+- `post-macos-27.2-samples.jsonl`: once muestras, SHA-256
+  `a9d9b433647fdaec5f1d3f2d6d73288fb32950f3db296b8d16828f764f762e0c`.
+- `post-macos-27.2-summary.json`: resumen calculado a partir de esas muestras.
+
+Los síntomas observados dejaron de reproducirse tras la actualización durante
+este intervalo. Esto no demuestra qué cambio interno de Apple lo resolvió,
+que la base estuviera corrupta, que las pruebas fueran el desencadenante ni
+que sea imposible una recurrencia futura. La reparación manual quedó sin
+ejecutar: se conservaron las bases del sistema y los datos del dueño. No se
+ejecutaron pruebas ni compilaciones locales; su cualificación sigue en CI remota.
