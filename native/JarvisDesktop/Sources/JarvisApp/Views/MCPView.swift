@@ -85,6 +85,10 @@ struct MCPView: View {
                                 if store.mcp.oauthStates[server.id]?["flow_id"].string != nil {
                                     Button("Comprobar acceso") { Task { await store.mcp.finishOAuth(server) } }
                                 }
+                                if let url = store.mcp.oauthAuthorizationURLs[server.id] {
+                                    Link("Abrir acceso pendiente", destination: url)
+                                        .accessibilityValue(url.absoluteString)
+                                }
                                 Button("Renovar autorización…") { Task { await store.mcp.refreshOAuth(server) } }.disabled(!canManage)
                                 Button("Revocar OAuth…") { Task { await store.mcp.revokeOAuth(server) } }
                                     .disabled(!store.ready || store.mcp.isChanging)

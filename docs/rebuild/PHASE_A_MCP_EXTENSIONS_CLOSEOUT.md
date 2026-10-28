@@ -21,6 +21,13 @@ fase A global ni acredita todos los servidores o paquetes de terceros.
   explícitamente, evitando registros huérfanos.
 - Las lecturas tardías de plugins y skills revalidan agente, revisión, recurso,
   generación y runtime antes de publicar contenido o incorporarlo al borrador.
+- Retirar una conexión también cierra el renderer y la capacidad de su App MCP
+  antes del cambio. El recorrido inicial confirmó el DELETE remoto, pero dejó
+  visible el iframe antiguo: se conserva ese fallo. Los cierres inciertos
+  retienen su identidad y bloquean mutaciones hasta reconciliarse.
+- El acceso OAuth pendiente conserva su enlace validado sólo en RAM para
+  reabrir el mismo flujo sin buscar pestañas. Finalización, revocación, cambios
+  de servidor y cierre retiran el enlace; no contiene tokens de acceso.
 
 El errno del fallo histórico de CI no se conservó. La carrera de salida es
 consistente con el comportamiento de `killpg` en XNU, pero no demuestra
@@ -62,6 +69,15 @@ Se añadieron regresiones de cierre Codex, integración HTTP/OAuth/Apps/relay,
 plugins y skills, borrado de agentes y respuestas nativas tardías. Las suites
 Python, Swift, paquete y bundle se ejecutarán exclusivamente en CI remota para
 el commit exacto. Los hooks locales sólo comprueban fuentes e identidad.
+
+El primer checkpoint `f185203`, [CI 40749062796](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40749062796),
+compiló el bundle y aprobó 456 pruebas Swift (una omitida, cero fallos).
+Python macOS aprobó 3 077 y Ubuntu 3 031 con 46 omisiones. Ambos tuvieron
+únicamente la misma aserción nueva incorrecta: el constructor stdio rechaza la
+versión HTTP con `ValueError`, no `McpError`. Se corrigió la expectativa, sin
+cambiar el rechazo productivo. Paquete y smoke de ese checkpoint quedaron sin
+ejecutar. No se presenta ese run como CI aprobada; el siguiente incluye también
+las nuevas regresiones nativas de cierre y vigencia de Apps MCP.
 
 Quedan por registrar los resultados de esa CI y los recorridos finales nativos:
 OAuth PKCE/renovación/revocación, SSE, servidor público compatible, relay con

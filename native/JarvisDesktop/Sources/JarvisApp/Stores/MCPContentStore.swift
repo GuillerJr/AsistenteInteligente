@@ -5,6 +5,10 @@ import Foundation
 @MainActor extension MCPStore {
     func setContext(_ value: SessionScope?, bindingKey: String? = nil) async {
         guard value != context || (bindingKey != nil && bindingKey != contextBindingKey) else { return }
+        guard pendingContentRunID == nil else {
+            errorMessage = "Consulta o cancela la lectura MCP pendiente antes de cambiar de contexto. Su identidad se conserva."
+            return
+        }
         generation += 1; contentTask?.cancel(); contentTask = nil
         await closeApplication()
         guard !appCleanupUnconfirmed else { return }
@@ -12,28 +16,40 @@ import Foundation
         pendingContentRunID = nil; pendingContentServer = nil; pendingContentCatalog = nil
     }
     func loadCatalog(_ server: MCPServerSnapshot) async {
-        guard runtimeIsActive(), server.connected, let client else { return }
-        let version = generation
+        guard runtimeIsActive(), !isChanging, server.connected, servers.contains(server), let client else { return }
+        var version = generation
         do {
             let result = try await client.catalog(serverID: server.id)
-            guard version == generation, servers.contains(where: { $0.id == server.id && $0.connected }) else { return }
-            catalogs[server.id] = result; errorMessage = nil
+            guard runtimeIsActive(), !isChanging, version == generation, servers.contains(server) else { return }
+            if app?.serverID == server.id, appCatalogHash != result.hash {
+                generation += 1; version = generation
+                await closeApplication()
+                guard runtimeIsActive(), !isChanging, version == generation, servers.contains(server) else { return }
+            }
+            catalogs[server.id] = result; catalogSources[server.id] = server; errorMessage = nil
         } catch { if version == generation { report(error) } }
     }
     func expandTemplate(server: String, template: String, arguments: [String: RPCValue]) async -> String? {
-        guard runtimeIsActive(), let client, let catalog = catalogs[server] else { return nil }
+        guard runtimeIsActive(), !isChanging, let client, let catalog = catalogs[server],
+              contentSourceIsCurrent(server: server, catalog: catalog.hash) else { return nil }
         let version = generation
         do {
             let uri = try await client.expandTemplate(serverID: server, catalog: catalog.hash, template: template, arguments: arguments)
-            guard version == generation, catalogs[server]?.hash == catalog.hash else { return nil }
+            guard version == generation, !isChanging, catalogs[server]?.hash == catalog.hash,
+                  contentSourceIsCurrent(server: server, catalog: catalog.hash) else { return nil }
             return uri
         } catch { if version == generation { report(error) }; return nil }
     }
     func readContent(server: String, kind: String, name: String, arguments: [String: RPCValue] = [:], app: Bool = false, toolRunID: String? = nil) async {
         guard runtimeIsActive(), !blocksContextChanges, pendingContentRunID == nil, let client, let scope = context,
-              let catalog = catalogs[server] else { return }
+              let catalog = catalogs[server], contentSourceIsCurrent(server: server, catalog: catalog.hash) else { return }
         let version = generation, request = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
         isChanging = true; contentPreview = nil; errorMessage = nil
+        if app {
+            await closeApplication()
+            guard !appCleanupUnconfirmed, version == generation, context == scope,
+                  contentSourceIsCurrent(server: server, catalog: catalog.hash) else { isChanging = false; return }
+        }
         pendingContentRunID = request; pendingContentServer = server; pendingContentCatalog = catalog.hash; pendingAppOpen = app
         defer { isChanging = false }
         do {
@@ -57,6 +73,7 @@ import Foundation
     }
     func resumeContentRead() {
         guard runtimeIsActive(), let client, let scope = context, let run = pendingContentRunID else { return }
+        guard let server = pendingContentServer, let catalog = pendingContentCatalog else { return }
         let version = generation, appOpen = pendingAppOpen
         contentTask?.cancel()
         contentTask = Task { [weak self] in
@@ -68,10 +85,16 @@ import Foundation
                         let result = try await client.appDocument(scope: scope, runID: run)
                         if result["settled"].bool == true {
                             guard version == generation, context == scope else { return }
-                            if let server = pendingContentServer, let catalog = pendingContentCatalog, result["app"].object != nil {
+                            if result["app"].object != nil {
                                 let document = try MCPAppDocument(result["app"], expectedServer: server, expectedCatalog: catalog)
+                                if !contentSourceIsCurrent(server: server, catalog: catalog) {
+                                    app = document; appCatalogHash = catalog; appSource = catalogSources[server]
+                                    await closeApplication()
+                                    errorMessage = "La fuente MCP cambió. Se retiró la App recibida; su solicitud no se volverá a ejecutar."
+                                } else {
+                                    await presentApplication(document, catalog: catalog, input: result["app"].object?["tool_input"], output: result["app"].object?["tool_result"])
+                                }
                                 pendingContentRunID = nil
-                                await presentApplication(document, input: result["app"].object?["tool_input"], output: result["app"].object?["tool_result"])
                             } else { pendingContentRunID = nil; errorMessage = "La lectura terminó sin una App MCP disponible." }
                             return
                         }
@@ -79,7 +102,13 @@ import Foundation
                         let result = try await client.contentResult(scope: scope, runID: run)
                         if result.settled {
                             guard version == generation, context == scope else { return }
-                            contentPreview = result; pendingContentRunID = nil
+                            pendingContentRunID = nil
+                            guard contentSourceIsCurrent(server: server, catalog: catalog) else {
+                                contentPreview = nil
+                                errorMessage = "La fuente MCP cambió. El recibo conserva la solicitud, pero su contenido anterior no se mostrará ni reenviará."
+                                return
+                            }
+                            contentPreview = result
                             if result.errorCode == "approval_denied" {
                                 errorMessage = "Operación rechazada. No se consultó la fuente MCP."
                             } else if result.errorCode != nil {
@@ -95,10 +124,10 @@ import Foundation
             catch { if version == generation { report(error) } }
         }
     }
-    private func presentApplication(_ document: MCPAppDocument, input: RPCValue?, output: RPCValue?) async {
-        guard let scope = context, let client, runtimeIsActive() else { return }
+    private func presentApplication(_ document: MCPAppDocument, catalog: String, input: RPCValue?, output: RPCValue?) async {
+        guard let scope = context, client != nil, runtimeIsActive() else { return }
         await closeApplication()
-        guard !appCleanupUnconfirmed else { try? await client.closeApp(id: document.id); return }
+        guard !appCleanupUnconfirmed else { await discardApplication(document, catalog: catalog); return }
         let version = generation
         let origins = document.policy.connectDomains + document.policy.resourceDomains
         guard OwnerManagementReview.confirm(title: "Abrir App MCP externa", action: "Abrir este contenido",
@@ -106,35 +135,45 @@ import Foundation
                 + (origins.isEmpty ? "Sin conexiones de red declaradas." : "Orígenes de red declarados:\n" + origins.joined(separator: "\n"))
                 + "\n\nEl contenido es externo y no está verificado. No recibe cookies ni credenciales del proveedor. Las herramientas se aprueban mediante la autoridad habitual.",
             isCurrent: { self.runtimeIsActive() && self.generation == version && self.context == scope }) else {
-            try? await client.closeApp(id: document.id); return
+            await discardApplication(document, catalog: catalog); return
         }
-        app = document; appError = nil
+        guard contentSourceIsCurrent(server: document.serverID, catalog: catalog) else {
+            app = document; appCatalogHash = catalog; appSource = catalogSources[document.serverID]
+            await closeApplication(); return
+        }
+        app = document; appCatalogHash = catalog; appSource = catalogSources[document.serverID]; appError = nil
         let renderer = MCPAppRenderer(document: document, toolInput: input, toolResult: output,
-            isCurrent: { [weak self] in self?.runtimeIsActive() == true && self?.appSurfaceVisible == true && self?.generation == version && self?.context == scope && self?.app?.id == document.id },
+            isCurrent: { [weak self] in self?.runtimeIsActive() == true && self?.appSurfaceVisible == true && self?.generation == version && self?.context == scope && self?.app?.id == document.id && self?.contentSourceIsCurrent(server: document.serverID, catalog: catalog) == true },
             request: { [weak self] message in
                 guard let self, runtimeIsActive(), generation == version, context == scope, app?.id == document.id else { throw MCPAppFailure.closed }
                 return try await requestApplication(message, document: document, scope: scope, version: version)
             })
         renderer.onError = { [weak self] text in if self?.generation == version { self?.appError = text } }
+        // Own the renderer while its proxy is starting, so retiring the source
+        // can close that proxy immediately instead of waiting for start().
+        appRenderer = renderer
         do {
             try await renderer.start()
             guard version == generation, context == scope, app?.id == document.id else { await renderer.close(); return }
-            appRenderer = renderer
         }
         catch {
             await renderer.close()
+            guard version == generation, context == scope, app?.id == document.id else { return }
             errorMessage = "La App MCP no pudo abrirse de forma aislada. No se intentará cargar de nuevo automáticamente."
             await closeApplication()
         }
     }
     private func requestApplication(_ message: RPCValue, document: MCPAppDocument, scope: SessionScope, version: Int) async throws -> RPCValue {
-        guard !appRequestPending, let client else { throw MCPAppFailure.busy }
+        guard !isChanging, !appRequestPending, let client else { throw MCPAppFailure.busy }
+        let token = UUID()
+        appRequestToken = token
         appRequestPending = true
-        defer { appRequestPending = false }
+        defer { if appRequestToken == token { appRequestToken = nil; appRequestPending = false } }
         let response: RPCValue
         do { response = try await client.appRequest(id: document.id, message: message) }
         catch {
-            if !RunPresentation.startWasRejected(error) {
+            if version == generation, context == scope, app?.id == document.id,
+               !RunPresentation.startWasRejected(error) {
                 appCleanupUnconfirmed = true
                 appError = "La solicitud no quedó confirmada. Cierra esta App para reconciliar sus operaciones antes de continuar."
             }
@@ -156,16 +195,55 @@ import Foundation
         throw RPCFailure.disconnected
     }
     func closeApplication() async {
-        guard let current = app else { return }
+        guard !appCloseInProgress, app != nil || !pendingAppCloseIDs.isEmpty else { return }
+        appCloseInProgress = true
+        defer { appCloseInProgress = false }
+        let current = app
+        if let current { pendingAppCloseIDs.insert(current.id) }
+        let closingIDs = pendingAppCloseIDs
         // Stop accepting JS before awaiting the backend capability revocation.
+        let renderer = appRenderer, catalog = appCatalogHash, source = appSource
         app = nil
-        await appRenderer?.close(); appRenderer = nil
+        appRenderer = nil; appCatalogHash = nil; appSource = nil
         appCleanupUnconfirmed = true
-        do {
-            guard let client else { throw RPCFailure.unavailable }
-            try await client.closeApp(id: current.id); appCleanupUnconfirmed = false
+        await renderer?.close()
+        for identity in closingIDs {
+            do {
+                guard let client else { throw RPCFailure.unavailable }
+                try await client.closeApp(id: identity)
+                pendingAppCloseIDs.remove(identity)
+            } catch { /* Retain the exact capability identity for explicit reconciliation. */ }
         }
-        catch { appError = "No se confirmó el cierre de la App MCP. Reintenta el cierre antes de cambiar de contexto."; app = current }
+        if pendingAppCloseIDs.isEmpty {
+            appCleanupUnconfirmed = false; appRequestToken = nil; appRequestPending = false; appError = nil
+        } else {
+            appError = "No se confirmó el cierre de la App MCP. Reintenta el cierre antes de cambiar de contexto."
+            app = current; appCatalogHash = catalog; appSource = source
+        }
+    }
+    private func discardApplication(_ document: MCPAppDocument, catalog: String) async {
+        pendingAppCloseIDs.insert(document.id)
+        if app == nil { app = document; appCatalogHash = catalog; appSource = catalogSources[document.serverID] }
+        await closeApplication()
+    }
+    func contentSourceIsCurrent(server: String, catalog: String) -> Bool {
+        runtimeIsActive() && catalogs[server]?.hash == catalog
+            && servers.contains(where: { $0.id == server && $0.connected && $0 == catalogSources[server] })
+    }
+    func prepareServerChange(serverID: String) async -> Bool {
+        guard pendingContentRunID == nil else {
+            errorMessage = "Consulta o cancela la lectura MCP pendiente antes de cambiar el servidor. No se cancelará ni reenviará por ti."
+            return false
+        }
+        generation += 1; contentTask?.cancel(); contentTask = nil
+        catalogs = [:]; catalogSources = [:]; contentPreview = nil
+        oauthAuthorizationURLs.removeValue(forKey: serverID)
+        await closeApplication()
+        guard !appCleanupUnconfirmed else {
+            errorMessage = "El cierre de la App MCP sigue sin confirmar. Completa ese cierre antes de cambiar servidores."
+            return false
+        }
+        return runtimeIsActive()
     }
     func discoverOAuth(_ server: MCPServerSnapshot, issuer: String? = nil) async -> MCPOAuthDiscovery? {
         guard runtimeIsActive(), !isChanging, let client, servers.contains(server) else { return nil }
@@ -204,9 +282,11 @@ import Foundation
                   let raw = flow["authorization_url"].string, let url = URL(string: raw),
                   ["https", "http"].contains(url.scheme ?? ""), url.user == nil, url.password == nil,
                   url.scheme == "https" || (server.configuration.allowLoopback && ["127.0.0.1", "::1", "[::1]"].contains(url.host ?? "")) else { throw RPCFailure.invalidResponse }
-            guard NSWorkspace.shared.open(url) else { throw RPCFailure.unavailable }
-            // Only a public flow ID is retained by this native store.
+            // The public flow ID and validated URL exist only in RAM. Reopening
+            // this URL resumes the same flow instead of issuing another grant.
             oauthStates[server.id] = .object(["flow_id": .string(id), "status": .string("authorization_pending")])
+            oauthAuthorizationURLs[server.id] = url
+            guard NSWorkspace.shared.open(url) else { throw RPCFailure.unavailable }
             return true
         } catch { if version == generation { report(error) }; return false }
     }
@@ -220,6 +300,7 @@ import Foundation
             guard version == generation, servers.contains(server), let status = result["status"].string,
                   ["connected", "authorization_pending", "failed"].contains(status) else { throw RPCFailure.invalidResponse }
             oauthStates[server.id] = .object(["flow_id": .string(flow), "status": .string(status)])
+            if status != "authorization_pending" { oauthAuthorizationURLs.removeValue(forKey: server.id) }
         } catch { report(error) }
     }
     func revokeOAuth(_ server: MCPServerSnapshot) async {
@@ -235,6 +316,7 @@ import Foundation
             let result = try await client.oauth("revoke", serverID: server.id)
             guard version == generation, servers.contains(server), result["revoked"].bool == true else { throw RPCFailure.invalidResponse }
             oauthStates.removeValue(forKey: server.id)
+            oauthAuthorizationURLs.removeValue(forKey: server.id)
         } catch { report(error) }
     }
     func refreshOAuth(_ server: MCPServerSnapshot) async {
@@ -271,6 +353,9 @@ import Foundation
             errorMessage = "El cierre de la App MCP sigue sin confirmar. No se modificó OAuth; completa ese cierre antes de continuar."
             return false
         }
+        oauthAuthorizationURLs.removeValue(forKey: server.id)
+        catalogs.removeValue(forKey: server.id); catalogSources.removeValue(forKey: server.id)
+        if pendingContentServer == server.id { contentPreview = nil }
         return runtimeIsActive() && generation == expected && servers.contains(server) && oauthHasNoPendingContent()
     }
 }

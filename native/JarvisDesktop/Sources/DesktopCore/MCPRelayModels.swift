@@ -42,21 +42,21 @@ public struct MCPRelayReview: Equatable, Sendable {
 }
 public extension MCPManagementClient {
     func relayStatus() async throws -> MCPRelaySnapshot {
-        let result = try await transport.call("mcp.relay.status")
+        let result = try await call("mcp.relay.status")
         return try MCPRelaySnapshot(result["relay"])
     }
     func reviewRelay(scope: SessionScope, action: String, exports: [String]) async throws -> MCPRelayReview {
         guard ["start", "stop", "revoke"].contains(action), exports.count <= 128 else { throw RPCFailure.configuration }
         var params = scope.params
         params.merge(["action": .string(action), "exports": .array(exports.map(RPCValue.string)), "port": .number(0)]) { _, new in new }
-        let result = try await transport.call("mcp.relay.review", params: params)
+        let result = try await call("mcp.relay.review", params: params)
         return try MCPRelayReview(result["review"])
     }
     func decideRelay(_ review: MCPRelayReview, allow: Bool) async throws -> RPCValue {
-        try await transport.call("mcp.relay.decide", params: ["review_id": .string(review.id), "digest": .string(review.digest), "allow": .bool(allow)])
+        try await call("mcp.relay.decide", params: ["review_id": .string(review.id), "digest": .string(review.digest), "allow": .bool(allow)])
     }
     func relayToken() async throws -> String {
-        let result = try await transport.call("mcp.relay.token")
+        let result = try await call("mcp.relay.token")
         guard let token = result["token"].string, (32...256).contains(token.utf8.count),
               token.unicodeScalars.allSatisfy({ CharacterSet.alphanumerics.contains($0) || "_-".unicodeScalars.contains($0) }) else { throw RPCFailure.invalidResponse }
         return token

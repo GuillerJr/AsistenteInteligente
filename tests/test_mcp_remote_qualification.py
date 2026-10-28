@@ -346,7 +346,8 @@ def test_june_2025_is_not_silently_admitted_on_other_transports(tmp_path, transp
             transport=transport,
             endpoint=None if transport == "stdio" else "https://example.com/mcp",
         )
-    with pytest.raises(McpError, match="unsupported_mcp_version"):
+    configuration_error = ValueError if transport == "stdio" else McpError
+    with pytest.raises(configuration_error, match="unsupported_mcp_version"):
         if transport == "stdio":
             McpClient(command, tmp_path.resolve() / "client", protocol_version=HTTP_COMPAT_VERSION)
         else:

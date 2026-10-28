@@ -21,23 +21,41 @@ final class MCPStore {
     var appCleanupUnconfirmed = false
     var appSurfaceVisible = false
     var oauthStates: [String: RPCValue] = [:]
+    // Validated authorization URLs are ephemeral UI state, never preferences,
+    // provider context, diagnostic output or durable receipts.
+    var oauthAuthorizationURLs: [String: URL] = [:]
     var relay: MCPRelaySnapshot?
     var context: SessionScope?
     @ObservationIgnored var contextBindingKey: String?
-    var blocksContextChanges: Bool { isChanging || appRequestPending || appCleanupUnconfirmed }
+    var blocksContextChanges: Bool { isChanging || appRequestPending || appCleanupUnconfirmed || pendingContentRunID != nil }
     @ObservationIgnored var onRunStarted: (@MainActor (String, SessionScope) -> Void)?
     @ObservationIgnored var contentTask: Task<Void, Never>?
     @ObservationIgnored var pendingAppOpen = false
     @ObservationIgnored var pendingContentServer: String?
     @ObservationIgnored var pendingContentCatalog: String?
+    @ObservationIgnored var appCatalogHash: String?
+    @ObservationIgnored var catalogSources: [String: MCPServerSnapshot] = [:]
+    @ObservationIgnored var appSource: MCPServerSnapshot?
+    @ObservationIgnored var appRequestToken: UUID?
+    @ObservationIgnored var pendingAppCloseIDs: Set<String> = []
+    @ObservationIgnored var appCloseInProgress = false
 
     @ObservationIgnored var runtimeIsActive: @Sendable () -> Bool = { false }
     @ObservationIgnored var generation = 0
     @ObservationIgnored var client: MCPManagementClient?
 
-    func configure(client: LocalRPCClient) { self.client = MCPManagementClient(transport: client); runtimeIsActive = { client.isActive } }
+    func configure(client: LocalRPCClient) { configure(MCPManagementClient(transport: client), runtimeIsActive: { client.isActive }) }
+    func configure(_ client: MCPManagementClient, runtimeIsActive: @escaping @Sendable () -> Bool) {
+        guard app == nil, appRenderer == nil, !appCleanupUnconfirmed, pendingAppCloseIDs.isEmpty else {
+            errorMessage = "Completa el cierre de la App MCP antes de cambiar su conexión."
+            return
+        }
+        generation += 1; oauthAuthorizationURLs = [:]; oauthStates = [:]
+        self.client = client; self.runtimeIsActive = runtimeIsActive
+    }
     func close() async {
         generation += 1; contentTask?.cancel(); contentTask = nil
+        oauthAuthorizationURLs = [:]; oauthStates = [:]
         await closeApplication()
         context = nil
         pendingContentRunID = nil; pendingContentServer = nil; pendingContentCatalog = nil
@@ -49,9 +67,26 @@ final class MCPStore {
         guard let client else { throw RPCFailure.unavailable }
         isLoading = true
         defer { isLoading = false }
-        let version = generation
+        var version = generation
         let catalog = try await client.list()
         guard version == generation else { return }
+        oauthAuthorizationURLs = oauthAuthorizationURLs.filter { id, _ in
+            catalog.servers.contains(where: { $0.id == id && $0.configuration == servers.first(where: { $0.id == id })?.configuration })
+        }
+        // Retire the actual renderer/proxy before publishing a disconnected or
+        // replaced source, rather than merely making its bridge fail closed.
+        if app != nil, !catalog.servers.contains(where: { $0.connected && $0 == appSource }) {
+            generation += 1; version = generation
+            await closeApplication()
+            guard version == generation, runtimeIsActive() else { return }
+        }
+        catalogs = catalogs.filter { id, _ in
+            catalog.servers.contains(where: { $0.id == id && $0.connected && $0 == catalogSources[id] })
+        }
+        catalogSources = catalogSources.filter { catalogs[$0.key] != nil }
+        if contentPreview != nil, pendingContentServer.flatMap({ catalogs[$0]?.hash }) != pendingContentCatalog {
+            contentPreview = nil
+        }
         servers = catalog.servers
         supportedProtocols = catalog.supportedProtocols
         didLoad = true
@@ -68,9 +103,9 @@ final class MCPStore {
             errorMessage = MCPConfigurationError.protocolVersion.localizedDescription
             return false
         }
-        generation += 1
         isChanging = true
         errorMessage = nil
+        guard await prepareServerChange(serverID: configuration.serverID) else { isChanging = false; return false }
         var succeeded = false
         do { try await client.add(configuration); succeeded = true }
         catch { report(error) }
@@ -81,9 +116,9 @@ final class MCPStore {
 
     func connect(_ server: MCPServerSnapshot) async {
         guard runtimeIsActive(), !isChanging, !server.connected, servers.contains(server), let client else { return }
-        generation += 1
         isChanging = true
         defer { isChanging = false }
+        guard await prepareServerChange(serverID: server.id) else { return }
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Conectar el servidor MCP «\(server.id)»"
@@ -109,9 +144,9 @@ final class MCPStore {
 
     func disconnect(_ server: MCPServerSnapshot) async {
         guard runtimeIsActive(), !isChanging, server.connected, servers.contains(server), let client else { return }
-        generation += 1
         isChanging = true
         errorMessage = nil
+        guard await prepareServerChange(serverID: server.id) else { isChanging = false; return }
         do { try await client.disconnect(server.id) }
         catch { report(error) }
         isChanging = false
@@ -120,9 +155,9 @@ final class MCPStore {
 
     func remove(_ server: MCPServerSnapshot) async {
         guard runtimeIsActive(), !isChanging, servers.contains(server), let client else { return }
-        generation += 1
         isChanging = true
         defer { isChanging = false }
+        guard await prepareServerChange(serverID: server.id) else { return }
         let alert = NSAlert()
         alert.messageText = "Quitar el servidor «\(server.id)»"
         alert.informativeText = "Se cerrará su conexión y se eliminará su configuración de Jarvis. No se borrará el programa."
