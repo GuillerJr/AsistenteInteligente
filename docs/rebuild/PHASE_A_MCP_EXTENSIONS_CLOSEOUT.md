@@ -89,3 +89,37 @@ Fuentes primarias: [transporte MCP 2025-06-18](https://modelcontextprotocol.io/s
 [ciclo de conexión](https://modelcontextprotocol.io/specification/2025-06-18/basic/lifecycle),
 [servidor Microsoft Learn](https://learn.microsoft.com/en-us/training/support/mcp-developer-reference)
 y [XNU, señales de procesos](https://raw.githubusercontent.com/apple-oss-distributions/xnu/main/bsd/kern/kern_sig.c).
+
+## Segundo checkpoint remoto y fallos encontrados en la app
+
+La [CI 40751158208](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40751158208)
+para `1578f9ec77ed429cf9ab10f7c1f0130253706465` aprobó 3078 casos Python en
+macOS y 3032 en Ubuntu (46 omisiones de plataforma). Swift aprobó 465 casos,
+con una omisión declarada. También pasaron bundle, wheel/sdist y smoke aislado.
+No se ejecutaron esas suites ni compilaciones en el Mac del dueño.
+
+Con ese bundle, en un perfil sintético nuevo y acceso oficial completado por el
+dueño, se comprobaron OAuth PKCE, renovación y revocación. El enlace pendiente
+se retiró al finalizar; renovar no volvió a conectar automáticamente el MCP.
+Una denegación se mostró como conocida sin despachar la lectura, y desconectar
+retiró realmente el iframe de la App MCP. El plugin propio se instaló y habilitó,
+se actualizó a v2 deshabilitado y volvió a v1 deshabilitado. Los recursos de cada
+versión coincidieron con sus hashes y el hook sólo preparó texto en el borrador.
+El descriptor MCP del paquete se guardó sin conectar.
+
+El recorrido conserva además tres defectos nuevos, sin convertirlos en éxitos:
+
+- Microsoft Learn usa tres cabeceras `Set-Cookie`. El cliente rechazaba toda
+  cabecera repetida. Se prepara descartarlas sin retenerlas ni devolver cookies;
+  las cabeceras de encuadre, sesión y autorización siguen sin admitir duplicados.
+- Una llamada desde Codex ejecutó exactamente un eco remoto, con recibo y texto
+  completos en Jarvis, pero el modelo dijo no tener el texto en su contexto. Se
+  añade diagnóstico de envío/acuse por hashes, bytes y códigos saneados. No
+  registra texto ni credenciales; un acuse no demuestra consumo por el modelo.
+  Un envío incierto tampoco puede generar una segunda respuesta contradictoria.
+- «Importar con recursos» conservó sólo el manifiesto de la skill. La revisión
+  estaba formada por estados separados y podía perder el modo elegido al abrir
+  la hoja. Se prepara una revisión atómica, sin degradar la importación a texto.
+
+Estos arreglos necesitan su propia CI y repetición con el bundle nuevo. La
+cualificación del checkpoint anterior no se traslada al árbol modificado.

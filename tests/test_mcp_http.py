@@ -15,7 +15,14 @@ from jarvis_core.mcp import (
     McpCancelled,
     McpError,
 )
-from jarvis_core.mcp_http import McpHttpClient, McpHTTPError, McpHTTPNetwork, header_value
+from jarvis_core.mcp_http import (
+    McpHttpClient,
+    McpHTTPError,
+    McpHTTPNetwork,
+    header_value,
+    read_headers,
+)
+from jarvis_core.web import WebError
 
 
 class HTTPFixture:
@@ -112,6 +119,128 @@ def catalog():
             },
         }
     ]
+
+
+async def parse_response_headers(lines):
+    reader = asyncio.StreamReader()
+    reader.feed_data(b"HTTP/1.1 200 OK\r\n" + b"\r\n".join(lines) + b"\r\n\r\n")
+    reader.feed_eof()
+    return await read_headers(reader)
+
+
+async def test_repeated_set_cookie_is_validated_then_discarded_instead_of_folded():
+    status, headers = await parse_response_headers(
+        [
+            b"Content-Type: application/json",
+            b"Set-Cookie: synthetic_a=ONE; Expires=Wed, 28 Oct 2026 19:00:00 GMT; Secure",
+            b"set-cookie: synthetic_b=TWO; HttpOnly",
+            b"SET-COOKIE: synthetic_c=THREE; SameSite=Strict",
+            b"MCP-Session-Id: reviewed-session",
+            b"Content-Length: 2",
+        ]
+    )
+    assert status == 200
+    assert headers == {
+        "content-type": "application/json",
+        "mcp-session-id": "reviewed-session",
+        "content-length": "2",
+    }
+    assert "synthetic_" not in repr(headers)
+
+
+@pytest.mark.parametrize(
+    "name,first,second",
+    [
+        ("Content-Length", "2", "2"),
+        ("Content-Length", "2", "3"),
+        ("Transfer-Encoding", "chunked", "chunked"),
+        ("Content-Type", "application/json", "text/event-stream"),
+        ("Content-Encoding", "identity", "gzip"),
+        ("Mcp-Session-Id", "one", "two"),
+        ("MCP-Protocol-Version", "2025-06-18", "2026-07-28"),
+        ("Location", "https://example.com/a", "https://example.com/b"),
+        ("WWW-Authenticate", 'Bearer realm="one"', 'Bearer realm="two"'),
+    ],
+)
+async def test_cookie_compatibility_preserves_other_header_rejection_rules(name, first, second):
+    with pytest.raises(McpHTTPError, match="http_duplicate_header"):
+        await parse_response_headers(
+            [
+                b"Set-Cookie: ignored=synthetic",
+                (name + ": " + first).encode(),
+                (name.lower() + ": " + second).encode(),
+            ]
+        )
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        b"Set-Cookie : ignored=synthetic",
+        b"\tSet-Cookie: ignored=synthetic",
+        b"Set-Cookie: ignored=synthetic\x00",
+    ],
+)
+async def test_ignored_cookie_does_not_bypass_header_syntax_validation(line):
+    with pytest.raises(WebError, match="web_headers_invalid"):
+        await parse_response_headers([line])
+
+
+async def test_discarded_cookie_lines_still_count_towards_header_limits_and_framing():
+    with pytest.raises(McpHTTPError, match="http_response_invalid"):
+        await parse_response_headers([b"Set-Cookie: ignored=synthetic"] * 101)
+    with pytest.raises(McpHTTPError, match="http_header_limit"):
+        await parse_response_headers([b"Set-Cookie: ignored=" + b"x" * 32768])
+    with pytest.raises(McpHTTPError, match="http_response_invalid"):
+        await parse_response_headers(
+            [
+                b"Set-Cookie: ignored=synthetic",
+                b"Content-Length: 2",
+                b"Transfer-Encoding: chunked",
+            ]
+        )
+
+
+async def test_three_response_cookies_are_not_reused_by_mcp_transport(tmp_path):
+    async def handler(request, _reader, writer):
+        assert "cookie" not in request["headers"]
+        message = json.loads(request["body"])
+        if message["method"] == "notifications/initialized":
+            return 202, {}, b""
+        result = (
+            {
+                "protocolVersion": HTTP_COMPAT_VERSION,
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": "independent-cookie-peer", "version": "1"},
+            }
+            if message["method"] == "initialize"
+            else {"tools": catalog()}
+        )
+        payload = json.dumps(reply(message, result)).encode()
+        writer.write(
+            b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+            b"Set-Cookie: own_a=ONE; HttpOnly\r\nset-cookie: own_b=TWO; Secure\r\n"
+            b"SET-COOKIE: own_c=THREE; Expires=Wed, 28 Oct 2026 19:00:00 GMT\r\n"
+            + f"Content-Length: {len(payload)}\r\nConnection: close\r\n\r\n".encode()
+            + payload
+        )
+        await writer.drain()
+        return None
+
+    async with HTTPFixture(handler) as remote:
+        client = McpHttpClient(
+            remote.base + "/mcp",
+            tmp_path.resolve() / "cookie-free-client",
+            protocol_version=HTTP_COMPAT_VERSION,
+            test_origins=(remote.base,),
+        )
+        try:
+            await client.start()
+            assert len(await client.list_tools()) == 1
+            assert len(remote.requests) == 3
+            assert all("cookie" not in request["headers"] for request in remote.requests)
+        finally:
+            assert (await client.aclose())["local_cleanup_confirmed"]
 
 
 @pytest.mark.parametrize("protocol", [HTTP_COMPAT_VERSION, LEGACY_VERSION, MODERN_VERSION])
@@ -229,8 +358,10 @@ async def test_2025_get_stream_session_delete_and_remote_unknown_do_not_replay(
 
     async with HTTPFixture(handler) as fixture:
         client = McpHttpClient(
-            fixture.base + "/mcp", tmp_path.resolve() / "client", protocol_version=protocol,
-            test_origins=(fixture.base,)
+            fixture.base + "/mcp",
+            tmp_path.resolve() / "client",
+            protocol_version=protocol,
+            test_origins=(fixture.base,),
         )
         await client.start()
         first = await client.aclose()

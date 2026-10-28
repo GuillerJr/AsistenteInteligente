@@ -138,6 +138,26 @@ def test_update_rollback_retire_and_restart_keep_exact_resource_versions(context
                                expected_sha256=restored.sha256)["content_base64"]
 
 
+def test_enabled_library_read_keeps_imported_resource_after_source_changes_and_restart(context):
+    store, source = context
+    imported = install(store, source, library=True)
+    original = "RECURSO SINTÉTICO".encode()
+    (source / "references/data.txt").write_bytes(b"DISTINTO DEL SNAPSHOT")
+    current = imported
+    for enabled in (True, False):
+        current = store.set_enabled("jarvis", current.skill_id, enabled,
+            expected_revision=current.revision, expected_sha256=current.sha256)
+        store = SkillsStore(store.document.directory)
+        resource = store.resource("jarvis", current.skill_id, "references/data.txt",
+            expected_revision=current.revision, expected_sha256=current.sha256)
+        assert base64.b64decode(resource["content_base64"]) == original
+        assert resource["bytes"] == len(original)
+        assert resource["sha256"] == hashlib.sha256(original).hexdigest()
+    with pytest.raises(SkillError, match="skill_revision_conflict"):
+        store.resource("jarvis", imported.skill_id, "references/data.txt",
+            expected_revision=imported.revision, expected_sha256=imported.sha256)
+
+
 def test_final_publication_guard_and_stale_revision_preserve_original(context):
     store, source = context
     row = install(store, source)

@@ -145,6 +145,12 @@ async def read_headers(reader):
         fields = {}
         for line in lines[1:]:
             key, value = _field(line)
+            if key == "set-cookie":
+                # RFC 9110 5.3: Set-Cookie is repeatable but cannot be folded.
+                # This MCP client has no cookie state (RFC 6265 5.2 permits
+                # ignoring cookies). Validate the line, then discard every
+                # value; never expose, retain or replay it as a credential.
+                continue
             if key in fields:
                 raise McpHTTPError("http_duplicate_header")
             fields[key] = value

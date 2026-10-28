@@ -26,6 +26,7 @@ struct MCPView: View {
                 HStack {
                     Button("Configurar servidor…") { showConfiguration = true }
                         .disabled(!canManage || store.mcp.supportedProtocols.isEmpty)
+                        .accessibilityIdentifier("jarvis.mcp.configure")
                     Button("Actualizar") { Task { await store.mcp.refreshFromUI() } }
                         .disabled(!store.ready || store.mcp.isChanging || store.mcp.isLoading)
                 }
@@ -82,16 +83,20 @@ struct MCPView: View {
                         if server.configuration.transport != .stdio {
                             HStack {
                                 Button("Autorizar OAuth…") { oauthServer = server }.disabled(!canManage)
+                                    .accessibilityIdentifier("jarvis.mcp.\(server.id).oauth.authorize")
                                 if store.mcp.oauthStates[server.id]?["flow_id"].string != nil {
                                     Button("Comprobar acceso") { Task { await store.mcp.finishOAuth(server) } }
+                                        .accessibilityIdentifier("jarvis.mcp.\(server.id).oauth.finish")
                                 }
                                 if let url = store.mcp.oauthAuthorizationURLs[server.id] {
                                     Link("Abrir acceso pendiente", destination: url)
                                         .accessibilityValue(url.absoluteString)
                                 }
                                 Button("Renovar autorización…") { Task { await store.mcp.refreshOAuth(server) } }.disabled(!canManage)
+                                    .accessibilityIdentifier("jarvis.mcp.\(server.id).oauth.refresh")
                                 Button("Revocar OAuth…") { Task { await store.mcp.revokeOAuth(server) } }
                                     .disabled(!store.ready || store.mcp.isChanging)
+                                    .accessibilityIdentifier("jarvis.mcp.\(server.id).oauth.revoke")
                             }
                             if let state = store.mcp.oauthStates[server.id]?["status"].string {
                                 Text(state == "connected" ? "Autorización conectada" : state == "failed" ? "El acceso no se completó" : "Esperando el acceso en el navegador")
@@ -100,6 +105,7 @@ struct MCPView: View {
                         }
                         if server.connected {
                             Button("Consultar catálogo de recursos y prompts") { Task { await store.mcp.loadCatalog(server) } }
+                                .accessibilityIdentifier("jarvis.mcp.\(server.id).catalog")
                             if let catalog = store.mcp.catalogs[server.id] {
                                 MCPContentCatalogView(catalog: catalog, store: store.mcp, prompt: $selectedPrompt,
                                     template: $selectedTemplate,
@@ -115,7 +121,7 @@ struct MCPView: View {
                                     .font(.system(.caption2, design: .monospaced)).textSelection(.enabled)
                             }
                         }
-                        if let error = server.errorCode {
+                        if let error = server.errorCode, error != "mcp_disconnected" {
                             Text(MCPPresentation.serverError(error)).font(.callout).foregroundStyle(.red)
                         }
                         HStack {
@@ -123,14 +129,17 @@ struct MCPView: View {
                                 Button("Desconectar") {
                                     Task { await store.mcp.disconnect(server); try? await store.access.refreshCatalog() }
                                 }
+                                .accessibilityIdentifier("jarvis.mcp.\(server.id).disconnect")
                             } else {
                                 Button("Conectar…") {
                                     Task { await store.mcp.connect(server); try? await store.access.refreshCatalog() }
                                 }
+                                .accessibilityIdentifier("jarvis.mcp.\(server.id).connect")
                             }
                             Button("Quitar…", role: .destructive) {
                                 Task { await store.mcp.remove(server); try? await store.access.refreshCatalog() }
                             }
+                            .accessibilityIdentifier("jarvis.mcp.\(server.id).remove")
                         }.disabled(!canManage)
                     }.padding(14).background(.quaternary, in: .rect(cornerRadius: 10))
                 }

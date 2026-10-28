@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import errno
+import hashlib
 import json
 import logging
 import math
@@ -66,6 +67,15 @@ class _InferenceBudget:
 
 
 @dataclass
+class _ToolReply:
+    metadata: dict
+    write_attempted: bool = False
+    write_confirmed: bool | None = None
+    acknowledged: bool = False
+    early_ack: dict | None = None
+
+
+@dataclass
 class _ToolTurn:
     names: frozenset[str]
     callback: Callable[[str, dict], Awaitable[dict]]
@@ -76,6 +86,9 @@ class _ToolTurn:
     context: Context = field(default_factory=copy_context, repr=False)
     seen: set[str] = field(default_factory=set)
     tasks: set[asyncio.Task] = field(default_factory=set)
+    on_event: Callable[[str, dict], None] | None = None
+    replies: dict[str, _ToolReply] = field(default_factory=dict)
+    diagnostic_count: int = 0
 
 
 class CodexClient:
@@ -172,7 +185,8 @@ class CodexClient:
                 await self._stop_process_locked()
                 raise
 
-    async def _write(self, message: dict, *, cleanup_reply: bool = False) -> None:
+    async def _write(self, message: dict, *, cleanup_reply: bool = False,
+                     on_dispatch: Callable[[], None] | None = None) -> None:
         data = json.dumps(message, allow_nan=False, separators=(",", ":")).encode() + b"\n"
         if len(data) > 1024 * 1024:
             raise CodexError("codex_frame_too_large")
@@ -186,6 +200,8 @@ class CodexClient:
                 self.before_io("cleanup.reply" if cleanup_reply
                                else message.get("method", "reply"))
             try:
+                if on_dispatch is not None:
+                    on_dispatch()
                 process.stdin.write(data)
                 await asyncio.wait_for(process.stdin.drain(), self.timeout)
             except (OSError, TimeoutError) as error:
@@ -276,6 +292,7 @@ class CodexClient:
         return True
 
     async def _serve_tool_request(self, identity: int | str, params: dict, turn: _ToolTurn) -> None:
+        accepted = False
         try:
             await asyncio.wait_for(turn.ready.wait(), self.timeout)
             name, call_id = params.get("tool"), params.get("callId")
@@ -291,6 +308,7 @@ class CodexClient:
             ):
                 raise CodexError("codex_tool_request_invalid")
             turn.seen.add(call_id)
+            accepted = True
             assert turn.budget is not None
             turn.budget.pause()
             try:
@@ -309,31 +327,211 @@ class CodexClient:
                 or not isinstance(result.get("contentItems"), list)
             ):
                 raise CodexError("codex_tool_result_invalid")
-            await self._write({"id": identity, "result": result})
-        except BaseException:
-            try:
-                await self._write(
-                    {
-                        "id": identity,
-                        "result": {
-                            "success": False,
-                            "contentItems": [
-                                {
-                                    "type": "inputText",
-                                    "text": (
-                                        "No se pudo confirmar el resultado. "
-                                        "No repitas la operación "
-                                        "automáticamente; espera un recibo confirmado de Jarvis."
-                                    ),
-                                }
-                            ],
-                        },
-                    }, cleanup_reply=True,
-                )
-            except (CodexError, OSError, ValueError):
-                pass
+            await self._write_tool_reply(identity, params, turn, result)
+        except BaseException as error:
+            # Once a reply may have reached app-server, a failed drain or task
+            # cancellation must not send a contradictory second response.
+            original = turn.replies.get(params.get("callId")) if accepted else None
+            if original is None or not original.write_attempted:
+                failure_metadata = self._tool_failure_metadata(error)
+                if accepted and original is None:
+                    self._tool_diagnostic(turn, "tool.reply.failure", {
+                        **self._tool_request_metadata(params), **failure_metadata,
+                        "reply_kind": "original", "original_write_attempted": False,
+                        "original_write_confirmed": False})
+                try:
+                    failure = {"success": False, "contentItems": [{
+                        "type": "inputText", "text": (
+                            "No se pudo confirmar el resultado. No repitas la operación "
+                            "automáticamente; espera un recibo confirmado de Jarvis.")}]}
+                    await self._write_tool_reply(identity, params, turn, failure,
+                                                 cleanup_reply=True, track=accepted,
+                                                 reply_kind="fallback", failure=failure_metadata,
+                                                 original=original)
+                except (CodexError, OSError, ValueError):
+                    pass
         finally:
             self._server_requests.discard(identity)
+
+    @staticmethod
+    def _diagnostic_hash(value) -> str:
+        return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False,
+                              allow_nan=False, separators=(",", ":")).encode()).hexdigest()
+
+    def _tool_request_metadata(self, params):
+        metadata = {}
+        for key, wire_field in (("thread_id", "threadId"), ("turn_id", "turnId"),
+                           ("call_id", "callId"), ("tool", "tool"), ("arguments", "arguments")):
+            try:
+                metadata[key + "_sha256"] = self._diagnostic_hash(params.get(wire_field))
+            except (TypeError, ValueError, RecursionError):
+                metadata[key + "_sha256"] = None
+        return metadata
+
+    @staticmethod
+    def _tool_failure_metadata(error):
+        # Only stable host error codes are eligible, never arbitrary exception
+        # text (which can contain an argument, private path or credential).
+        module = type(error).__module__
+        name = type(error).__name__
+        trusted = module.startswith("jarvis_core.")
+        code = getattr(error, "code", None) if trusted else None
+        if isinstance(error, CodexError):
+            code = str(error)
+        if not isinstance(code, str) or re.fullmatch(r"[a-z][a-z0-9_]{0,79}", code) is None:
+            code = "tool_reply_unavailable"
+        if not (trusted or module in {"builtins", "asyncio.exceptions"}):
+            name = "Exception"
+        return {"failure_code": code, "exception_class": name[:64]}
+
+    @staticmethod
+    def _tool_diagnostic(turn: _ToolTurn, kind: str, payload: dict) -> None:
+        # Optional transport evidence cannot grant authority, replay an effect
+        # or turn a failed observer into a second JSON-RPC response.
+        if turn.on_event is None or turn.diagnostic_count >= 192:
+            return
+        turn.diagnostic_count += 1
+        try:
+            turn.on_event(kind, {**payload, "physical_verified": False,
+                                 "model_consumption_verified": False})
+        except Exception:
+            _LOGGER.warning("codex_tool_delivery_diagnostic_unavailable")
+
+    async def _write_tool_reply(self, identity, params, turn, result, *,
+                                cleanup_reply=False, track=True, reply_kind="original",
+                                failure=None, original=None) -> None:
+        reply = None
+        if track:
+            items = result["contentItems"]
+            metadata = self._tool_request_metadata(params)
+            metadata.update(success=result["success"],
+                            reply_kind=reply_kind,
+                            content_items_sha256=self._diagnostic_hash(items),
+                            content_items_count=len(items),
+                            text_items_count=sum(
+                                isinstance(i, dict) and i.get("type") == "inputText"
+                                for i in items),
+                            text_bytes=sum(len(i["text"].encode()) for i in items
+                                           if isinstance(i, dict) and i.get("type") == "inputText"
+                                           and isinstance(i.get("text"), str)),
+                            image_items_count=sum(
+                                isinstance(i, dict) and i.get("type") == "inputImage"
+                                for i in items))
+            if failure is not None:
+                metadata.update(failure)
+                metadata["original_content_items_sha256"] = (
+                    original.metadata["content_items_sha256"] if original is not None else None)
+            reply = _ToolReply(metadata)
+            turn.replies[params["callId"]] = reply
+
+        def dispatched():
+            if reply is not None:
+                reply.write_attempted = True
+
+        try:
+            await self._write({"id": identity, "result": result}, cleanup_reply=cleanup_reply,
+                              on_dispatch=dispatched)
+        except BaseException as error:
+            if reply is not None:
+                self._tool_reply_sent(turn, reply, confirmed=False, failure=error)
+            raise
+        if reply is not None:
+            self._tool_reply_sent(turn, reply, confirmed=True)
+
+    def _tool_reply_sent(self, turn, reply, *, confirmed, failure=None):
+        reply.write_confirmed = confirmed
+        original = reply.metadata["reply_kind"] == "original"
+        payload = {**reply.metadata, **self._reply_write_metadata(reply)}
+        if failure is not None:
+            payload.update(self._tool_failure_metadata(failure))
+        phase = "tool.reply.sent" if original else "tool.reply.fallback"
+        self._tool_diagnostic(turn, phase if reply.write_attempted else "tool.reply.failure",
+                              payload)
+        if reply.early_ack is not None:
+            self._tool_diagnostic(turn, "tool.reply.ack", {
+                **reply.early_ack, **self._reply_write_metadata(reply)})
+            reply.early_ack = None
+
+    @staticmethod
+    def _reply_write_metadata(reply):
+        original = reply.metadata["reply_kind"] == "original"
+        return {"write_confirmed": reply.write_confirmed, "write_attempted": reply.write_attempted,
+                "original_write_attempted": original and reply.write_attempted,
+                "original_write_confirmed": original and reply.write_confirmed}
+
+    def _observe_tool_reply(self, params, item, turn):
+        call_id = item.get("id")
+        reply = turn.replies.get(call_id) if isinstance(call_id, str) else None
+        if reply is not None and reply.acknowledged:
+            return
+        expected = reply.metadata if reply is not None else {}
+        try:
+            identity = {key + "_sha256": self._diagnostic_hash(value) for key, value in (
+                ("thread_id", params.get("threadId")), ("turn_id", params.get("turnId")),
+                ("call_id", call_id), ("tool", item.get("tool")),
+                ("arguments", item.get("arguments")))}
+            items = item.get("contentItems")
+            observed_hash = self._diagnostic_hash(items) if isinstance(items, list) else None
+        except (TypeError, ValueError, RecursionError):
+            identity, items, observed_hash = {}, None, None
+        identity_matches = (reply is not None and item.get("namespace") is None
+                            and all(identity.get(k) == expected.get(k) for k in (
+                                "thread_id_sha256", "turn_id_sha256", "call_id_sha256",
+                                "tool_sha256")))
+        arguments_match = (reply is not None
+                           and identity.get("arguments_sha256") == expected.get("arguments_sha256"))
+        content_match = observed_hash == expected.get("content_items_sha256") if (
+            reply is not None and observed_hash is not None) else None
+        success_match = item["success"] == expected.get("success") if (
+            reply is not None and type(item.get("success")) is bool) else None
+        status = item.get("status")
+        status = status if isinstance(status, str) and status in {
+            "completed", "failed", "inProgress"} else "unknown"
+        if reply is None:
+            state, matches = "unconfirmed", None
+        elif not identity_matches or not arguments_match or content_match is False or (
+            success_match is False
+        ):
+            state, matches = "mismatch", False
+        elif (not reply.write_attempted or content_match is None or success_match is None
+              or status not in {"completed", "failed"}):
+            state, matches = "unconfirmed", None
+        else:
+            state, matches = "matched", True
+        payload = {**expected, "ack_state": state, "matches": matches,
+                   **{"observed_" + key: value for key, value in identity.items()},
+                   "request_tracked": reply is not None, "identity_matches": identity_matches,
+                   "arguments_match": arguments_match, "content_matches": content_match,
+                   "success_matches": success_match, "observed_content_items_sha256": observed_hash,
+                   "observed_content_items_count": len(items) if isinstance(items, list) else None,
+                   "observed_text_bytes": sum(len(i["text"].encode()) for i in items
+                       if isinstance(i, dict) and i.get("type") == "inputText"
+                       and isinstance(i.get("text"), str)) if isinstance(items, list) else None,
+                   "ack_status": status,
+                   "ack_success": (item.get("success")
+                                   if type(item.get("success")) is bool else None),
+                   "original_reply_delivered": (matches is True and reply is not None
+                                                and reply.write_attempted
+                                                and expected.get("reply_kind") == "original")}
+        if reply is None:
+            self._tool_diagnostic(turn, "tool.reply.ack", payload)
+        else:
+            reply.acknowledged = True
+            if reply.write_confirmed is None:
+                reply.early_ack = payload
+            else:
+                self._tool_diagnostic(turn, "tool.reply.ack", {
+                    **payload, **self._reply_write_metadata(reply)})
+
+    def _finish_tool_diagnostics(self, turn):
+        for reply in turn.replies.values():
+            if not reply.acknowledged:
+                self._tool_diagnostic(turn, "tool.reply.ack", {
+                    **reply.metadata, **self._reply_write_metadata(reply),
+                    "ack_state": "unconfirmed", "matches": None,
+                    "original_reply_delivered": False,
+                    "reason": "completed_item_not_observed"})
+        turn.replies.clear()
 
     async def _drain_stderr(self) -> None:
         assert self._process is not None and self._process.stderr is not None
@@ -498,7 +696,8 @@ class CodexClient:
         queue: asyncio.Queue = asyncio.Queue(maxsize=1024)
         self._events[thread_id] = queue
         tool_turn = (
-            _ToolTurn(frozenset(names), on_tool_call, callback_timeout=host_tool_timeout)
+            _ToolTurn(frozenset(names), on_tool_call, callback_timeout=host_tool_timeout,
+                      on_event=on_event)
             if on_tool_call
             else None
         )
@@ -563,6 +762,8 @@ class CodexClient:
                             if not isinstance(item.get("text"), str):
                                 raise CodexError("codex_answer_invalid")
                             text_parts[item.get("id", "final")] = item["text"]
+                        elif item.get("type") == "dynamicToolCall" and tool_turn:
+                            self._observe_tool_reply(params, item, tool_turn)
                     elif method == "turn/completed":
                         settled = True
                         if params.get("turn", {}).get("status") != "completed":
@@ -591,6 +792,7 @@ class CodexClient:
                 for task in tuple(tool_turn.tasks):
                     task.cancel()
                 await asyncio.gather(*tuple(tool_turn.tasks), return_exceptions=True)
+                self._finish_tool_diagnostics(tool_turn)
             self._events.pop(thread_id, None)
 
     def active_turn_id(self, thread_id: str) -> str | None:

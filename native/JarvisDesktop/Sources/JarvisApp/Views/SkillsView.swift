@@ -4,10 +4,8 @@ import SwiftUI
 
 struct SkillsView: View {
     @Bindable var store: ChatStore
-    @State private var preview: SkillPreviewSnapshot?
+    @State private var importReview: SkillImportReviewSnapshot?
     @State private var editing: SkillDescriptor?
-    @State private var importAgentID = "jarvis"
-    @State private var library: SkillLibraryPreview?
     @State private var details: SkillDescriptor?
 
     var body: some View {
@@ -61,7 +59,7 @@ struct SkillsView: View {
         }
         .task { await management.loadSkills() }
         .onChange(of: management.selectedAgentID) { _, _ in management.skills = []; Task { await management.loadSkills() } }
-        .sheet(item: $preview) { value in SkillImportReview(preview: value, library: library, agentID: importAgentID, store: store) }
+        .sheet(item: $importReview) { value in SkillImportReview(selection: value, store: store) }
         .sheet(item: $editing) { value in SkillEditorView(skill: value, store: store) }
         .sheet(item: $details) { value in SkillDetailsView(skill: value, store: store) }
     }
@@ -86,7 +84,13 @@ struct SkillsView: View {
                         guard let result = await store.management.inspectLibrary(path: physical), result.skillHash == inspected.hash else { return }
                         selectedLibrary = result
                     } else { selectedLibrary = nil }
-                    library = selectedLibrary; importAgentID = agentID; preview = inspected
+                    do {
+                        importReview = try SkillImportReviewSnapshot(preview: inspected,
+                            library: selectedLibrary, agentID: agentID,
+                            mode: withResources ? .withResources : .manifestOnly)
+                    } catch {
+                        store.management.errorMessage = "La revisión de la skill no coincide con sus recursos. Vuelve a elegir la carpeta."
+                    }
                 }
             }
         } catch { store.management.errorMessage = "No se pudo resolver la carpeta seleccionada." }
@@ -94,9 +98,10 @@ struct SkillsView: View {
 }
 
 private struct SkillImportReview: View {
-    let preview: SkillPreviewSnapshot
-    let library: SkillLibraryPreview?
-    let agentID: String
+    let selection: SkillImportReviewSnapshot
+    private var preview: SkillPreviewSnapshot { selection.preview }
+    private var library: SkillLibraryPreview? { selection.library }
+    private var agentID: String { selection.agentID }
     @Bindable var store: ChatStore
     @Environment(\.dismiss) private var dismiss
     var body: some View {
@@ -120,8 +125,13 @@ private struct SkillImportReview: View {
                 Button("Importar esta versión…") {
                     Task {
                         let success: Bool
-                        if let library { success = await store.management.importLibrary(preview, library: library, agent: agentID) }
-                        else { success = await store.management.importSkill(preview, agentID: agentID) }
+                        switch selection.mode {
+                        case .withResources:
+                            guard let library else { return }
+                            success = await store.management.importLibrary(preview, library: library, agent: agentID)
+                        case .manifestOnly:
+                            success = await store.management.importSkill(preview, agentID: agentID)
+                        }
                         if success { dismiss() }
                     }
                 }

@@ -40,6 +40,7 @@ threads = 0
 turns = 0
 request_number = 10000
 calls = {}
+call_params = {}
 active = {}
 
 def emit(message):
@@ -70,6 +71,7 @@ def call(state, *, overrides=None, method='item/tool/call', call_id=None):
     }
     params.update(overrides or {})
     calls[identity] = state
+    call_params[identity] = dict(params)
     emit({'id': identity, 'method': method, 'params': params})
 
 for line in sys.stdin:
@@ -82,6 +84,39 @@ for line in sys.stdin:
         state = calls.get(message.get('id'))
         if state:
             state['responses'].append(message)
+            scenario = state['scenario']
+            if scenario.startswith('delivery-') and scenario != 'delivery-no-ack':
+                request = call_params[message['id']]
+                item = {'type': 'dynamicToolCall', 'id': request['callId'],
+                        'tool': request['tool'], 'arguments': request['arguments'],
+                        'status': 'completed' if message['result']['success'] else 'failed',
+                        **message['result']}
+                completed = {'threadId': state['thread'], 'turnId': state['turn'], 'item': item}
+                if scenario == 'delivery-content-mismatch':
+                    item['contentItems'] = [{'type': 'inputText', 'text': 'OTRO CONTENIDO'}]
+                elif scenario == 'delivery-no-items':
+                    item.pop('contentItems')
+                elif scenario == 'delivery-no-success':
+                    item.pop('success')
+                elif scenario == 'delivery-wrong-arguments':
+                    item['arguments'] = {'value': 'DIFFERENT'}
+                elif scenario == 'delivery-wrong-tool':
+                    item['tool'] = 'different_tool'
+                elif scenario == 'delivery-wrong-id':
+                    item['id'] = 'different-call'
+                elif scenario == 'delivery-wrong-thread':
+                    completed['threadId'] = 'different-thread'
+                elif scenario == 'delivery-wrong-turn':
+                    completed['turnId'] = 'different-turn'
+                elif scenario == 'delivery-namespace':
+                    item['namespace'] = 'different_namespace'
+                elif scenario == 'delivery-success-mismatch':
+                    item['success'] = not item['success']
+                elif scenario == 'delivery-bad-status':
+                    item['status'] = {'invalid': 'SYNTHETIC-PRIVATE-STATUS'}
+                emit({'method': 'item/completed', 'params': completed})
+                if scenario == 'delivery-duplicate-ack':
+                    emit({'method': 'item/completed', 'params': completed})
             if state['scenario'] == 'replay' and len(state['responses']) == 1:
                 call(state, call_id='same-logical-call')
             if state['scenario'] == 'sequential-limit' and len(state['responses']) < 65:
@@ -226,6 +261,173 @@ async def test_dynamic_tool_round_trip_has_official_shapes_and_one_real_fixture_
         assert item["type"] == "inputText"
         assert json.loads(item["text"])["sha256"] == hashlib.sha256(effect.read_bytes()).hexdigest()
         assert client._tool_turns == {} and client._server_requests == set()
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.parametrize("scenario,state", [
+    ("delivery-match", "matched"), ("delivery-duplicate-ack", "matched"),
+    ("delivery-no-items", "unconfirmed"), ("delivery-no-success", "unconfirmed"),
+    ("delivery-bad-status", "unconfirmed"),
+    ("delivery-no-ack", "unconfirmed"), ("delivery-wrong-id", "unconfirmed"),
+    ("delivery-wrong-thread", "unconfirmed"), ("delivery-wrong-turn", "unconfirmed"),
+    ("delivery-content-mismatch", "mismatch"), ("delivery-wrong-tool", "mismatch"),
+    ("delivery-wrong-arguments", "mismatch"), ("delivery-namespace", "mismatch"),
+    ("delivery-success-mismatch", "mismatch"),
+])
+async def test_dynamic_tool_delivery_ack_is_correlated_hashed_and_never_replayed(
+    tmp_path, tool_peer, scenario, state,
+):
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
+    calls, events = [], []
+    private_text = "SYNTHETIC-PRIVATE-TOOL-TEXT-7126"
+    image = "data:image/jpeg;base64,U1lOVEhFVElDLVBSSVZBVEU="
+    result = {"success": True, "contentItems": [
+        {"type": "inputText", "text": private_text},
+        {"type": "inputText", "text": "Datos externos sin verificación"},
+        {"type": "inputImage", "imageUrl": image},
+    ]}
+
+    async def callback(name, arguments):
+        calls.append((name, arguments))
+        return result
+
+    try:
+        answer = await client.chat(scenario, tool_specs=[TOOL], on_tool_call=callback,
+                                   on_event=lambda *event: events.append(event))
+        assert answer["answer"] == "Recibido sintético"
+        assert calls == [("fixture_write", {"value": "10001"})]
+        assert len(tool_replies(client)) == 1
+        diagnostics = [(kind, data) for kind, data in events if kind.startswith("tool.reply.")]
+        sent = [data for kind, data in diagnostics if kind == "tool.reply.sent"]
+        acks = [data for kind, data in diagnostics if kind == "tool.reply.ack"]
+        assert len(sent) == 1 and any(ack["ack_state"] == state for ack in acks)
+        assert sent[0]["original_write_attempted"] and sent[0]["original_write_confirmed"]
+        assert sent[0]["content_items_count"] == 3 and sent[0]["text_items_count"] == 2
+        assert sent[0]["image_items_count"] == 1
+        assert sent[0]["text_bytes"] == sum(
+            len(item["text"].encode()) for item in result["contentItems"] if "text" in item)
+        expected = hashlib.sha256(json.dumps(result["contentItems"], sort_keys=True,
+            ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode()).hexdigest()
+        assert sent[0]["content_items_sha256"] == expected
+        if state == "matched":
+            assert len(acks) == 1 and acks[0]["matches"] is True
+            assert acks[0]["original_reply_delivered"] is True
+            assert acks[0]["content_items_sha256"] == acks[0]["observed_content_items_sha256"]
+            assert acks[0]["arguments_sha256"] == acks[0]["observed_arguments_sha256"]
+        else:
+            assert not any(ack["matches"] is True for ack in acks)
+            assert not any(ack["original_reply_delivered"] for ack in acks)
+        assert not any(data["physical_verified"] or data["model_consumption_verified"]
+                       for _, data in diagnostics)
+        serialized = json.dumps(diagnostics)
+        for secret in (private_text, image, "synthetic-thread-1", "synthetic-turn-1", "call-10001"):
+            assert secret not in serialized
+        assert diagnostics[0][0] == "tool.reply.sent"
+        assert client._tool_turns == {} and not client._server_requests
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.parametrize("phase", ["provider_guard", "callback"])
+async def test_fallback_ack_never_claims_original_receipt_delivery(tmp_path, tool_peer, phase):
+    from jarvis_core.provider_choice import ProviderChoiceError
+
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
+    events, calls = [], []
+    private_text = "SYNTHETIC-PRIVATE-RESULT-OR-ERROR-2391"
+
+    def before_io(method):
+        if method == "reply" and phase == "provider_guard":
+            raise ProviderChoiceError("provider_choice_changed")
+
+    async def callback(name, arguments):
+        calls.append((name, arguments))
+        if phase == "callback":
+            raise RuntimeError(private_text)
+        return confirmed(private_text)
+
+    client.before_io = before_io
+    try:
+        await client.chat("delivery-match", tool_specs=[TOOL], on_tool_call=callback,
+                          on_event=lambda *event: events.append(event))
+        assert len(calls) == 1
+        replies = tool_replies(client)
+        assert len(replies) == 1 and replies[0]["result"]["success"] is False
+        diagnostics = [(kind, data) for kind, data in events if kind.startswith("tool.reply.")]
+        failure = next(data for kind, data in diagnostics if kind == "tool.reply.failure")
+        fallback = next(data for kind, data in diagnostics if kind == "tool.reply.fallback")
+        ack = next(data for kind, data in diagnostics if kind == "tool.reply.ack")
+        assert failure["failure_code"] == (
+            "provider_choice_changed" if phase == "provider_guard" else "tool_reply_unavailable")
+        assert failure["exception_class"] == (
+            "ProviderChoiceError" if phase == "provider_guard" else "RuntimeError")
+        assert not failure["original_write_attempted"]
+        assert fallback["reply_kind"] == "fallback" and fallback["write_confirmed"]
+        assert not fallback["original_write_attempted"] and not fallback["original_write_confirmed"]
+        assert ack["reply_kind"] == "fallback" and ack["matches"] is True
+        assert ack["original_reply_delivered"] is False
+        assert private_text not in json.dumps(diagnostics)
+        assert not any(kind == "tool.reply.sent" for kind, _ in diagnostics)
+    finally:
+        await client.aclose()
+
+
+async def test_uncertain_reply_write_never_sends_second_contradictory_result(
+    tmp_path, tool_peer, monkeypatch,
+):
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
+    real_write = client._write
+    calls, events = [], []
+
+    async def lost_confirmation(message, **options):
+        await real_write(message, **options)
+        if "method" not in message and "result" in message:
+            raise CodexError("codex_disconnected")
+
+    async def callback(name, arguments):
+        calls.append((name, arguments))
+        return confirmed("SYNTHETIC-PRIVATE-RETURNED-TEXT")
+
+    monkeypatch.setattr(client, "_write", lost_confirmation)
+    try:
+        await client.chat("delivery-match", tool_specs=[TOOL], on_tool_call=callback,
+                          on_event=lambda *event: events.append(event))
+        assert len(calls) == len(tool_replies(client)) == 1
+        sent = [data for kind, data in events if kind == "tool.reply.sent"]
+        acks = [data for kind, data in events if kind == "tool.reply.ack"]
+        assert len(sent) == 1 and sent[0]["original_write_attempted"]
+        assert sent[0]["original_write_confirmed"] is False
+        assert len(acks) == 1 and acks[0]["matches"] is True
+        assert acks[0]["original_reply_delivered"] is True
+        assert acks[0]["physical_verified"] is False
+        assert not any(kind == "tool.reply.fallback" for kind, _ in events)
+    finally:
+        await client.aclose()
+
+
+async def test_delivery_observer_failure_never_changes_or_repeats_reply(
+    tmp_path, tool_peer, caplog,
+):
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
+    calls, attempts = [], []
+
+    async def callback(name, arguments):
+        calls.append((name, arguments))
+        return confirmed()
+
+    def observer(kind, _data):
+        if kind.startswith("tool.reply."):
+            attempts.append(kind)
+            raise RuntimeError("SYNTHETIC-PRIVATE-OBSERVER-MESSAGE")
+
+    try:
+        result = await client.chat("delivery-match", tool_specs=[TOOL], on_tool_call=callback,
+                                   on_event=observer)
+        assert result["answer"] == "Recibido sintético"
+        assert len(calls) == len(tool_replies(client)) == 1
+        assert attempts == ["tool.reply.sent", "tool.reply.ack"]
+        assert "SYNTHETIC-PRIVATE" not in caplog.text
     finally:
         await client.aclose()
 
