@@ -174,3 +174,27 @@ cuando el protocolo exige ASCII visible y no fija esa longitud. Se elimina ese
 recorte arbitrario manteniendo los límites HTTP por campo y bloque; nuevas
 regresiones comprueban reutilización exacta y rechazo de controles/sobretamaño.
 Ese último ajuste aún requiere su CI y recorrido público final.
+
+## Interoperabilidad pública y metadatos al inicio
+
+El bundle CI de `ead30c3a87735f2d1aafad1fe386b31577fa2965` conectó Microsoft
+Learn con 2025-06-18 explícito y tres herramientas. Una búsqueda pública pasó
+por aprobación nativa y terminó con resultado conocido y un recibo exitoso,
+sin convertir el contenido remoto en verificado. La respuesta completa tenía
+41334 bytes; el app-server acusó los mismos 83959 bytes de los dos elementos de
+texto enviados. El modelo devolvió una referencia del resultado, pero dijo no
+ver el identificador de operación en la salida larga.
+
+El recibo serializado colocaba `operation_id`, errores y estado después de
+`output`. El ajuste siguiente conserva todos los campos/valores y el contenido
+completo, y coloca `output` al final. Una regresión de ~41 KiB comprueba los
+metadatos en el prefijo, igualdad exacta al reconstruir JSON, contenido íntegro
+y una sola ejecución autorizada. No interpreta un acuse como verificación física
+ni elimina datos del recibo para forzar el resultado. Falta su CI y repetición.
+
+La skill corregida sobrevivió al reinicio con los mismos 25 bytes/hash. Se
+retiró después únicamente ese fixture; la importación histórica incompleta se
+conservó. El plugin de prueba terminó también su retirada de versión y eliminación;
+sus ZIP originales se conservaron. Se cerraron las conexiones públicas y el
+peer propio: salida 0, cero conexiones y cero tareas pendientes. El censo acotado
+previo comprobó la salida del servicio, Codex y su auxiliar sin enviarles señales.

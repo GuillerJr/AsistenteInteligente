@@ -91,8 +91,11 @@ class CodexBridge:
                 raise ValueError("missing_runtime_tool_receipt")
             receipt = context.tool_results[-1]
             if not turn.waiting.done():
+                # Keep receipt metadata ahead of potentially large external output.
+                payload = asdict(receipt)
+                payload["output"] = payload.pop("output")
                 items = [
-                    {"type": "inputText", "text": json.dumps(asdict(receipt), ensure_ascii=False)}
+                    {"type": "inputText", "text": json.dumps(payload, ensure_ascii=False)}
                 ]
                 if receipt.output:
                     # Keep the authoritative receipt intact, but also deliver
