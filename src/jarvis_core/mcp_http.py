@@ -50,7 +50,10 @@ from jarvis_core.web import (
 SSE_VERSION = "2024-11-05"
 _TOKEN = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+\Z")
 _METHOD = re.compile(r"[a-zA-Z][a-zA-Z0-9_./-]{0,127}\Z")
-_SESSION = re.compile(r"[\x21-\x7e]{1,128}\Z")
+# MCP 2025 session IDs may be opaque JWT-like values. The protocol only
+# restricts their alphabet, not their length; the HTTP parser already bounds
+# each field to 8 KiB and the complete header block to 32 KiB.
+_SESSION = re.compile(r"[\x21-\x7e]+\Z")
 
 
 class McpHTTPError(McpError):

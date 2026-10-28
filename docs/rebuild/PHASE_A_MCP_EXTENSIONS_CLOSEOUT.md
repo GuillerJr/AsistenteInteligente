@@ -123,3 +123,54 @@ El recorrido conserva además tres defectos nuevos, sin convertirlos en éxitos:
 
 Estos arreglos necesitan su propia CI y repetición con el bundle nuevo. La
 cualificación del checkpoint anterior no se traslada al árbol modificado.
+
+El relay del mismo checkpoint se activó desde la interfaz para compartir sólo
+`workspace_write`. Un cliente independiente de biblioteca estándar recibió 401
+sin bearer y, autenticado, hizo `server/discover` 2026-07-28, consultó el único
+tool exportado y presentó la tarjeta nativa. Tras la aprobación delegada creó
+`relay-qualification.txt`: 17 bytes y SHA-256
+`5a00bb9d771a098d0bfe72bbf4cce4eb112e9329503fde33514fb543812f13a9`,
+coincidentes con el recibo y con una lectura independiente posterior. El primer
+probe de ausencia usó por error `root/workspace` en vez de `root/state/workspace`;
+no acredita ausencia previa. La suite remota comprueba ese límite y el oráculo
+manual conserva expresamente esta limitación. No se repitió la operación.
+
+## Checkpoint 6502786 y repetición con oráculos
+
+La [CI 40755610918](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40755610918)
+para `650278610dfa989994852a96be9a0befc98c95a1` aprobó 3112 pruebas Python
+macOS, 3066 Ubuntu (46 omisiones) y 469 Swift (una omitida, cero fallos), además
+de bundle, paquetes y smoke. Su ZIP tiene SHA-256
+`057ab6e40e2c08a69a432af41098bc88619a78b3195a4f1683d2e44da78a9138`.
+
+La nueva importación sí mostró biblioteca y recurso en ambas revisiones. El
+primer intento se rechazó porque su manifiesto ya estaba importado por SHA;
+se conservó ese registro incompleto y se eligió una fixture nueva. La nueva
+biblioteca importada permitió leer los 25 bytes de `RECURSO SKILL JARVIS 1804`
+con SHA-256 `393bc6fc6b2aaf9dcc96d6e28e9e813b8ccebea6a9c45bd0a66b5780b8d317aa`.
+Preparar argumentos no ejecutó un turno. Editar a v2 conservó el recurso, y
+volver a v1 creó revisión nueva deshabilitada.
+
+Codex real recibió dos elementos de texto, 976 bytes: envío original confirmado
+y acuse `matched` del app-server, con hashes de identidad, argumentos y contenido
+coincidentes. El modelo transcribió el texto remoto y el `operation_id` aleatorio
+`97b5e6df81264f1cbe619f99dddcfe5c`, que no estaba en el prompt. El recibo SQLite
+independiente coincidió. Una sola llamada produjo ese marcador y no se repitió.
+Esto acredita este consumo; la causa exacta del fallo histórico no se puede
+reconstruir retroactivamente. Un turno anterior se canceló antes de aprobar al
+alcanzar la cuota; el journal confirma que no despachó su marcador.
+
+La medición local superó por unos 3 MiB el presupuesto de 256 MiB durante ese
+arranque. Se canceló y cerró la app, se conservaron perfiles y credenciales y se
+retiraron únicamente archivos/bundles CI propios reproducibles, con recibos de
+hashes. La reanudación permaneció alrededor de 203 MiB. Los metadatos del perfil
+muestran recursos descargados por el cliente oficial; no se leyeron sus contenidos,
+credenciales ni rollouts. No se atribuye ese incremento a las suites, que corrieron
+remotamente.
+
+El nuevo intento público superó las cabeceras repetidas y encontró otro límite:
+Microsoft devuelve un `Mcp-Session-Id` válido de 220 bytes. El cliente imponía 128,
+cuando el protocolo exige ASCII visible y no fija esa longitud. Se elimina ese
+recorte arbitrario manteniendo los límites HTTP por campo y bloque; nuevas
+regresiones comprueban reutilización exacta y rechazo de controles/sobretamaño.
+Ese último ajuste aún requiere su CI y recorrido público final.

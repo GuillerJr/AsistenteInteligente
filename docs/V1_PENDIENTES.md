@@ -9,7 +9,9 @@ Alcance inicial elegido: macOS Apple Silicon y Telegram como primer canal extern
 El dueño aplazó expresamente la app de iPhone; ver [decisiones](rebuild/PHASE_A_TARGETS.md).
 
 El incremento de [MCP, plugins y skills](rebuild/PHASE_A_MCP_EXTENSIONS.md) ya
-conecta sus superficies y está en cualificación nativa/CI. La investigación REA
+conecta sus superficies y está en [cualificación nativa/CI](rebuild/PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md).
+La matriz reconoce ese código con 51 familias parciales y 29 sin implementación;
+ninguna familia amplia se declara completa. La investigación REA
 acumula 38 lotes y 144 rutas TS/JS seleccionadas; no es cobertura exhaustiva.
 
 ## Fase A — base completa primero
@@ -349,8 +351,9 @@ previo se conserva. Los fixtures y el SDK propio no acreditan inferencia
 autenticada; las credenciales y perfiles personales siguen fuera de la delegación.
 
 REA OC-22A/B1/B2/C mantiene manifiestos, blobs, hashes e incógnitas. La cobertura
-acumulada es parcial: **27 lotes, 105 rutas TS/JS únicas**, 47 familias con avance
-parcial y 33 sin implementación. No son porcentajes de producto terminado.
+del checkpoint Mac/navegador era parcial: **27 lotes, 105 rutas TS/JS únicas**,
+47 familias con avance parcial y 33 sin implementación. No son porcentajes de
+producto terminado; memoria y MCP amplían posteriormente ese registro.
 OC-23 añade cuatro particiones de memoria: **31 lotes y 118 rutas TS/JS únicas**
 en el registro actual. Estudia búsqueda híbrida, sincronización, recuperación
 activa y mantenimiento con REA, sin ejecutar la referencia ni copiar su código.
@@ -387,6 +390,35 @@ wiki, motores alternativos ni datos del Jarvis anterior sin elección explícita
 
 La distribución autocontenida, Developer ID/notarización y actualización remota
 firmada siguen pendientes. La fase A sigue abierta y la fase B no ha comenzado.
+
+### MCP, plugins y skills — cualificación en curso
+
+El [registro del incremento](rebuild/PHASE_A_MCP_EXTENSIONS.md) y la
+[continuación del cierre](rebuild/PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md) conservan
+por separado implementación, fallos iniciales, regresiones y recorridos del
+bundle exacto. El estado es `qualification_in_progress`, no cierre global.
+
+- [x] Implementar transportes elegidos con protocolo explícito, OAuth PKCE,
+  recursos/prompts/plantillas y validación local revisada de esquemas.
+- [x] Conectar Apps WebKit y relay loopback a la autoridad común; retirar
+  renderer/capacidad antes de cambiar fuentes y conservar cierres inciertos.
+- [x] Implementar paquetes declarativos propios, instalación/actualización
+  deshabilitadas, activación, reversión, retirada y configuración MCP separada.
+- [x] Implementar skills con argumentos, recursos congelados, versiones y
+  reversión; preparar contexto no envía un turno ni concede herramientas.
+- [x] Añadir regresiones de cierre de Codex, agentes con plugins, lecturas
+  tardías y lifecycle nativo de Apps; conservar los fallos de checkpoints previos.
+- [ ] Registrar la cualificación nativa final: OAuth/renovación/revocación,
+  SSE, servidor público compatible, App/puente/retiro, relay independiente y
+  ciclos completos de paquetes/skills con sus oráculos y recibos.
+- [ ] Aprobar Python, Swift, bundle, wheel/sdist y smoke del último árbol en
+  CI remota, sin repetir suites ni compilaciones en el Mac.
+
+REA mantiene **38 lotes y 144 rutas TS/JS seleccionadas**; los catálogos restantes
+siguen abiertos. Los paquetes propios no son plugins OpenClaw compatibles ni
+acreditan sus 177 conectores. El relay no es un servicio OAuth de Internet; las
+capacidades de Apps no anunciadas, los servicios no elegidos y la distribución
+autocontenida se mantienen separados. La fase A sigue abierta y B no ha comenzado.
 
 ## Fase B — después de acreditar A
 

@@ -28,6 +28,10 @@ intentos fallidos, pruebas con pesos reales y el recorrido nativo con ChatGPT.
 El [bloque de MCP y extensiones](PHASE_A_MCP_EXTENSIONS.md) conecta transportes
 HTTP/SSE, OAuth, recursos/prompts, Apps, relay, paquetes propios y versiones de
 skills. Conserva separados implementación, pruebas focales y cualificación nativa.
+La [continuación de cualificación](PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md) está en
+curso: conserva los fallos reales, correcciones, CI por checkpoint y recorridos
+finales. La matriz reconoce ahora relay, paquetes y Apps como implementación
+parcial, sin declarar completas sus familias ni todos los conectores del catálogo.
 
 Se conservan el nombre de producto Jarvis, los identificadores técnicos `jarvis`,
 la interfaz en español y las reglas de privacidad/aprobación. La primera conexión
@@ -185,12 +189,15 @@ las fuentes productivas ya cualificadas. El cierre conserva ese fallo y su corre
 La investigación [OC-21A](REA_PART21A_CORE_SERVICE.json),
 [OC-21B](REA_PART21B_SUMMARY.json) y [OC-21C](REA_PART21C_SUMMARY.json)
 dejó el checkpoint de núcleo en 23 lotes y 90 fuentes TS/JS seleccionadas.
-El [bloque actual de herramientas del Mac y navegador](PHASE_A_MAC_BROWSER_CLOSEOUT.md)
+El [checkpoint de herramientas del Mac y navegador](PHASE_A_MAC_BROWSER_CLOSEOUT.md)
 añade [OC-22A](REA_PART22A_SUMMARY.json), [OC-22B1/B2](REA_PART22B_SUMMARY.json)
 y [OC-22C](REA_PART22C_SUMMARY.json): **27 lotes y 105 rutas TS/JS únicas**,
 con incógnitas estáticas y dependencias sin revisar. No es revisión exhaustiva
-ni ejecución de OpenClaw. Las 80 familias mantienen ahora **47 avances parciales
-y 33 sin implementación**; esas cifras no son porcentajes de producto terminado.
+ni ejecución de OpenClaw. Ese checkpoint conservaba 47 avances parciales y 33
+sin implementación. Tras reconciliar MCP, plugins y Apps, la matriz registra
+**51 avances parciales y 29 sin implementación**, ninguna familia completa;
+esas cifras no son porcentajes de producto terminado. El registro REA vigente
+incluye también memoria y MCP: **38 lotes, 144 rutas TS/JS únicas** (142 TS).
 A-71 y la fase A siguen abiertas y la fase B continúa aplazada.
 
 Este incremento implementa parches multiarchivo con CAS, PTY confinada de un

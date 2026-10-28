@@ -326,6 +326,101 @@ async def test_http_json_and_sse_reply_resource_prompt_and_exact_effect_guard(tm
             assert closed["local_cleanup_confirmed"] and not client.connected
 
 
+@pytest.mark.parametrize("protocol", [HTTP_COMPAT_VERSION, LEGACY_VERSION])
+@pytest.mark.parametrize("length", [128, 129, 220, 8191])
+async def test_visible_ascii_opaque_session_is_reused_without_truncation(
+    tmp_path, protocol, length
+):
+    # A public MCP peer returned a 220-byte opaque identifier. The spec permits
+    # every visible ASCII character, rather than only token/UUID alphabets.
+    alphabet = "opaque:/+={}[]!~"
+    session = (alphabet * ((length // len(alphabet)) + 1))[:length]
+
+    async def handler(request, _reader, _writer):
+        if request["method"] == "DELETE":
+            assert request["headers"]["mcp-session-id"] == session
+            return 204, {}, b""
+        message = json.loads(request["body"])
+        method = message["method"]
+        if method == "initialize":
+            assert "mcp-session-id" not in request["headers"]
+            return (
+                200,
+                {"Mcp-Session-Id": session},
+                reply(
+                    message,
+                    {
+                        "protocolVersion": protocol,
+                        "serverInfo": {"name": "own", "version": "1"},
+                        "capabilities": {"tools": {}},
+                    },
+                ),
+            )
+        assert request["headers"]["mcp-session-id"] == session
+        if method == "notifications/initialized":
+            return 202, {}, b""
+        assert method == "tools/list"
+        return 200, {}, reply(message, {"tools": catalog()})
+
+    async with HTTPFixture(handler) as fixture:
+        client = McpHttpClient(
+            fixture.base + "/mcp",
+            tmp_path.resolve() / "client",
+            protocol_version=protocol,
+            test_origins=(fixture.base,),
+        )
+        try:
+            await client.start()
+            assert len(await client.list_tools()) == 1
+        finally:
+            closed = await client.aclose()
+        assert closed["local_cleanup_confirmed"]
+        assert closed["remote_session_termination"] == "confirmed"
+        assert len(fixture.requests) == 4
+        assert [request["method"] for request in fixture.requests] == [
+            "POST", "POST", "POST", "DELETE"
+        ]
+
+
+@pytest.mark.parametrize(
+    "session",
+    ["", "with space", "with\ttab", "control\x1f", "delete\x7f", "nonascii\u00e9", "x" * 8192],
+    ids=["empty", "space", "tab", "control", "delete", "non-ascii", "http-field-limit"],
+)
+async def test_invalid_or_oversized_session_is_not_reused_or_retried(tmp_path, session):
+    async def handler(request, _reader, _writer):
+        message = json.loads(request["body"])
+        return (
+            200,
+            {"Mcp-Session-Id": session},
+            reply(
+                message,
+                {
+                    "protocolVersion": HTTP_COMPAT_VERSION,
+                    "serverInfo": {"name": "own", "version": "1"},
+                    "capabilities": {"tools": {}},
+                },
+            ),
+        )
+
+    async with HTTPFixture(handler) as fixture:
+        client = McpHttpClient(
+            fixture.base + "/mcp",
+            tmp_path.resolve() / "client",
+            protocol_version=HTTP_COMPAT_VERSION,
+            test_origins=(fixture.base,),
+        )
+        with pytest.raises(McpError):
+            await client.start()
+        closed = await client.aclose()
+        assert closed["local_cleanup_confirmed"]
+        assert not client.connected and client._session_id is None
+        assert len(fixture.requests) == 1
+        request = fixture.requests[0]
+        assert json.loads(request["body"])["method"] == "initialize"
+        assert "mcp-session-id" not in request["headers"]
+
+
 @pytest.mark.parametrize("delete_status", [204, 503])
 @pytest.mark.parametrize("protocol", [HTTP_COMPAT_VERSION, LEGACY_VERSION])
 async def test_2025_get_stream_session_delete_and_remote_unknown_do_not_replay(

@@ -65,7 +65,12 @@ fallos encontrados en la verificación, sus correcciones, las regresiones y los
 recorridos nativos. Las versiones 2025-06-18 y 2024-11-05 sólo se ofrecen para
 Streamable HTTP y HTTP+SSE respectivamente; no hay fallback automático.
 
-La implementación está en comprobación nativa y CI. Pasaron inicialmente 78
+La implementación está en comprobación nativa y CI (`qualification_in_progress`).
+La matriz reconoce relay, plugins y Apps como código parcial y conserva el
+cierre amplio pendiente. El [registro de cierre](PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md)
+se actualiza con el bundle y el árbol exactos; un positivo de un checkpoint
+anterior no acredita automáticamente las correcciones siguientes.
+Pasaron inicialmente 78
 pruebas focales MCP y 79 de extensiones/skills, además de los contratos previos de
 chat y MCP. Los recibos identifican cada árbol comprobado; no sustituyen la suite
 remota del commit final ni un recorrido real de la app.
@@ -87,8 +92,10 @@ La aserción de desconexión pasó; `aclose()` falló después al señalizar el 
 del proceso con `os.killpg`, convertido en `codex_cleanup_incomplete`. El log no
 conserva el errno original: no permite atribuirlo a una carrera, a permisos ni a
 infraestructura. Paquete y smoke macOS quedaron sin ejecutar. Este resultado
-posterior queda pendiente de investigar y no se presenta como CI aprobada ni
-como consecuencia del incidente local de `dasd`. No se repitió la suite en el Mac.
+posterior dejó pendiente la investigación en aquel checkpoint y no se presenta
+como CI aprobada ni como consecuencia del incidente local de `dasd`. La
+continuación documenta la corrección y sus regresiones sin inventar el errno
+histórico que no se conservó. No se repitió la suite en el Mac.
 
 La compilación local se detuvo por `global_storage_guard` tras 13,667 s y un pico
 de 103 165 952 bytes dentro de su volumen. Se conservaron el resultado fallido y
@@ -108,8 +115,9 @@ el servicio anuncia la versión SSE 2024-11-05 y el cliente sólo reconocía las
 dos posteriores. Se corrigió el catálogo nativo, se restringió esa versión al
 transporte SSE y se añadieron regresiones de arranque y compatibilidad. La
 ejecución de esas regresiones pasó en la CI citada. El nuevo recorrido nativo
-sigue pendiente; la comprobación sintáctica inicial no se presenta como
-compilación ni prueba funcional.
+se registra en la continuación de cualificación y sigue separado de la
+comprobación sintáctica inicial, que no se presenta como compilación ni prueba
+funcional.
 
 La fase A global continúa abierta: distribución autocontenida y otras familias
 se cualifican por separado. Este documento no declara revisión exhaustiva de

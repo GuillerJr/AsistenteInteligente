@@ -45,7 +45,7 @@
       "Contratos declarados y rutas UI no acreditan disponibilidad ni funcionamiento real.",
       "No se ejecutó OpenClaw ni se leyó configuración/cuenta del dueño."
     ],
-    "current_jarvis_state": "Desarrollo propio con Codex oficial y bloques previos de archivos, memoria léxica, MCP, procesos, agentes, skills, programador, Telegram, voz y lectura HTTPS. El bloque finito de núcleo/sesiones añade identidad Ed25519 local y revocación, supervisión de caída sin replay, compactación extractiva, fork/rewind conversacionales, objetivos con hijos, límites, cola y steering. Recorridos nativos de este incremento usan perfiles y peer de inferencia propios sintéticos; se conserva separada la evidencia autenticada anterior. Recuperación/activación/copia de memoria/reconciliación previamente cualificadas no se reabren. macOS inicial, iPhone aplazado; ninguna familia amplia ni fase A completas y fase B no iniciada. El incremento Mac/navegador añade patches/PTY, decisiones recordadas, broker firmado y herramientas nativas AX/WebKit/CDP con pruebas de componentes. La cualificación GUI/TCC y los controles globales están registrados por separado en PHASE_A_MAC_BROWSER_CLOSEOUT; no se presume éxito real por fixtures. El incremento elegido de memoria local CPU, semántica/híbrida, indexación de notas aprobadas, recuperación y mantenimiento está cualificado en P-MEMORY-LOCAL. Mantiene pendientes los extras no elegidos y la paridad amplia de referencia."
+    "current_jarvis_state": "Desarrollo propio con Codex oficial y bloques previos de archivos, memoria léxica, MCP, procesos, agentes, skills, programador, Telegram, voz y lectura HTTPS. El bloque finito de núcleo/sesiones añade identidad Ed25519 local y revocación, supervisión de caída sin replay, compactación extractiva, fork/rewind conversacionales, objetivos con hijos, límites, cola y steering. Recorridos nativos de este incremento usan perfiles y peer de inferencia propios sintéticos; se conserva separada la evidencia autenticada anterior. Recuperación/activación/copia de memoria/reconciliación previamente cualificadas no se reabren. macOS inicial, iPhone aplazado; ninguna familia amplia ni fase A completas y fase B no iniciada. El incremento Mac/navegador añade patches/PTY, decisiones recordadas, broker firmado y herramientas nativas AX/WebKit/CDP con pruebas de componentes. La cualificación GUI/TCC y los controles globales están registrados por separado en PHASE_A_MAC_BROWSER_CLOSEOUT; no se presume éxito real por fixtures. El incremento elegido de memoria local CPU, semántica/híbrida, indexación de notas aprobadas, recuperación y mantenimiento está cualificado en P-MEMORY-LOCAL. Mantiene pendientes los extras no elegidos y la paridad amplia de referencia. El incremento P-MCP-EXTENSIONS implementa HTTP/SSE, OAuth, recursos/prompts/Apps, relay loopback y extensiones/skills versionadas; su cualificación nativa y CI siguen en curso en PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md. Los catálogos individuales de conectores, el cierre amplio y la distribución permanecen separados."
   },
   "status_vocabulary": {
     "no_implementado": "Sin evidencia productiva propia de cierre.",
@@ -54,7 +54,7 @@
     "excluido_por_instruccion": "Diferencia explícita con referencia; no cuenta como soporte.",
     "sin_cualificar": "Sólo registro estático; comportamiento/prueba aún pendientes.",
     "port_de_referencia_pendiente_de_decision": "No borrar por silencio; adoptar port o registrar explícitamente diferencia.",
-    "implementacion_parcial_contratos_probados": "Hay código propio y pruebas locales con contenido/servicios sintéticos. La capacidad completa y su integración productiva siguen pendientes."
+    "implementacion_parcial_contratos_probados": "Hay código propio y contratos probados con contenido/servicios de prueba. La capacidad amplia y su integración productiva siguen pendientes; CI y recorridos nativos se registran por checkpoint."
   },
   "closure_contract": {
     "complete_reference_variant_requires": [
@@ -1350,6 +1350,10 @@
         {
           "progress_id": "P-MCP",
           "scope": "Ver avance parcial; no cierra la capacidad."
+        },
+        {
+          "progress_id": "P-MCP-EXTENSIONS",
+          "scope": "Implementación propia de transportes HTTP/SSE, OAuth, recursos/prompts/Apps, relay, paquetes declarativos y versiones de skills. Cualificación del incremento en curso; no cierra la familia amplia ni la fase A. Ver PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md."
         }
       ],
       "acceptance": {
@@ -1377,6 +1381,10 @@
         {
           "progress_id": "P-MCP",
           "scope": "Ver avance parcial; no cierra la capacidad."
+        },
+        {
+          "progress_id": "P-MCP-EXTENSIONS",
+          "scope": "Implementación propia de transportes HTTP/SSE, OAuth, recursos/prompts/Apps, relay, paquetes declarativos y versiones de skills. Cualificación del incremento en curso; no cierra la familia amplia ni la fase A. Ver PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md."
         }
       ],
       "acceptance": {
@@ -1399,8 +1407,13 @@
       "family": "mcp",
       "name": "Servidor/relay y eventos MCP",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-MCP-EXTENSIONS",
+          "scope": "Implementación propia de transportes HTTP/SSE, OAuth, recursos/prompts/Apps, relay, paquetes declarativos y versiones de skills. Cualificación del incremento en curso; no cierra la familia amplia ni la fase A. Ver PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md."
+        }
+      ],
       "acceptance": {
         "observable_success": "Cliente externo de prueba ve sólo catálogo admitido; suscripción entrega evento correlacionado.",
         "observable_failure_or_revocation": "Cliente no admitido, evento duplicado y suscripción eliminada no invocan efectos ni comparten credenciales.",
@@ -1421,8 +1434,13 @@
       "family": "plugins",
       "name": "Registro, contratos, hooks y lifecycle",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-MCP-EXTENSIONS",
+          "scope": "Implementación propia de transportes HTTP/SSE, OAuth, recursos/prompts/Apps, relay, paquetes declarativos y versiones de skills. Cualificación del incremento en curso; no cierra la familia amplia ni la fase A. Ver PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md."
+        }
+      ],
       "acceptance": {
         "observable_success": "Cargar extensión propia declarada, invocar tool y deshabilitar/recargar liberando recursos.",
         "observable_failure_or_revocation": "Manifest incompatible, permiso ausente y fallo del plugin quedan aislados sin vía fuera de autoridad.",
@@ -1442,8 +1460,13 @@
       "family": "plugins",
       "name": "Catálogo, instalación, actualización y eliminación",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-MCP-EXTENSIONS",
+          "scope": "Implementación propia de transportes HTTP/SSE, OAuth, recursos/prompts/Apps, relay, paquetes declarativos y versiones de skills. Cualificación del incremento en curso; no cierra la familia amplia ni la fase A. Ver PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md."
+        }
+      ],
       "acceptance": {
         "observable_success": "Instalar paquete propio de prueba desde fuente explícita, inspeccionar, actualizar y desinstalar con UI/runtime coherentes.",
         "observable_failure_or_revocation": "Paquete manipulado, ruta no admitida y actualización fallida preservan versión previa sin ejecutar código nuevo.",
@@ -1468,6 +1491,10 @@
         {
           "progress_id": "P-SKILLS",
           "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-MCP-EXTENSIONS",
+          "scope": "Implementación propia de transportes HTTP/SSE, OAuth, recursos/prompts/Apps, relay, paquetes declarativos y versiones de skills. Cualificación del incremento en curso; no cierra la familia amplia ni la fase A. Ver PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md."
         }
       ],
       "acceptance": {
@@ -1494,6 +1521,10 @@
         {
           "progress_id": "P-SKILLS",
           "scope": "Avance acotado propio; ver límites y recorridos por capacidad."
+        },
+        {
+          "progress_id": "P-MCP-EXTENSIONS",
+          "scope": "Implementación propia de transportes HTTP/SSE, OAuth, recursos/prompts/Apps, relay, paquetes declarativos y versiones de skills. Cualificación del incremento en curso; no cierra la familia amplia ni la fase A. Ver PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md."
         }
       ],
       "acceptance": {
@@ -1981,8 +2012,13 @@
       "family": "ui",
       "name": "Portales, apps MCP y vistas de plugins",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-MCP-EXTENSIONS",
+          "scope": "Implementación propia de transportes HTTP/SSE, OAuth, recursos/prompts/Apps, relay, paquetes declarativos y versiones de skills. Cualificación del incremento en curso; no cierra la familia amplia ni la fase A. Ver PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md."
+        }
+      ],
       "acceptance": {
         "observable_success": "Abrir/cerrar portal/app de prueba manteniendo ámbito, destino y estado en app nativa.",
         "observable_failure_or_revocation": "Vista ajena, plugin deshabilitado y enlace revocado no ejecutan efectos por UI ni API.",
@@ -14082,8 +14118,8 @@
     ]
   },
   "progress_snapshot": {
-    "date": "2026-10-26",
-    "revision_scope": "Herramientas propias de Mac y navegador: patches/PTY, autoridad única y decisiones recordadas, broker nativo firmado, AX/fotograma efímero y navegador WebKit/CDP explícito. Pruebas de componentes realizadas; recorridos GUI/TCC y controles globales en cierre integrado. Núcleo/sesiones, recuperación, activación, copia de memoria y reconciliación anteriores conservan sus cierres finitos. Ninguna familia amplia ni fase A completas; fase B no iniciada.",
+    "date": "2026-10-28",
+    "revision_scope": "MCP, plugins y skills: incremento propio implementado y en cualificación nativa/CI. Se registran por separado los fallos reales de cierre de Codex, denegación, compatibilidad de protocolo y retiro de Apps, sus correcciones y las regresiones. Los cierres finitos anteriores de recuperación, activación, copia de memoria, reconciliación, núcleo/sesiones, Mac/navegador y memoria local se conservan. Ninguna familia amplia ni fase A completas; fase B no iniciada.",
     "complete_capability_count": 0,
     "complete_reference_parity": false,
     "authenticated_inference_verified": true,
@@ -14212,7 +14248,7 @@
           "A-40"
         ],
         "verified_scope": "Procesos stdio y socket locales propios; versiones2025-11-25 y2026-07-28 explícitas, catálogo versionado, mantenimiento, no autoconexión, misma autoridad por operación consumida justo antes de escribir tools/call, revocación y efecto incierto sin replay.",
-        "remaining": "Sin servidores externos cualificados, OAuth/HTTP/SSE, apps completas, subscriptions/sampling/tasks/MRTR o JSON Schema completo. HOME privado no es sandbox OS. Recursos/prompts del transporte aún no expuestos como tools/UI de producto."
+        "remaining": "El incremento P-MCP-EXTENSIONS implementa HTTP/SSE, OAuth, recursos/prompts/plantillas, Apps, relay y validación JSON Schema local revisada; su cualificación nativa/CI está en curso. No se anuncia compatibilidad universal con servidores externos, sampling, tasks, MRTR ni capacidades de Apps no ofrecidas. HOME privado no es una sandbox del sistema."
       },
       {
         "id": "P-TOOLS",
@@ -14341,7 +14377,7 @@
           "A-60"
         ],
         "verified_scope": "Importación explícita SKILL.md con hash, revisión, procedencia, contexto acotado y omisiones explícitas, habilitación por agente. Contenido hostil no concede permisos ni ejecuta recursos.",
-        "remaining": "Frontmatter completo, paquetes/recursos ejecutables, biblioteca remota/workshop completo y reversión versionada."
+        "remaining": "El incremento P-MCP-EXTENSIONS añade metadatos/argumentos, importación de recursos, snapshots, versiones, reversión y retiro; su cualificación está en curso. Biblioteca remota/workshop completos y ejecución de código de paquetes no se declaran acreditados. Los paquetes propios no son extensiones OpenClaw compatibles."
       },
       {
         "id": "P-SCHEDULER",
@@ -14894,13 +14930,76 @@
         "verified_scope": "MiniLM fijado CPU con pesos reales, notas aprobadas SQLite/temporales RAM, índice derivado sin texto, citas actuales, caché atómica acotada, autoindex por generación, cápsulas nuevas por turno, abstención antes de RRF, revocación, reconstrucción/verificación y cierre retenido. App sintética: guardado/corrección/olvido con ChatGPT real y aprobaciones delegadas; nuevos chats recuperan el valor vigente y se abstienen después del olvido o la revocación. Ver PHASE_A_MEMORY_QUALIFICATION.json para SHA, casos y fallos conservados.",
         "remaining": "La paridad amplia de referencia sigue abierta: wiki/motores opcionales A-27, captura/flush conversacional automático, cifrado integral, corpus personales o migración anterior y distribución autocontenida no se declaran acreditados. No se habilita ninguna de esas entradas por silencio.",
         "record": "PHASE_A_MEMORY_QUALIFICATION.json"
+      },
+      {
+        "id": "P-MCP-EXTENSIONS",
+        "component": "MCP HTTP/SSE, OAuth, recursos y Apps, relay, plugins y skills versionadas",
+        "status": "qualification_in_progress",
+        "code": [
+          "src/jarvis_core/mcp_http.py",
+          "src/jarvis_core/mcp_oauth.py",
+          "src/jarvis_core/mcp_resources.py",
+          "src/jarvis_core/mcp_product.py",
+          "src/jarvis_core/mcp_server.py",
+          "src/jarvis_core/mcp_network_management.py",
+          "src/jarvis_core/mcp_schema.py",
+          "src/jarvis_core/plugin_packages.py",
+          "src/jarvis_core/plugins.py",
+          "src/jarvis_core/extension_management.py",
+          "src/jarvis_core/extension_hooks.py",
+          "src/jarvis_core/skills.py",
+          "native/JarvisDesktop/Sources/DesktopCore/MCPAppRenderer.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Stores/MCPStore.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Stores/MCPContentStore.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Stores/PluginStore.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Stores/SkillExtensionStore.swift"
+        ],
+        "tests": [
+          "tests/test_mcp_http.py",
+          "tests/test_mcp_oauth.py",
+          "tests/test_mcp_resources.py",
+          "tests/test_mcp_product.py",
+          "tests/test_mcp_relay_product.py",
+          "tests/test_mcp_remote_qualification.py",
+          "tests/test_mcp_schema.py",
+          "tests/test_plugins.py",
+          "tests/test_skill_versions.py",
+          "tests/test_extension_management.py",
+          "tests/test_extension_qualification.py",
+          "tests/test_extension_portability.py",
+          "native/JarvisDesktop/Tests/AppLayoutTests/ExtensionSelectionRaceTests.swift",
+          "native/JarvisDesktop/Tests/AppLayoutTests/MCPContentLifecycleTests.swift"
+        ],
+        "capability_ids": [
+          "A-10",
+          "A-11",
+          "A-38",
+          "A-39",
+          "A-40",
+          "A-41",
+          "A-42",
+          "A-43",
+          "A-44",
+          "A-45",
+          "A-59",
+          "A-60",
+          "A-62",
+          "A-70",
+          "A-71",
+          "A-73"
+        ],
+        "implemented_scope": "Versiones explícitas de stdio, Streamable HTTP 2025-06-18/2025-11-25/2026-07-28 y SSE 2024-11-05; OAuth PKCE y credenciales RAM, recursos/prompts/plantillas con autoridad única, Apps WebKit opacas y contenido privado separado del modelo. Relay loopback autenticado por exportaciones revisadas. Paquetes declarativos propios con CAS, activación/actualización/reversión/retiro y skills con argumentos, recursos congelados y versiones. Retiro de renderer/capacidad antes de cambiar fuente; lecturas tardías y cierres inciertos conservan ámbito, identidad y bloqueo. Enlace OAuth pendiente sólo RAM, sin iniciar otra concesión al reabrirlo.",
+        "qualification_scope": "Los fallos observados del checkpoint inicial y las regresiones preparadas se conservan en el cierre. CI y recorridos finales del bundle exacto siguen en comprobación; no se presenta la implementación como cualificación completa.",
+        "remaining": "Registrar CI completa del árbol final y oráculos de los recorridos nativos: OAuth, SSE, servidor público compatible, Apps/relay y ciclos de plugins/skills. No equivalencia universal de plugins o servidores de referencia, ejecución de paquetes OpenClaw, capacidades de Apps no anunciadas, relay remoto OAuth ni distribución autocontenida. La fase A global permanece abierta.",
+        "detail_file": "PHASE_A_MCP_EXTENSIONS.md",
+        "qualification_file": "PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md"
       }
     ],
-    "detail_file": "PHASE_A_MAC_BROWSER_CLOSEOUT.md",
+    "detail_file": "PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md",
     "rea": {
       "source_file": "REA_COVERAGE.json",
-      "static_batches": 27,
-      "unique_typescript_paths_in_completed_batches": 103,
+      "static_batches": 38,
+      "unique_typescript_paths_in_completed_batches": 142,
       "global_status": "partial",
       "runtime_executed": false,
       "semantic_unknowns_remain": true,
@@ -14931,16 +15030,27 @@
         "OC-22A",
         "OC-22B1",
         "OC-22B2",
-        "OC-22C"
+        "OC-22C",
+        "OC-23A",
+        "OC-23B",
+        "OC-23C",
+        "OC-23D",
+        "OC24A-http",
+        "OC24B-oauth",
+        "OC24C-apps",
+        "OC24D-relay",
+        "OC24E-install",
+        "OC24F-lifecycle",
+        "OC24G-skills"
       ],
       "limits": "Contar rutas examinadas no significa comprensión semántica ni revisión global. IDs y evidencias completos en REA_COVERAGE.json/provenance.",
-      "unique_ts_js_paths_in_completed_batches": 105,
+      "unique_ts_js_paths_in_completed_batches": 144,
       "source_count_note": "El contador TypeScript conserva su sentido estricto; el total TS/JS incluye también MJS/CJS."
     },
     "previous_detail_file": "PHASE_A_CORE_CLOSEOUT.md",
     "qualification_file": "PHASE_A_RECOVERY_QUALIFICATION.json",
-    "latest_qualification_status": "mac_browser_implemented_component_verified_native_gui_and_global_gates_pending",
-    "latest_qualification_record": "PHASE_A_MAC_BROWSER_CLOSEOUT.json",
+    "latest_qualification_status": "qualification_in_progress",
+    "latest_qualification_record": "PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md",
     "completion_increment_file": "PHASE_A_RECOVERY_COMPLETION.md",
     "completion_increment_qualification": "recovery_finite_matrix_and_local_reconciliation_native_verified",
     "previous_qualification_status": "2540python_332native_ci_success_core_finite_contract_closed",
@@ -14959,8 +15069,8 @@
       "No cierra ninguna familia amplia ni revisión global de OpenClaw."
     ],
     "capability_status_counts": {
-      "implementacion_parcial_contratos_probados": 47,
-      "no_implementado": 33
+      "implementacion_parcial_contratos_probados": 51,
+      "no_implementado": 29
     },
     "mac_browser_increment_file": "PHASE_A_MAC_BROWSER_CLOSEOUT.md",
     "mac_browser_contract_files": [
@@ -14978,7 +15088,11 @@
     "memory_increment_file": "PHASE_A_MEMORY_INTELLIGENCE.md",
     "memory_qualification_file": "PHASE_A_MEMORY_QUALIFICATION.json",
     "memory_selected_scope_status": "qualified_selected_increment",
-    "memory_qualification_basis": "Subárbol Python idéntico al cualificado en 075b9dd (macOS/Ubuntu); suite Swift/bundle aprobados 10e4d65 y fuente nativa idéntica al recorrido GUI real; detalles y fallo de adquisición pública separados en el registro."
+    "memory_qualification_basis": "Subárbol Python idéntico al cualificado en 075b9dd (macOS/Ubuntu); suite Swift/bundle aprobados 10e4d65 y fuente nativa idéntica al recorrido GUI real; detalles y fallo de adquisición pública separados en el registro.",
+    "mcp_previous_detail_file": "PHASE_A_MAC_BROWSER_CLOSEOUT.md",
+    "mcp_previous_qualification_record": "PHASE_A_MAC_BROWSER_CLOSEOUT.json",
+    "mcp_extensions_increment_file": "PHASE_A_MCP_EXTENSIONS.md",
+    "mcp_extensions_selected_scope_status": "qualification_in_progress"
   },
   "target_decisions": {
     "date": "2026-10-24",
