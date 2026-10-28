@@ -106,9 +106,17 @@ Evidencia local en `/private/tmp/jarvis-dasd-diagnostico-20261028/`:
 - `powerlog-stat.txt` y `space-direct.txt`: identidades, tamaños y espacio.
 
 El catálogo oficial ofrece macOS 27.2 (26B123), 6 067 473 KiB, con reinicio.
-El dueño autorizó instalarla antes de intervenir manualmente el almacén. Se
-inició únicamente su descarga con `softwareupdate --download`; la instalación,
-autenticación/reinicio del dueño y las mediciones posteriores están pendientes.
+El dueño autorizó instalarla antes de intervenir manualmente el almacén. La
+descarga con `softwareupdate --download` terminó al 100 % con código de salida
+0. La preparación se mantuvo durante un intervalo en el 98,51 %; una muestra de
+nuestro cliente mostró espera de respuesta XPC y el servicio UpdateBrain de Apple
+seguía activo. No se repitió la descarga ni se lanzó otra en paralelo.
+
+El intento de instalación con `sudo -n softwareupdate --install --no-scan`,
+etiqueta exacta y usuario propietario, terminó antes de instalar con
+`sudo: a password is required`. La autenticación e instalación/reinicio del
+dueño y las mediciones posteriores siguen pendientes. El checkpoint local
+`download-complete.json` conserva ese estado; no afirma que 27.2 esté instalada.
 No se acepta una licencia automáticamente ni se fuerza el reinicio. Las notas
 de Apple no acreditan una corrección específica de DASD/PowerLog:
 [versión publicada](https://developer.apple.com/news/releases/?id=10262026d),
@@ -120,3 +128,12 @@ conservar la familia completa antes de permitir su regeneración. SQLite
 [advierte sobre renombrar bases todavía abiertas](https://sqlite.org/howtocorrupt.html#unlinking_or_renaming_a_database_file_while_in_use).
 La actualización autorizada no se presenta como solución comprobada hasta
 observar su resultado en este Mac.
+
+Durante la descarga, Monitor de Actividad mostró menos de 1 MB de escritura
+acumulada del nuevo PID 404 y la familia PowerLog conservó sus tamaños e
+identidades originales en las comprobaciones de metadatos. Esto distingue el
+atasco de lectura actual del episodio anterior del temporal creciente. En ese
+intervalo también hubo escritura de servicios Apple de extracción y assets;
+sus contadores acumulados no equivalen al espacio asignado ni permiten atribuir
+toda la caída del espacio libre a una sola causa. Las mediciones parciales del
+actualizador no se presentan como inventario completo del almacenamiento.
