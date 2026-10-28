@@ -24,6 +24,7 @@ from test_service_management import (
     management as management,
 )
 
+from jarvis_core.automation_flows import AutomationFlowError
 from jarvis_core.client_identity import ClientIdentity
 from jarvis_core.protocol import LocalRpcClient, RpcError
 from jarvis_core.service import JarvisService
@@ -295,10 +296,87 @@ async def test_revoked_activation_client_cannot_start_another_step_or_effect():
                     paused = await flow_until(admin, queued["flow_id"], {"paused"})
                     await admin.call("clients.revoke", {
                         "client_id": operator.client_id, "expected_revision": 2})
+                    assert not (await admin.call("automation.list"))["runner_running"]
+                    with pytest.raises(RpcError, match="activa el motor"):
+                        await admin.call("automation.flows.resume", {
+                            "flow_id": paused["flow_id"], "expected_revision": paused["revision"]})
+                    assert service.automation_flows.get_flow(paused["flow_id"]) == {
+                        key: value for key, value in paused.items() if key != "sessions"}
+                    assert len(peer.calls) == 1
+                    # A different owner must explicitly review and activate the
+                    # engine before resuming the retained known checkpoint.
+                    await activate(admin)
                     await admin.call("automation.flows.resume", {
                         "flow_id": paused["flow_id"], "expected_revision": paused["revision"]})
-                    final = await flow_until(admin, queued["flow_id"], {"failed", "interrupted"})
-                    assert final["outcome"] == "known" and len(peer.calls) == 1
+                    final = await flow_until(admin, queued["flow_id"], {"completed"})
+                    assert final["outcome"] == "known" and len(peer.calls) == 2
                     await admin.call("automation.stop")
+        finally:
+            await service.aclose()
+
+
+async def test_revoking_webhook_owner_closes_admission_and_does_not_borrow_another_owner():
+    base = "/private/tmp" if sys.platform == "darwin" else tempfile.gettempdir()
+    with tempfile.TemporaryDirectory(prefix="jvs-hook-rev-", dir=base) as value:
+        profile = Path(value) / "profile"
+        owner, operator = ClientIdentity.generate(), ClientIdentity.generate()
+        peer = ManagementPeer()
+        service = JarvisService(profile, peer, bootstrap_public_key=owner.public_key)
+        review = service.client_authority.review(owner.client_id, {
+            "public_key": operator.public_key, "scope": "owner", "expected_revision": 1})
+        service.client_authority.admit(owner.client_id, {
+            key: review[key] for key in ("review_id", "review_digest")})
+        await service.start()
+        try:
+            async with LocalRpcClient(profile, identity=owner) as admin:
+                async with LocalRpcClient(profile, identity=operator) as client:
+                    hook = await create_hook(client, event="webhook")
+                    snapshot = await client.call("automation.list")
+                    parameters = {"hook_id": hook["hook_id"],
+                        "expected_revision": hook["revision"],
+                        "configuration_hash": snapshot["configuration_hash"], "secret": "S" * 32}
+                    listener = (await client.call(
+                        "automation.webhook.start", parameters))["listener"]
+                    url = urlsplit(listener["address"])
+                    # A failed start from another admitted owner cannot retarget
+                    # the already active listener's identity or secret.
+                    with pytest.raises(RpcError, match="already_open"):
+                        await admin.call("automation.webhook.start", parameters)
+                    assert service._automation_webhook_owner == operator.client_id
+                    reader, writer = await asyncio.open_connection(url.hostname, url.port)
+                    try:
+                        writer.write(b"POST /hooks/")
+                        await writer.drain()
+                        async with asyncio.timeout(3):
+                            while service.automation_webhook.active_count != 1:
+                                await asyncio.sleep(0.005)
+                        await admin.call("clients.revoke", {
+                            "client_id": operator.client_id, "expected_revision": 2})
+                        status = (await admin.call("automation.webhook.status"))["listener"]
+                        assert not status["running"] and status["pending_cleanup"]
+                        with pytest.raises(OSError):
+                            await asyncio.open_connection(url.hostname, url.port)
+                        with pytest.raises(AutomationFlowError, match="owner_revoked"):
+                            service._emit_automation_event("webhook", uuid4().hex, {},
+                                source="webhook", hook_id=hook["hook_id"],
+                                expected_revision=hook["revision"])
+                        assert not service.automation_flows.list_flows() and not peer.calls
+                        async with asyncio.timeout(2):
+                            try:
+                                received = await reader.read()
+                            except ConnectionResetError:
+                                received = b""
+                        assert received == b"" or received.startswith(b"HTTP/1.1 400 Jarvis\r\n")
+                        await admin.call("automation.webhook.stop")
+                        status = (await admin.call("automation.webhook.status"))["listener"]
+                        assert not status["pending_cleanup"] and status["active_count"] == 0
+                        assert service._automation_webhook_owner is None
+                        assert service.automation_webhook._key is None
+                    finally:
+                        writer.close()
+                        try:
+                            await writer.wait_closed()
+                        except ConnectionResetError:
+                            pass
         finally:
             await service.aclose()

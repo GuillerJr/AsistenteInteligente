@@ -28,6 +28,7 @@ class AutomationEventsAPI:
         self._automation_origins = set()
         self._automation_run_guards = {}
         self._automation_runner_owner = None
+        self._automation_webhook_owner = None
         self._new_automation_runner()
         self.automation_webhook = WebhookListener(
             self.automation_flows, emit=self._emit_automation_event,
@@ -122,6 +123,14 @@ class AutomationEventsAPI:
     def _emit_automation_event(self, event, event_id, payload, **kwargs):
         if self._closing or self._maintenance:
             raise AutomationFlowError("automation_service_unavailable")
+        if kwargs.get("source") == "webhook":
+            owner = self._automation_webhook_owner
+            try:
+                if owner is None or self.automation_webhook._closing:
+                    raise AutomationFlowError("automation_webhook_owner_revoked")
+                self.client_authority.lookup(owner, scope="owner")
+            except ClientIdentityError:
+                raise AutomationFlowError("automation_webhook_owner_revoked") from None
         return self.automation_flows.emit(event, event_id, payload, **kwargs)
 
     async def emit_automation_hook(self, value):
@@ -140,6 +149,8 @@ class AutomationEventsAPI:
     async def _control_automation_flow(self, value, action):
         params(value, {"flow_id", "expected_revision"}, {"flow_id", "expected_revision"})
         self._automation_control()
+        if action == "resume" and not self.automation_runner.running:
+            raise RpcError(-32035, "Revisa y activa el motor antes de reanudar el flujo.")
         result = getattr(self.automation_flows, action)(**value)
         # Cancel the exact run now as well as notifying the durable pump. Its
         # cleanup remains owned; no new step can overtake that cleanup.
@@ -192,13 +203,33 @@ class AutomationEventsAPI:
                 or hook["workspace_id"] != self._workspace_id
                 or not isinstance(secret, str) or re.fullmatch(r"[!-~]{32,64}", secret) is None):
             raise AutomationFlowError("automation_webhook_configuration_invalid")
-        await self.automation_webhook.start(hook["hook_id"], secret.encode("ascii"))
+        listener = self.automation_webhook
+        if (listener._server is not None or listener._startup_task is not None
+                or listener._closing or listener.active_count):
+            raise AutomationFlowError("automation_webhook_already_open")
+        owner = authenticated_client.get()
+        self.client_authority.lookup(owner, scope="owner")
+        self._automation_webhook_owner = owner
+        try:
+            await listener.start(hook["hook_id"], secret.encode("ascii"))
+            self.client_authority.lookup(owner, scope="owner")
+        except BaseException:
+            listener.revoke()
+            await listener.aclose()
+            self._automation_webhook_owner = None
+            # A successfully drained failed acquisition is reusable only as a
+            # fresh listener, never by retargeting the previous owner's object.
+            self.automation_webhook = WebhookListener(
+                self.automation_flows, emit=self._emit_automation_event,
+                on_enqueue=lambda: self.automation_runner.wake())
+            raise
         return {"listener": self._automation_listener_value()}
 
     async def stop_automation_webhook(self, value):
         params(value, set())
         self._automation_control()
         await self.automation_webhook.aclose()
+        self._automation_webhook_owner = None
         self.automation_webhook = WebhookListener(
             self.automation_flows, emit=self._emit_automation_event,
             on_enqueue=lambda: self.automation_runner.wake())

@@ -689,6 +689,7 @@ class WebhookListener:
         self.store, self.emit = store, emit or store.emit
         self.on_enqueue, self.clock = on_enqueue, clock
         self._server = None
+        self._startup_task = None
         self._key = None
         self._hook = None
         self._tasks = set()
@@ -703,10 +704,12 @@ class WebhookListener:
 
     @property
     def pending_cleanup(self):
-        return self._closing and bool(self._tasks or self._writers or self._server)
+        return self._closing and bool(
+            self._tasks or self._writers or self._server or self._startup_task)
 
     def status(self):
-        running = self._server is not None and self._server.is_serving()
+        running = (not self._closing and self._server is not None
+                   and self._server.is_serving())
         address = None
         if running:
             port = self._server.sockets[0].getsockname()[1]
@@ -717,7 +720,8 @@ class WebhookListener:
                 "pending_cleanup": self.pending_cleanup}
 
     async def start(self, hook_id, key):
-        if self._server is not None or self._tasks or self._closing:
+        if (self._server is not None or self._startup_task is not None
+                or self._tasks or self._closing):
             _fail("automation_webhook_already_open")
         if not isinstance(key, bytes) or not 32 <= len(key) <= 64:
             _fail("automation_webhook_key_invalid")
@@ -725,13 +729,34 @@ class WebhookListener:
         if not hook["enabled"] or hook["event"] != "webhook":
             _fail("automation_hook_unavailable")
         self._hook, self._key = hook, bytes(key)
+        # The server acquisition is owned even if the RPC that awaits it is
+        # cancelled. A later close drains this exact task and its server.
+        self._startup_task = asyncio.create_task(asyncio.start_server(
+            self._accept, "127.0.0.1", 0, limit=4096))
         try:
-            self._server = await asyncio.start_server(self._accept, "127.0.0.1", 0, limit=4096)
+            self._server = await asyncio.shield(self._startup_task)
+            self._startup_task = None
+            if self._closing:
+                self._server.close()
+                _fail("automation_webhook_revoked")
             self._port = self._server.sockets[0].getsockname()[1]
         except BaseException:
-            self._hook = self._key = None
+            self.revoke()
             raise
         return self.status()
+
+    def revoke(self):
+        """Withdraw admission synchronously; retain keys/resources until close ACK."""
+        self._closing = True
+        if self._server is not None:
+            self._server.close()
+        for writer in tuple(self._writers):
+            try:
+                writer.close()
+            except (OSError, RuntimeError):
+                pass  # Preserve the writer for an explicit close retry.
+        for task in tuple(self._tasks):
+            task.cancel()
 
     def _accept(self, reader, writer):
         # Custody precedes scheduling: aclose may cancel a task before its first
@@ -799,6 +824,8 @@ class WebhookListener:
                 status = 409
             elif error.code in {"automation_hook_unavailable", "automation_revision_conflict"}:
                 status = 409
+            elif error.code == "automation_webhook_owner_revoked":
+                status = 401
         except (ValueError, UnicodeError, OSError, TimeoutError, RecursionError,
                 asyncio.IncompleteReadError,
                 asyncio.LimitOverrunError):
@@ -829,10 +856,24 @@ class WebhookListener:
                 self._writers.discard(writer)
 
     async def aclose(self):
-        self._closing = True
+        self.revoke()
+        if self._startup_task is not None:
+            startup = self._startup_task
+            _, pending = await asyncio.wait({startup}, timeout=5)
+            if pending:
+                _fail("automation_webhook_cleanup_pending")
+            try:
+                self._server = startup.result()
+            except (OSError, asyncio.CancelledError):
+                pass
+            self._startup_task = None
         if self._server is not None:
             self._server.close()
-            await self._server.wait_closed()
+            try:
+                async with asyncio.timeout(5):
+                    await self._server.wait_closed()
+            except TimeoutError:
+                _fail("automation_webhook_cleanup_pending")
             self._server = None
         for writer in tuple(self._writers):
             writer.close()

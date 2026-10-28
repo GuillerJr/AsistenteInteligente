@@ -597,3 +597,42 @@ async def test_webhook_retains_uncertain_writer_and_key_until_confirmed_close(st
     writer.fails = False
     await listener.aclose()
     assert not listener.pending_cleanup and listener._key is None
+
+
+@pytest.mark.parametrize("action", ["revoke", "cancel_start"])
+async def test_webhook_start_acquisition_remains_owned_during_revocation_or_cancel(
+    store, clock, monkeypatch, action
+):
+    row, key = hook(store, event="webhook"), b"k" * 32
+    listener = WebhookListener(store, clock=clock)
+    entered, release, created = asyncio.Event(), asyncio.Event(), []
+    original = asyncio.start_server
+    async def delayed_start(*args, **kwargs):
+        entered.set()
+        await release.wait()
+        server = await original(*args, **kwargs)
+        created.append((server, server.sockets[0].getsockname()[1]))
+        return server
+    with monkeypatch.context() as patch:
+        patch.setattr("jarvis_core.automation_flows.asyncio.start_server", delayed_start)
+        start = asyncio.create_task(listener.start(row["hook_id"], key))
+        await entered.wait()
+        with pytest.raises(AutomationFlowError, match="already_open"):
+            await listener.start(row["hook_id"], b"z" * 32)
+        if action == "cancel_start":
+            start.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await start
+        else:
+            listener.revoke()
+        assert listener.pending_cleanup and listener._key == key
+        release.set()
+        if action == "revoke":
+            with pytest.raises(AutomationFlowError, match="webhook_revoked"):
+                await start
+        await listener.aclose()
+    assert len(created) == 1 and not created[0][0].is_serving()
+    assert listener._key is None and not listener.pending_cleanup
+    assert not store.list_flows()
+    with pytest.raises(OSError):
+        await asyncio.open_connection("127.0.0.1", created[0][1])

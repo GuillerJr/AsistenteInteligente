@@ -416,6 +416,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         if getattr(self, "_automation_runner_owner", None) == client_id:
             self.automation_runner._stop.set()
             self.automation_runner.wake()
+        if getattr(self, "_automation_webhook_owner", None) == client_id:
+            self.automation_webhook.revoke()
         for run_id, owner in tuple(self._run_clients.items()):
             if owner != client_id:
                 continue

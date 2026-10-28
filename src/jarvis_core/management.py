@@ -112,9 +112,12 @@ class ManagementAPI:
             or any(row.agent_id == agent.agent_id for row in self.schedule_store.list())
             or any(row["agent_id"] == agent.agent_id
                    for row in self.automation_flows.list_hooks())
+            or any(row["agent_id"] == agent.agent_id
+                   for row in self.automation_flows.list_flows())
         ):
             raise RpcError(
-                -32032, "El agente conserva skills, plugins, memoria o tareas. Retíralas primero."
+                -32032, "El agente conserva skills, plugins, memoria, tareas "
+                "o historial de automatizaciones."
             )
         self.agent_profiles.delete(**value)
         return {"deleted": True}
@@ -396,10 +399,35 @@ class ManagementAPI:
                     "request_id": occurrence.occurrence_id,
                 }
             )
-        except RpcError:
-            self._automation_origins.discard(occurrence.occurrence_id)
-            self._automation_run_guards.pop(occurrence.occurrence_id, None)
-            return DispatchResult(None, "failed", "known", "scheduled_dispatch_unavailable")
+        except BaseException as error:
+            partial = self._handles.get(occurrence.occurrence_id)
+            if partial is None:
+                # Provider choice, client revocation and invalid context may
+                # fail before a runtime exists. Nothing will settle these
+                # registrations later, so remove both on every error path.
+                self._automation_origins.discard(occurrence.occurrence_id)
+                self._automation_run_guards.pop(occurrence.occurrence_id, None)
+            else:
+                # A future start_run implementation may yield after creating
+                # a runtime. Retain its guards until its owner settles it, and
+                # never turn a partial start into a known no-effect receipt.
+                partial.cancel()
+                cleanup = asyncio.create_task(partial.await_settled())
+                while not cleanup.done():
+                    try:
+                        await asyncio.shield(cleanup)
+                    except asyncio.CancelledError:
+                        continue
+                cleanup.result()
+            if isinstance(error, RpcError):
+                return DispatchResult(
+                    partial.run_id if partial is not None else None,
+                    "interrupted" if partial is not None else "failed",
+                    "unknown" if partial is not None else "known",
+                    "scheduled_dispatch_unconfirmed" if partial is not None
+                    else "scheduled_dispatch_unavailable",
+                )
+            raise
         finally:
             authenticated_client.reset(owner_token)
         run_id = run["run_id"]

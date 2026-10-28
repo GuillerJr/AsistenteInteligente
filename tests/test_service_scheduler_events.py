@@ -5,6 +5,7 @@ import asyncio
 import pytest
 from test_service_management import management as management
 from test_service_management import (
+    new_agent,
     occurrence,
     pending,
     schedule,
@@ -13,6 +14,8 @@ from test_service_management import (
 )
 
 from jarvis_core.protocol import RpcError
+from jarvis_core.provider_choice import ProviderChoiceError
+from jarvis_core.scheduler import DispatchResult
 
 
 async def approval_for_occurrence(service, client, identity):
@@ -99,3 +102,91 @@ async def test_suspend_invalidates_pending_action_approval_without_replay(manage
     await asyncio.sleep(0.02)
     assert len(peer.calls) == 1
     assert not (service._workspace_path / "suspended.txt").exists()
+
+
+@pytest.mark.parametrize("error_type", [ValueError, ProviderChoiceError, asyncio.CancelledError])
+async def test_schedule_start_failure_removes_origin_and_guard_without_awaiting_nonexistent_runtime(
+    management, monkeypatch, error_type,
+):
+    service, client, peer, _root = management
+    job = await schedule(client, prompt="inicio fallido sintético", enabled=True)
+
+    async def unavailable(_request):
+        raise error_type("synthetic_start_unavailable")
+
+    monkeypatch.setattr(service, "start_run", unavailable)
+    await start_scheduler(client)
+    receipt = await occurrence(client, job["schedule_id"])
+    assert receipt["status"] in {"failed", "cancelled"}
+    assert receipt["outcome"] == "unknown"
+    assert receipt["occurrence_id"] not in service._automation_origins
+    assert receipt["occurrence_id"] not in service._automation_run_guards
+    assert not service._handles and not service._refs and not peer.calls
+    await client.call("scheduler.stop")
+    await start_scheduler(client)
+    await asyncio.sleep(0.02)
+    assert len(service.schedule_store.history(job["schedule_id"])) == 1
+
+
+async def test_partial_rpc_start_failure_cancels_owned_runtime_and_keeps_unknown_receipt(
+    management, monkeypatch,
+):
+    service, client, peer, _root = management
+    job = await schedule(client, prompt="esperar", enabled=True)
+    original = service.start_run
+
+    async def partial_start(request):
+        await original(request)
+        await peer.entered.wait()
+        raise RpcError(-32020, "synthetic_partial_start_ack_lost")
+
+    monkeypatch.setattr(service, "start_run", partial_start)
+    await start_scheduler(client)
+    receipt = await occurrence(client, job["schedule_id"])
+    assert receipt["status"] == "interrupted" and receipt["outcome"] == "unknown"
+    assert receipt["error_code"] == "scheduled_dispatch_unconfirmed"
+    assert receipt["run_id"] == receipt["occurrence_id"]
+    async with asyncio.timeout(5):
+        while service._handles:
+            await asyncio.sleep(0.002)
+    assert receipt["occurrence_id"] not in service._automation_origins
+    assert receipt["occurrence_id"] not in service._automation_run_guards
+    assert len(peer.calls) == 1
+    await client.call("scheduler.stop")
+    await start_scheduler(client)
+    await asyncio.sleep(0.02)
+    assert len(peer.calls) == 1
+
+
+async def test_agent_with_retained_flow_history_cannot_be_orphaned_after_hook_removal(management):
+    service, client, peer, _root = management
+    agent = await new_agent(client)
+    hook = (await client.call("automation.hooks.create", {
+        "title": "Historial sintético", "event": "manual", "agent_id": agent["agent_id"],
+        "steps": [{"prompt": "No usar herramientas", "pause_after": False}],
+    }))["hook"]
+    hook = (await client.call("automation.hooks.update", {
+        "hook_id": hook["hook_id"], "expected_revision": hook["revision"], "enabled": True,
+    }))["hook"]
+    flow = (await client.call("automation.hooks.emit", {
+        "hook_id": hook["hook_id"], "expected_revision": hook["revision"],
+        "event_id": "retained-history-event", "payload": {},
+    }))["flows"][0]
+    # Finish only a synthetic registry claim, without inference or a session.
+    claim = service.automation_flows.claim_next()
+    service.automation_flows.finish_step(claim, DispatchResult(None))
+    await client.call("automation.hooks.remove", {
+        "hook_id": hook["hook_id"], "expected_revision": hook["revision"],
+    })
+    assert not service.automation_flows.list_hooks()
+    assert not any(row.agent_id == agent["agent_id"] for row in service.store.list_sessions())
+    before = service.automation_flows.get_flow(flow["flow_id"])
+    assert before["status"] == "completed"
+    with pytest.raises(RpcError) as error:
+        await client.call("agents.delete", {
+            "agent_id": agent["agent_id"], "expected_revision": agent["revision"],
+        })
+    assert error.value.code == -32032
+    assert service.agent_profiles.get(agent["agent_id"]).revision == agent["revision"]
+    assert service.automation_flows.get_flow(flow["flow_id"]) == before
+    assert not peer.calls
