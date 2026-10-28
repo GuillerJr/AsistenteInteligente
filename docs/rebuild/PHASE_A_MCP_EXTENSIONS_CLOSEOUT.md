@@ -198,3 +198,61 @@ conservó. El plugin de prueba terminó también su retirada de versión y elimi
 sus ZIP originales se conservaron. Se cerraron las conexiones públicas y el
 peer propio: salida 0, cero conexiones y cero tareas pendientes. El censo acotado
 previo comprobó la salida del servicio, Codex y su auxiliar sin enviarles señales.
+
+
+## Repetición final del código d935bfc
+
+La [CI 40759557092](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40759557092) del código `d935bfc208e298828ed40445bf46b17073c9c3cc` aprobó Python macOS 3128, Ubuntu 3082 (46 omisiones), Swift 469 casos (una omisión, cero fallos), bundle de desarrollo, wheel/sdist y smoke aislado. Las suites y compilaciones completas corrieron exclusivamente en CI remota.
+
+El bundle exacto repitió una única búsqueda autorizada en Microsoft Learn con
+2025-06-18 explícito: un recibo conocido, 41334 bytes de resultado íntegro y dos
+elementos de texto con 83959 bytes confirmados por ACK correlacionado. El modelo
+transcribió el identificador aleatorio de operación que no aparecía en el prompt,
+además de una referencia del resultado. Es una evidencia separada de consumo;
+el ACK aislado y el reporte externo siguen sin acreditar verificación física.
+Se conserva la omisión de identificador del checkpoint EAD como antecedente, sin
+atribuir retroactivamente una causa no observada.
+
+OAuth PKCE/renovación/revocación, SSE, lectura denegada sin despacho, WebKit/puente
+y retiro de App, relay por cliente HTTP independiente, versiones y eliminación
+de plugins/skills ya tienen sus oráculos por checkpoint. El recurso de la skill
+corregida conservó 25 bytes y su hash tras reinicio; su fixture se eliminó y el
+registro histórico incompleto se conservó. Los contratos remotos de suscripción
+relay comprueban ACK, filtro exacto, revocación, aviso de catálogo y stop obsoleto;
+no se afirma una suscripción manual adicional.
+
+La última sesión terminó en 183,041 segundos, dentro del plazo de 300. La app
+desconectó la fuente pública y cerró; el socket desapareció. Las tres identidades
+censadas del servicio, Codex y host no estaban presentes tras 0,023 segundos, sin
+señales del observador. El censo usa PID, inicio con precisión de segundos y
+ejecutable, sin handle del kernel; no acredita custodia de árboles arbitrarios.
+El peer propio cerró con salida 0, cero conexiones y cero tareas.
+
+La medición final del directorio propio fue de 215744 KiB (aproximadamente
+210,7 MiB), bajo 256 MiB; `dasd` marcaba 0 % en esa muestra. El exceso previo de
+unos 3 MiB se conserva con su parada y recibos de limpieza de cachés reproducibles.
+No se borraron perfiles ni datos del dueño y no se repitieron suites locales.
+
+## Transparencia de privacidad
+
+Al localizar el navegador del acceso OAuth, la selección de Chrome devolvió el
+árbol de accesibilidad de una ventana personal. No se abrieron mensajes ni se
+usó o exportó su contenido al repositorio o a archivos; el dueño fue informado.
+El recorrido continuó mediante el enlace validado, sólo en RAM dentro de Jarvis,
+y un IAB aislado cuya pestaña se cerró. Este incidente se registra sin nombres,
+remitentes, asuntos ni direcciones personales. Las banderas de exportación del
+JSON describen sólo sus metadatos saneados y no niegan esta lectura accidental.
+
+El acceso oficial ChatGPT lo completó el dueño; las credenciales que guarda el
+cliente oficial permanecen bajo su gestión y no se inspeccionaron sus archivos.
+La afirmación de credenciales sólo RAM corresponde a OAuth MCP, no al almacenamiento
+interno de autenticación del proveedor oficial.
+
+## Estado del alcance elegido
+
+El incremento elegido está cualificado (`qualified_selected_increment`): el [registro JSON](PHASE_A_MCP_EXTENSIONS_QUALIFICATION.json) reúne hashes, CI, oráculos y fallos preservados.
+Paquetes declarativos propios no equivalen a extensiones ejecutables OpenClaw;
+no se acreditan todos sus 177 conectores, todos los servidores, capacidades Apps
+no anunciadas, relay OAuth de Internet ni distribución autocontenida/notarizada.
+La matriz conserva 51 familias parciales, 29 sin implementar y ninguna completa.
+La fase A global sigue abierta y la fase B no ha comenzado.

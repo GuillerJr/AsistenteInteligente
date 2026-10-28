@@ -2,8 +2,8 @@
   "format": "jarvis-phase-a-mcp-extensions-qualification/1",
   "date": "2026-10-28",
   "prepared_at_utc": "2026-10-28T19:39:57.239749+00:00",
-  "status": "qualification_in_progress",
-  "selected_increment_complete": false,
+  "status": "qualified_selected_increment",
+  "selected_increment_complete": true,
   "complete_capability_families": 0,
   "whole_reference_parity_complete": false,
   "phase_a_complete": false,
@@ -635,6 +635,217 @@
         "no_model_consumption_claim_from_ack_alone": true,
         "next_bridge_adjustment_pending": true
       }
+    },
+    {
+      "commit": "d935bfc208e298828ed40445bf46b17073c9c3cc",
+      "status": "selected_native_repeat_and_cleanup_positive",
+      "launch": {
+        "architecture": "arm64",
+        "archive_sha256": "734f681adccb178423e195d5d0da78a288d1dd5da13ad0cb6edb7afc22783279",
+        "binary_sha256": "fc384ea84cfb881ab82cc84ea840e0cb9352445784bbc0d02aad78dc0d586036",
+        "commit": "d935bfc208e298828ed40445bf46b17073c9c3cc",
+        "development_bundle": true,
+        "external_python_required": true,
+        "format": "jarvis-mcp-native-launch/4",
+        "run_id": "40759557092",
+        "artifact_id": 12847782005,
+        "artifact_zip_sha256": "c2c6a636301aeb11d106daeca3f293d0870b3e551a76e394a3b5c456d0054a29",
+        "launcher_sha256": "e89349d5349e4cb9eec7e3e61d1e6b7c2f4cfa12cd78ab51cb48c3bf5413aea6",
+        "test_binary_sha256": "3c7a23c778bd9d00dfbac76c3da957035fe2bf0a4f6eb06e55b334e142143529",
+        "manual_gui_budget_mib": 256,
+        "manual_gui_deadline_seconds": 300,
+        "segment_start_unix": 1793217888.547385,
+        "segment": "Una respuesta pública extensa con metadatos al inicio y cierre",
+        "existing_synthetic_profile_retained": true
+      },
+      "artifact": {
+        "architecture": "arm64",
+        "archive_sha256": "734f681adccb178423e195d5d0da78a288d1dd5da13ad0cb6edb7afc22783279",
+        "binary_sha256": "fc384ea84cfb881ab82cc84ea840e0cb9352445784bbc0d02aad78dc0d586036",
+        "commit": "d935bfc208e298828ed40445bf46b17073c9c3cc",
+        "development_bundle": true,
+        "external_python_required": true,
+        "format": "jarvis-desktop-ci/1",
+        "run_id": "40759557092"
+      },
+      "public_server_final": {
+        "format": "jarvis-public-mcp-final-oracle/1",
+        "commit": "d935bfc208e298828ed40445bf46b17073c9c3cc",
+        "endpoint": "https://learn.microsoft.com/api/mcp",
+        "protocol": "2025-06-18",
+        "run_id": "831b71ca63e14fa59164ebb0c01486af",
+        "status": "completed",
+        "outcome": "known",
+        "receipt_count": 1,
+        "tool_name": "mcp_learn_publico_28ac8c3efbf2737c",
+        "operation_id": "88d8dbd560b94c4fb751c3b1b2166900",
+        "succeeded": true,
+        "remote_verified": false,
+        "output_bytes": 41334,
+        "output_sha256": "e8f6f91b03b8ffa7f238b3fbf40ea3e8636cf784caaa256fd9fd1c831e988863",
+        "durable_excerpt_truncated": true,
+        "model_reported_unprompted_operation_id": true,
+        "answer_has_result_url": true,
+        "answer_sha256": "e766946b5e0c50d54cbc46cff305afa1391c7e7c619f672b750b641702b6170f",
+        "events": [
+          {
+            "kind": "tool.reply.sent",
+            "payload": {
+              "arguments_sha256": "f22c903a5979189bf3929ba35218082f78d00166d593927af7cceb4f404260b2",
+              "call_id_sha256": "1c14ad38a0bb39686f856c8206619c1f903c4e628ab633051cf17ade91dcdb1a",
+              "content_items_count": 2,
+              "content_items_sha256": "544b81a7029adc2d0bdf513ecce90172f697345f72214a5e30fd9faea98fa769",
+              "image_items_count": 0,
+              "model_consumption_verified": false,
+              "original_write_attempted": true,
+              "original_write_confirmed": true,
+              "physical_verified": false,
+              "reply_kind": "original",
+              "success": true,
+              "text_bytes": 83959,
+              "text_items_count": 2,
+              "thread_id_sha256": "56b6cfc923e5708ff11dcdcbe06957356edcf5f98bccd48ccf70023d4c58495c",
+              "tool_sha256": "9b8f08cb19814870aa8ce9bde047439b6e06d80b73f7d6ccd61a189ca18a9932",
+              "turn_id_sha256": "ca0261178b386bf8523b1cf163a76c7f8fa79cf66fbecfb5d56c44b8c4054212",
+              "write_attempted": true,
+              "write_confirmed": true
+            }
+          },
+          {
+            "kind": "tool.reply.ack",
+            "payload": {
+              "ack_state": "matched",
+              "ack_status": "completed",
+              "ack_success": true,
+              "arguments_match": true,
+              "arguments_sha256": "f22c903a5979189bf3929ba35218082f78d00166d593927af7cceb4f404260b2",
+              "call_id_sha256": "1c14ad38a0bb39686f856c8206619c1f903c4e628ab633051cf17ade91dcdb1a",
+              "content_items_count": 2,
+              "content_items_sha256": "544b81a7029adc2d0bdf513ecce90172f697345f72214a5e30fd9faea98fa769",
+              "content_matches": true,
+              "identity_matches": true,
+              "image_items_count": 0,
+              "matches": true,
+              "model_consumption_verified": false,
+              "observed_arguments_sha256": "f22c903a5979189bf3929ba35218082f78d00166d593927af7cceb4f404260b2",
+              "observed_call_id_sha256": "1c14ad38a0bb39686f856c8206619c1f903c4e628ab633051cf17ade91dcdb1a",
+              "observed_content_items_count": 2,
+              "observed_content_items_sha256": "544b81a7029adc2d0bdf513ecce90172f697345f72214a5e30fd9faea98fa769",
+              "observed_text_bytes": 83959,
+              "observed_thread_id_sha256": "56b6cfc923e5708ff11dcdcbe06957356edcf5f98bccd48ccf70023d4c58495c",
+              "observed_tool_sha256": "9b8f08cb19814870aa8ce9bde047439b6e06d80b73f7d6ccd61a189ca18a9932",
+              "observed_turn_id_sha256": "ca0261178b386bf8523b1cf163a76c7f8fa79cf66fbecfb5d56c44b8c4054212",
+              "original_reply_delivered": true,
+              "original_write_attempted": true,
+              "original_write_confirmed": true,
+              "physical_verified": false,
+              "reply_kind": "original",
+              "request_tracked": true,
+              "success": true,
+              "success_matches": true,
+              "text_bytes": 83959,
+              "text_items_count": 2,
+              "thread_id_sha256": "56b6cfc923e5708ff11dcdcbe06957356edcf5f98bccd48ccf70023d4c58495c",
+              "tool_sha256": "9b8f08cb19814870aa8ce9bde047439b6e06d80b73f7d6ccd61a189ca18a9932",
+              "turn_id_sha256": "ca0261178b386bf8523b1cf163a76c7f8fa79cf66fbecfb5d56c44b8c4054212",
+              "write_attempted": true,
+              "write_confirmed": true
+            }
+          }
+        ],
+        "segment_elapsed_seconds": 138.614
+      },
+      "native_close": {
+        "format": "jarvis-mcp-final-close-observation/1",
+        "source_commit": "d935bfc208e298828ed40445bf46b17073c9c3cc",
+        "segment_elapsed_seconds": 183.041,
+        "segment_deadline_seconds": 300,
+        "within_deadline": true,
+        "service_socket_absent": true,
+        "public_connection_disconnected_in_ui": true,
+        "own_peer_closed": true,
+        "own_peer_connections_remaining": 0,
+        "own_peer_tasks_remaining": 0,
+        "shutdown_identities_absent": true,
+        "new_public_tool_receipts": 1,
+        "owner_installed_app_or_profiles_modified": false,
+        "latest_test_bundle_retained": "native-d935bfc/Jarvis.app"
+      },
+      "shutdown": {
+        "ready": {
+          "captured_at": "2026-10-28T20:07:19.433821+00:00",
+          "census_is_atomic": false,
+          "environment_read": false,
+          "identity_resolution_seconds": 1,
+          "observation_seconds": 10,
+          "original_processes": [
+            {
+              "comm": "/opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python",
+              "pid": 14987,
+              "start_time": "Wed Oct 28 15:05:09 2026"
+            },
+            {
+              "comm": "/opt/homebrew/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex",
+              "pid": 15011,
+              "start_time": "Wed Oct 28 15:05:41 2026"
+            },
+            {
+              "comm": "/opt/homebrew/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex-code-mode-host",
+              "pid": 15043,
+              "start_time": "Wed Oct 28 15:06:44 2026"
+            }
+          ],
+          "parent_pids": {
+            "15011": 14987,
+            "15043": 15011
+          },
+          "phase": "ready_before_operator_closes_app",
+          "process_arguments_read": false,
+          "root_pids": [
+            14987
+          ],
+          "signals_sent": false,
+          "snapshot_sha256": "a38bc0eed2d6e47081c4fd7e60e96115e256baf087114f7178fbaff4add8bf9d",
+          "socket": "/private/tmp/jarvis-mcp-final-20261028-1793214534198/state/service.sock",
+          "vanished_during_census": 0,
+          "wait_trigger_seconds": 180
+        },
+        "result": {
+          "all_original_identities_absent": true,
+          "elapsed_seconds": 0.023,
+          "finished_at": "2026-10-28T20:07:34.803719+00:00",
+          "limit": "PID, start time (second precision), and comm; no kernel process handle",
+          "new_descendants_discovered_after_trigger": false,
+          "observations": [
+            {
+              "first_absent_seconds": 0.0,
+              "last_same_identity_seconds": null,
+              "observation_count": 1,
+              "pid": 14987,
+              "state": "absent"
+            },
+            {
+              "first_absent_seconds": 0.008,
+              "last_same_identity_seconds": null,
+              "observation_count": 1,
+              "pid": 15011,
+              "state": "absent"
+            },
+            {
+              "first_absent_seconds": 0.017,
+              "last_same_identity_seconds": null,
+              "observation_count": 1,
+              "pid": 15043,
+              "state": "absent"
+            }
+          ],
+          "phase": "original_processes_after_operator_closes_app",
+          "signals_sent": false,
+          "snapshot_sha256": "a38bc0eed2d6e47081c4fd7e60e96115e256baf087114f7178fbaff4add8bf9d",
+          "triggered_at": "2026-10-28T20:07:34.780346+00:00"
+        }
+      },
+      "observation_scope": "Una búsqueda pública autorizada con respuesta extensa, entrega exacta y consumo del identificador aleatorio; no verificación física del servidor."
     }
   ],
   "remote_ci": [
@@ -686,14 +897,53 @@
       "commit": "ead30c3a87735f2d1aafad1fe386b31577fa2965",
       "run_id": "40757900276",
       "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40757900276",
-      "status": "in_progress",
+      "status": "cancelled",
       "source": "Estado comunicado por el agente raíz al preparar este registro",
       "full_qualification_confirmed": false,
       "local_suites_run": false,
       "local_compilations_run": false,
       "last_reported_status": "in_progress",
-      "may_be_superseded_by_combined_bridge_push": true,
-      "status_note": "No se acredita aquí macOS aprobado para EAD; conservar el resultado exacto si este run resulta sustituido por la CI del nuevo bridge."
+      "status_note": "No se acredita aquí macOS aprobado para EAD; conservar el resultado exacto si este run resulta sustituido por la CI del nuevo bridge.",
+      "macos_status": "cancelled",
+      "supersession_observed": true,
+      "superseded_by_commit": "d935bfc208e298828ed40445bf46b17073c9c3cc",
+      "superseded_by_run_id": "40759557092",
+      "note": "Ubuntu aprobado; macOS cancelado al publicar el ajuste final del recibo. El commit combinado siguiente aprobó la cualificación completa."
+    },
+    {
+      "commit": "d935bfc208e298828ed40445bf46b17073c9c3cc",
+      "run_id": "40759557092",
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40759557092",
+      "status": "success",
+      "source": "Resultados de GitHub Actions comunicados por el agente raíz",
+      "full_qualification_confirmed": true,
+      "local_suites_run": false,
+      "local_compilations_run": false,
+      "jobs": [
+        {
+          "os": "ubuntu-24.04",
+          "status": "success",
+          "python": {
+            "passed": 3082,
+            "skipped": 46
+          },
+          "wheel_sdist_smoke": "success"
+        },
+        {
+          "os": "macos-26",
+          "status": "success",
+          "python": {
+            "passed": 3128
+          },
+          "swift": {
+            "total": 469,
+            "skipped": 1,
+            "failed": 0
+          },
+          "native_development_bundle": "success",
+          "wheel_sdist_smoke": "success"
+        }
+      ]
     }
   ],
   "independent_relay": {
@@ -790,7 +1040,16 @@
       "connect_errno": 61,
       "closed": true
     },
-    "subscription_event_record": null
+    "subscription_event_record": {
+      "qualification": "qualified_remote_contracts",
+      "tests": [
+        "tests/test_mcp_server.py::test_relay_modern_subscription_ack_exact_filter_and_revoke",
+        "tests/test_mcp_relay_product.py::test_external_relay_tool_needs_central_approval_then_catalog_notice_and_stale_stop"
+      ],
+      "ci_run_id": "40759557092",
+      "manual_subscription_event_claimed": false,
+      "scope": "ACK, filtro exacto, revocación, aviso de catálogo y retirada obsoleta por contratos remotos; sin repetir suscripción GUI."
+    }
   },
   "evidence_files": [
     {
@@ -928,11 +1187,60 @@
       "scope": "final_native_repeat_and_peer_cleanup"
     },
     {
+      "path": "public-mcp-d935-oracle.json",
+      "bytes": 3988,
+      "sha256": "e41905ab63d6619057c8fb6ce8e017d42608ad6a104e80533d60bb98777b1584",
+      "kind": "own_synthetic_metadata",
+      "scope": "final_d935_native_repeat_and_cleanup"
+    },
+    {
+      "path": "launch-record-d935bfc.json",
+      "bytes": 940,
+      "sha256": "fcdd92348eca1766f5aabcb23bdf5f9e7e2d5607067ca981976a48acc1e29513",
+      "kind": "own_synthetic_metadata",
+      "scope": "final_d935_native_repeat_and_cleanup"
+    },
+    {
+      "path": "final-native-close.json",
+      "bytes": 584,
+      "sha256": "9d1428750a357ad42d26b216aff03459f2b3e6b8fa6834db7ef21cc6718f4322",
+      "kind": "own_synthetic_metadata",
+      "scope": "final_d935_native_repeat_and_cleanup"
+    },
+    {
+      "path": "codex-shutdown-final.ready.json",
+      "bytes": 1329,
+      "sha256": "3b78176f092f409877c1024a05d012a3190ce7664d8fc39f106534fd29f1858b",
+      "kind": "own_synthetic_metadata",
+      "scope": "final_d935_native_repeat_and_cleanup"
+    },
+    {
+      "path": "codex-shutdown-final.result.json",
+      "bytes": 1011,
+      "sha256": "2cb8b02bb62500d5d9795608998eb1e54f0749e9872dd3f465f7827b429f01c2",
+      "kind": "own_synthetic_metadata",
+      "scope": "final_d935_native_repeat_and_cleanup"
+    },
+    {
+      "path": "storage-final-observed.json",
+      "bytes": 456,
+      "sha256": "9645321f20bf03a83114724bb89462c26019d44ddb05d98cdd1e9935fe0f374e",
+      "kind": "own_synthetic_metadata",
+      "scope": "final_d935_native_repeat_and_cleanup"
+    },
+    {
       "path": "peer-close-observed.json",
       "bytes": 149,
       "sha256": "494390ef609d28fea82d2374219e67fa8b0c214d3e8fc8d02919cc3a181e2581",
       "kind": "own_synthetic_metadata",
-      "scope": "final_native_repeat_and_peer_cleanup"
+      "scope": "final_d935_native_repeat_and_cleanup"
+    },
+    {
+      "path": "native-d935bfc/Jarvis-provenance.json",
+      "bytes": 371,
+      "sha256": "262ecc3d1b48edbfbd78afb81d1900271c37bd7cda4de6daf320484aea729796",
+      "kind": "own_synthetic_metadata",
+      "scope": "final_d935_native_repeat_and_cleanup"
     }
   ],
   "privacy": {
@@ -946,14 +1254,23 @@
     "raw_skill_text_exported": false,
     "raw_skill_base64_exported": false,
     "raw_authorization_urls_exported": false,
-    "raw_session_identifiers_exported": false
+    "raw_session_identifiers_exported": false,
+    "scope": "Las banderas de exportación se refieren sólo a este registro saneado y sus artefactos; no describen la persistencia interna del cliente oficial ni borran el incidente de inspección de ventana.",
+    "official_provider_login_owner_completed": true,
+    "official_provider_credentials_stored_managed_by_official_client": true,
+    "official_provider_credential_files_inspected": false,
+    "runtime_inadvertent_personal_window_read": true,
+    "runtime_privacy_incident": {
+      "scope": "Durante la localización del navegador OAuth, una selección de Chrome devolvió el árbol AX de una ventana personal.",
+      "personal_messages_opened": false,
+      "personal_content_used_or_exported_to_repository_or_files": false,
+      "owner_informed_in_commentary": true,
+      "corrective_path": "Enlace validado conservado en RAM por Jarvis y apertura en IAB aislado; pestaña cerrada después.",
+      "personal_names_senders_subjects_or_raw_urls_exported": false
+    },
+    "mcp_oauth_credentials_in_ram_only": true
   },
-  "remaining_before_selected_increment_close": [
-    "Publicar y cualificar en CI remota el último bridge con su regresión de orden del contenido completo.",
-    "Repetir el recorrido nativo de metadatos/resultado con el bundle corregido; conservar el resultado público EAD y el identificador omitido como antecedente.",
-    "Registrar el resultado exacto de CI EAD si queda sustituida y la CI completa del commit combinado final.",
-    "Adjuntar la evidencia de suscripción/evento independiente del relay si se ejercita; revocación y cierre del listener conservan sus oráculos separados."
-  ],
+  "remaining_before_selected_increment_close": [],
   "limits": [
     "Own declarative packages are not OpenClaw runtime-compatible extensions.",
     "A tested MCP server or own App does not establish compatibility with all servers/plugins.",
@@ -978,7 +1295,7 @@
     },
     "current_final_peer_close_observed": true,
     "current_profile_shutdown_observed": true,
-    "note": "The zero-connection/task observation belongs only to the earlier explicitly named synthetic peer. Current final-profile cleanup remains to be recorded.",
+    "note": "El peer final propio cerró con cero tareas/conexiones. Tras cerrar la app d935, las tres identidades censadas desaparecieron sin señales enviadas por el observador; no acredita custodia de árboles arbitrarios.",
     "650_service_codex_host_graceful_shutdown": {
       "ready": {
         "captured_at": "2026-10-28T19:53:33.364659+00:00",
@@ -1058,7 +1375,7 @@
       "identity_limit": "PID, hora de arranque con precisión de segundos y nombre del ejecutable; censo no atómico y sin handle de proceso del kernel.",
       "does_not_prove_arbitrary_descendant_custody": true
     },
-    "current_profile_shutdown_scope": "Únicamente las tres identidades originales de servicio, Codex y host del checkpoint 650; el peer externo y descendientes arbitrarios no quedan certificados por esta observación.",
+    "current_profile_shutdown_scope": "Únicamente las tres identidades originales de servicio, Codex y host del checkpoint d935; PID, hora de inicio a segundos y comm, censo no atómico y sin handle del kernel.",
     "current_final_peer_close": {
       "source_path": "peer-close-observed.json",
       "observation": {
@@ -1070,6 +1387,97 @@
         "tasks_remaining": 0
       },
       "scope": "El peer externo final propio; cero conexiones y tareas, salida 0. No certifica árboles arbitrarios."
+    },
+    "d935_service_codex_host_graceful_shutdown": {
+      "ready": {
+        "captured_at": "2026-10-28T20:07:19.433821+00:00",
+        "census_is_atomic": false,
+        "environment_read": false,
+        "identity_resolution_seconds": 1,
+        "observation_seconds": 10,
+        "original_processes": [
+          {
+            "comm": "/opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python",
+            "pid": 14987,
+            "start_time": "Wed Oct 28 15:05:09 2026"
+          },
+          {
+            "comm": "/opt/homebrew/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex",
+            "pid": 15011,
+            "start_time": "Wed Oct 28 15:05:41 2026"
+          },
+          {
+            "comm": "/opt/homebrew/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex-code-mode-host",
+            "pid": 15043,
+            "start_time": "Wed Oct 28 15:06:44 2026"
+          }
+        ],
+        "parent_pids": {
+          "15011": 14987,
+          "15043": 15011
+        },
+        "phase": "ready_before_operator_closes_app",
+        "process_arguments_read": false,
+        "root_pids": [
+          14987
+        ],
+        "signals_sent": false,
+        "snapshot_sha256": "a38bc0eed2d6e47081c4fd7e60e96115e256baf087114f7178fbaff4add8bf9d",
+        "socket": "/private/tmp/jarvis-mcp-final-20261028-1793214534198/state/service.sock",
+        "vanished_during_census": 0,
+        "wait_trigger_seconds": 180
+      },
+      "result": {
+        "all_original_identities_absent": true,
+        "elapsed_seconds": 0.023,
+        "finished_at": "2026-10-28T20:07:34.803719+00:00",
+        "limit": "PID, start time (second precision), and comm; no kernel process handle",
+        "new_descendants_discovered_after_trigger": false,
+        "observations": [
+          {
+            "first_absent_seconds": 0.0,
+            "last_same_identity_seconds": null,
+            "observation_count": 1,
+            "pid": 14987,
+            "state": "absent"
+          },
+          {
+            "first_absent_seconds": 0.008,
+            "last_same_identity_seconds": null,
+            "observation_count": 1,
+            "pid": 15011,
+            "state": "absent"
+          },
+          {
+            "first_absent_seconds": 0.017,
+            "last_same_identity_seconds": null,
+            "observation_count": 1,
+            "pid": 15043,
+            "state": "absent"
+          }
+        ],
+        "phase": "original_processes_after_operator_closes_app",
+        "signals_sent": false,
+        "snapshot_sha256": "a38bc0eed2d6e47081c4fd7e60e96115e256baf087114f7178fbaff4add8bf9d",
+        "triggered_at": "2026-10-28T20:07:34.780346+00:00"
+      },
+      "identity_limit": "PID/start_time/comm; no kernel process handle; non-atomic census"
+    },
+    "final_native_close": {
+      "format": "jarvis-mcp-final-close-observation/1",
+      "source_commit": "d935bfc208e298828ed40445bf46b17073c9c3cc",
+      "segment_elapsed_seconds": 183.041,
+      "segment_deadline_seconds": 300,
+      "within_deadline": true,
+      "service_socket_absent": true,
+      "public_connection_disconnected_in_ui": true,
+      "own_peer_closed": true,
+      "own_peer_connections_remaining": 0,
+      "own_peer_tasks_remaining": 0,
+      "shutdown_identities_absent": true,
+      "new_public_tool_receipts": 1,
+      "owner_installed_app_or_profiles_modified": false,
+      "latest_test_bundle_retained": "native-d935bfc/Jarvis.app"
     }
   },
   "superseded_metadata_versions": [
@@ -1093,7 +1501,7 @@
     "bytes": 18706,
     "sha256": "e6ab9f16aa3167b278b04c24578dbee1325dce8e837bdcaece77a4cd9a0c1bef"
   },
-  "updated_at_utc": "2026-10-28T20:01:19.429949+00:00",
+  "updated_at_utc": "2026-10-28T20:15:57.830869+00:00",
   "metadata_reconciliation_notes": [
     "The source manual snapshot retained external_client_pending=true alongside completed=true. The current qualification projection sets pending=false from the completed independent client receipt; historical failure records are unchanged.",
     "The pre-approval absence probe used the wrong workspace path and remains explicitly invalid.",
@@ -1105,7 +1513,7 @@
     "excess_reported_mib_approximately": 3,
     "limit_exceeded_reported_by_root": true,
     "kept_separate_from_functional_failures": true,
-    "current_allocated_kib_reported_by_root": 207728,
+    "current_allocated_kib_reported_by_root": 215744,
     "archive_cleanup": {
       "format": "jarvis-reproducible-ci-cache-cleanup/1",
       "service_closed": true,
@@ -1208,28 +1616,57 @@
       ]
     },
     "profile_data_removed": false,
-    "current_test_bundle_preserved": "native-6502786/Jarvis.app",
-    "scope": "Only verified own reproducible CI archives/bundles; no personal data or profile removal"
+    "current_test_bundle_preserved": "native-d935bfc/Jarvis.app",
+    "scope": "Only verified own reproducible CI archives/bundles; no personal data or profile removal",
+    "final_storage_observation": {
+      "format": "jarvis-manual-qualification-storage/1",
+      "observed_at_utc": "2026-10-28T20:00:19Z",
+      "dasd_pid": 599,
+      "dasd_cpu_percent": 0.0,
+      "dasd_cumulative_cpu_seconds": 15.95,
+      "volume_available_kib": 207215896,
+      "own_root_after_close_kib": 215744,
+      "manual_root_budget_mib": 256,
+      "observed_peak_kib": 265196,
+      "threshold_exceeded_stopped_and_recorded": true,
+      "owner_profile_data_removed": false,
+      "local_suites_or_compilation": false
+    }
   },
   "title": "Cualificación de MCP, plugins y skills — fase A",
-  "description": "Registro de metadatos, oráculos independientes, checkpoints fallidos y validación remota. El incremento y la fase A siguen abiertos hasta completar las comprobaciones restantes.",
-  "current_code_commit": "ead30c3a87735f2d1aafad1fe386b31577fa2965",
+  "description": "Registro de metadatos, oráculos independientes, checkpoints fallidos y validación remota. Incremento elegido cualificado; ninguna familia amplia ni la fase A completas.",
+  "current_code_commit": "d935bfc208e298828ed40445bf46b17073c9c3cc",
   "source_metadata_root": "/private/tmp/jarvis-mcp-final-20261028-1793214534198",
   "latest_bridge_validation": {
-    "status": "pending",
-    "commit": null,
-    "ci_run_id": null,
-    "ci_status": "pending_combined_push",
-    "native_metadata_repeat_pending": true,
+    "status": "qualified_selected_increment",
+    "commit": "d935bfc208e298828ed40445bf46b17073c9c3cc",
+    "ci_run_id": "40759557092",
+    "ci_status": "success",
+    "native_metadata_repeat_pending": false,
     "prepared_change": "Presentar metadatos de operación primero y el resultado completo al final, sin pérdida ni recorte de contenido.",
     "regression_cases_added": 1,
     "motivating_observation": "La búsqueda pública produjo recibo exitoso y ACK correlacionado, pero la respuesta del modelo no incluyó el identificador de operación; no se atribuye retrospectivamente a una causa no observada.",
     "previous_public_checkpoint": "ead30c3a87735f2d1aafad1fe386b31577fa2965",
-    "local_tests_or_compilation_performed": false
+    "local_tests_or_compilation_performed": false,
+    "native_repeat_operation_id_matched": true,
+    "independent_native_oracle": "public-mcp-d935-oracle.json"
   },
   "previous_qualification_record_snapshot": {
     "path": "qualification-record.before-public-ead.json",
     "bytes": 45683,
     "sha256": "5c35f63b9797ddc8ebed328cd67be1f0f63f845aa69d425bd3a4c725ab6f213a"
+  },
+  "final_scope_reconciliation": {
+    "selected_increment": "qualified_selected_increment",
+    "complete_capability_families": 0,
+    "capability_status_counts": {
+      "implementacion_parcial_contratos_probados": 51,
+      "no_implementado": 29
+    },
+    "whole_reference_parity_complete": false,
+    "phase_a_complete": false,
+    "phase_b_started": false,
+    "historical_failed_checkpoints_preserved": true,
+    "optional_relay_subscription_gui_repeat_required": false
   }
 }

@@ -28,10 +28,11 @@ intentos fallidos, pruebas con pesos reales y el recorrido nativo con ChatGPT.
 El [bloque de MCP y extensiones](PHASE_A_MCP_EXTENSIONS.md) conecta transportes
 HTTP/SSE, OAuth, recursos/prompts, Apps, relay, paquetes propios y versiones de
 skills. Conserva separados implementación, pruebas focales y cualificación nativa.
-La [continuación de cualificación](PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md) está en
-curso: conserva los fallos reales, correcciones, CI por checkpoint y recorridos
-finales. La matriz reconoce ahora relay, paquetes y Apps como implementación
-parcial, sin declarar completas sus familias ni todos los conectores del catálogo.
+El incremento elegido está cualificado (`qualified_selected_increment`): OAuth, SSE, servidor público, App/puente/retiro, relay independiente y versiones
+de plugins/skills tienen oráculos separados. El [registro saneado](PHASE_A_MCP_EXTENSIONS_QUALIFICATION.json)
+y el [cierre narrativo](PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md) conservan CI, hashes,
+fallos históricos y límites. La matriz mantiene 51 familias parciales, 29 sin
+implementar y ninguna completa; la fase A sigue abierta y B no ha comenzado.
 
 Se conservan el nombre de producto Jarvis, los identificadores técnicos `jarvis`,
 la interfaz en español y las reglas de privacidad/aprobación. La primera conexión

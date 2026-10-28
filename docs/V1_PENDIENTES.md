@@ -8,8 +8,9 @@ producto anterior sigue en Git y sus inventarios están congelados.
 Alcance inicial elegido: macOS Apple Silicon y Telegram como primer canal externo.
 El dueño aplazó expresamente la app de iPhone; ver [decisiones](rebuild/PHASE_A_TARGETS.md).
 
-El incremento de [MCP, plugins y skills](rebuild/PHASE_A_MCP_EXTENSIONS.md) ya
-conecta sus superficies y está en [cualificación nativa/CI](rebuild/PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md).
+El incremento de [MCP, plugins y skills](rebuild/PHASE_A_MCP_EXTENSIONS.md) está
+cualificado en el alcance elegido; sus [oráculos y CI](rebuild/PHASE_A_MCP_EXTENSIONS_QUALIFICATION.json)
+se conservan junto al [cierre narrativo](rebuild/PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md).
 La matriz reconoce ese código con 51 familias parciales y 29 sin implementación;
 ninguna familia amplia se declara completa. La investigación REA
 acumula 38 lotes y 144 rutas TS/JS seleccionadas; no es cobertura exhaustiva.
@@ -391,12 +392,13 @@ wiki, motores alternativos ni datos del Jarvis anterior sin elección explícita
 La distribución autocontenida, Developer ID/notarización y actualización remota
 firmada siguen pendientes. La fase A sigue abierta y la fase B no ha comenzado.
 
-### MCP, plugins y skills — cualificación en curso
+### MCP, plugins y skills — incremento elegido cualificado
 
 El [registro del incremento](rebuild/PHASE_A_MCP_EXTENSIONS.md) y la
 [continuación del cierre](rebuild/PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md) conservan
 por separado implementación, fallos iniciales, regresiones y recorridos del
-bundle exacto. El estado es `qualification_in_progress`, no cierre global.
+bundle exacto. El [registro saneado](rebuild/PHASE_A_MCP_EXTENSIONS_QUALIFICATION.json)
+conserva el estado `qualified_selected_increment`; la fase A global sigue abierta.
 
 - [x] Implementar transportes elegidos con protocolo explícito, OAuth PKCE,
   recursos/prompts/plantillas y validación local revisada de esquemas.
@@ -408,10 +410,10 @@ bundle exacto. El estado es `qualification_in_progress`, no cierre global.
   reversión; preparar contexto no envía un turno ni concede herramientas.
 - [x] Añadir regresiones de cierre de Codex, agentes con plugins, lecturas
   tardías y lifecycle nativo de Apps; conservar los fallos de checkpoints previos.
-- [ ] Registrar la cualificación nativa final: OAuth/renovación/revocación,
+- [x] Registrar la cualificación nativa final: OAuth/renovación/revocación,
   SSE, servidor público compatible, App/puente/retiro, relay independiente y
   ciclos completos de paquetes/skills con sus oráculos y recibos.
-- [ ] Aprobar Python, Swift, bundle, wheel/sdist y smoke del último árbol en
+- [x] Aprobar Python, Swift, bundle, wheel/sdist y smoke del último árbol en
   CI remota, sin repetir suites ni compilaciones en el Mac.
 
 REA mantiene **38 lotes y 144 rutas TS/JS seleccionadas**; los catálogos restantes

@@ -65,11 +65,11 @@ fallos encontrados en la verificación, sus correcciones, las regresiones y los
 recorridos nativos. Las versiones 2025-06-18 y 2024-11-05 sólo se ofrecen para
 Streamable HTTP y HTTP+SSE respectivamente; no hay fallback automático.
 
-La implementación está en comprobación nativa y CI (`qualification_in_progress`).
-La matriz reconoce relay, plugins y Apps como código parcial y conserva el
-cierre amplio pendiente. El [registro de cierre](PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md)
-se actualiza con el bundle y el árbol exactos; un positivo de un checkpoint
-anterior no acredita automáticamente las correcciones siguientes.
+El incremento elegido está cualificado (`qualified_selected_increment`): el [registro saneado](PHASE_A_MCP_EXTENSIONS_QUALIFICATION.json)
+identifica el código `d935bfc208e298828ed40445bf46b17073c9c3cc`, el bundle CI y sus oráculos.
+La matriz mantiene 51 familias parciales, 29 sin implementar y cero completas.
+El [cierre narrativo](PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md) preserva también fallos
+y correcciones anteriores; la fase A global y la distribución siguen abiertas.
 Pasaron inicialmente 78
 pruebas focales MCP y 79 de extensiones/skills, además de los contratos previos de
 chat y MCP. Los recibos identifican cada árbol comprobado; no sustituyen la suite
