@@ -132,7 +132,15 @@ async def test_partial_rpc_start_failure_cancels_owned_runtime_and_keeps_unknown
     management, monkeypatch,
 ):
     service, client, peer, _root = management
-    job = await schedule(client, prompt="esperar", enabled=True)
+    # Lose the ACK after inference has entered. A consumed once rule correctly
+    # refuses provider preparation before its exact run binding is attached;
+    # injecting an await inside that binding gap would test a different fault.
+    job = (await client.call("schedules.create", {
+        "title": "ACK perdido sintético", "prompt": "esperar", "agent_id": "jarvis",
+        "enabled": True, "spec": {"kind": "event"},
+    }))["schedule"]
+    wake = {"schedule_id": job["schedule_id"], "expected_revision": job["revision"],
+            "event_id": "synthetic-partial-start-event"}
     original = service.start_run
 
     async def partial_start(request):
@@ -142,7 +150,9 @@ async def test_partial_rpc_start_failure_cancels_owned_runtime_and_keeps_unknown
 
     monkeypatch.setattr(service, "start_run", partial_start)
     await start_scheduler(client)
+    admitted = (await client.call("schedules.wake", wake))["occurrence"]
     receipt = await occurrence(client, job["schedule_id"])
+    assert receipt["occurrence_id"] == admitted["occurrence_id"]
     assert receipt["status"] == "interrupted" and receipt["outcome"] == "unknown"
     assert receipt["error_code"] == "scheduled_dispatch_unconfirmed"
     assert receipt["run_id"] == receipt["occurrence_id"]
@@ -154,6 +164,9 @@ async def test_partial_rpc_start_failure_cancels_owned_runtime_and_keeps_unknown
     assert len(peer.calls) == 1
     await client.call("scheduler.stop")
     await start_scheduler(client)
+    duplicate = (await client.call("schedules.wake", wake))["occurrence"]
+    assert duplicate["occurrence_id"] == receipt["occurrence_id"]
+    assert duplicate["status"] == "interrupted" and duplicate["outcome"] == "unknown"
     await asyncio.sleep(0.02)
     assert len(peer.calls) == 1
 
