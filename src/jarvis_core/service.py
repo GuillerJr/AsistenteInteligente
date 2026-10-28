@@ -410,6 +410,12 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
     def _client_revoked(self, client_id):
         self.mcp_product.client_revoked(client_id)
         self.mcp_network_client_revoked(client_id)
+        if getattr(self, "_scheduler_owner", None) == client_id:
+            self.scheduler._stop.set()
+            self.scheduler._wake.set()
+        if getattr(self, "_automation_runner_owner", None) == client_id:
+            self.automation_runner._stop.set()
+            self.automation_runner.wake()
         for run_id, owner in tuple(self._run_clients.items()):
             if owner != client_id:
                 continue
@@ -1555,6 +1561,10 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         resource_errors = []
         for handle in tuple(self._handles.values()):
             handle.cancel()
+        try:
+            await self.close_automation_events()
+        except Exception as error:
+            resource_errors.append(error)
         # Keep signed worker cleanup acknowledgements reachable until native
         # actions have actually settled. A cancel ACK is not that receipt.
         await self.native_broker.aclose(drain=True)

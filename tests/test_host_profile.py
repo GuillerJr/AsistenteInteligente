@@ -255,6 +255,8 @@ async def test_absent_sources_and_exclusions_are_never_created_or_opened(service
         expected = {"state", "memory", "schedules", "skills", "telegram"}
         if getattr(service, "plugins", None) is not None:
             expected.add("plugins")
+        if getattr(service, "automation_flows", None) is not None:
+            expected.add("automations")
         assert set(bundle.absent) == expected
         assert bundle.json[0].role == "agents"
         assert not bundle.sqlite
@@ -395,8 +397,17 @@ def module_session(row):
 
 
 async def test_scheduler_running_requires_explicit_stop_not_automatic_pause(service):
+    from jarvis_core.client_identity import key_id
+    from jarvis_core.protocol import authenticated_client
+
     snapshot = await call(service, "schedules.list")
-    await call(service, "scheduler.start", {"configuration_hash": snapshot["configuration_hash"]})
+    owner = key_id(os.environ["JARVIS_RPC_BOOTSTRAP_PUBLIC_KEY"])
+    token = authenticated_client.set(owner)
+    try:
+        await call(service, "scheduler.start", {
+            "configuration_hash": snapshot["configuration_hash"]})
+    finally:
+        authenticated_client.reset(token)
     owned = service.scheduler._lease
     with pytest.raises(HostProfileError, match=r"^profile_not_quiescent$") as raised:
         with service.profile_gate.exclusive():

@@ -197,8 +197,20 @@ class ManagementAPI:
         if len(records) > 32 or any(len(row.prompt.encode()) > 8000 for row in records):
             raise RpcError(-32033, "El programador supera el límite revisable de 32 tareas.")
         rows = [asdict(row) for row in records]
+        self._schedule_wire_budget(rows)
         digest = hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()
         return rows, digest
+
+    @staticmethod
+    def _schedule_wire_budget(rows):
+        # Use the real IPC escape expansion, not the user's UTF-8 byte count.
+        # Reserve envelope/state overhead; reject before publishing a mutation.
+        try:
+            size = len(json.dumps(rows, ensure_ascii=True, allow_nan=False).encode())
+        except (ValueError, TypeError, UnicodeError):
+            raise RpcError(-32602, "La configuración de tareas no es válida.") from None
+        if size > 524288:
+            raise RpcError(-32033, "Las tareas superan el tamaño revisable. Reduce sus textos.")
 
     async def list_schedules(self, value):
         params(value, set())
@@ -220,12 +232,19 @@ class ManagementAPI:
         )
         self._management_idle()
         self.agent_profiles.get(value["agent_id"])
+        spec = ScheduleSpec.from_dict(value["spec"])
+        self._schedule_wire_budget([*self._schedule_snapshot()[0], {
+            "schedule_id": "0" * 32, "title": value["title"], "prompt": value["prompt"],
+            "agent_id": value["agent_id"], "workspace_id": self._workspace_id,
+            "spec": asdict(spec), "enabled": value.get("enabled", False), "revision": 1,
+            "next_at": 253402214399.0, "created_at": 253402214399.0,
+            "updated_at": 253402214399.0}])
         row = self.schedule_store.create(
             value["title"],
             value["prompt"],
             value["agent_id"],
             self._workspace_id,
-            ScheduleSpec.from_dict(value["spec"]),
+            spec,
             enabled=value.get("enabled", False),
         )
         return {"schedule": asdict(row)}
@@ -236,16 +255,40 @@ class ManagementAPI:
             {"schedule_id", "expected_revision", "title", "prompt", "spec", "enabled"},
             {"schedule_id", "expected_revision"},
         )
-        self._management_idle()
+        revoking = value.get("enabled") is False and set(value) <= {
+            "schedule_id", "expected_revision", "enabled"}
+        self._automation_control() if revoking else self._management_idle()
         data = dict(value)
         if "spec" in data:
             data["spec"] = ScheduleSpec.from_dict(data["spec"])
-        return {"schedule": asdict(self.schedule_store.update(**data))}
+        rows = self._schedule_snapshot()[0]
+        for row in rows:
+            if row["schedule_id"] == data["schedule_id"]:
+                row.update({key: asdict(item) if key == "spec" else item
+                            for key, item in data.items() if key != "expected_revision"})
+                row["revision"] += 1
+                row["updated_at"] = 253402214399.0
+        self._schedule_wire_budget(rows)
+        result = self.schedule_store.update(**data)
+        if revoking:
+            self._cancel_schedule_runs(result.schedule_id)
+        return {"schedule": asdict(result)}
 
     async def remove_schedule(self, value):
         params(value, {"schedule_id", "expected_revision"}, {"schedule_id", "expected_revision"})
-        self._management_idle()
-        return {"removed": self.schedule_store.remove(**value)}
+        self._automation_control()
+        removed = self.schedule_store.remove(**value)
+        if removed:
+            self._cancel_schedule_runs(value["schedule_id"])
+        return {"removed": removed}
+
+    def _cancel_schedule_runs(self, schedule_id):
+        for occurrence in self.schedule_store.history(schedule_id):
+            if occurrence.status == "running":
+                handle = self._handles.get(occurrence.run_id)
+                if handle is not None:
+                    handle.cancel()
+        self.scheduler.wake()
 
     async def schedule_history(self, value):
         params(value, {"schedule_id"}, {"schedule_id"})

@@ -4,12 +4,13 @@ import SwiftUI
 struct AutomationFlowsView: View {
     @Bindable var store: ManagementStore
     let mayChange: Bool
+    let openSession: (String) -> Void
     @State private var editing: AutomationHook?
     @State private var showingEditor = false
     @State private var webhookHookID = ""
     @State private var webhookSecret = ""
 
-    private var mayControl: Bool { store.runtimeIsActive() && !store.isChanging }
+    private var controls: AutomationControlAvailability { store.automationControls(mayChangeSession: mayChange) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -27,13 +28,13 @@ struct AutomationFlowsView: View {
                     Spacer()
                     Button(snapshot.running ? "Detener…" : "Activar…") {
                         Task { await store.setAutomationRunning(!snapshot.running) }
-                    }.disabled(snapshot.running ? !mayControl : !mayChange)
+                    }.disabled(snapshot.running ? !controls.canRevoke : !controls.canAdmit)
                 }
                 if snapshot.errorCode != nil {
                     Text("El motor conserva un error. Revisa los flujos y su resultado antes de volver a activarlo.").font(.caption).foregroundStyle(.orange)
                 }
                 ForEach(snapshot.hooks) { hook in
-                    AutomationHookRow(hook: hook, store: store, mayChange: mayChange,
+                    AutomationHookRow(hook: hook, store: store, controls: controls,
                                       currentWorkspace: snapshot.workspaceID) { editing = hook; showingEditor = true }
                 }
                 if snapshot.hooks.isEmpty { Text("No hay disparadores configurados.").font(.caption).foregroundStyle(.secondary) }
@@ -52,7 +53,7 @@ struct AutomationFlowsView: View {
                     }
                 }.disabled(store.isChanging || store.automationLoading)
                 ForEach(snapshot.flows) { flow in
-                    AutomationFlowRow(flow: flow, store: store, mayChange: mayControl)
+                    AutomationFlowRow(flow: flow, store: store, controls: controls, openSession: openSession)
                 }
                 if snapshot.flows.isEmpty { Text("No hay eventos registrados.").font(.caption).foregroundStyle(.secondary) }
             } else if store.automationLoading { ProgressView("Consultando automatizaciones…") }
@@ -80,7 +81,7 @@ struct AutomationFlowsView: View {
                 Text(snapshot.webhook.url ?? "").font(.system(.caption, design: .monospaced)).textSelection(.enabled)
                 Text("Destino: \(snapshot.hooks.first(where: { $0.id == snapshot.webhook.hookID })?.title ?? "disparador conservado")")
                     .font(.caption)
-                Button("Cerrar entrada y retirar secreto…") { Task { await store.setAutomationWebhook(hook: nil) } }.disabled(!mayControl)
+                Button("Cerrar entrada y retirar secreto…") { Task { await store.setAutomationWebhook(hook: nil) } }.disabled(!controls.canRevoke)
             } else {
                 Picker("Disparador", selection: $webhookHookID) {
                     Text("Selecciona uno habilitado").tag("")
@@ -103,7 +104,7 @@ struct AutomationFlowsView: View {
 private struct AutomationHookRow: View {
     let hook: AutomationHook
     @Bindable var store: ManagementStore
-    let mayChange: Bool
+    let controls: AutomationControlAvailability
     let currentWorkspace: String
     let edit: () -> Void
     private struct DisplayStep: Identifiable {
@@ -136,11 +137,12 @@ private struct AutomationHookRow: View {
             }
             HStack {
                 Button(hook.enabled ? "Deshabilitar…" : "Habilitar…") { Task { await store.setAutomationHookEnabled(hook) } }
-                Button("Editar…", action: edit)
+                    .disabled(!controls.canSetEnabled(currentlyEnabled: hook.enabled))
+                Button("Editar…", action: edit).disabled(!controls.canAdmit)
                 Button("Disparar ahora…") { Task { await store.emitAutomationHook(hook) } }
-                    .disabled(!hook.enabled || hook.workspaceID != currentWorkspace)
-                Button("Quitar…", role: .destructive) { Task { await store.removeAutomationHook(hook) } }
-            }.disabled(!mayChange)
+                    .disabled(!controls.canAdmit || !hook.enabled || hook.workspaceID != currentWorkspace)
+                Button("Quitar…", role: .destructive) { Task { await store.removeAutomationHook(hook) } }.disabled(!controls.canRevoke)
+            }
         }.padding(12).background(.quaternary, in: .rect(cornerRadius: 8))
     }
 }
@@ -148,7 +150,8 @@ private struct AutomationHookRow: View {
 private struct AutomationFlowRow: View {
     let flow: AutomationFlow
     @Bindable var store: ManagementStore
-    let mayChange: Bool
+    let controls: AutomationControlAvailability
+    let openSession: (String) -> Void
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(flow.title).font(.headline)
@@ -168,12 +171,16 @@ private struct AutomationFlowRow: View {
                 }
                 if flow.receipts.isEmpty { Text("Sin pasos asentados todavía.").font(.caption) }
             }
+            ForEach(flow.sessions) { link in
+                Button("Abrir conversación del paso \(link.stepNumber)") { openSession(link.sessionID) }
+                    .disabled(!controls.canAdmit)
+            }
             if flow.status == "paused" { Text("Caduca: \(flow.expiresAt.formatted(date: .abbreviated, time: .standard))").font(.caption) }
             HStack {
-                if flow.canPause { Button("Pausar…") { Task { await store.changeAutomationFlow(flow, action: "pause") } } }
-                if flow.canResume { Button("Reanudar…") { Task { await store.changeAutomationFlow(flow, action: "resume") } } }
-                if flow.canCancel { Button("Cancelar…", role: .destructive) { Task { await store.changeAutomationFlow(flow, action: "cancel") } } }
-            }.disabled(!mayChange)
+                if flow.canPause { Button("Pausar…") { Task { await store.changeAutomationFlow(flow, action: "pause") } }.disabled(!controls.canRevoke) }
+                if flow.canResume { Button("Reanudar…") { Task { await store.changeAutomationFlow(flow, action: "resume") } }.disabled(!controls.canAdmit) }
+                if flow.canCancel { Button("Cancelar…", role: .destructive) { Task { await store.changeAutomationFlow(flow, action: "cancel") } }.disabled(!controls.canRevoke) }
+            }
         }.padding(12).background(.quaternary, in: .rect(cornerRadius: 8))
     }
 }

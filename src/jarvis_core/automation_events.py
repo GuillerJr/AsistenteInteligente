@@ -75,6 +75,12 @@ class AutomationEventsAPI:
         flows, size = [], 0
         ordered = list(reversed(snapshot["flows"]))
         for row in ordered[offset:offset + 8]:
+            sessions = []
+            for run_id in row["run_ids"]:
+                ref = self.store.session_for_run(run_id)
+                if ref is not None:
+                    sessions.append({"run_id": run_id, "session_id": ref.session_id})
+            row = {**row, "sessions": sessions}
             length = len(json.dumps(row, ensure_ascii=True).encode())
             if flows and size + length > 262144:
                 break

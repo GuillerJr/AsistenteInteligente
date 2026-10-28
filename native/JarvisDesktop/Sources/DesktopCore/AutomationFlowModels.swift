@@ -68,6 +68,18 @@ public struct AutomationStepReceipt: Identifiable, Equatable, Sendable {
     }
 }
 
+public struct AutomationFlowSession: Identifiable, Equatable, Sendable {
+    public var id: String { runID }
+    public let runID: String
+    public let sessionID: String
+    public let stepNumber: Int
+    public init(_ value: RPCValue, runIDs: [String]) throws {
+        guard let run = value["run_id"].string, let index = runIDs.firstIndex(of: run),
+              let session = value["session_id"].string, ManagementValidation.identifier(session) else { throw RPCFailure.invalidResponse }
+        runID = run; sessionID = session; stepNumber = index + 1
+    }
+}
+
 public struct AutomationFlow: Identifiable, Equatable, Sendable {
     public let id: String
     public let hookID: String
@@ -82,6 +94,7 @@ public struct AutomationFlow: Identifiable, Equatable, Sendable {
     public let steps: [AutomationStep]
     public let runIDs: [String]
     public let receipts: [AutomationStepReceipt]
+    public let sessions: [AutomationFlowSession]
     public let expiresAt: Date
     public let errorCode: String?
     public init(_ value: RPCValue) throws {
@@ -116,6 +129,11 @@ public struct AutomationFlow: Identifiable, Equatable, Sendable {
               [cursor, cursor + 1].contains(parsedReceipts.count),
               !(["queued", "running", "paused", "completed"].contains(status) && parsedReceipts.count != cursor) else { throw RPCFailure.invalidResponse }
         runIDs = parsedRuns; receipts = parsedReceipts
+        let parsedSessions: [AutomationFlowSession]
+        if value["sessions"] == .null { parsedSessions = [] }
+        else { parsedSessions = try ManagementValidation.rows(value["sessions"], limit: 16, parse: { try AutomationFlowSession($0, runIDs: parsedRuns) }) }
+        guard Set(parsedSessions.map(\.runID)).count == parsedSessions.count else { throw RPCFailure.invalidResponse }
+        sessions = parsedSessions
         self.id = id; hookID = hook; self.hookRevision = hookRevision; self.title = title; agentID = agent
         workspaceID = workspace; self.revision = revision; self.status = status; self.outcome = outcome
         self.cursor = cursor; self.steps = steps; expiresAt = Date(timeIntervalSince1970: expires)
@@ -174,9 +192,11 @@ public struct AutomationSnapshot: Sendable {
         guard value["offset"] == .null || value["offset"].integer != nil,
               value["has_more"] == .null || value["has_more"].bool != nil else { throw RPCFailure.invalidResponse }
         offset = value["offset"].integer ?? 0; hasMore = value["has_more"].bool ?? false
-        nextOffset = value["next_offset"].integer
-        guard (0...256).contains(offset), hasMore == (nextOffset != nil),
-              !hasMore || (!flows.isEmpty && nextOffset == offset + flows.count && nextOffset! <= 256),
-              value["next_offset"] == .null || nextOffset != nil else { throw RPCFailure.invalidResponse }
+        let cursor = value["next_offset"].integer
+        guard (0...256).contains(offset),
+              cursor == nil || cursor == offset + flows.count,
+              !hasMore || (!flows.isEmpty && cursor != nil && cursor! <= 256),
+              value["next_offset"] == .null || cursor != nil else { throw RPCFailure.invalidResponse }
+        nextOffset = hasMore ? cursor : nil
     }
 }

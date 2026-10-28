@@ -1,0 +1,63 @@
+{
+  "format": "jarvis-phase-a-automation-qualification/1",
+  "status": "validation_in_progress",
+  "selected_increment_complete": false,
+  "phase_a_complete": false,
+  "phase_b_started": false,
+  "local_full_suites_or_builds": false,
+  "reference": {
+    "revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+    "static_batches": [
+      "OC-25A",
+      "OC-25B",
+      "OC-25C"
+    ],
+    "reference_executed": false,
+    "evidence_bundle_sha256": "3968930851bc99d6487ceae7bf28ec3daedcb4fda8b42c685533db2033963ac3"
+  },
+  "attempts": [
+    {
+      "commit": "ce9582a5467566f3d03258d8bbe6b6470f47c5e8",
+      "run_id": 40767488514,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40767488514",
+      "ubuntu": {
+        "status": "failure",
+        "passed": 3229,
+        "failed": 3,
+        "skipped": 46,
+        "elapsed_seconds": 224.5,
+        "cleanup": "confirmed",
+        "source_unchanged": true,
+        "failures": [
+          "TCP RST del peer al cerrar petición parcial no aceptado por fixture.",
+          "Expectativa histórica de absent no incluía automations.",
+          "Invocación interna de scheduler.start sin contexto de cliente sintético."
+        ]
+      },
+      "macos": {
+        "bundle_build": "success",
+        "swift_tests": "in_progress_before_superseding_revision"
+      },
+      "fixes": [
+        "Mantener comprobación de puerto cerrado y cero flujos, aceptando EOF/RST del peer.",
+        "Actualizar inventario ausente manteniendo prohibición de abrir credenciales.",
+        "Usar identidad sintética admitida en la prueba interna, sin debilitar autoridad.",
+        "Optimizar reposo y probar ausencia de publicaciones o crecimiento.",
+        "Permitir revocación y suspensión durante una ejecución, conservando gates al admitir trabajo.",
+        "Presupuestar texto escapado del IPC antes de publicar tareas."
+      ]
+    }
+  ],
+  "native_qualification": {
+    "status": "pending",
+    "budget_mib": 256,
+    "profile": "synthetic_only",
+    "owner_approvals_delegated": true,
+    "owner_installed_app_modified": false
+  },
+  "limits": [
+    "No se declara equivalencia exhaustiva por análisis estático ni por fixtures.",
+    "Webhook local loopback, sin publicación Internet o daemon OS.",
+    "Firma/distribución autocontenida y notificaciones push pertenecen a otros bloques."
+  ]
+}

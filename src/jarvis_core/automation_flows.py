@@ -446,6 +446,15 @@ class AutomationFlowStore:
     def claim_next(self):
         claim = None
         now = _time(self.clock())
+        # An idle poll is a read, not a no-op write transaction. Besides avoiding
+        # lock churn, this skips re-serializing the whole bounded history twice.
+        # Another enqueue just after this snapshot is handled by wake/the next
+        # poll; any real claim is still revalidated under the document lock.
+        snapshot = self.document.read()
+        if not any(row["status"] == "queued" or (
+                row["status"] == "paused" and row["expires_at"] <= now)
+                for row in snapshot["flows"]):
+            return None
         def change(data):
             nonlocal claim
             for row in data["flows"]:
@@ -555,15 +564,17 @@ def disarm_automation_document(value):
 
 
 class AutomationFlowRunner:
-    def __init__(self, store, dispatch, *, poll_interval=0.1, dispatch_timeout=300,
-                 close_timeout=10):
+    def __init__(self, store, dispatch, *, poll_interval=1, active_poll_interval=0.1,
+                 dispatch_timeout=300, close_timeout=10):
         if (not callable(dispatch) or any(type(value) not in {int, float}
                 or not math.isfinite(value) or not 0 < value <= maximum
-                for value, maximum in ((poll_interval, 5), (dispatch_timeout, 3600),
+                for value, maximum in ((poll_interval, 5), (active_poll_interval, 1),
+                                       (dispatch_timeout, 3600),
                                        (close_timeout, 30)))):
             _fail("automation_configuration_invalid")
         self.store, self.dispatch = store, dispatch
         self.poll_interval, self.dispatch_timeout = poll_interval, dispatch_timeout
+        self.active_poll_interval = active_poll_interval
         self.close_timeout = close_timeout
         self._task = self._dispatch_task = None
         self._lease = None
@@ -616,20 +627,20 @@ class AutomationFlowRunner:
     async def _pump(self):
         try:
             while not self._stop.is_set():
+                self._wake.clear()
                 claim = self.store.claim_next()
                 if claim is not None:
                     self._dispatch_task = asyncio.create_task(self._execute(claim))
                     # Controls may invalidate a running claim. Retain ownership
                     # until the callback settles, before admitting another step.
                     while not self._dispatch_task.done():
-                        await asyncio.sleep(self.poll_interval)
+                        await asyncio.sleep(self.active_poll_interval)
                         row = self.store.get_flow(claim.flow_id)
                         if row["status"] != "running" or self._stop.is_set():
                             self._dispatch_task.cancel()
                     await self._dispatch_task
                     self._dispatch_task = None
                     continue
-                self._wake.clear()
                 try:
                     await asyncio.wait_for(self._wake.wait(), self.poll_interval)
                 except TimeoutError:

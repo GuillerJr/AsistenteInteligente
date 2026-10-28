@@ -7,6 +7,8 @@ struct SchedulesView: View {
     @State private var showEditor = false
     @State private var showingHistory: ScheduleDescriptor?
 
+    private var controls: AutomationControlAvailability { store.management.automationControls(mayChangeSession: store.canChangeSession) }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -21,7 +23,7 @@ struct SchedulesView: View {
                     Label(snapshot.running ? "Programador activo" : "Programador detenido", systemImage: snapshot.running ? "clock.badge.checkmark" : "pause.circle")
                     if snapshot.running {
                         Button("Detener programador…") { Task { await store.management.stopScheduler() } }
-                            .disabled(store.management.isChanging)
+                            .disabled(!controls.canRevoke)
                     } else {
                         Button("Activar programador…") { Task { await store.management.startScheduler() } }
                             .disabled(!store.canChangeSession)
@@ -29,7 +31,7 @@ struct SchedulesView: View {
                     if snapshot.running {
                         Button(snapshot.suspended ? "Reanudar admisión…" : "Suspender y cancelar ejecuciones…") {
                             Task { await store.management.suspendScheduler(!snapshot.suspended) }
-                        }.disabled(!store.canChangeSession)
+                        }.disabled(!controls.canSetSuspended(currentlySuspended: snapshot.suspended))
                         if snapshot.suspended { Text("Admisión suspendida; las tareas nuevas esperan.").font(.caption).foregroundStyle(.secondary) }
                     }
                     ForEach(snapshot.schedules) { schedule in
@@ -54,18 +56,19 @@ struct SchedulesView: View {
                             }
                             HStack {
                                 Button(schedule.enabled ? "Pausar…" : "Habilitar…") { Task { await store.management.enableSchedule(schedule) } }
+                                    .disabled(!controls.canSetEnabled(currentlyEnabled: schedule.enabled))
                                 Button("Ejecutar ahora…") { Task { await store.management.wakeSchedule(schedule) } }
-                                    .disabled(!schedule.enabled || !snapshot.running || snapshot.suspended || schedule.workspaceID != snapshot.workspaceID)
-                                Button("Editar…") { editing = schedule; showEditor = true }
-                                Button("Quitar…", role: .destructive) { Task { await store.management.removeSchedule(schedule) } }
-                            }.disabled(!store.canChangeSession)
+                                    .disabled(!controls.canAdmit || !schedule.enabled || !snapshot.running || snapshot.suspended || schedule.workspaceID != snapshot.workspaceID)
+                                Button("Editar…") { editing = schedule; showEditor = true }.disabled(!controls.canAdmit)
+                                Button("Quitar…", role: .destructive) { Task { await store.management.removeSchedule(schedule) } }.disabled(!controls.canRevoke)
+                            }
                             Button("Ver ejecuciones") { showingHistory = schedule; Task { await store.management.loadHistory(schedule) } }
                         }.padding(14).background(.quaternary, in: .rect(cornerRadius: 10))
                     }
                     if snapshot.schedules.isEmpty { Text("No hay tareas configuradas.").foregroundStyle(.secondary) }
                     if snapshot.errorCode != nil { Text("El programador se detuvo por un error. Revisa sus ejecuciones antes de activarlo otra vez.").foregroundStyle(.red) }
                 }
-                AutomationFlowsView(store: store.management, mayChange: store.canChangeSession)
+                AutomationFlowsView(store: store.management, mayChange: store.canChangeSession, openSession: { id in Task { await store.openScheduledSession(id) } })
                 Text("Los intervalos y días perdidos se agrupan en una ocurrencia. Una hora inexistente por horario de verano se omite; una hora duplicada usa su primera aparición. Al cerrar Jarvis se detiene el programador; no se activa al reiniciar.")
                     .font(.caption).foregroundStyle(.secondary)
                 if let error = store.management.errorMessage { Text(error).foregroundStyle(.red).textSelection(.enabled) }
@@ -192,7 +195,7 @@ private struct ScheduleHistoryView: View {
                             }
                             if ["claimed", "running"].contains(occurrence.status) {
                                 Button("Cancelar esta ejecución…", role: .destructive) { Task { await store.management.cancelOccurrence(occurrence) } }
-                                    .disabled(store.management.isChanging)
+                                    .disabled(!store.management.automationControls(mayChangeSession: store.canChangeSession).canRevoke)
                             }
                             if occurrence.errorCode != nil { Text("La ejecución conserva un error; no se repite automáticamente.").foregroundStyle(.secondary) }
                         }.padding(12).background(.quaternary, in: .rect(cornerRadius: 8))

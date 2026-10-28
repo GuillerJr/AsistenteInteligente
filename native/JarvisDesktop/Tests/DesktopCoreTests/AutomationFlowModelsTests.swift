@@ -69,6 +69,13 @@ final class AutomationFlowModelsTests: XCTestCase {
             "run_ids": .array([.string(run)]), "receipts": .array([receipt])]))
         XCTAssertEqual(completed.receipts.first?.runID, run)
         XCTAssertFalse(completed.canResume)
+        let linked = try AutomationFlow(changed(flow, ["status": .string("completed"), "cursor": .number(1),
+            "run_ids": .array([.string(run)]), "receipts": .array([receipt]),
+            "sessions": .array([.object(["run_id": .string(run), "session_id": .string(identity)])])]))
+        XCTAssertEqual(linked.sessions.first?.sessionID, identity)
+        XCTAssertEqual(linked.sessions.first?.stepNumber, 1)
+        XCTAssertThrowsError(try AutomationFlow(changed(flow, ["sessions": .array([
+            .object(["run_id": .string(run), "session_id": .string(identity)])])])) )
         XCTAssertThrowsError(try AutomationFlow(changed(flow, ["status": .string("completed"), "cursor": .number(1),
             "run_ids": .array([]), "receipts": .array([receipt])])))
     }
@@ -97,6 +104,7 @@ final class AutomationFlowModelsTests: XCTestCase {
         XCTAssertThrowsError(try AutomationSnapshot(changed(snapshot, ["flows": .array([changed(flow), changed(flow)])])))
         let paged = try AutomationSnapshot(changed(snapshot, ["offset": .number(8), "next_offset": .number(9), "has_more": .bool(true)]))
         XCTAssertEqual(paged.nextOffset, 9)
+        XCTAssertNil(try AutomationSnapshot(changed(snapshot, ["offset": .number(0), "next_offset": .number(1), "has_more": .bool(false)])).nextOffset)
         XCTAssertThrowsError(try AutomationSnapshot(changed(snapshot, ["offset": .number(8), "next_offset": .number(8), "has_more": .bool(true)])))
         XCTAssertThrowsError(try AutomationSnapshot(changed(snapshot, ["flows": .array([]), "next_offset": .number(1), "has_more": .bool(true)])))
     }

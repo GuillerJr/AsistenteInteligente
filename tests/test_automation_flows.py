@@ -320,6 +320,66 @@ def test_portable_validation_and_disarming_are_pure_and_preserve_receipts(store,
     assert disarm_automation_document(disarmed) == disarmed
 
 
+def test_idle_claim_is_read_only_without_lock_publication_or_growth(store, monkeypatch):
+    row = hook(store)
+    flow = trigger(store, row)
+    paused = store.pause(flow["flow_id"], flow["revision"])
+    path = store.document.path
+    before = path.stat()
+    raw = path.read_bytes()
+    def no_transaction(*_args, **_kwargs):
+        raise AssertionError("idle claim must not start a document write transaction")
+    monkeypatch.setattr(store, "_change", no_transaction)
+    for _ in range(12):
+        assert store.claim_next() is None
+    after = path.stat()
+    assert (after.st_ino, after.st_mtime_ns, after.st_size, after.st_blocks) == (
+        before.st_ino, before.st_mtime_ns, before.st_size, before.st_blocks)
+    assert path.read_bytes() == raw and store.get_flow(flow["flow_id"]) == paused
+    assert not tuple(path.parent.glob(".registry-*"))
+
+
+async def test_runner_idle_default_is_one_second_and_wake_is_immediate(store, monkeypatch):
+    row = hook(store)
+    calls, dispatched = [], asyncio.Event()
+    original = store.claim_next
+    def tracked_claim():
+        calls.append(asyncio.get_running_loop().time())
+        return original()
+    async def dispatch(_claim):
+        dispatched.set()
+        return DispatchResult(None)
+    monkeypatch.setattr(store, "claim_next", tracked_claim)
+    runner = AutomationFlowRunner(store, dispatch, active_poll_interval=0.005)
+    assert runner.poll_interval == 1 and runner.active_poll_interval == 0.005
+    runner.start()
+    try:
+        await until(lambda: len(calls) == 1)
+        # A short observation window excludes the former ten-Hz idle polling.
+        await asyncio.sleep(0.15)
+        assert len(calls) == 1
+        flow = trigger(store, row)
+        runner.wake()
+        async with asyncio.timeout(0.5):
+            await dispatched.wait()
+        await until(lambda: store.get_flow(flow["flow_id"])["status"] == "completed")
+    finally:
+        await runner.aclose()
+
+
+def test_claim_transaction_failure_keeps_original_queued_snapshot(store, monkeypatch):
+    row = hook(store)
+    flow = trigger(store, row)
+    before = store.document.path.read_bytes()
+    def reject_staging(*_args):
+        raise PrivateJsonError("synthetic_before_publish_failure")
+    monkeypatch.setattr(store.document, "_write_temporary", reject_staging)
+    with pytest.raises(PrivateJsonError, match="synthetic_before_publish_failure"):
+        store.claim_next()
+    assert store.document.path.read_bytes() == before
+    assert store.get_flow(flow["flow_id"]) == flow
+
+
 async def test_runner_is_explicit_and_releases_lease_after_known_completion(store):
     row = hook(store)
     flow = trigger(store, row)
@@ -498,12 +558,24 @@ async def test_webhook_cancels_slow_partial_request_and_closes_exact_connection(
         await until(lambda: listener.active_count == 1)
         await listener.aclose()
         assert listener.active_count == 0 and not listener.pending_cleanup
-        async with asyncio.timeout(2):
-            response = await reader.read()
+        try:
+            async with asyncio.timeout(2):
+                response = await reader.read()
+        except ConnectionResetError:
+            # Closing a socket with an unfinished request may produce TCP RST
+            # rather than EOF, particularly on Linux. Both terminate this peer.
+            response = b""
         assert response == b"" or response.startswith(b"HTTP/1.1 400 Jarvis\r\n")
+        assert not store.list_flows()
+        assert not listener.status()["running"]
+        with pytest.raises(OSError):
+            await asyncio.open_connection(url.hostname, url.port)
     finally:
         writer.close()
-        await writer.wait_closed()
+        try:
+            await writer.wait_closed()
+        except ConnectionResetError:
+            pass  # Same confirmed peer RST may be reported again by wait_closed.
 
 
 async def test_webhook_retains_uncertain_writer_and_key_until_confirmed_close(store, clock):
