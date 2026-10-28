@@ -32,6 +32,7 @@ class HostPlan:
     result: object = None
     payload: dict | None = None
     settled: bool = False
+    settlement_error: str | None = None
 
 
 class HostToolRuns:
@@ -131,9 +132,12 @@ class HostToolRuns:
                 except ValueError:
                     pass
 
-    def settle(self, run_id):
+    def settle(self, run_id, *, error=None):
         plan = self.plans.get(run_id)
         if plan is not None:
+            # A denial happens before execute/capture, so it has no ToolResult.
+            # Preserve its final public code for the host's RAM-only view.
+            plan.settlement_error = error
             plan.settled = True
 
     def result(self, ref, run_id):
@@ -156,7 +160,7 @@ class HostToolRuns:
                 "error": "volatile_result_expired",
                 "provenance": "external_unverified",
             }
-        error = plan.result.error if plan.result is not None else None
+        error = plan.result.error if plan.result is not None else plan.settlement_error
         return {
             "settled": plan.settled,
             "payload": plan.payload,

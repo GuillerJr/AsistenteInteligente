@@ -8,7 +8,13 @@ from pathlib import Path
 
 import pytest
 
-from jarvis_core.mcp import LEGACY_VERSION, MODERN_VERSION, McpCancelled, McpError
+from jarvis_core.mcp import (
+    HTTP_COMPAT_VERSION,
+    LEGACY_VERSION,
+    MODERN_VERSION,
+    McpCancelled,
+    McpError,
+)
 from jarvis_core.mcp_http import McpHttpClient, McpHTTPError, McpHTTPNetwork, header_value
 
 
@@ -108,7 +114,7 @@ def catalog():
     ]
 
 
-@pytest.mark.parametrize("protocol", [LEGACY_VERSION, MODERN_VERSION])
+@pytest.mark.parametrize("protocol", [HTTP_COMPAT_VERSION, LEGACY_VERSION, MODERN_VERSION])
 async def test_http_json_and_sse_reply_resource_prompt_and_exact_effect_guard(tmp_path, protocol):
     effects, committed = [], []
 
@@ -120,6 +126,9 @@ async def test_http_json_and_sse_reply_resource_prompt_and_exact_effect_guard(tm
         if protocol == MODERN_VERSION:
             assert request["headers"]["mcp-method"] == method
             assert params["_meta"]["io.modelcontextprotocol/protocolVersion"] == protocol
+        else:
+            assert request["headers"]["mcp-protocol-version"] == protocol
+            assert "mcp-method" not in request["headers"] and "_meta" not in params
         if method == "notifications/initialized":
             return 202, {}, b""
         result = (
@@ -189,8 +198,9 @@ async def test_http_json_and_sse_reply_resource_prompt_and_exact_effect_guard(tm
 
 
 @pytest.mark.parametrize("delete_status", [204, 503])
+@pytest.mark.parametrize("protocol", [HTTP_COMPAT_VERSION, LEGACY_VERSION])
 async def test_2025_get_stream_session_delete_and_remote_unknown_do_not_replay(
-    tmp_path, delete_status
+    tmp_path, delete_status, protocol
 ):
     async def handler(request, reader, writer):
         if request["method"] == "GET":
@@ -210,7 +220,7 @@ async def test_2025_get_stream_session_delete_and_remote_unknown_do_not_replay(
             reply(
                 message,
                 {
-                    "protocolVersion": LEGACY_VERSION,
+                    "protocolVersion": protocol,
                     "serverInfo": {"name": "own", "version": "1"},
                     "capabilities": {"tools": {"listChanged": True}},
                 },
@@ -219,7 +229,8 @@ async def test_2025_get_stream_session_delete_and_remote_unknown_do_not_replay(
 
     async with HTTPFixture(handler) as fixture:
         client = McpHttpClient(
-            fixture.base + "/mcp", tmp_path.resolve() / "client", test_origins=(fixture.base,)
+            fixture.base + "/mcp", tmp_path.resolve() / "client", protocol_version=protocol,
+            test_origins=(fixture.base,)
         )
         await client.start()
         first = await client.aclose()

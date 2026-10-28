@@ -18,28 +18,28 @@ import Foundation
         } catch { if version == generation { errorMessage = "No se pudo confirmar el cierre de las extensiones." } }
     }
     func metadata(_ skill: SkillDescriptor) async -> SkillInvocationMetadata? {
-        guard runtimeIsActive(), let client else { return nil }
+        guard skillReadIsCurrent(skill, generation: generation), let client else { return nil }
         let version = generation
-        do { let result = try await client.skillMetadata(skill); return version == generation ? result : nil }
-        catch { errorMessage = "No se pudo consultar la metadata de esta versión de la skill."; return nil }
+        do { let result = try await client.skillMetadata(skill); return skillReadIsCurrent(skill, generation: version) ? result : nil }
+        catch { if skillReadIsCurrent(skill, generation: version) { errorMessage = "No se pudo consultar la metadata de esta versión de la skill." }; return nil }
     }
     func versions(_ skill: SkillDescriptor) async -> [ExtensionVersion]? {
-        guard runtimeIsActive(), let client else { return nil }
+        guard skillReadIsCurrent(skill, generation: generation), let client else { return nil }
         let version = generation
-        do { let result = try await client.skillVersions(skill); return version == generation ? result : nil }
-        catch { errorMessage = "No se pudieron consultar las versiones de esta skill."; return nil }
+        do { let result = try await client.skillVersions(skill); return skillReadIsCurrent(skill, generation: version) ? result : nil }
+        catch { if skillReadIsCurrent(skill, generation: version) { errorMessage = "No se pudieron consultar las versiones de esta skill." }; return nil }
     }
     func resource(_ skill: SkillDescriptor, path: String) async -> ExtensionResource? {
-        guard runtimeIsActive(), let client, skills.contains(skill) else { return nil }
+        guard skillReadIsCurrent(skill, generation: generation), let client else { return nil }
         let version = generation
-        do { let result = try await client.skillResource(skill, path: path); return version == generation ? result : nil }
-        catch { errorMessage = "No se pudo leer el recurso conservado de esta versión."; return nil }
+        do { let result = try await client.skillResource(skill, path: path); return skillReadIsCurrent(skill, generation: version) ? result : nil }
+        catch { if skillReadIsCurrent(skill, generation: version) { errorMessage = "No se pudo leer el recurso conservado de esta versión." }; return nil }
     }
     func invoke(_ skill: SkillDescriptor, arguments: [String: RPCValue]) async -> SkillInvocation? {
-        guard runtimeIsActive(), !isChanging, let client, skills.contains(skill) else { return nil }
+        guard skillReadIsCurrent(skill, generation: generation), let client else { return nil }
         let version = generation
-        do { let result = try await client.skillInvocation(skill, arguments: arguments); return version == generation ? result : nil }
-        catch { errorMessage = "Los argumentos o la versión de la skill ya no son válidos. No se ejecutó código."; return nil }
+        do { let result = try await client.skillInvocation(skill, arguments: arguments); return skillReadIsCurrent(skill, generation: version) ? result : nil }
+        catch { if skillReadIsCurrent(skill, generation: version) { errorMessage = "Los argumentos o la versión de la skill ya no son válidos. No se ejecutó código." }; return nil }
     }
     func inspectLibrary(path: String) async -> SkillLibraryPreview? {
         guard runtimeIsActive(), !isChanging, let client else { return nil }
@@ -63,5 +63,9 @@ import Foundation
             title: retire ? "Retirar copia histórica de la skill" : "Volver a una versión conservada", action: "Autorizar esta versión",
             detail: "Versión: \(version.version) · revisión \(revision)\nSHA-256: \(version.hash)\n\n"
                 + (retire ? "Sólo se retira la copia histórica elegida." : "Se conserva el estado actual y la versión restaurada queda deshabilitada."))
+    }
+    func skillReadIsCurrent(_ skill: SkillDescriptor, generation version: Int) -> Bool {
+        runtimeIsActive() && !isChanging && version == generation
+            && skill.agentID == selectedAgentID && skills.contains(skill)
     }
 }

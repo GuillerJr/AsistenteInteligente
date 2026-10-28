@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import errno
 import signal
 import sys
 from dataclasses import dataclass
@@ -285,3 +286,122 @@ async def test_successful_stop_reaps_and_releases_only_its_original_group(owned)
     assert owned.client._process is None and not owned.client._cleanup_pending
     assert not owned.client._threads
     await owned.client.aclose()
+
+
+async def test_group_permission_race_needs_reaped_child_and_fresh_absence(owned, monkeypatch):
+    calls = []
+
+    def exited_before_child_watcher(pid, sig):
+        assert pid == owned.process.pid
+        calls.append(sig)
+        if sig == signal.SIGTERM:
+            # Deterministic kernel/asyncio ordering: the owned child exits, but
+            # its watcher has not published returncode when killpg reports EPERM.
+            owned.process.kill()
+            raise PermissionError(errno.EPERM, "SYNTHETIC-PRIVATE-OS-MESSAGE")
+        assert sig == 0
+        return owned.killpg(pid, sig)
+
+    monkeypatch.setattr(module.os, "killpg", exited_before_child_watcher)
+    await owned.client._stop_process()
+    assert calls == [signal.SIGTERM, 0]
+    assert owned.process.returncode is not None
+    assert owned.client._process is None and not owned.client._cleanup_pending
+    assert owned.reader.done() and owned.stderr.done()
+    await owned.client.aclose()
+
+
+async def test_permission_race_with_present_or_reused_group_never_signals_again(
+    owned, monkeypatch, caplog
+):
+    calls = []
+
+    def group_still_present(pid, sig):
+        assert pid == owned.process.pid
+        calls.append(sig)
+        if sig == signal.SIGTERM:
+            owned.process.kill()
+            raise PermissionError(errno.EPERM, "SYNTHETIC-PRIVATE-OS-MESSAGE")
+        assert sig == 0
+        # The observed group could contain descendants or have been reused.
+        # Reaping our child alone cannot authorize signalling that group again.
+
+    monkeypatch.setattr(module.os, "killpg", group_still_present)
+    with pytest.raises(CodexError, match=r"^codex_cleanup_incomplete$") as caught:
+        await owned.client._stop_process()
+    assert calls == [signal.SIGTERM, 0] and owned.process.returncode is not None
+    assert caught.value.cleanup_stage == "permission_group_unsettled"
+    assert caught.value.os_errno == errno.EPERM
+    assert "SYNTHETIC-PRIVATE" not in str(caught.value) + caplog.text
+    assert "stage=permission_group_unsettled errno=1" in caplog.text
+    await assert_blocked(owned)
+    monkeypatch.setattr(module.os, "killpg", owned.killpg)
+    await assert_finished(owned)
+
+
+async def test_permission_denial_on_live_child_times_out_and_keeps_custody(owned, monkeypatch):
+    calls = []
+
+    def denied(pid, sig):
+        assert pid == owned.process.pid
+        calls.append(sig)
+        raise PermissionError(errno.EPERM, "SYNTHETIC-PRIVATE-OS-MESSAGE")
+
+    monkeypatch.setattr(module.os, "killpg", denied)
+    monkeypatch.setattr(owned.client, "_shutdown_timeout", 0.02)
+    async with asyncio.timeout(1):
+        with pytest.raises(CodexError, match=r"^codex_cleanup_incomplete$") as caught:
+            await owned.client._stop_process()
+    assert calls == [signal.SIGTERM] and owned.process.returncode is None
+    assert caught.value.cleanup_stage == "permission_reap_timeout"
+    assert caught.value.os_errno == errno.EPERM
+    await assert_blocked(owned)
+    monkeypatch.setattr(module.os, "killpg", owned.killpg)
+    monkeypatch.setattr(owned.client, "_shutdown_timeout", 2.0)
+    await assert_finished(owned)
+
+
+async def test_denied_probe_after_permission_race_is_not_absence(owned, monkeypatch, caplog):
+    calls = []
+
+    def denied_probe(pid, sig):
+        assert pid == owned.process.pid
+        calls.append(sig)
+        if sig == signal.SIGTERM:
+            owned.process.kill()
+        else:
+            assert sig == 0
+        raise PermissionError(errno.EPERM, "SYNTHETIC-PRIVATE-OS-MESSAGE")
+
+    monkeypatch.setattr(module.os, "killpg", denied_probe)
+    with pytest.raises(CodexError, match=r"^codex_cleanup_incomplete$") as caught:
+        await owned.client._stop_process()
+    assert calls == [signal.SIGTERM, 0] and owned.process.returncode is not None
+    assert caught.value.cleanup_stage == "probe_group" and caught.value.os_errno == errno.EPERM
+    assert "SYNTHETIC-PRIVATE" not in str(caught.value) + caplog.text
+    assert "stage=probe_group errno=1" in caplog.text
+    await assert_blocked(owned)
+    monkeypatch.setattr(module.os, "killpg", owned.killpg)
+    await assert_finished(owned)
+
+
+async def test_other_signal_error_is_preserved_without_permission_recovery(
+    owned, monkeypatch, caplog
+):
+    calls = []
+
+    def invalid_signal(pid, sig):
+        assert pid == owned.process.pid
+        calls.append(sig)
+        raise OSError(errno.EINVAL, "SYNTHETIC-PRIVATE-OS-MESSAGE")
+
+    monkeypatch.setattr(module.os, "killpg", invalid_signal)
+    with pytest.raises(CodexError, match=r"^codex_cleanup_incomplete$") as caught:
+        await owned.client._stop_process()
+    assert calls == [signal.SIGTERM] and owned.process.returncode is None
+    assert caught.value.cleanup_stage == "signal_group" and caught.value.os_errno == errno.EINVAL
+    assert "SYNTHETIC-PRIVATE" not in str(caught.value) + caplog.text
+    assert f"stage=signal_group errno={errno.EINVAL}" in caplog.text
+    await assert_blocked(owned)
+    monkeypatch.setattr(module.os, "killpg", owned.killpg)
+    await assert_finished(owned)

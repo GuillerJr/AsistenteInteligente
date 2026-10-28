@@ -90,7 +90,8 @@ class ProfileConfig:
                 or set(server) - {"command", "protocol_version", "transport", "endpoint",
                                   "oauth", "allow_loopback"}
                 or not isinstance(server["protocol_version"], str)
-                or server["protocol_version"] not in {"2024-11-05", "2025-11-25", "2026-07-28"}
+                or server["protocol_version"] not in {
+                    "2024-11-05", "2025-06-18", "2025-11-25", "2026-07-28"}
             ):
                 raise ConfigError("invalid_mcp_configuration")
             command = server["command"]

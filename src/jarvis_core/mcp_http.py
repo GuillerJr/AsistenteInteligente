@@ -3,7 +3,7 @@
 Wire eras/transports are owner-selected. Streamable HTTP 2025 retains explicit
 sessions/GET events; 2026 is stateless POST with mirrored routing headers. Legacy
 HTTP+SSE is explicit, never an automatic fallback. Remote output stays untrusted.
-Primary contracts: modelcontextprotocol.io/specification/{2025-11-25,2026-07-28}/
+Primary contracts: modelcontextprotocol.io/specification/{2025-06-18,2025-11-25,2026-07-28}/
 basic/transports and /2026-07-28/basic/transports/streamable-http (2026-10-28).
 """
 
@@ -24,6 +24,7 @@ from types import MappingProxyType
 from urllib.parse import urljoin, urlsplit
 
 from jarvis_core.mcp import (
+    HTTP_COMPAT_VERSION,
     LEGACY_VERSION,
     MODERN_VERSION,
     McpCancelled,
@@ -512,6 +513,7 @@ class McpHttpClient(McpClient):
         network=None,
     ):
         if transport not in {"streamable_http", "sse"} or protocol_version not in {
+            HTTP_COMPAT_VERSION,
             LEGACY_VERSION,
             MODERN_VERSION,
             SSE_VERSION,
@@ -519,12 +521,16 @@ class McpHttpClient(McpClient):
             raise McpError("unsupported_mcp_version")
         if protocol_version == SSE_VERSION and transport != "sse":
             raise McpError("unsupported_mcp_version")
+        if protocol_version == HTTP_COMPAT_VERSION and transport != "streamable_http":
+            raise McpError("unsupported_mcp_version")
         super().__init__(
             (str(Path(directory) / "http-transport"),),
             directory,
             authorize=authorize,
             protocol_version=(
-                LEGACY_VERSION if protocol_version == SSE_VERSION else protocol_version
+                LEGACY_VERSION
+                if protocol_version in {SSE_VERSION, HTTP_COMPAT_VERSION}
+                else protocol_version
             ),
             request_timeout=request_timeout,
             shutdown_timeout=shutdown_timeout,
@@ -649,7 +655,7 @@ class McpHttpClient(McpClient):
                     await self._open_subscription()
                 if (
                     self.transport == "streamable_http"
-                    and self.protocol_version == LEGACY_VERSION
+                    and self.protocol_version in {HTTP_COMPAT_VERSION, LEGACY_VERSION}
                     and any(v.get("listChanged") or v.get("subscribe") for v in caps.values())
                 ):
                     await self._open_events(legacy=False)
@@ -929,7 +935,8 @@ class McpHttpClient(McpClient):
                     credential=self._credential(),
                     maximum=self.max_line_bytes,
                 )
-                if self.protocol_version == LEGACY_VERSION and method == "initialize":
+                if (self.protocol_version in {HTTP_COMPAT_VERSION, LEGACY_VERSION}
+                        and method == "initialize"):
                     session = exchange.headers.get("mcp-session-id")
                     if session is not None and not _SESSION.fullmatch(session):
                         raise McpError("invalid_session_id")

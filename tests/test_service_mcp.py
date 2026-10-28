@@ -198,7 +198,8 @@ async def test_add_does_not_launch_then_exact_connection_lists_current_catalog(m
     assert (await client.call("mcp.add", value)) == {"configured": True}
     assert wire(root) == [] and not (root / "effect-fixture.txt").exists()
     listing = await client.call("mcp.list")
-    assert set(listing["supported_protocols"]) == {"2024-11-05", LEGACY_VERSION, MODERN_VERSION}
+    assert set(listing["supported_protocols"]) == {
+        "2024-11-05", "2025-06-18", LEGACY_VERSION, MODERN_VERSION}
     assert listing["servers"] == [
         {
             **value,

@@ -84,21 +84,27 @@ final class MCPModelsTests: XCTestCase {
         }
     }
 
-    func testEmptyStartupCatalogAcceptsAllThreePublishedProtocols() throws {
+    func testEmptyStartupCatalogAcceptsAllFourPublishedProtocols() throws {
         let catalog = try MCPCatalog(.object([
             "servers": .array([]),
             "supported_protocols": .array([
-                .string("2024-11-05"), .string("2025-11-25"), .string("2026-07-28")
+                .string("2024-11-05"), .string("2025-06-18"),
+                .string("2025-11-25"), .string("2026-07-28")
             ])
         ]))
         XCTAssertTrue(catalog.servers.isEmpty)
-        XCTAssertEqual(catalog.supportedProtocols, [.sseLegacy, .legacy, .modern])
+        XCTAssertEqual(catalog.supportedProtocols, [.sseLegacy, .june2025, .legacy, .modern])
     }
 
-    func testProtocol2024RequiresSSEWithoutChangingLaterVersionCompatibility() throws {
+    func testProtocolTransportMatrixPreservesExplicitCompatibilityChoices() throws {
         for version in MCPProtocolVersion.allCases {
             for transport in MCPTransport.allCases {
-                let compatible = version != .sseLegacy || transport == .sse
+                let compatible: Bool
+                switch version {
+                case .sseLegacy: compatible = transport == .sse
+                case .june2025: compatible = transport == .streamableHTTP
+                case .legacy, .modern: compatible = true
+                }
                 XCTAssertEqual(version.supports(transport), compatible)
                 let configuration = {
                     if transport == .stdio {

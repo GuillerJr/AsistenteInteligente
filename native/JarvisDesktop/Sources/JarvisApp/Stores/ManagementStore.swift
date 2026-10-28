@@ -23,7 +23,10 @@ final class ManagementStore {
     @ObservationIgnored var generation = 0
     @ObservationIgnored private var historyRequest = 0
 
-    func configure(client: LocalRPCClient) { self.client = ManagementClient(transport: client); runtimeIsActive = { client.isActive } }
+    func configure(client: LocalRPCClient) { configure(ManagementClient(transport: client), runtimeIsActive: { client.isActive }) }
+    func configure(_ client: ManagementClient, runtimeIsActive: @escaping @Sendable () -> Bool) {
+        generation += 1; self.client = client; self.runtimeIsActive = runtimeIsActive
+    }
     func close() async { generation += 1; await client?.close() }
     func setContext(_ value: SessionScope?) {
         guard scope != value else { return }
@@ -58,8 +61,12 @@ final class ManagementStore {
         catch { report(error); return nil }
     }
     func skillText(_ skill: SkillDescriptor) async -> String? {
-        guard let client else { return nil }
-        do { return try await client.skillText(skill) } catch { report(error); return nil }
+        guard let client, skillReadIsCurrent(skill, generation: generation) else { return nil }
+        let version = generation
+        do {
+            let text = try await client.skillText(skill)
+            return skillReadIsCurrent(skill, generation: version) ? text : nil
+        } catch { if skillReadIsCurrent(skill, generation: version) { report(error) }; return nil }
     }
     func loadHistory(_ schedule: ScheduleDescriptor) async {
         guard let client else { return }

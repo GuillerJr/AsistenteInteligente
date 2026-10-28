@@ -6,7 +6,7 @@ implementación ni como dependencia del producto.
 
 ## Funcionalidad conectada
 
-- MCP stdio, Streamable HTTP 2025-11-25/2026-07-28 y SSE legado 2024-11-05
+- MCP stdio, Streamable HTTP 2025-06-18/2025-11-25/2026-07-28 y SSE legado 2024-11-05
   seleccionados explícitamente. Sesiones, notificaciones, paginación, cierre,
   límites y comprobación de autorización inmediatamente antes del primer byte.
 - OAuth con descubrimiento del recurso/emisor, elección explícita entre varios
@@ -59,6 +59,11 @@ siendo el proveedor de conversación elegido. No hay inferencia, memoria ni audi
 a NVIDIA ni cambio oculto de proveedor.
 
 ## Cualificación
+
+La [continuación del cierre](PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md) conserva los
+fallos encontrados en la verificación, sus correcciones, las regresiones y los
+recorridos nativos. Las versiones 2025-06-18 y 2024-11-05 sólo se ofrecen para
+Streamable HTTP y HTTP+SSE respectivamente; no hay fallback automático.
 
 La implementación está en comprobación nativa y CI. Pasaron inicialmente 78
 pruebas focales MCP y 79 de extensiones/skills, además de los contratos previos de

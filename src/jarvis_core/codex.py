@@ -8,7 +8,9 @@ authority; unknown server requests fail closed. No external history is discovere
 from __future__ import annotations
 
 import asyncio
+import errno
 import json
+import logging
 import math
 import os
 import re
@@ -21,9 +23,21 @@ from urllib.parse import urlsplit
 
 from jarvis_core.state import ensure_private_directory
 
+_LOGGER = logging.getLogger(__name__)
+
 
 class CodexError(RuntimeError):
     """A stable public error code, never raw stderr, credentials or RPC error text."""
+
+    def __init__(self, code: str, *, cleanup_stage: str | None = None,
+                 os_errno: int | None = None) -> None:
+        super().__init__(code)
+        self.cleanup_stage = cleanup_stage
+        self.os_errno = os_errno
+        if cleanup_stage is not None:
+            # Numeric errno and a host-owned stage are sufficient to diagnose a
+            # lifecycle failure. Never attach the OS error's message or paths.
+            _LOGGER.warning("codex_cleanup_incomplete stage=%s errno=%s", cleanup_stage, os_errno)
 
 
 @dataclass
@@ -643,8 +657,9 @@ class CodexClient:
             os.killpg(process.pid, sig)
         except ProcessLookupError:
             pass
-        except OSError:
-            raise CodexError("codex_cleanup_incomplete") from None
+        except OSError as error:
+            raise CodexError("codex_cleanup_incomplete", cleanup_stage="signal_group",
+                             os_errno=error.errno) from None
 
     @staticmethod
     def _group_absent(process) -> bool:
@@ -652,8 +667,39 @@ class CodexClient:
             os.killpg(process.pid, 0)
         except ProcessLookupError:
             return True
-        except OSError:
-            raise CodexError("codex_cleanup_incomplete") from None
+        except OSError as error:
+            raise CodexError("codex_cleanup_incomplete", cleanup_stage="probe_group",
+                             os_errno=error.errno) from None
+        return False
+
+    async def _signal_or_reap_group(self, process, sig) -> bool:
+        """Signal the owned group, or confirm an exited-child race without retry.
+
+        Darwin can report EPERM for a group whose only remaining member is an
+        exiting/zombie leader before asyncio publishes its return code. EPERM is
+        not absence: only the owned child's completed wait AND a fresh ESRCH for
+        the exact original PGID can settle this path. A live, denied or possibly
+        reused group remains owned and receives no additional signal here.
+        """
+        try:
+            self._signal_group(process, sig)
+        except CodexError as error:
+            if error.os_errno != errno.EPERM:
+                raise
+            try:
+                await asyncio.wait_for(process.wait(), self._shutdown_timeout)
+            except TimeoutError:
+                raise CodexError("codex_cleanup_incomplete",
+                                 cleanup_stage="permission_reap_timeout",
+                                 os_errno=errno.EPERM) from None
+            except OSError as wait_error:
+                raise CodexError("codex_cleanup_incomplete", cleanup_stage="process_wait",
+                                 os_errno=wait_error.errno) from None
+            if process.returncode is None or not self._group_absent(process):
+                raise CodexError("codex_cleanup_incomplete",
+                                 cleanup_stage="permission_group_unsettled",
+                                 os_errno=errno.EPERM) from None
+            return True
         return False
 
     async def _settle_group(self, process) -> None:
@@ -681,19 +727,26 @@ class CodexClient:
         self._cleanup_pending = True
         process = self._process
         if process is not None:
+            group_settled = False
             if process.returncode is None:
                 for sig in (signal.SIGTERM, signal.SIGKILL):
-                    self._signal_group(process, sig)
+                    if process.returncode is not None:
+                        break
+                    group_settled = await self._signal_or_reap_group(process, sig)
+                    if group_settled:
+                        break
                     try:
                         await asyncio.wait_for(process.wait(), self._shutdown_timeout)
                         break
                     except TimeoutError:
                         continue
-                    except OSError:
-                        raise CodexError("codex_cleanup_incomplete") from None
+                    except OSError as error:
+                        raise CodexError("codex_cleanup_incomplete", cleanup_stage="process_wait",
+                                         os_errno=error.errno) from None
                 else:
                     raise CodexError("codex_cleanup_incomplete")
-            await self._settle_group(process)
+            if not group_settled:
+                await self._settle_group(process)
         readers = tuple(task for task in (self._reader, self._stderr) if task is not None)
         for task in readers:
             task.cancel()

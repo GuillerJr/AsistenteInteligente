@@ -898,7 +898,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 }
                 for spec in self.config.server_specs
             ],
-            "supported_protocols": ["2024-11-05", "2025-11-25", "2026-07-28"],
+            "supported_protocols": ["2024-11-05", "2025-06-18", "2025-11-25", "2026-07-28"],
         }
 
     @staticmethod
@@ -1397,6 +1397,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
     @profile_background("run.settlement")
     async def _settle(self, ref: SessionRef, handle: RunHandle) -> None:
         result = await handle.await_settled()
+        error = result.error
         try:
             error = self._errors.pop(handle.run_id, result.error)
             receipt = {
@@ -1406,6 +1407,11 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 "error_type": result.error_type,
                 "action_receipts": [self._receipt(item) for item in result.action_receipts],
             }
+            known_host_denial = (
+                self.host_tools.get(result.run_id) is not None
+                and result.status == "failed" and error == "approval_denied"
+                and not result.action_receipts
+            )
             self.store.finish_run(
                 ref,
                 result.run_id,
@@ -1413,14 +1419,14 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 receipt=receipt,
                 assistant_text=result.answer,
                 clear_provider_thread=result.status != "completed",
-                outcome="known" if result.status == "completed" else "unknown",
+                outcome="known" if result.status == "completed" or known_host_denial else "unknown",
             )
         except StateError:
             # Do not forge a successful receipt if persistence failed. The active
             # record remains recoverable as interrupted on the next process start.
             self._closing = True
         finally:
-            self.host_tools.settle(handle.run_id)
+            self.host_tools.settle(handle.run_id, error=error)
             self.extension_hooks.clear(handle.run_id)
             self._handles.pop(handle.run_id, None)
             self._refs.pop(handle.run_id, None)

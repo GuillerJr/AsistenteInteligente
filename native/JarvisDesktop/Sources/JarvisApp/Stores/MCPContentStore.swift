@@ -80,7 +80,11 @@ import Foundation
                         if result.settled {
                             guard version == generation, context == scope else { return }
                             contentPreview = result; pendingContentRunID = nil
-                            if result.errorCode != nil { errorMessage = "La fuente MCP no confirmó su resultado. Revisa el recibo de la operación." }
+                            if result.errorCode == "approval_denied" {
+                                errorMessage = "Operación rechazada. No se consultó la fuente MCP."
+                            } else if result.errorCode != nil {
+                                errorMessage = "La fuente MCP no confirmó su resultado. Revisa el recibo de la operación."
+                            }
                             return
                         }
                     }

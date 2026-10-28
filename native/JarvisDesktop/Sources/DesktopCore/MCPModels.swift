@@ -2,12 +2,17 @@ import Foundation
 
 public enum MCPProtocolVersion: String, CaseIterable, Identifiable, Sendable {
     case sseLegacy = "2024-11-05"
+    case june2025 = "2025-06-18"
     case legacy = "2025-11-25"
     case modern = "2026-07-28"
     public var id: String { rawValue }
 
     public func supports(_ transport: MCPTransport) -> Bool {
-        self != .sseLegacy || transport == .sse
+        switch self {
+        case .sseLegacy: transport == .sse
+        case .june2025: transport == .streamableHTTP
+        case .legacy, .modern: true
+        }
     }
 }
 
@@ -41,7 +46,7 @@ public enum MCPConfigurationError: Error, LocalizedError, Equatable {
         case .identifier: return "Usa un identificador de hasta 24 caracteres: una letra minúscula seguida de letras, números o guiones bajos."
         case .command: return "Elige un ejecutable mediante una ruta absoluta. No se admiten intérpretes de shell ni argumentos vacíos."
         case .arguments: return "Los argumentos deben ser un array JSON de texto, sin claves ni contraseñas. Se admiten hasta 63 argumentos, 8 KiB por elemento y 32 KiB en total."
-        case .protocolVersion: return "Elige una versión del protocolo publicada por el servicio y compatible con el transporte. La versión 2024-11-05 requiere HTTP + SSE. No hay cambio automático de versión."
+        case .protocolVersion: return "Elige una versión publicada y compatible con el transporte. 2024-11-05 requiere HTTP + SSE; 2025-06-18, HTTP transmisible. No hay cambio automático de versión."
         case .endpoint: return "Usa una dirección HTTPS sin usuario, contraseña, consulta ni fragmento. HTTP requiere una excepción explícita para el servidor local."
         }
     }

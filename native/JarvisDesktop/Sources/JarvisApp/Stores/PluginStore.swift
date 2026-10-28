@@ -20,7 +20,10 @@ import Observation
     @ObservationIgnored var onRunStarted: (@MainActor (String, SessionScope) -> Void)?
 
     func configure(_ transport: LocalRPCClient) {
-        generation += 1; client = PluginManagementClient(transport: transport); runtimeIsActive = { transport.isActive }
+        configure(PluginManagementClient(transport: transport), runtimeIsActive: { transport.isActive })
+    }
+    func configure(_ client: PluginManagementClient, runtimeIsActive: @escaping @Sendable () -> Bool) {
+        generation += 1; self.client = client; self.runtimeIsActive = runtimeIsActive
     }
     func close() async { generation += 1; await client?.close() }
     func selectAgent(_ agent: String) {
@@ -48,8 +51,8 @@ import Observation
                 package: PluginPackagePreview? = nil, target: String? = nil) async -> Bool {
         guard runtimeIsActive(), !isChanging, let client,
               plugin == nil || plugins.contains(plugin!) else { return false }
+        isChanging = true; generation += 1; errorMessage = nil
         let agent = selectedAgentID, version = generation
-        isChanging = true; errorMessage = nil
         defer { isChanging = false }
         var fields = plugin?.revisionParams ?? [:]
         fields.removeValue(forKey: "agent_id")
@@ -97,20 +100,20 @@ import Observation
     func loadVersions(_ plugin: PluginDescriptor) async {
         guard let client, runtimeIsActive(), !isChanging, plugins.contains(plugin) else { return }
         let version = generation
-        do { let rows = try await client.versions(plugin); if generation == version { versions[plugin.id] = rows } }
-        catch { if generation == version { report(error) } }
+        do { let rows = try await client.versions(plugin); if readIsCurrent(plugin, generation: version) { versions[plugin.id] = rows } }
+        catch { if readIsCurrent(plugin, generation: version) { report(error) } }
     }
     func readResource(_ plugin: PluginDescriptor, path: String) async {
         guard let client, runtimeIsActive(), !isChanging, plugins.contains(plugin), ExtensionFileDescriptor.validPath(path) else { return }
         let version = generation
-        do { let result = try await client.resource(plugin, path: path); if generation == version { resource = result } }
-        catch { if generation == version { report(error) } }
+        do { let result = try await client.resource(plugin, path: path); if readIsCurrent(plugin, generation: version) { resource = result } }
+        catch { if readIsCurrent(plugin, generation: version) { report(error) } }
     }
     func loadCatalog(_ plugin: PluginDescriptor) async {
         guard let client, runtimeIsActive(), !isChanging, plugins.contains(plugin) else { return }
         let version = generation
-        do { let result = try await client.catalog(plugin); if generation == version { catalogs[plugin.id] = result } }
-        catch { if generation == version { report(error) } }
+        do { let result = try await client.catalog(plugin); if readIsCurrent(plugin, generation: version) { catalogs[plugin.id] = result } }
+        catch { if readIsCurrent(plugin, generation: version) { report(error) } }
     }
     func configureMCP(_ plugin: PluginDescriptor, serverID: String) async {
         guard let client, runtimeIsActive(), !isChanging, plugins.contains(plugin) else { return }
@@ -167,11 +170,15 @@ import Observation
         let version = generation
         do {
             let resource = try await client.resource(plugin, path: path)
-            guard version == generation, let text = resource.text else { return nil }
+            guard readIsCurrent(plugin, generation: version), let text = resource.text else { return nil }
             return "Contexto externo de un hook de prompt elegido explícitamente. No ejecuta una acción ni concede permisos:\n"
                 + ManagementValidation.json(.object(["plugin_id": .string(plugin.id), "revision": .number(Double(plugin.revision)),
                     "source": .string(path), "sha256": .string(resource.hash), "text": .string(text)]))
-        } catch { if version == generation { report(error) }; return nil }
+        } catch { if readIsCurrent(plugin, generation: version) { report(error) }; return nil }
+    }
+    private func readIsCurrent(_ plugin: PluginDescriptor, generation version: Int) -> Bool {
+        runtimeIsActive() && !isChanging && version == generation
+            && plugin.agentID == selectedAgentID && plugins.contains(plugin)
     }
     static func actionTitle(_ action: String) -> String {
         ["install": "instalación de plugin", "update": "actualización de plugin", "rollback": "rollback de plugin",

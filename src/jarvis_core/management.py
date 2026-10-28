@@ -103,11 +103,12 @@ class ManagementAPI:
                     break
         if (
             self.skills.list(agent.agent_id)
+            or (getattr(self, "plugins", None) is not None and self.plugins.list(agent.agent_id))
             or self.memory.agent_has_documents(agent.agent_id)
             or any(row.agent_id == agent.agent_id for row in self.schedule_store.list())
         ):
             raise RpcError(
-                -32032, "El agente conserva skills, memoria o tareas. Retíralas primero."
+                -32032, "El agente conserva skills, plugins, memoria o tareas. Retíralas primero."
             )
         self.agent_profiles.delete(**value)
         return {"deleted": True}

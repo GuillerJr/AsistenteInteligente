@@ -22,6 +22,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from .mcp import (
+    HTTP_COMPAT_VERSION,
     LEGACY_VERSION,
     MODERN_VERSION,
     McpCancelled,
@@ -120,10 +121,13 @@ class ServerSpec:
                 except ValueError:
                     raise McpRegistryError("mcp_oauth_configuration_invalid") from None
                 object.__setattr__(self, "oauth", _freeze(value))
+        supported = {
+            "stdio": {LEGACY_VERSION, MODERN_VERSION},
+            "streamable_http": {HTTP_COMPAT_VERSION, LEGACY_VERSION, MODERN_VERSION},
+            "sse": {"2024-11-05", LEGACY_VERSION, MODERN_VERSION},
+        }
         if (not isinstance(self.protocol_version, str)
-                or self.protocol_version not in ({LEGACY_VERSION, MODERN_VERSION, "2024-11-05"}
-                                                if self.transport == "sse" else
-                                                {LEGACY_VERSION, MODERN_VERSION})):
+                or self.protocol_version not in supported[self.transport]):
             raise McpRegistryError("mcp_protocol_version_invalid")
 
     def public(self) -> dict:

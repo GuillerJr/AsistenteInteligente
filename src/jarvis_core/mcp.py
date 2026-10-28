@@ -39,6 +39,9 @@ from .state import StateError, ensure_private_directory
 
 LEGACY_VERSION = "2025-11-25"
 MODERN_VERSION = "2026-07-28"
+# An explicit Streamable HTTP compatibility choice, not a stdio mode or an
+# automatic downgrade. McpHttpClient supplies its initialize/initialized path.
+HTTP_COMPAT_VERSION = "2025-06-18"
 Authorize = Callable[[str, Mapping[str, Any]], Awaitable[bool]]
 EffectStatus = Literal["not_dispatched", "unknown", "reported"]
 _NAME = re.compile(r"[A-Za-z0-9_.-]{1,128}\Z")
