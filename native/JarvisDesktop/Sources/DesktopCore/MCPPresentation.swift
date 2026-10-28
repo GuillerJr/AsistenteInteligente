@@ -3,12 +3,16 @@ import Foundation
 public enum MCPPresentation {
     public static func errorMessage(_ error: Error) -> String {
         if let configuration = error as? MCPConfigurationError { return configuration.localizedDescription }
+        if let app = error as? MCPAppFailure { return app.localizedDescription }
         guard let failure = error as? RPCFailure else { return "No se pudo completar la operación del servidor MCP." }
         guard case .remote(_, let message) = failure else { return failure.localizedDescription }
         switch message {
         case "mcp_server_id_invalid": return MCPConfigurationError.identifier.localizedDescription
         case "mcp_server_command_invalid": return MCPConfigurationError.command.localizedDescription
         case "mcp_protocol_version_invalid": return MCPConfigurationError.protocolVersion.localizedDescription
+        case "mcp_endpoint_invalid", "mcp_network_denied": return MCPConfigurationError.endpoint.localizedDescription
+        case "mcp_catalog_changed", "mcp_app_stale": return "El catálogo MCP cambió. Consúltalo de nuevo antes de solicitar otra operación."
+        case "mcp_oauth_required", "mcp_unauthorized": return "Este servidor requiere que autorices el acceso OAuth desde su panel."
         case "mcp_server_not_found", "mcp_not_configured": return "El servidor ya no está configurado. Actualiza la lista."
         case "mcp_configuration_changed", "mcp_config_changed": return "La configuración cambió después de la revisión. Actualiza la lista y revisa el programa de nuevo."
         case "mcp_busy", "runs_active", "run_active", "active_runs": return "Espera a que terminen las ejecuciones antes de cambiar servidores MCP."

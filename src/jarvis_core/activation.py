@@ -55,6 +55,7 @@ _ROLES = {
     "schedules": (".", "schedules.sqlite3", 64 * 1024 * 1024),
     "agents": ("profiles", "agents.json", 524_288),
     "skills": ("profiles", "skills.json", 4_194_304),
+    "plugins": ("profiles", "plugins.json", 4_194_304),
     "telegram": ("telegram", "telegram.json", 1_048_576),
     "configuration_portable": (".", "configuration.json", 1024),
 }
@@ -346,7 +347,7 @@ def _read_prepared(directory, context, limits, *, owner=None):
                   tuple(root_names)))
     with ExitStack() as handles:
         parents = {".": directory}
-        for name, allowed in (("profiles", {"agents.json", "skills.json"}),
+        for name, allowed in (("profiles", {"agents.json", "skills.json", "plugins.json"}),
                               ("telegram", {"telegram.json"})):
             if name in root_entries:
                 parent = handles.enter_context(Directory(directory.path / name))
@@ -387,6 +388,8 @@ def _read_prepared(directory, context, limits, *, owner=None):
         inspections = _cross_references(images, documents, context, limits.recovery(), settled=True)
         _sql_disarms(images, context, limits)
         if (any(row["enabled"] for row in documents.get("skills", {}).get("skills", {}).values())
+                or any(row["enabled"]
+                       for row in documents.get("plugins", {}).get("plugins", {}).values())
                 or any(row["enabled"] for row in documents.get("telegram", {}).get("routes", {})
                        .values())):
             _fail("activation_profile_not_disarmed")

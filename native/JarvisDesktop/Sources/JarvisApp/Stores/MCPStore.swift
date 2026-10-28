@@ -11,13 +11,38 @@ final class MCPStore {
     var isChanging = false
     var isLoading = false
     var didLoad = false
+    var catalogs: [String: MCPContentCatalog] = [:]
+    var contentPreview: MCPContentResult?
+    var pendingContentRunID: String?
+    var app: MCPAppDocument?
+    var appRenderer: MCPAppRenderer?
+    var appError: String?
+    var appRequestPending = false
+    var appCleanupUnconfirmed = false
+    var appSurfaceVisible = false
+    var oauthStates: [String: RPCValue] = [:]
+    var relay: MCPRelaySnapshot?
+    var context: SessionScope?
+    @ObservationIgnored var contextBindingKey: String?
+    var blocksContextChanges: Bool { isChanging || appRequestPending || appCleanupUnconfirmed }
+    @ObservationIgnored var onRunStarted: (@MainActor (String, SessionScope) -> Void)?
+    @ObservationIgnored var contentTask: Task<Void, Never>?
+    @ObservationIgnored var pendingAppOpen = false
+    @ObservationIgnored var pendingContentServer: String?
+    @ObservationIgnored var pendingContentCatalog: String?
 
-    @ObservationIgnored private var runtimeIsActive: @Sendable () -> Bool = { false }
-    @ObservationIgnored private var generation = 0
-    @ObservationIgnored private var client: MCPManagementClient?
+    @ObservationIgnored var runtimeIsActive: @Sendable () -> Bool = { false }
+    @ObservationIgnored var generation = 0
+    @ObservationIgnored var client: MCPManagementClient?
 
     func configure(client: LocalRPCClient) { self.client = MCPManagementClient(transport: client); runtimeIsActive = { client.isActive } }
-    func close() async { await client?.close() }
+    func close() async {
+        generation += 1; contentTask?.cancel(); contentTask = nil
+        await closeApplication()
+        context = nil
+        pendingContentRunID = nil; pendingContentServer = nil; pendingContentCatalog = nil
+        await client?.close()
+    }
 
     func refresh() async throws {
         guard runtimeIsActive(), !isChanging, !isLoading else { return }
@@ -62,12 +87,15 @@ final class MCPStore {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Conectar el servidor MCP «\(server.id)»"
-        alert.informativeText = "Se ejecutará el programa de abajo con tu usuario. Un HOME privado aísla su configuración, pero no es una sandbox del sistema: el programa conserva los accesos de tu usuario.\n\nProtocolo: \(server.configuration.protocolVersion.rawValue). Las herramientas seguirán necesitando aprobación por operación. Revisa el array JSON completo; el primer elemento es el ejecutable y cada elemento posterior es un argumento exacto."
-        alert.addButton(withTitle: "Conectar este programa")
+        alert.informativeText = server.configuration.transport == .stdio
+            ? "Se ejecutará el programa de abajo con tu usuario. Un HOME privado aísla su configuración, pero no es una sandbox del sistema.\n\nProtocolo: \(server.configuration.protocolVersion.rawValue). Cada herramienta, recurso y prompt seguirá usando la autorización por operación."
+            : "Se abrirá una conexión al destino exacto revisado. No se enviarán credenciales de Codex ni datos de otros servidores.\n\nTransporte: \(server.configuration.transport.title). Protocolo: \(server.configuration.protocolVersion.rawValue). Cada operación conserva su autorización."
+        alert.addButton(withTitle: server.configuration.transport == .stdio ? "Conectar este programa" : "Conectar este destino")
         alert.addButton(withTitle: "Cancelar")
         alert.buttons.first?.keyEquivalent = ""
         alert.buttons.last?.keyEquivalent = "\r"
-        alert.accessoryView = Self.commandReview(server.configuration.commandJSON)
+        alert.accessoryView = Self.commandReview(server.configuration.transport == .stdio ? server.configuration.commandJSON
+            : ManagementValidation.json(.object(server.configuration.params)))
         guard alert.runModal() == .alertFirstButtonReturn, runtimeIsActive() else { return }
         // This is only the owner's process-launch choice. Tool effects still
         // use the one run/session/digest authority in AccessStore and the host.
@@ -126,7 +154,7 @@ final class MCPStore {
         return scroll
     }
 
-    private func report(_ error: Error) {
+    func report(_ error: Error) {
         errorMessage = MCPPresentation.errorMessage(error)
     }
 }

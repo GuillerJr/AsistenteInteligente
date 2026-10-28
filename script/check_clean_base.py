@@ -38,11 +38,11 @@ RETIRED_FILES = (
 )
 EXTERNAL_RUNTIMES = {"openclaw", "opencode"}
 STDLIB = sys.stdlib_module_names | {"__future__", "jarvis_core"}
-# Signature primitive plus the owner's explicitly selected CPU embedding engine.
+# Signing, the selected CPU embedding engine and offline schema validation.
 # No agent framework, GPU runtime or inference fallback; uv.lock binds artifacts.
 SIGNING_DEPENDENCIES = ("cryptography==50.0.2",)
-REVIEWED_DEPENDENCIES = (*SIGNING_DEPENDENCIES, "numpy==2.3.5", "onnxruntime==1.31.1",
-                         "tokenizers==0.22.1")
+REVIEWED_DEPENDENCIES = (*SIGNING_DEPENDENCIES, "jsonschema==4.26.0", "numpy==2.3.5",
+                         "onnxruntime==1.31.1", "referencing==0.37.0", "tokenizers==0.22.1")
 SDIST_REQUIRED = {
     "PKG-INFO", "pyproject.toml", "README.md", "LICENSE", "uv.lock", "MANIFEST.in",
     "script/check_clean_base.py", "script/research_inventory.py", "script/setup_git_gates.sh",
@@ -152,7 +152,7 @@ def _dependencies(values) -> tuple[str, ...]:
 def _check_imports(data: bytes, name: str, dependencies: tuple[str, ...] = ()) -> None:
     allowed = STDLIB | ({"cryptography"} if dependencies else set())
     if dependencies == REVIEWED_DEPENDENCIES:
-        allowed |= {"numpy", "onnxruntime", "tokenizers"}
+        allowed |= {"numpy", "onnxruntime", "tokenizers", "jsonschema", "referencing"}
     tree = ast.parse(data, filename=name)
     dynamic_names = {"eval", "exec", "__import__"}
     for node in ast.walk(tree):
@@ -437,8 +437,11 @@ def smoke_wheel(wheel: Path) -> None:
                "key.public_key().verify(key.sign(b'jarvis offline smoke'),"
                "b'jarvis offline smoke'); "
                if dependencies else "")
-            + ("import numpy, onnxruntime, tokenizers; "
+            + ("import numpy, onnxruntime, tokenizers, jsonschema, referencing; "
                "assert 'CPUExecutionProvider' in onnxruntime.get_available_providers(); "
+               "from jarvis_core.mcp import _schema, _validate; "
+               "schema={'type':'object','properties':{'x':{'anyOf':[{'type':'string'}]}}}; "
+               "_schema(schema); _validate({'x':'JARVIS OFFLINE'},schema); "
                if dependencies == REVIEWED_DEPENDENCIES else "")
             + "print('installed_base_import=ok')"
         )

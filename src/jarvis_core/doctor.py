@@ -22,6 +22,7 @@ from types import MappingProxyType
 from typing import Protocol
 from uuid import uuid4
 
+from jarvis_core.plugins import _validate as validate_plugins
 from jarvis_core.profiles import _validate as validate_agents
 from jarvis_core.skills import _validate as validate_skills
 from jarvis_core.telegram import _journal_validate as validate_telegram
@@ -38,6 +39,7 @@ _PATHS = {
     "schedules": ("schedules.sqlite3",),
     "agents": ("profiles", "agents.json"),
     "skills": ("profiles", "skills.json"),
+    "plugins": ("profiles", "plugins.json"),
     "telegram": ("telegram", "telegram.json"),
 }
 _ROLES = (*_PATHS, "configuration_portable", "restore_record")
@@ -503,6 +505,7 @@ def _json_check(role, data, context):
         {
             "agents": validate_agents,
             "skills": validate_skills,
+            "plugins": validate_plugins,
             "telegram": validate_telegram,
         }[role](value)
     except (ValueError, UnicodeError, RecursionError, KeyError, TypeError):
@@ -515,6 +518,9 @@ def _json_check(role, data, context):
             ("skills", len(value["skills"])),
             ("enabled_skills", sum(row["enabled"] for row in value["skills"].values())),
         )
+    elif role == "plugins":
+        counts = (("plugins", len(value["plugins"])),
+                  ("enabled_plugins", sum(row["enabled"] for row in value["plugins"].values())))
     else:
         counts = (
             ("routes", len(value["routes"])),
@@ -532,11 +538,13 @@ def _json_check(role, data, context):
         references = frozenset(value["agents"])
     elif role == "skills":
         references = frozenset(row["agent_id"] for row in value["skills"].values())
+    elif role == "plugins":
+        references = frozenset(row["agent_id"] for row in value["plugins"].values())
     else:
         references = tuple(
             (row["agent_id"], row["session_id"]) for row in value["routes"].values()
         )
-    return value["version"], tuple(sorted(counts)), references
+    return (1 if role == "plugins" else value["version"]), tuple(sorted(counts)), references
 
 
 def _sqlite_check(role, data, context, inspector):
@@ -886,6 +894,7 @@ def _cross_references(facts):
         return None
     agents = facts.get("agents")
     required = set(facts.get("skills", ()))
+    required.update(facts.get("plugins", ()))
     state = facts.get("state")
     if state is not None:
         required.update(state.agent_ids)

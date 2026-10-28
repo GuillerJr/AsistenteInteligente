@@ -53,7 +53,7 @@ class ModelPeer:
 
 @pytest.fixture
 async def connection():
-    temporary_root = "/private/tmp" if sys.platform == "darwin" else tempfile.gettempdir()
+    temporary_root = tempfile.gettempdir()
     directory = Path(tempfile.mkdtemp(prefix="jvs-", dir=temporary_root)).resolve()
     provider = ModelPeer()
     service = JarvisService(directory, provider)

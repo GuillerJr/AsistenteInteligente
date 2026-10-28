@@ -3,7 +3,7 @@ import Foundation
 /// Read-only listing and configuration do not launch a process. Only connect
 /// sends the explicit command/version reviewed by the owner to the host.
 public final class MCPManagementClient: Sendable {
-    private let transport: LocalRPCClient
+    let transport: LocalRPCClient
 
     public init(transport: LocalRPCClient) { self.transport = transport }
     public func close() async { await transport.close() }

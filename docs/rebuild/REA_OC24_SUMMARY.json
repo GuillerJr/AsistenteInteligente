@@ -1,0 +1,1496 @@
+{
+  "format": "jarvis-rea-mcp-extensions/1",
+  "date": "2026-10-28",
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "acquisition_path": "/private/tmp/jarvis-rea-oc24-mcp-i6j04r53/acquisition.json",
+  "acquisition_sha256": "c53e51133ca42248864712f305b32764fd6d32e89a75cee91cf915bcf8017f1e",
+  "export_path": "/private/tmp/jarvis-rea-oc24-mcp-i6j04r53/evidence.json",
+  "export_bytes": 38792259,
+  "export_sha256": "45edbe7ef4808d05357e7d6cc2f94391f9724b233b39a5cb532fb54f76dca085",
+  "copied_into_product": false,
+  "reference_executed": false,
+  "whole_reference_review_complete": false,
+  "semantic_status": "unknown",
+  "batches": [
+    {
+      "id": "OC24A-http",
+      "parent_evidence_id": "ev_0d53fac7427febe959008066d00dd42362e7804a6400a88281d7430a656afd19",
+      "summary_evidence_id": "ev_0e4f7a534c2924aae28b4705cf7fde306ed6da6b788c9b7ebf16d95b0babd780",
+      "partition_sha256": "0b377a267d4b280f8f0ae8d109c65d095a70efff934a66a25205718c0b97f381",
+      "source_paths": [
+        "package.json",
+        "src/agents/mcp-http-transport.ts",
+        "src/agents/mcp-http.ts",
+        "src/agents/mcp-http-fetch.ts"
+      ],
+      "statistics": {
+        "relevant_files": 4,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 179713,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 3,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 3413,
+        "findings": 44,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "complete",
+          "truncated": false,
+          "omitted_count": 0,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 2,
+              "omitted_relations": 0,
+              "unknown_count": 1
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 72,
+              "omitted_relations": 0,
+              "unknown_count": 142
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 137,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 2,
+              "omitted_relations": 0,
+              "unknown_count": 2
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 1320,
+              "omitted_relations": 0,
+              "unknown_count": 182
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 170,
+              "omitted_relations": 0,
+              "unknown_count": 287
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 23,
+              "omitted_relations": 0,
+              "unknown_count": 21
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 3,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 0,
+        "semantic_unknowns": 635
+      },
+      "unknowns": [
+        "635 semantic graph unknowns remain in the parent Evidence.",
+        "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+        "Caller-selected source analysis leaves 0 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+        "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+        "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+        "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+        "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+        "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+        "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+        "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code.",
+        "semantic_graph.coverage.status is unknown"
+      ],
+      "trace": {
+        "evidence_id": "ev_01b3fd5a862308355fadcfc7ecbcf0c330cb80b69a822f599c6a139f8d578558",
+        "source_evidence_id": "ev_0d53fac7427febe959008066d00dd42362e7804a6400a88281d7430a656afd19",
+        "summary": {
+          "matched_seeds": 2,
+          "traced_nodes": 8,
+          "traced_edges": 12,
+          "terminal_paths": 1,
+          "native_handoffs": 0,
+          "observed_facts": 6,
+          "inferred_facts": 22,
+          "unknown_facts": 0,
+          "unavailable_facts": 0
+        },
+        "coverage": {
+          "status": "complete-within-source",
+          "source_graph_status": "complete",
+          "total_seed_matches": 2
+        }
+      }
+    },
+    {
+      "id": "OC24B-oauth",
+      "parent_evidence_id": "ev_0be14b4325c635becac2ee501de1af2660266a1df9c1c2f5f9b11e083099794a",
+      "summary_evidence_id": "ev_1581607f68ca635e30f83dedf94d594886e639a13465cfd9afa4e4748745fe9b",
+      "partition_sha256": "f3d7dc37aeca23c083a6ed1a3d85d361de830045e4791e11334da1383765e7ef",
+      "source_paths": [
+        "package.json",
+        "src/agents/mcp-oauth-authorization.ts",
+        "src/agents/mcp-oauth-refresh-boundary.ts",
+        "src/agents/mcp-oauth-identity.ts"
+      ],
+      "statistics": {
+        "relevant_files": 4,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 165913,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 3,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 1355,
+        "findings": 51,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "complete",
+          "truncated": false,
+          "omitted_count": 0,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 1,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 41,
+              "omitted_relations": 0,
+              "unknown_count": 64
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 110,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 660,
+              "omitted_relations": 0,
+              "unknown_count": 91
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 59,
+              "omitted_relations": 0,
+              "unknown_count": 69
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 17,
+              "omitted_relations": 0,
+              "unknown_count": 16
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 0,
+        "semantic_unknowns": 240
+      },
+      "unknowns": [
+        "240 semantic graph unknowns remain in the parent Evidence.",
+        "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+        "Caller-selected source analysis leaves 0 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+        "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+        "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+        "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+        "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+        "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+        "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+        "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code.",
+        "semantic_graph.coverage.status is unknown"
+      ],
+      "trace": {
+        "evidence_id": "ev_d6b2f546d0fd36f84fbccdbe9160b9792a0b86ec42c616cc687fe5c6a6b4f8bc",
+        "source_evidence_id": "ev_0be14b4325c635becac2ee501de1af2660266a1df9c1c2f5f9b11e083099794a",
+        "summary": {
+          "matched_seeds": 2,
+          "traced_nodes": 13,
+          "traced_edges": 15,
+          "terminal_paths": 2,
+          "native_handoffs": 0,
+          "observed_facts": 4,
+          "inferred_facts": 28,
+          "unknown_facts": 0,
+          "unavailable_facts": 0
+        },
+        "coverage": {
+          "status": "complete-within-source",
+          "source_graph_status": "complete",
+          "total_seed_matches": 2
+        }
+      }
+    },
+    {
+      "id": "OC24C-apps",
+      "parent_evidence_id": "ev_7abee9c4e34aad26b8febc9cf689d17e08fe0123e9ebceba2b32302e7e84bf21",
+      "summary_evidence_id": "ev_73ecaf2db92fd649897a96e125fb86375bba7cb3f65482319e4611b6677bd7c1",
+      "partition_sha256": "201100c1f3aed35c39614eba153995812ee0f2b1ef97d2a58f61659beefc2ac0",
+      "source_paths": [
+        "package.json",
+        "src/agents/mcp-ui-resource.ts",
+        "src/agents/mcp-app-sandbox.ts",
+        "src/agents/mcp-app-extension-metadata.ts",
+        "src/agents/mcp-form-resource-context.ts"
+      ],
+      "statistics": {
+        "relevant_files": 5,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 182118,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 4,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 4133,
+        "findings": 76,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "complete",
+          "truncated": false,
+          "omitted_count": 0,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 4,
+              "omitted_relations": 0,
+              "unknown_count": 4
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 107,
+              "omitted_relations": 0,
+              "unknown_count": 175
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 141,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 1219,
+              "omitted_relations": 0,
+              "unknown_count": 225
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 266,
+              "omitted_relations": 0,
+              "unknown_count": 359
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 5,
+              "omitted_relations": 0,
+              "unknown_count": 5
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 1,
+              "omitted_relations": 0,
+              "unknown_count": 1
+            }
+          ]
+        },
+        "application_unknowns": 0,
+        "semantic_unknowns": 769
+      },
+      "unknowns": [
+        "769 semantic graph unknowns remain in the parent Evidence.",
+        "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+        "Caller-selected source analysis leaves 0 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+        "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+        "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+        "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+        "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+        "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+        "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+        "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code.",
+        "semantic_graph.coverage.status is unknown"
+      ],
+      "trace": {
+        "evidence_id": "ev_ae02fe78fe93822d463661bacb58c78b54d6c98aee0494fc9b45c5547ea2ec37",
+        "source_evidence_id": "ev_7abee9c4e34aad26b8febc9cf689d17e08fe0123e9ebceba2b32302e7e84bf21",
+        "summary": {
+          "matched_seeds": 2,
+          "traced_nodes": 37,
+          "traced_edges": 45,
+          "terminal_paths": 0,
+          "native_handoffs": 0,
+          "observed_facts": 17,
+          "inferred_facts": 81,
+          "unknown_facts": 0,
+          "unavailable_facts": 0
+        },
+        "coverage": {
+          "status": "complete-within-source",
+          "source_graph_status": "complete",
+          "total_seed_matches": 2
+        }
+      }
+    },
+    {
+      "id": "OC24D-relay",
+      "parent_evidence_id": "ev_d6248d3df928a35ae15105718a247ab6e2a03a4e2f8eee00bbcab6d815f3ca72",
+      "summary_evidence_id": "ev_e0c39a689da212c4f02192134537766ae7c05af8bf2e68937aef14fb0fa300ab",
+      "partition_sha256": "1fcb90ec0d6f056fdfe3b80d6400ad5e25d41ab3d07ec6c0ed1e1e9adba78fb4",
+      "source_paths": [
+        "package.json",
+        "extensions/mcp-events/src/http.ts",
+        "extensions/mcp-events/src/protocol.ts",
+        "extensions/mcp-events/src/source-authority.ts",
+        "extensions/mcp-events/src/service.ts"
+      ],
+      "statistics": {
+        "relevant_files": 5,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 196769,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 4,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 6305,
+        "findings": 89,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "partial",
+          "truncated": false,
+          "omitted_count": null,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 5,
+              "omitted_relations": 0,
+              "unknown_count": 3
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 88,
+              "omitted_relations": 0,
+              "unknown_count": 361
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 214,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 1855,
+              "omitted_relations": 0,
+              "unknown_count": 262
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 369,
+              "omitted_relations": 0,
+              "unknown_count": 645
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 94,
+              "omitted_relations": 0,
+              "unknown_count": 70
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 0,
+        "semantic_unknowns": 1341
+      },
+      "unknowns": [
+        "1341 semantic graph unknowns remain in the parent Evidence.",
+        "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+        "Caller-selected source analysis leaves 0 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+        "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+        "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+        "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+        "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+        "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+        "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+        "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+        "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code.",
+        "graph.coverage.status is partial",
+        "semantic_graph.coverage.status is unknown"
+      ],
+      "trace": {
+        "evidence_id": "ev_301c26534b800b95aa8906b4b0b600c1d78b0619b2b633cef38ef1f1fc56285f",
+        "source_evidence_id": "ev_d6248d3df928a35ae15105718a247ab6e2a03a4e2f8eee00bbcab6d815f3ca72",
+        "summary": {
+          "matched_seeds": 2,
+          "traced_nodes": 7,
+          "traced_edges": 6,
+          "terminal_paths": 0,
+          "native_handoffs": 0,
+          "observed_facts": 6,
+          "inferred_facts": 10,
+          "unknown_facts": 0,
+          "unavailable_facts": 0
+        },
+        "coverage": {
+          "status": "partial",
+          "source_graph_status": "partial",
+          "total_seed_matches": 2
+        }
+      }
+    },
+    {
+      "id": "OC24E-install",
+      "parent_evidence_id": "ev_642776787302fb116278347ec6e5e49c3e7a3e5b1cd00ef572e6decc28d577b9",
+      "summary_evidence_id": "ev_fbd98b949e6641b95e55d920c3db501156245d3faded45e80b9ccb619b8b60ab",
+      "partition_sha256": "8a6eb970ef5c01988ceaef66e586121ef25cd37e3d6539dbdd7c62abe3a5e83e",
+      "source_paths": [
+        "package.json",
+        "src/plugins/install-artifact-inspection.ts",
+        "src/plugins/install-transaction.ts",
+        "src/plugins/install-provenance.ts",
+        "src/plugins/install-record-commit.ts"
+      ],
+      "statistics": {
+        "relevant_files": 5,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 190780,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 4,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 4181,
+        "findings": 106,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "complete",
+          "truncated": false,
+          "omitted_count": 0,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 2,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 152,
+              "omitted_relations": 0,
+              "unknown_count": 159
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 250,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 1860,
+              "omitted_relations": 0,
+              "unknown_count": 296
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 208,
+              "omitted_relations": 0,
+              "unknown_count": 271
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 55,
+              "omitted_relations": 0,
+              "unknown_count": 48
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 0,
+        "semantic_unknowns": 774
+      },
+      "unknowns": [
+        "774 semantic graph unknowns remain in the parent Evidence.",
+        "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+        "Caller-selected source analysis leaves 0 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+        "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+        "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+        "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+        "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+        "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+        "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+        "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code.",
+        "semantic_graph.coverage.status is unknown"
+      ],
+      "trace": {
+        "evidence_id": "ev_464368bea7a45e60230ab9e88d1d8e17d4e890949b895030ec6135d5e475720e",
+        "source_evidence_id": "ev_642776787302fb116278347ec6e5e49c3e7a3e5b1cd00ef572e6decc28d577b9",
+        "summary": {
+          "matched_seeds": 2,
+          "traced_nodes": 13,
+          "traced_edges": 12,
+          "terminal_paths": 0,
+          "native_handoffs": 0,
+          "observed_facts": 14,
+          "inferred_facts": 22,
+          "unknown_facts": 0,
+          "unavailable_facts": 0
+        },
+        "coverage": {
+          "status": "complete-within-source",
+          "source_graph_status": "complete",
+          "total_seed_matches": 2
+        }
+      }
+    },
+    {
+      "id": "OC24F-lifecycle",
+      "parent_evidence_id": "ev_ba0b728b4a946dea1cfd862484379c6e4edeb2792fb80d74aeb67ce33d3383f7",
+      "summary_evidence_id": "ev_7ac06ac795604fbe6a9461f10898596ab2d6ff187da9147d61d17cb2202ac496",
+      "partition_sha256": "ad0ae85fa0c2b53898f9db2b020a28dd3a23974d1977f695d72b3ae9d7c9ccee",
+      "source_paths": [
+        "package.json",
+        "src/plugins/manifest.ts",
+        "src/plugins/registry-lifecycle.ts",
+        "src/plugins/hooks.ts",
+        "src/plugins/loader-runtime-load.ts"
+      ],
+      "statistics": {
+        "relevant_files": 5,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 250625,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 4,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 11156,
+        "findings": 318,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "complete",
+          "truncated": false,
+          "omitted_count": 0,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 2,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 611,
+              "omitted_relations": 0,
+              "unknown_count": 453
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 729,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 5282,
+              "omitted_relations": 0,
+              "unknown_count": 817
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 703,
+              "omitted_relations": 0,
+              "unknown_count": 788
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 45,
+              "omitted_relations": 0,
+              "unknown_count": 26
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 0,
+        "semantic_unknowns": 2084
+      },
+      "unknowns": [
+        "2084 semantic graph unknowns remain in the parent Evidence.",
+        "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+        "Caller-selected source analysis leaves 0 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+        "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+        "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+        "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+        "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+        "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+        "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+        "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code.",
+        "semantic_graph.coverage.status is unknown"
+      ],
+      "trace": {
+        "evidence_id": "ev_c66b24f1a25bea0590adc0c09de6896a81612fc28ef867bef4ebc8502e12061c",
+        "source_evidence_id": "ev_ba0b728b4a946dea1cfd862484379c6e4edeb2792fb80d74aeb67ce33d3383f7",
+        "summary": {
+          "matched_seeds": 2,
+          "traced_nodes": 53,
+          "traced_edges": 57,
+          "terminal_paths": 0,
+          "native_handoffs": 0,
+          "observed_facts": 33,
+          "inferred_facts": 112,
+          "unknown_facts": 0,
+          "unavailable_facts": 0
+        },
+        "coverage": {
+          "status": "complete-within-source",
+          "source_graph_status": "complete",
+          "total_seed_matches": 2
+        }
+      }
+    },
+    {
+      "id": "OC24G-skills",
+      "parent_evidence_id": "ev_c445c8845c9f39dfc0442748453065d5d13dcc4b1db8d42437bc95d161eb9dee",
+      "summary_evidence_id": "ev_5f1f35c026a49d219c8aa11a457d72b5e574cc2ce35cdbb353bc3966e2479d61",
+      "partition_sha256": "7a361fe02d882d7df689b7ef52c257265938cd79f130499ef0d589287501a73a",
+      "source_paths": [
+        "package.json",
+        "src/skills/loading/frontmatter.ts",
+        "src/skills/workshop/skill-versions.ts",
+        "src/skills/library/selection.ts",
+        "src/skills/lifecycle/install-extract.ts"
+      ],
+      "statistics": {
+        "relevant_files": 5,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 176253,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 4,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 2824,
+        "findings": 109,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "partial",
+          "truncated": false,
+          "omitted_count": null,
+          "limits": []
+        },
+        "semantic": {
+          "status": "unknown",
+          "truncated": false,
+          "omitted_nodes": 0,
+          "omitted_relations": 0,
+          "limits": [],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 8,
+              "omitted_relations": 0,
+              "unknown_count": 1
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 76,
+              "omitted_relations": 0,
+              "unknown_count": 145
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 165,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 1238,
+              "omitted_relations": 0,
+              "unknown_count": 225
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 168,
+              "omitted_relations": 0,
+              "unknown_count": 209
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 23,
+              "omitted_relations": 0,
+              "unknown_count": 23
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": 0,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 0,
+        "semantic_unknowns": 603
+      },
+      "unknowns": [
+        "603 semantic graph unknowns remain in the parent Evidence.",
+        "Boundary extraction covers unshadowed JSON/global coercions plus parse and validation method candidates.",
+        "Caller-selected source analysis leaves 0 inventoried files outside analysis scope. Inventory identity covers the complete artifact; relationships through unselected sources remain unknown.",
+        "Child-process extraction covers asynchronous node:child_process creation, literal argv/env/stdio options, exit/error listeners, and kill signals.",
+        "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+        "Configuration extraction covers process.env, process.argv, node:fs reads, and direct logical defaults.",
+        "Event extraction covers EventEmitter-style literal registrations, removals, and dispatch candidates; dynamic names remain unknown.",
+        "Function fingerprints are static candidates; equal digests can remain ambiguous and do not prove behavioral equivalence.",
+        "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+        "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+        "Local data flow does not claim control-flow-sensitive reaching definitions or arbitrary dynamic property resolution.",
+        "Promise ownership covers explicit unshadowed Promise construction, static factories, aggregation, chaining, and await syntax only.",
+        "Request extraction covers fetch, WebSocket, node:http/node:https construction, direct option fields, and exact local response consumers.",
+        "Resource extraction covers built-in filesystem/network acquisition and exact local close/destroy/end handles.",
+        "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+        "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+        "The semantic graph contains static syntax observations and conservative relationship candidates; it does not claim runtime execution.",
+        "Timer extraction covers global or node:timers scheduling and exact local-handle cancellation.",
+        "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code.",
+        "graph.coverage.status is partial",
+        "semantic_graph.coverage.status is unknown"
+      ],
+      "trace": {
+        "evidence_id": "ev_2859681045604252e7bc7a741ef83fd8cda2d3f9a642696f344c98576417e71c",
+        "source_evidence_id": "ev_c445c8845c9f39dfc0442748453065d5d13dcc4b1db8d42437bc95d161eb9dee",
+        "summary": {
+          "matched_seeds": 2,
+          "traced_nodes": 16,
+          "traced_edges": 15,
+          "terminal_paths": 0,
+          "native_handoffs": 0,
+          "observed_facts": 7,
+          "inferred_facts": 28,
+          "unknown_facts": 0,
+          "unavailable_facts": 0
+        },
+        "coverage": {
+          "status": "partial",
+          "source_graph_status": "partial",
+          "total_seed_matches": 2
+        }
+      }
+    }
+  ],
+  "acquisition": {
+    "format": "jarvis-reference-partitions/1",
+    "revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+    "reference_root": "/Users/guillerjr/Documents/Proyectos/Jarvis-Base-OpenClaw",
+    "executed": false,
+    "partitions": [
+      {
+        "id": "OC24A-http",
+        "path": "/private/tmp/jarvis-rea-oc24-mcp-i6j04r53/OC24A-http",
+        "source_paths": [
+          "package.json",
+          "src/agents/mcp-http-transport.ts",
+          "src/agents/mcp-http.ts",
+          "src/agents/mcp-http-fetch.ts"
+        ],
+        "files": [
+          {
+            "path": "package.json",
+            "bytes": 153025,
+            "blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d",
+            "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5"
+          },
+          {
+            "path": "src/agents/mcp-http-transport.ts",
+            "bytes": 17215,
+            "blob": "0cd41ffdaa3096f6ecf4cebeb9a5154a96a131f3",
+            "sha256": "19aaa12ef8628b34937ccddfffea9a5f863ddcd891b347bbb340c8f4e2a77c26"
+          },
+          {
+            "path": "src/agents/mcp-http.ts",
+            "bytes": 2215,
+            "blob": "a69e5608bf128d28619b9e0fbcfef87a0344e12b",
+            "sha256": "a6bf5067337959b80d2dbcb0f4707e0d5f92a15e479373763967b568496cb784"
+          },
+          {
+            "path": "src/agents/mcp-http-fetch.ts",
+            "bytes": 7258,
+            "blob": "bfeef8270b8975f6bc42f74b0b4942ae9e5bc512",
+            "sha256": "6742b1708c31637dfa5cbf0783e15a20f671f4ec77fc97f6686239b721465f28"
+          }
+        ]
+      },
+      {
+        "id": "OC24B-oauth",
+        "path": "/private/tmp/jarvis-rea-oc24-mcp-i6j04r53/OC24B-oauth",
+        "source_paths": [
+          "package.json",
+          "src/agents/mcp-oauth-authorization.ts",
+          "src/agents/mcp-oauth-refresh-boundary.ts",
+          "src/agents/mcp-oauth-identity.ts"
+        ],
+        "files": [
+          {
+            "path": "package.json",
+            "bytes": 153025,
+            "blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d",
+            "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5"
+          },
+          {
+            "path": "src/agents/mcp-oauth-authorization.ts",
+            "bytes": 3901,
+            "blob": "a6807d32e273922fd465ce2684a314eba8e0459a",
+            "sha256": "bd141899e4d648c8956768abb214f372f9aaeac55b6be60f832f4b973af4f04a"
+          },
+          {
+            "path": "src/agents/mcp-oauth-refresh-boundary.ts",
+            "bytes": 5351,
+            "blob": "1d02182a227b6b6d35af0e857a7e3d43dabdb886",
+            "sha256": "42c3fd463f32962ca064624dc8f5771762cff82cc6b54dfb103cf568c361927e"
+          },
+          {
+            "path": "src/agents/mcp-oauth-identity.ts",
+            "bytes": 3636,
+            "blob": "cb18328390ba1f2bedfc96da971407bcc7e57c1f",
+            "sha256": "881ec066c806203d534ed64300a228cafdc485f6a83f045390f2afb80610b472"
+          }
+        ]
+      },
+      {
+        "id": "OC24C-apps",
+        "path": "/private/tmp/jarvis-rea-oc24-mcp-i6j04r53/OC24C-apps",
+        "source_paths": [
+          "package.json",
+          "src/agents/mcp-ui-resource.ts",
+          "src/agents/mcp-app-sandbox.ts",
+          "src/agents/mcp-app-extension-metadata.ts",
+          "src/agents/mcp-form-resource-context.ts"
+        ],
+        "files": [
+          {
+            "path": "package.json",
+            "bytes": 153025,
+            "blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d",
+            "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5"
+          },
+          {
+            "path": "src/agents/mcp-ui-resource.ts",
+            "bytes": 20718,
+            "blob": "5ba507bbfca8ac4803fcc119d9a7bc28ad7478c5",
+            "sha256": "633f679d54eeaa231d891793033d6ae5e6029c5f92a741bf47274157713502f3"
+          },
+          {
+            "path": "src/agents/mcp-app-sandbox.ts",
+            "bytes": 362,
+            "blob": "21ec999515438c6deecc495da0a31cb9899a7a1f",
+            "sha256": "bd7ac057bc788a0d3570eb7d8d227e38276a8763a8efb2ab043a05781ca6ad25"
+          },
+          {
+            "path": "src/agents/mcp-app-extension-metadata.ts",
+            "bytes": 2605,
+            "blob": "25cbd1ac1d2626b41a15b06022a1dd9932ed5de4",
+            "sha256": "d69c0681aed0a690a645f50ec1958aa74085e9da4ce0c2e319c23e4e290a8eb1"
+          },
+          {
+            "path": "src/agents/mcp-form-resource-context.ts",
+            "bytes": 5408,
+            "blob": "5b976593425c8b0c1f70e6c6e74f687f132c22fa",
+            "sha256": "a4f37339e98c27b5f9e537138af60f43de046fd8950f0c53787c10406878b307"
+          }
+        ]
+      },
+      {
+        "id": "OC24D-relay",
+        "path": "/private/tmp/jarvis-rea-oc24-mcp-i6j04r53/OC24D-relay",
+        "source_paths": [
+          "package.json",
+          "extensions/mcp-events/src/http.ts",
+          "extensions/mcp-events/src/protocol.ts",
+          "extensions/mcp-events/src/source-authority.ts",
+          "extensions/mcp-events/src/service.ts"
+        ],
+        "files": [
+          {
+            "path": "package.json",
+            "bytes": 153025,
+            "blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d",
+            "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5"
+          },
+          {
+            "path": "extensions/mcp-events/src/http.ts",
+            "bytes": 6893,
+            "blob": "e7f34eff88605d581c580f1b609beaf956332ffb",
+            "sha256": "69a9729f3818ecfe03970309fc245e92d4573597ae022908f6b76e44a6fa500d"
+          },
+          {
+            "path": "extensions/mcp-events/src/protocol.ts",
+            "bytes": 8698,
+            "blob": "34f5d0da2eed40b8afb918c41e0bb519a9463837",
+            "sha256": "ee6ac3dc3fd9fc67499dbf67a58b0d1a5f6c4eee4074a5e954de35f36ab8793e"
+          },
+          {
+            "path": "extensions/mcp-events/src/source-authority.ts",
+            "bytes": 2776,
+            "blob": "74c0750cc86224633f1a3007d5b5c4b0db57d9ca",
+            "sha256": "65502cb023720ee601c635f4cab4b75fdccd14a42f7929b114dedc12f38a7f1e"
+          },
+          {
+            "path": "extensions/mcp-events/src/service.ts",
+            "bytes": 25377,
+            "blob": "01566dfb84f82d47511c04abd0c3904f19651b3c",
+            "sha256": "2606f649a1d05532a70d54feb4570e083bf9d5319ebcad3f0023f3f44baea6db"
+          }
+        ]
+      },
+      {
+        "id": "OC24E-install",
+        "path": "/private/tmp/jarvis-rea-oc24-mcp-i6j04r53/OC24E-install",
+        "source_paths": [
+          "package.json",
+          "src/plugins/install-artifact-inspection.ts",
+          "src/plugins/install-transaction.ts",
+          "src/plugins/install-provenance.ts",
+          "src/plugins/install-record-commit.ts"
+        ],
+        "files": [
+          {
+            "path": "package.json",
+            "bytes": 153025,
+            "blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d",
+            "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5"
+          },
+          {
+            "path": "src/plugins/install-artifact-inspection.ts",
+            "bytes": 1071,
+            "blob": "3a2fabfc966dd8fa086efae4f25f33cfd145da7f",
+            "sha256": "7c453f80f3fd6028436b02ebd23ea466172867b21b0487551e67098a8037ef13"
+          },
+          {
+            "path": "src/plugins/install-transaction.ts",
+            "bytes": 6918,
+            "blob": "175d5d60d1a4051abb4641a784e460979105c89f",
+            "sha256": "1bc8319d944b83c73be2171fbb10661ab0dc38bc6ab78c8e229b80dfad991e15"
+          },
+          {
+            "path": "src/plugins/install-provenance.ts",
+            "bytes": 2030,
+            "blob": "f3bec39aa0a6b0a8b723ea0049a1822b55e4ccba",
+            "sha256": "e2a55165f9308e155ac323a648433ab3681417108be106874d38069addef977f"
+          },
+          {
+            "path": "src/plugins/install-record-commit.ts",
+            "bytes": 27736,
+            "blob": "b52363fb752e31d0f919804c1ff23870ee9711d5",
+            "sha256": "2850da7261b4e47580ca96978445112999d0571a063505e5784132f55f26cf3e"
+          }
+        ]
+      },
+      {
+        "id": "OC24F-lifecycle",
+        "path": "/private/tmp/jarvis-rea-oc24-mcp-i6j04r53/OC24F-lifecycle",
+        "source_paths": [
+          "package.json",
+          "src/plugins/manifest.ts",
+          "src/plugins/registry-lifecycle.ts",
+          "src/plugins/hooks.ts",
+          "src/plugins/loader-runtime-load.ts"
+        ],
+        "files": [
+          {
+            "path": "package.json",
+            "bytes": 153025,
+            "blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d",
+            "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5"
+          },
+          {
+            "path": "src/plugins/manifest.ts",
+            "bytes": 17827,
+            "blob": "dba67fb8c61e9194cf690a9af6f5b577cd044066",
+            "sha256": "643a0dbd2adca5b593a4c8303e4bbf4469c09c1a258a3256b8fadbf20a5df53c"
+          },
+          {
+            "path": "src/plugins/registry-lifecycle.ts",
+            "bytes": 20969,
+            "blob": "658bc45b9965273d5cebcc04536d37cf8c673908",
+            "sha256": "11e4f65137391b48e983752f0b352f73bdf6529f04bc6dcd0581d5da4fd9960f"
+          },
+          {
+            "path": "src/plugins/hooks.ts",
+            "bytes": 43491,
+            "blob": "2ed8c72dfe63b3a11aa0519057cb6f44a5dfe7a2",
+            "sha256": "971662f2d03cee4df603525c12af7bb5d270129b7939241dd9a92f25cf95e354"
+          },
+          {
+            "path": "src/plugins/loader-runtime-load.ts",
+            "bytes": 15313,
+            "blob": "254a138b01e87b1c60139ffd447c24eb6d21ce42",
+            "sha256": "45835c32bfc53036af4fc62a4e7de4e4aa200957f47fb74dc1527912012f516c"
+          }
+        ]
+      },
+      {
+        "id": "OC24G-skills",
+        "path": "/private/tmp/jarvis-rea-oc24-mcp-i6j04r53/OC24G-skills",
+        "source_paths": [
+          "package.json",
+          "src/skills/loading/frontmatter.ts",
+          "src/skills/workshop/skill-versions.ts",
+          "src/skills/library/selection.ts",
+          "src/skills/lifecycle/install-extract.ts"
+        ],
+        "files": [
+          {
+            "path": "package.json",
+            "bytes": 153025,
+            "blob": "cc10d5f094978391dd1e0fe89e5054eb5c664b3d",
+            "sha256": "7a5dc63cff6b85c63ba307ccd055ed4a5a105a4e223e27ec61fa6e24428618c5"
+          },
+          {
+            "path": "src/skills/loading/frontmatter.ts",
+            "bytes": 6016,
+            "blob": "27290bd8111b472c995e0284a856530f7f19152a",
+            "sha256": "d03ba2e68c4bbdf9a69d7ebc6ae181fefc23423358c6a0de71158d53886dd543"
+          },
+          {
+            "path": "src/skills/workshop/skill-versions.ts",
+            "bytes": 3934,
+            "blob": "f6298cbb753e8440255c0712add54ef00cc5c111",
+            "sha256": "91363cd762a0ca3f10553bac03e712e6122d5f389a7da559edd84e37f98ad32b"
+          },
+          {
+            "path": "src/skills/library/selection.ts",
+            "bytes": 10762,
+            "blob": "c694828c8e9e6b7008f49fe35c67bf552c29173b",
+            "sha256": "eea020d35915b5cc917d30dfdf1e9ee1433628a76150ce0ae12cfd4af5ef04b3"
+          },
+          {
+            "path": "src/skills/lifecycle/install-extract.ts",
+            "bytes": 2516,
+            "blob": "74caf84d37ac3cdc4eea060c22a60325c0c3fa7b",
+            "sha256": "677a02ce127bef64952ce86fa46a6a86431e408762bb0bbcbbb254145295744d"
+          }
+        ]
+      }
+    ]
+  }
+}

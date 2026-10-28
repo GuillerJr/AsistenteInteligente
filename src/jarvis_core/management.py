@@ -57,7 +57,9 @@ class ManagementAPI:
     def _management_idle(self):
         intelligence = getattr(self, "memory_intelligence", None)
         if (self._closing or self._maintenance or self._handles or self._retiring_sessions
-                or (intelligence is not None and intelligence.blockers)):
+                or (intelligence is not None and intelligence.blockers)
+                or (getattr(self, "plugins", None) is not None and self.plugins.pending_cleanup)
+                or (getattr(self, "skills", None) is not None and self.skills.pending_cleanup)):
             raise RpcError(
                 -32011, "Espera a que terminen las ejecuciones antes de cambiar ajustes."
             )

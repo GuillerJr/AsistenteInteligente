@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
 
-from jarvis_core import profiles, skills, telegram
+from jarvis_core import plugins, profiles, skills, telegram
 from jarvis_core.recovery_fs import (
     Directory,
     FileIdentity,
@@ -42,11 +42,14 @@ from jarvis_core.recovery_sqlite import (
 from jarvis_core.tools import ToolError
 
 FORMAT = "jarvis-backup/1"
-_ROLES = ("state", "memory", "schedules", "agents", "skills", "telegram", "configuration_portable")
+_LEGACY_ROLES = ("state", "memory", "schedules", "agents", "skills", "telegram",
+                 "configuration_portable")
+_ROLES = (*_LEGACY_ROLES, "plugins")
 _SQL = frozenset({"state", "memory", "schedules"})
 _JSON_LIMITS = {
     "agents": 524_288,
     "skills": 4_194_304,
+    "plugins": 4_194_304,
     "telegram": 1_048_576,
     "configuration_portable": 1024,
 }
@@ -57,6 +60,7 @@ _PROFILE_NAMES = {
     "schedules": (".", "schedules.sqlite3"),
     "agents": ("profiles", "agents.json"),
     "skills": ("profiles", "skills.json"),
+    "plugins": ("profiles", "plugins.json"),
     "telegram": ("telegram", "telegram.json"),
     "configuration_portable": (".", "configuration.json"),
 }
@@ -301,6 +305,8 @@ def _json(role, data):
             profiles._validate(value)
         elif role == "skills":
             skills._validate(value)
+        elif role == "plugins":
+            plugins._validate(value)
         elif role == "telegram":
             telegram._journal_validate(value)
             if value["version"] != 2:
@@ -340,6 +346,9 @@ def _cross_references(images, documents, context, limits, *, settled=False):
         ):
             raise RecoveryError("recovery_source_unsettled")
     for row in documents.get("skills", {}).get("skills", {}).values():
+        if row["agent_id"] not in agents:
+            raise RecoveryError("recovery_cross_reference_invalid")
+    for row in documents.get("plugins", {}).get("plugins", {}).values():
         if row["agent_id"] not in agents:
             raise RecoveryError("recovery_cross_reference_invalid")
     session_agents = dict(inspections["state"].session_agents) if "state" in inspections else {}
@@ -604,7 +613,7 @@ def _validate_manifest(value):
         any(not isinstance(role, str) or role not in _ROLES for role in absent)
         or len(set(absent)) != len(absent)
         or set(absent) & seen
-        or set(absent) | seen != set(_ROLES)
+        or (set(absent) | seen not in (set(_ROLES), set(_LEGACY_ROLES)))
         or not {"agents", "configuration_portable"} <= seen
     ):
         raise RecoveryError("recovery_manifest_inventory_invalid")
@@ -809,13 +818,14 @@ def create_backup(bundle, target, context, *, limits=None, publish=no_replace):
                 len(source_roles) != len(set(source_roles))
                 or any(role not in _SQL for role in [s.role for s in bundle.sqlite])
                 or any(
-                    role not in {"agents", "skills", "telegram"}
+                    role not in {"agents", "skills", "telegram", "plugins"}
                     for role in [s.role for s in bundle.json]
                 )
                 or len(set(bundle.absent)) != len(bundle.absent)
                 or set(source_roles) & set(bundle.absent)
-                or set(source_roles) | set(bundle.absent)
-                != set(_ROLES) - {"configuration_portable"}
+                or (set(source_roles) | set(bundle.absent)) not in (
+                    set(_ROLES) - {"configuration_portable"},
+                    set(_LEGACY_ROLES) - {"configuration_portable"})
                 or "agents" not in source_roles
             ):
                 raise RecoveryError("recovery_source_inventory_invalid")
@@ -926,6 +936,11 @@ def _restore_json(role, data):
     value = _json(role, data)
     if role == "skills":
         for row in value["skills"].values():
+            row["enabled"] = False
+    elif role == "plugins":
+        # Preserve reviewed package/version bytes and provenance; restore no
+        # extension context, lifecycle dispatch, MCP connection or permission.
+        for row in value["plugins"].values():
             row["enabled"] = False
     elif role == "telegram":
         for row in value["routes"].values():

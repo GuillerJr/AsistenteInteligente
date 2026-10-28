@@ -252,7 +252,10 @@ async def test_absent_sources_and_exclusions_are_never_created_or_opened(service
     with service.profile_gate.exclusive() as cut:
         frozen = freeze_sources(service, cut)
         bundle = frozen.bind(cut)
-        assert set(bundle.absent) == {"state", "memory", "schedules", "skills", "telegram"}
+        expected = {"state", "memory", "schedules", "skills", "telegram"}
+        if getattr(service, "plugins", None) is not None:
+            expected.add("plugins")
+        assert set(bundle.absent) == expected
         assert bundle.json[0].role == "agents"
         assert not bundle.sqlite
         assert next(row for row in frozen.metadata if row["role"] == "agents")[

@@ -1,0 +1,28 @@
+import Foundation
+import XCTest
+@testable import DesktopCore
+
+final class MaintenancePluginCompatibilityTests: XCTestCase {
+    private func review(_ transform: ([RPCValue]) -> [RPCValue]) throws -> RPCValue {
+        var value = MaintenanceFixtures.review.object!
+        var metadata = value["metadata"]!.object!
+        metadata["source"] = .array(transform(metadata["source"]!.array!))
+        value["metadata"] = .object(metadata)
+        value["review_digest"] = .string(ManagementValidation.digest(try MaintenanceValidation.canonical(.object(metadata))))
+        return .object(value)
+    }
+    private var plugin: RPCValue { .object(["role": .string("plugins"), "disposition": .string("owned"), "bytes": .number(12)]) }
+    func testHistoricalSixAndCurrentSevenSourceReviewsRemainCompleteAndDigestBound() throws {
+        let legacy = try MaintenanceReview(MaintenanceFixtures.review)
+        XCTAssertEqual(legacy.sources.count, 6)
+        let current = try MaintenanceReview(review { $0 + [plugin] })
+        XCTAssertEqual(current.sources.count, 7)
+        XCTAssertTrue(current.sources.contains { $0.role == "plugins" })
+        XCTAssertEqual(MaintenancePresentation.role("plugins"), "Plugins")
+    }
+    func testPluginRoleDoesNotPermitDuplicatesOrIncompleteHistoricalSources() throws {
+        XCTAssertThrowsError(try MaintenanceReview(review { $0 + [plugin, plugin] }))
+        XCTAssertThrowsError(try MaintenanceReview(review { $0.filter { $0["role"].string != "state" } + [plugin] }))
+        XCTAssertThrowsError(try MaintenanceReview(review { Array($0.dropLast()) }))
+    }
+}

@@ -1,7 +1,8 @@
 import Foundation
 
 public enum MaintenanceValidation {
-    static let roles = Set(["state", "memory", "schedules", "agents", "skills", "telegram", "configuration_portable"])
+    static let legacyRoles = Set(["state", "memory", "schedules", "agents", "skills", "telegram", "configuration_portable"])
+    static let roles = legacyRoles.union(["plugins"])
     static let exclusions = Set(["provider_credentials_and_state", "transport_tokens_sockets_and_locks", "mcp_programs_arguments_and_runtime_homes", "external_and_internal_workspace_files", "external_skill_resources", "temporary_sessions_and_memory", "live_approvals_and_grants", "running_processes_audio_and_network_clients", "host_maintenance_journal"])
     static let disarms = Set(["provider_threads_and_bindings_cleared", "workspace_unselected", "mcp_programs_absent", "schedules_disabled", "telegram_routes_disabled", "skills_disabled", "unfinished_records_interrupted_unknown_no_replay", "fresh_transport_required", "fresh_channel_pairing_and_delivery_cutoff_required", "memory_workspace_association_requires_separate_review"])
     public static func canonical(_ value: RPCValue) throws -> String {
@@ -130,7 +131,10 @@ public struct MaintenanceReview: Identifiable, Sendable {
             _ = try MaintenanceFileIdentity(metadata["source_artifact_identity"])
         }
         let sources = try ManagementValidation.rows(metadata["source"], limit: 7, parse: MaintenanceSource.init)
-        guard Set(sources.map(\.role)) == MaintenanceValidation.roles.subtracting(["configuration_portable"]), sources.count == 6 else { throw RPCFailure.invalidResponse }
+        let actualRoles = Set(sources.map(\.role))
+        let legacySources = MaintenanceValidation.legacyRoles.subtracting(["configuration_portable"])
+        let currentSources = MaintenanceValidation.roles.subtracting(["configuration_portable"])
+        guard sources.count == actualRoles.count, actualRoles == legacySources || actualRoles == currentSources else { throw RPCFailure.invalidResponse }
         let recovery = try metadata.object?["sqlite_recovery"].map { try ManagementValidation.rows($0, limit: 3, parse: MaintenanceSqliteRecovery.init) } ?? []
         guard Set(recovery.map(\.role)).count == recovery.count,
               recovery.allSatisfy({ row in sources.contains { $0.role == row.role && $0.disposition == "present" } }) else { throw RPCFailure.invalidResponse }
@@ -424,7 +428,7 @@ public enum MaintenancePresentation {
         ["awaiting_owner":"Esperando tu aprobación", "quiescing":"Comprobando disponibilidad", "working":"En curso", "complete":"Completada", "staged_disarmed":"Perfil preparado y desarmado", "activated_not_opened":"Perfil activado; aún sin abrir", "cancelled":"Cancelada", "denied":"No autorizada", "failed":"Fallida", "publication_unknown":"Resultado sin confirmar", "cleanup_pending":"Limpieza pendiente"][phase] ?? "Sin confirmar"
     }
     public static func role(_ role: String) -> String {
-        ["state":"Conversaciones y recibos", "memory":"Memoria", "schedules":"Tareas", "agents":"Agentes", "skills":"Skills", "telegram":"Registro de Telegram", "configuration_portable":"Configuración del respaldo", "cross_references":"Relaciones entre recursos"][role] ?? "Recurso propio"
+        ["state":"Conversaciones y recibos", "memory":"Memoria", "schedules":"Tareas", "agents":"Agentes", "skills":"Skills", "plugins":"Plugins", "telegram":"Registro de Telegram", "configuration_portable":"Configuración del respaldo", "cross_references":"Relaciones entre recursos"][role] ?? "Recurso propio"
     }
 }
 

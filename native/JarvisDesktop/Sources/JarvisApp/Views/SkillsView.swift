@@ -7,6 +7,8 @@ struct SkillsView: View {
     @State private var preview: SkillPreviewSnapshot?
     @State private var editing: SkillDescriptor?
     @State private var importAgentID = "jarvis"
+    @State private var library: SkillLibraryPreview?
+    @State private var details: SkillDescriptor?
 
     var body: some View {
         @Bindable var management = store.management
@@ -20,6 +22,7 @@ struct SkillsView: View {
                     .foregroundStyle(.secondary)
                 HStack {
                     Button("Importar carpeta…") { chooseDirectory() }.disabled(!store.canChangeSession)
+                    Button("Importar con recursos…") { chooseDirectory(withResources: true) }.disabled(!store.canChangeSession)
                     Button("Actualizar") { Task { await management.loadSkills() } }
                 }
                 ForEach(management.skills) { skill in
@@ -39,25 +42,38 @@ struct SkillsView: View {
                         HStack {
                             Button(skill.enabled ? "Deshabilitar…" : "Habilitar…") { Task { await management.enableSkill(skill) } }
                             Button("Editar…") { editing = skill }
+                            Button("Usar, recursos y versiones…") { details = skill }
                             Button("Quitar…", role: .destructive) { Task { await management.removeSkill(skill) } }
                         }.disabled(!store.canChangeSession)
                     }.padding(14).background(.quaternary, in: .rect(cornerRadius: 10))
                 }
                 if management.skills.isEmpty { Text("No hay skills importadas para este agente.").foregroundStyle(.secondary) }
                 if let error = management.errorMessage { Text(error).foregroundStyle(.red).textSelection(.enabled) }
+                if let receipt = management.lastMutationReceipt {
+                    DisclosureGroup("Recibo de la última operación") { Text(ManagementValidation.json(receipt)).font(.system(.caption, design: .monospaced)).textSelection(.enabled) }
+                    if receipt["cleanup_confirmed"].bool == false && management.extensionCleanupReceipt?["cleanup_confirmed"].bool != true {
+                        Button("Completar cierre…") { Task { await management.completeExtensionCleanup() } }
+                            .disabled(management.isChanging || store.activeRunID != nil || store.busy)
+                    }
+                    if let cleanup = management.extensionCleanupReceipt { Text("Recibo de cierre: " + ManagementValidation.json(cleanup)).font(.caption).textSelection(.enabled) }
+                }
             }.padding(20)
         }
         .task { await management.loadSkills() }
         .onChange(of: management.selectedAgentID) { _, _ in management.skills = []; Task { await management.loadSkills() } }
-        .sheet(item: $preview) { value in SkillImportReview(preview: value, agentID: importAgentID, store: store) }
+        .sheet(item: $preview) { value in SkillImportReview(preview: value, library: library, agentID: importAgentID, store: store) }
         .sheet(item: $editing) { value in SkillEditorView(skill: value, store: store) }
+        .sheet(item: $details) { value in SkillDetailsView(skill: value, store: store) }
     }
 
-    private func chooseDirectory() {
+    private func chooseDirectory(withResources: Bool = false) {
         let agentID = store.management.selectedAgentID
         let panel = NSOpenPanel()
+        panel.directoryURL = store.access.workspacePath.map { URL(fileURLWithPath: $0, isDirectory: true) }
+            ?? FileManager.default.temporaryDirectory
         panel.title = "Elegir carpeta de skill"
-        panel.message = "Se leerá únicamente SKILL.md de la carpeta seleccionada. Sus recursos no se abren ni ejecutan."
+        panel.message = withResources ? "Se leerá SKILL.md y únicamente sus recursos declarados de esta carpeta. No se ejecutará código."
+            : "Se leerá únicamente SKILL.md de la carpeta seleccionada. Sus recursos no se abren ni ejecutan."
         panel.canChooseDirectories = true; panel.canChooseFiles = false; panel.allowsMultipleSelection = false
         panel.resolvesAliases = false; panel.prompt = "Revisar SKILL.md"
         guard panel.runModal() == .OK, let path = panel.url?.path else { return }
@@ -65,7 +81,12 @@ struct SkillsView: View {
             let physical = try ManagementValidation.physicalPath(path)
             Task {
                 if let inspected = await store.management.inspectSkill(path: physical) {
-                    importAgentID = agentID; preview = inspected
+                    let selectedLibrary: SkillLibraryPreview?
+                    if withResources {
+                        guard let result = await store.management.inspectLibrary(path: physical), result.skillHash == inspected.hash else { return }
+                        selectedLibrary = result
+                    } else { selectedLibrary = nil }
+                    library = selectedLibrary; importAgentID = agentID; preview = inspected
                 }
             }
         } catch { store.management.errorMessage = "No se pudo resolver la carpeta seleccionada." }
@@ -74,6 +95,7 @@ struct SkillsView: View {
 
 private struct SkillImportReview: View {
     let preview: SkillPreviewSnapshot
+    let library: SkillLibraryPreview?
     let agentID: String
     @Bindable var store: ChatStore
     @Environment(\.dismiss) private var dismiss
@@ -83,6 +105,10 @@ private struct SkillImportReview: View {
             Text("Agente: \(agentID)").font(.caption)
             Text(preview.sourcePath).font(.caption).textSelection(.enabled)
             Text("SHA-256: \(preview.hash)").font(.system(.caption2, design: .monospaced)).textSelection(.enabled)
+            if let library {
+                Text("Biblioteca: \(library.files.count) recursos · SHA-256 \(library.libraryHash)").font(.caption).textSelection(.enabled)
+                ForEach(library.files) { file in Text("\(file.path) · \(file.bytes) bytes · \(file.hash)").font(.caption2).textSelection(.enabled) }
+            }
             ScrollView { Text(preview.text).font(.system(.body, design: .monospaced)).frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled) }
                 .frame(height: 300).border(.quaternary)
             Text("La copia quedará deshabilitada. Habilitarla requerirá otra decisión tuya; ninguna instrucción de esta skill concede permisos.")
@@ -91,7 +117,14 @@ private struct SkillImportReview: View {
             HStack {
                 Spacer()
                 Button("Cancelar") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Importar esta versión…") { Task { if await store.management.importSkill(preview, agentID: agentID) { dismiss() } } }
+                Button("Importar esta versión…") {
+                    Task {
+                        let success: Bool
+                        if let library { success = await store.management.importLibrary(preview, library: library, agent: agentID) }
+                        else { success = await store.management.importSkill(preview, agentID: agentID) }
+                        if success { dismiss() }
+                    }
+                }
                     .disabled(!store.canChangeSession)
             }
         }.padding(24).frame(width: 680)

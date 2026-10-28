@@ -6,8 +6,10 @@ readme = "README.md"
 requires-python = ">=3.11,<3.14"
 dependencies = [
     "cryptography==50.0.2",
+    "jsonschema==4.26.0",
     "numpy==2.3.5",
     "onnxruntime==1.31.1",
+    "referencing==0.37.0",
     "tokenizers==0.22.1",
 ]
 

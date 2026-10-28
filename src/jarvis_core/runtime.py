@@ -31,6 +31,7 @@ def _safe_error_type(name: str | None) -> str | None:
 @dataclass(frozen=True)
 class FinalAnswer:
     text: str
+    source: Literal["model", "host"] = "model"
 
 
 @dataclass(frozen=True)
@@ -169,7 +170,7 @@ class RunResult:
     answer: str | None
     tool_results: tuple[ToolResult, ...]
     error: str | None = None
-    answer_source: Literal["model"] | None = None
+    answer_source: Literal["model", "host"] | None = None
     error_type: str | None = None
 
     def __post_init__(self) -> None:
@@ -189,6 +190,7 @@ class RunHandle:
         self._settled: asyncio.Future[RunResult] = asyncio.get_running_loop().create_future()
         self._task: asyncio.Task[None] | None = None
         self._entered = False
+        self._force_confirmation = False
         self.budget = budget or RunBudget()
         self.provider_steps = 0
         self._deadline = (None if self.budget.timeout_seconds is None else
@@ -302,11 +304,14 @@ class AgentRuntime:
         offered_tools: Sequence[str] | None = None,
         run_id: str | None = None,
         budget: RunBudget | None = None,
+        force_confirmation: bool = False,
     ) -> RunHandle:
         if not isinstance(session_id, str) or not session_id.strip():
             raise ValueError("session_id must be nonempty")
         if not isinstance(message, str):
             raise ValueError("message must be text")
+        if type(force_confirmation) is not bool:
+            raise ValueError("force_confirmation_invalid")
         names = tuple(self._tools) if offered_tools is None else tuple(offered_tools)
         if len(set(names)) != len(names) or any(name not in self._tools for name in names):
             raise ValueError("offered tools must be distinct registered names")
@@ -318,6 +323,7 @@ class AgentRuntime:
         if budget is not None and type(budget) is not RunBudget:
             raise ValueError("run_budget_invalid")
         handle = RunHandle(context, budget or RunBudget(self._max_steps))
+        handle._force_confirmation = force_confirmation
         lock = self._session_locks.setdefault(session_id, asyncio.Lock())
         task = asyncio.create_task(self._run(handle, context, lock))
         handle._task = task
@@ -350,9 +356,10 @@ class AgentRuntime:
                 handle._phase = RunPhase.RUNNING
                 try:
                     async with asyncio.timeout_at(handle._deadline):
-                        answer = await self._steps(handle, context, results)
+                        answer, answer_source = await self._steps(handle, context, results)
                     outcome = RunResult(
-                        context.run_id, "completed", answer, tuple(results), answer_source="model"
+                        context.run_id, "completed", answer, tuple(results),
+                        answer_source=answer_source
                     )
                 except asyncio.CancelledError as error:
                     outcome = RunResult(
@@ -448,7 +455,7 @@ class AgentRuntime:
         handle: RunHandle,
         context: RunContext,
         results: list[ToolResult],
-    ) -> str:
+    ) -> tuple[str, str]:
         for _ in range(handle.budget.max_steps):
             self._check_cancelled(handle)
             handle.provider_steps += 1
@@ -464,7 +471,9 @@ class AgentRuntime:
             if isinstance(step, FinalAnswer):
                 if not isinstance(step.text, str) or not step.text.strip():
                     raise _RunFailure("invalid_final_answer")
-                return step.text
+                if step.source not in {"model", "host"}:
+                    raise _RunFailure("invalid_answer_source")
+                return step.text, step.source
             if not isinstance(step, ToolProposal) or step.tool_name not in context.offered_tools:
                 raise _RunFailure("tool_not_offered")
             await self._tool(handle, context, step, results)
@@ -502,7 +511,8 @@ class AgentRuntime:
             context.run_id, context.session_id, operation_id, tool.name, snapshot, digest
         )
         grant = None
-        if tool.requires_confirmation:
+        confirmation = tool.requires_confirmation or handle._force_confirmation
+        if confirmation:
             if self._approval_gate is None:
                 raise _RunFailure("approval_required")
             handle._phase = RunPhase.WAITING_APPROVAL
@@ -540,7 +550,7 @@ class AgentRuntime:
         # effect. Preserve uncertainty even if it suppresses cancellation and
         # returns a seemingly successful value. Never replay that effect.
         with ExitStack() as scope:
-            if tool.requires_confirmation and self._execution_scope:
+            if confirmation and self._execution_scope:
                 try:
                     scope.enter_context(self._execution_scope(operation, grant))
                 except Exception as error:

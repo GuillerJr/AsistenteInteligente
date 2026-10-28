@@ -40,11 +40,41 @@ jobs:
           echo "JARVIS_MINILM_TEST_ASSETS=$JARVIS_MODEL_TEST_ROOT/artifacts" >> "$GITHUB_ENV"
           .venv/bin/python -B script/prepare_memory_model.py \
             --directory "$JARVIS_MODEL_TEST_ROOT/artifacts"
-      - name: Pruebas Swift y bundle nativo de desarrollo
+      - name: Compilar bundle nativo de desarrollo
         if: runner.os == 'macOS'
         run: |
-          ./script/test_desktop.sh --full --budget-mib 6144
-          ./script/build_desktop.sh --full --budget-mib 6144
+          ./script/build_desktop.sh --full --budget-mib 6144 --output /private/tmp/jarvis-ci-desktop
+      - name: Preparar bundle trazable para comprobación nativa
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          tar -czf "$RUNNER_TEMP/Jarvis-macos-arm64.tar.gz" -C /private/tmp/jarvis-ci-desktop Jarvis.app
+          .venv/bin/python -B - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          root = Path(os.environ["RUNNER_TEMP"])
+          package = root / "Jarvis-macos-arm64.tar.gz"
+          binary = Path("/private/tmp/jarvis-ci-desktop/Jarvis.app/Contents/MacOS/Jarvis")
+          value = {"format": "jarvis-desktop-ci/1", "commit": os.environ["GITHUB_SHA"],
+                   "run_id": os.environ["GITHUB_RUN_ID"], "development_bundle": True,
+                   "external_python_required": True, "architecture": "arm64",
+                   "archive_sha256": hashlib.sha256(package.read_bytes()).hexdigest(),
+                   "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest()}
+          (root / "Jarvis-provenance.json").write_text(json.dumps(value, sort_keys=True) + "\n")
+          PY
+      - name: Conservar bundle de desarrollo sin perfiles ni credenciales
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-desktop-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/Jarvis-macos-arm64.tar.gz
+            ${{ runner.temp }}/Jarvis-provenance.json
+          if-no-files-found: error
+          retention-days: 3
+      - name: Pruebas Swift
+        if: runner.os == 'macOS'
+        run: ./script/test_desktop.sh --full --budget-mib 6144
       - name: Pruebas de contratos propios
         run: >-
           .venv/bin/python -B script/test_resource_guard.py run

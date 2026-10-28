@@ -27,6 +27,7 @@ final class ChatStore {
     var capabilities: RPCValue = .null
     let access = AccessStore()
     let mcp = MCPStore()
+    let plugins = PluginStore()
     let management = ManagementStore()
     let sessionCore = SessionCoreStore()
     let clientIdentities = ClientIdentityStore()
@@ -87,14 +88,21 @@ final class ChatStore {
     var isRecoveryOnly: Bool { (options ?? suppliedOptions)?.recoveryOnly == true }
     var serviceOwner: ServiceOwnerIdentity? { service.ownedIdentity }
     var durableDraftSnapshot: SessionDrafts { drafts.durableOnly }
-    var mayHandoff: Bool { !lifecycleBlocksInteraction && !isRecoveryOnly && ready && !handoffPreparing && !busy && activeRunID == nil && !voice.canStopDictation && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.isRequesting && !restored.responseUnconfirmed && restored.operation?.workerPending != true && restored.operation?.cleanupOwnerPending != true }
+    var mayHandoff: Bool { !lifecycleBlocksInteraction && !isRecoveryOnly && ready && !handoffPreparing && !busy && activeRunID == nil && !voice.canStopDictation && !access.isChangingWorkspace && !mcp.blocksContextChanges && !plugins.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.isRequesting && !restored.responseUnconfirmed && restored.operation?.workerPending != true && restored.operation?.cleanupOwnerPending != true }
     var shutdownWarning: String? { service.lastStopReport?.warning }
+    var latestConversationRunID: String? { observedConversationRunID }
+    var mcpSelectionKey: String {
+        ManagementValidation.digest([runtime.id.uuidString, options?.state ?? "", localProfileStatus?.identity.device ?? "",
+            localProfileStatus?.identity.inode ?? "", selected?.id ?? "", String(selected?.temporary ?? false),
+            selected?.agentID ?? "", String(management.agents.first(where: { $0.id == selected?.agentID })?.revision ?? 0),
+            access.workspacePath ?? ""].joined(separator: "\0"))
+    }
 
     var selected: ChatSession? { sessions.first { $0.id == selectedID } }
-    var canSend: Bool { !lifecycleBlocksInteraction && !isRecoveryOnly && ready && connected && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil && selected != nil
+    var canSend: Bool { !lifecycleBlocksInteraction && !isRecoveryOnly && ready && connected && !busy && !access.isChangingWorkspace && !mcp.blocksContextChanges && !plugins.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil && selected != nil
                        && selected?.archived == false
                        && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    private var sessionChangeEligible: Bool { !isRecoveryOnly && ready && !busy && !access.isChangingWorkspace && !mcp.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil }
+    private var sessionChangeEligible: Bool { !isRecoveryOnly && ready && !busy && !access.isChangingWorkspace && !mcp.blocksContextChanges && !plugins.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil }
     var canChangeSession: Bool { !lifecycleBlocksInteraction && sessionChangeEligible }
     private var canInitializeSession: Bool {
         starting && !stopping && !recoveringCrash && !nativeCleanupPending && !automation.lifecycleBusy && sessionChangeEligible
@@ -111,6 +119,8 @@ final class ChatStore {
         self.runtime = runtime; memoryRestoration = RestoredMemoryStore(runtime: runtime); memoryIntelligence = MemoryIntelligenceStore(runtime: runtime); recovery = RecoveryExtensionStore(runtime: runtime); suppliedOptions = options; openTarget = target
         self.voice = voice ?? LocalVoiceController(driver: MacLocalVoiceDriver())
         self.voice.onTranscript = { [weak self] transcript in self?.acceptDictation(transcript) }
+        mcp.onRunStarted = { [weak self] run, scope in self?.observeMCPRun(run, scope: scope) }
+        plugins.onRunStarted = { [weak self] run, scope in self?.observeMCPRun(run, scope: scope) }
         maintenance.waitForSupervisionIdle = { [weak self] in
             guard let self else { throw RPCFailure.configuration }
             try await self.waitForMonitorSettlement()
@@ -218,6 +228,7 @@ final class ChatStore {
         conversationRefresh = ConversationRefresh(reader: ConversationReader(transport: connection))
         access.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
         mcp.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+        plugins.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
         management.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
         sessionCore.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
         clientIdentities.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
@@ -384,7 +395,7 @@ final class ChatStore {
             guard await automation.stop(handshake: false) else { throw ServiceProcessFailure.cleanupUnconfirmed }
             nativeCleanupPending = false
             polling?.cancel(); memoryRecallRefresh?.cancel(); conversationRefresh?.setScope(nil)
-            await client?.close(); await access.close(); await mcp.close(); await management.close()
+            await client?.close(); await access.close(); await mcp.close(); await plugins.close(); await management.close()
             await sessionCore.close(); await clientIdentities.close(); await delegation.close(); await telegram.close()
             await maintenance.close(); await restored.close(); await channelRestoration.close()
             await memoryRestoration.close(); await memoryIntelligence.close(); await recovery.close()
@@ -506,6 +517,8 @@ final class ChatStore {
             let result = try await rpc("sessions.create", ["title": .string(temporary ? "Chat temporal" : "Nueva conversación"),
                                                             "temporary": .bool(temporary), "agent_id": .string(newAgentID)])
             guard let session = ChatSession(result["session"]) else { throw RPCFailure.invalidResponse }
+            await mcp.setContext(session.scope)
+            guard mcp.context == session.scope, !mcp.appCleanupUnconfirmed else { throw RPCFailure.unavailable }
             sessions.insert(session, at: 0)
             selectedID = session.id
             access.setContext(session.scope)
@@ -532,6 +545,8 @@ final class ChatStore {
         defer { busy = false; conversationRefresh?.setScope(selected?.scope) }
         do {
             let rows = try await fetchMessages(session)
+            await mcp.setContext(session.scope)
+            guard mcp.context == session.scope, !mcp.appCleanupUnconfirmed else { throw RPCFailure.unavailable }
             selectedID = id
             access.setContext(session.scope)
             management.setContext(session.scope)
@@ -548,6 +563,14 @@ final class ChatStore {
 
     private func scope(_ session: ChatSession) -> [String: RPCValue] {
         ["session_id": .string(session.id), "temporary": .bool(session.temporary)]
+    }
+
+    private func observeMCPRun(_ id: String, scope: SessionScope) {
+        guard runtime.isActive, !stopping, let session = selected, session.scope == scope,
+              mcp.context == scope, ManagementValidation.identifier(id), activeRunID == nil || activeRunID == id else { return }
+        activeRunID = id; activeSession = session; observedConversationRunID = id
+        runPhase = "queued"; activities = []; streamingText = ""
+        watchRun(id, session: session)
     }
 
     private func decodeMessages(_ rows: [RPCValue], scope: SessionScope) throws -> [ChatMessage] {
@@ -792,6 +815,7 @@ final class ChatStore {
         await client?.close()
         await access.close()
         await mcp.close()
+        await plugins.close()
         await management.close()
         await sessionCore.close()
         await clientIdentities.close()
@@ -1018,6 +1042,7 @@ final class ChatStore {
         await client?.close()
         await access.close()
         await mcp.close()
+        await plugins.close()
         await management.close()
         await sessionCore.close()
         await clientIdentities.close()

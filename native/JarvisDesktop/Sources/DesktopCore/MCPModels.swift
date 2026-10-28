@@ -6,8 +6,30 @@ public enum MCPProtocolVersion: String, CaseIterable, Identifiable, Sendable {
     public var id: String { rawValue }
 }
 
+public enum MCPTransport: String, CaseIterable, Identifiable, Sendable {
+    case stdio, streamableHTTP = "streamable_http", sse
+    public var id: String { rawValue }
+    public var title: String { self == .stdio ? "Programa local · stdio" : self == .sse ? "HTTP + SSE" : "HTTP transmisible" }
+}
+
+public struct MCPOAuthConfiguration: Equatable, Sendable {
+    public let resource: String
+    public let clientID: String
+    public let scopes: [String]
+    public init(resource: String, clientID: String, scopes: [String], allowLoopback: Bool = false) throws {
+        guard let url = URLComponents(string: resource), let host = url.host,
+              url.scheme == "https" || (allowLoopback && url.scheme == "http" && ["127.0.0.1", "::1", "[::1]"].contains(host)),
+              url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
+              ManagementValidation.text(resource, limit: 4096), ManagementValidation.text(clientID, limit: 512),
+              scopes.count <= 32, scopes.allSatisfy({ ManagementValidation.text($0, limit: 128) && !$0.contains(" ") }),
+              Set(scopes).count == scopes.count else { throw MCPConfigurationError.endpoint }
+        self.resource = resource; self.clientID = clientID; self.scopes = scopes
+    }
+    public var value: RPCValue { .object(["resource": .string(resource), "client_id": .string(clientID), "scopes": .array(scopes.map(RPCValue.string))]) }
+}
+
 public enum MCPConfigurationError: Error, LocalizedError, Equatable {
-    case identifier, command, arguments, protocolVersion
+    case identifier, command, arguments, protocolVersion, endpoint
 
     public var errorDescription: String? {
         switch self {
@@ -15,6 +37,7 @@ public enum MCPConfigurationError: Error, LocalizedError, Equatable {
         case .command: return "Elige un ejecutable mediante una ruta absoluta. No se admiten intérpretes de shell ni argumentos vacíos."
         case .arguments: return "Los argumentos deben ser un array JSON de texto, sin claves ni contraseñas. Se admiten hasta 63 argumentos, 8 KiB por elemento y 32 KiB en total."
         case .protocolVersion: return "Elige una versión del protocolo publicada por el servicio. No hay cambio automático de versión."
+        case .endpoint: return "Usa una dirección HTTPS sin usuario, contraseña, consulta ni fragmento. HTTP requiere una excepción explícita para el servidor local."
         }
     }
 }
@@ -23,6 +46,10 @@ public struct MCPConfiguration: Equatable, Sendable {
     public let serverID: String
     public let command: [String]
     public let protocolVersion: MCPProtocolVersion
+    public let transport: MCPTransport
+    public let endpoint: String?
+    public let oauth: MCPOAuthConfiguration?
+    public let allowLoopback: Bool
 
     public init(serverID: String, command: [String], protocolVersion: MCPProtocolVersion) throws {
         guard serverID.range(of: "^[a-z][a-z0-9_]{0,23}\\z", options: .regularExpression) != nil else {
@@ -34,6 +61,40 @@ public struct MCPConfiguration: Equatable, Sendable {
               !["sh", "bash", "zsh", "dash", "csh", "fish"].contains(URL(fileURLWithPath: command[0]).lastPathComponent)
         else { throw MCPConfigurationError.command }
         self.serverID = serverID; self.command = command; self.protocolVersion = protocolVersion
+        transport = .stdio; endpoint = nil; oauth = nil; allowLoopback = false
+    }
+
+    public init(serverID: String, endpoint: String, transport: MCPTransport, protocolVersion: MCPProtocolVersion,
+                oauth: MCPOAuthConfiguration? = nil, allowLoopback: Bool = false) throws {
+        guard serverID.range(of: "^[a-z][a-z0-9_]{0,23}$", options: .regularExpression) != nil else { throw MCPConfigurationError.identifier }
+        guard transport != .stdio, ManagementValidation.text(endpoint, limit: 4096),
+              let parts = URLComponents(string: endpoint), let host = parts.host?.lowercased(), !host.isEmpty,
+              parts.user == nil, parts.password == nil, parts.query == nil, parts.fragment == nil,
+              parts.scheme == "https" || (allowLoopback && parts.scheme == "http" && ["127.0.0.1", "::1", "[::1]"].contains(host)),
+              !endpoint.contains("\r"), !endpoint.contains("\n") else { throw MCPConfigurationError.endpoint }
+        self.serverID = serverID; command = []; self.endpoint = endpoint; self.transport = transport
+        self.protocolVersion = protocolVersion; self.oauth = oauth; self.allowLoopback = allowLoopback
+    }
+
+    public init(spec: RPCValue) throws {
+        guard let id = spec["server_id"].string, let protocolRaw = spec["protocol_version"].string,
+              let version = MCPProtocolVersion(rawValue: protocolRaw) else { throw RPCFailure.invalidResponse }
+        let transport = try MCPTransport.wire(spec["transport"])
+        if transport == .stdio {
+            guard let argv = spec["command"].array, argv.allSatisfy({ $0.string != nil }) else { throw RPCFailure.invalidResponse }
+            try self.init(serverID: id, command: argv.compactMap(\.string), protocolVersion: version)
+        } else {
+            guard let endpoint = spec["endpoint"].string else { throw RPCFailure.invalidResponse }
+            let loopback = spec["allow_loopback"].bool ?? false
+            var oauth: MCPOAuthConfiguration?
+            if case .null = spec["oauth"] { oauth = nil }
+            else {
+                guard let resource = spec["oauth"]["resource"].string, let client = spec["oauth"]["client_id"].string,
+                      let scopes = spec["oauth"]["scopes"].array, scopes.allSatisfy({ $0.string != nil }) else { throw RPCFailure.invalidResponse }
+                oauth = try MCPOAuthConfiguration(resource: resource, clientID: client, scopes: scopes.compactMap(\.string), allowLoopback: loopback)
+            }
+            try self.init(serverID: id, endpoint: endpoint, transport: transport, protocolVersion: version, oauth: oauth, allowLoopback: loopback)
+        }
     }
 
     public init(serverID: String, executable: String, argumentsJSON: String,
@@ -66,8 +127,13 @@ public struct MCPConfiguration: Equatable, Sendable {
     }
 
     public var params: [String: RPCValue] {
-        ["server_id": .string(serverID), "command": .array(command.map(RPCValue.string)),
-         "protocol_version": .string(protocolVersion.rawValue)]
+        var result: [String: RPCValue] = ["server_id": .string(serverID), "command": .array(command.map(RPCValue.string)),
+            "protocol_version": .string(protocolVersion.rawValue)]
+        if transport != .stdio {
+            result["transport"] = .string(transport.rawValue); result["endpoint"] = endpoint.map(RPCValue.string) ?? .null
+            result["oauth"] = oauth?.value ?? .null; result["allow_loopback"] = .bool(allowLoopback)
+        }
+        return result
     }
 
     /// JSON escapes make whitespace and bidirectional characters visible. This is
@@ -106,13 +172,11 @@ public struct MCPServerSnapshot: Identifiable, Equatable, Sendable {
         guard let id = value["server_id"].string,
               let protocolRaw = value["protocol_version"].string,
               let version = MCPProtocolVersion(rawValue: protocolRaw),
-              let argv = value["command"].array,
               let connected = value["connected"].bool,
               let configured = value["configured"].bool,
               let count = value["tool_count"].integer, count >= 0, count <= 10_000,
-              configured,
-              argv.allSatisfy({ $0.string != nil }) else { throw RPCFailure.invalidResponse }
-        do { configuration = try MCPConfiguration(serverID: id, command: argv.compactMap(\.string), protocolVersion: version) }
+              configured else { throw RPCFailure.invalidResponse }
+        do { configuration = try MCPConfiguration(spec: value) }
         catch { throw RPCFailure.invalidResponse }
         let hash = value["catalog_hash"]
         if case .null = hash { catalogHash = nil }
@@ -127,6 +191,14 @@ public struct MCPServerSnapshot: Identifiable, Equatable, Sendable {
             errorCode = text
         } else { throw RPCFailure.invalidResponse }
         self.connected = connected; self.configured = configured; toolCount = count
+    }
+}
+
+private extension MCPTransport {
+    static func wire(_ value: RPCValue) throws -> Self {
+        if case .null = value { return .stdio }
+        guard let text = value.string, let kind = Self(rawValue: text) else { throw RPCFailure.invalidResponse }
+        return kind
     }
 }
 

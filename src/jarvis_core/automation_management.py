@@ -26,7 +26,12 @@ class AutomationAPI:
     def _native_guard(self, run_id):
         self._assert_run_client(run_id)
         self.provider_choice.assert_current(self._provider_epochs[run_id])
-        self._adapter.bridge.assert_can_execute(run_id)
+        host = getattr(self, "host_tools", None)
+        plan = host.get(run_id) if host is not None else None
+        if plan is not None:
+            plan.guard()
+        else:
+            self._adapter.bridge.assert_can_execute(run_id)
 
     def _permission_context(self, operation):
         ref = self._refs.get(operation.run_id)
@@ -47,7 +52,12 @@ class AutomationAPI:
         context = self._permission_context(operation)
         if context is None:
             return
-        self._native_guard(operation.run_id)
+        hooks = getattr(self, "extension_hooks", None)
+        if hooks is not None and hooks.is_hook(operation):
+            self._assert_run_client(operation.run_id)
+            self.provider_choice.assert_current(self._provider_epochs[operation.run_id])
+        else:
+            self._native_guard(operation.run_id)
         rule = self.automation_permissions.match(**context)
         if rule is not None:
             self.store.append_event(

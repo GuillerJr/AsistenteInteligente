@@ -130,6 +130,7 @@ import SwiftUI
                         Button("Turno y cola") { inspector.selection = "runInput"; inspector.isPresented = true }
                         Button("Agentes") { inspector.selection = "agents"; inspector.isPresented = true }
                         Button("Skills") { inspector.selection = "skills"; inspector.isPresented = true }
+                        Button("Plugins") { inspector.selection = "plugins"; inspector.isPresented = true }
                         Button("Programador") { inspector.selection = "schedules"; inspector.isPresented = true }
                         Button("Procesos") { inspector.selection = "processes"; inspector.isPresented = true }
                         Button("Telegram") { inspector.selection = "telegram"; inspector.isPresented = true }
@@ -177,6 +178,7 @@ import SwiftUI
                         Text("MCP").tag("mcp")
                         Text("Agentes").tag("agents")
                         Text("Skills").tag("skills")
+                        Text("Plugins").tag("plugins")
                         Text("Programador").tag("schedules")
                         Text("Procesos").tag("processes")
                         Text("Telegram").tag("telegram")
@@ -194,6 +196,7 @@ import SwiftUI
                 else if inspector.selection == "memory" { MemoryView(store: store, page: $inspector.memoryPage) }
                 else if inspector.selection == "agents" { AgentsView(store: store) }
                 else if inspector.selection == "skills" { SkillsView(store: store) }
+                else if inspector.selection == "plugins" { PluginsView(store: store) }
                 else if inspector.selection == "schedules" { SchedulesView(store: store) }
                 else if inspector.selection == "processes" { ProcessesView(store: store) }
                 else if inspector.selection == "telegram" { TelegramView(store: store) }

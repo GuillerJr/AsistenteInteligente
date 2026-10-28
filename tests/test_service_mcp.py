@@ -7,6 +7,7 @@ An external success report is never treated as independent verification.
 
 import asyncio
 import json
+import re
 import shutil
 import sys
 import tempfile
@@ -20,6 +21,7 @@ from jarvis_core.protocol import LocalRpcClient, RpcError
 from jarvis_core.service import JarvisService
 
 BASE_TOOL_NAMES = {
+    "mcp_catalog", "mcp_resource_read", "mcp_prompt_get", "mcp_resource_template_read",
     "memory_recall", "memory_store", "memory_forget", "web_fetch",
     "agents_available", "agents_delegate", "workspace_list", "workspace_read",
     "workspace_write", "workspace_edit", "workspace_mkdir", "process_run",
@@ -105,7 +107,7 @@ class ToolPeer:
 
 @pytest.fixture
 async def mcp_service():
-    base = "/private/tmp" if sys.platform == "darwin" else tempfile.gettempdir()
+    base = tempfile.gettempdir()
     root = Path(tempfile.mkdtemp(prefix="jarvis-mcp-e2e-", dir=base)).resolve()
     script = root / "fixture_server.py"
     script.write_text(SERVER)
@@ -181,7 +183,8 @@ async def decide_fixture(client, ref, value, *, allow=True):
 
 async def mcp_name(client):
     tools = (await client.call("tools.list"))["tools"]
-    names = [tool["name"] for tool in tools if tool["name"].startswith("mcp_")]
+    names = [tool["name"] for tool in tools
+             if re.fullmatch(r"mcp_fixture_[a-f0-9]{16}", tool["name"])]
     assert len(names) == 1
     assert all(tool["requires_confirmation"] for tool in tools if tool["name"] in names)
     return names[0]
@@ -195,7 +198,7 @@ async def test_add_does_not_launch_then_exact_connection_lists_current_catalog(m
     assert (await client.call("mcp.add", value)) == {"configured": True}
     assert wire(root) == [] and not (root / "effect-fixture.txt").exists()
     listing = await client.call("mcp.list")
-    assert set(listing["supported_protocols"]) == {LEGACY_VERSION, MODERN_VERSION}
+    assert set(listing["supported_protocols"]) == {"2024-11-05", LEGACY_VERSION, MODERN_VERSION}
     assert listing["servers"] == [
         {
             **value,
@@ -337,7 +340,7 @@ async def test_disconnect_and_remove_invalidate_tools_and_removed_server_status(
     assert not [
         item
         for item in (await client.call("tools.list"))["tools"]
-        if item["name"].startswith("mcp_")
+        if re.fullmatch(r"mcp_fixture_[a-f0-9]{16}", item["name"])
     ]
     listed = (await client.call("mcp.list"))["servers"]
     assert len(listed) == 1 and not listed[0]["connected"] and listed[0]["tool_count"] == 0
@@ -445,5 +448,5 @@ async def test_catalog_change_during_approval_prevents_dispatch_and_refreshes_ne
     assert not [
         item
         for item in (await client.call("tools.list"))["tools"]
-        if item["name"].startswith("mcp_")
+        if re.fullmatch(r"mcp_fixture_[a-f0-9]{16}", item["name"])
     ]

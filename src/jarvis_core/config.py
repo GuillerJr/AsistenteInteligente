@@ -86,12 +86,30 @@ class ProfileConfig:
                 not isinstance(server_id, str)
                 or re.fullmatch(r"[a-z][a-z0-9_]{0,23}", server_id) is None
                 or not isinstance(server, dict)
-                or set(server) != {"command", "protocol_version"}
+                or not {"command", "protocol_version"} <= set(server)
+                or set(server) - {"command", "protocol_version", "transport", "endpoint",
+                                  "oauth", "allow_loopback"}
                 or not isinstance(server["protocol_version"], str)
-                or server["protocol_version"] not in {"2025-11-25", "2026-07-28"}
+                or server["protocol_version"] not in {"2024-11-05", "2025-11-25", "2026-07-28"}
             ):
                 raise ConfigError("invalid_mcp_configuration")
             command = server["command"]
+            if not isinstance(command, list):
+                raise ConfigError("invalid_mcp_configuration")
+            if server.get("transport", "stdio") != "stdio":
+                try:
+                    from jarvis_core.mcp_registry import ServerSpec
+                    ServerSpec(server_id, tuple(command), server["protocol_version"],
+                               transport=server.get("transport", "stdio"),
+                               endpoint=server.get("endpoint"), oauth=server.get("oauth"),
+                               allow_loopback=server.get("allow_loopback", False))
+                except (TypeError, ValueError):
+                    raise ConfigError("invalid_mcp_configuration") from None
+                continue
+            if (server["protocol_version"] not in {"2025-11-25", "2026-07-28"}
+                    or server.get("endpoint") is not None or server.get("oauth") is not None
+                    or server.get("allow_loopback", False)):
+                raise ConfigError("invalid_mcp_configuration")
             if (
                 not isinstance(command, list)
                 or not 1 <= len(command) <= 64
@@ -286,17 +304,27 @@ class ProfileConfig:
                 "server_id": key,
                 "command": tuple(value["command"]),
                 "protocol_version": value["protocol_version"],
+                **{name: value[name] for name in
+                   ("transport", "endpoint", "oauth", "allow_loopback")
+                   if name in value},
             }
             for key, value in self._read().get("mcp_servers", {}).items()
         )
 
-    def set_server(self, server_id: str, command: tuple[str, ...], protocol_version: str) -> None:
+    def set_server(self, server_id: str, command: tuple[str, ...], protocol_version: str, *,
+                   transport: str = "stdio", endpoint: str | None = None,
+                   oauth: dict | None = None, allow_loopback: bool = False) -> None:
+        from jarvis_core.mcp_registry import ServerSpec
+        spec = ServerSpec(server_id, command, protocol_version, transport, endpoint, oauth,
+                          allow_loopback)
+        record = spec.public()
+        record.pop("server_id")
         self._update(
             lambda current: {
                 **current,
                 "mcp_servers": {
                     **current.get("mcp_servers", {}),
-                    server_id: {"command": list(command), "protocol_version": protocol_version},
+                    server_id: record,
                 },
             }
         )

@@ -7,6 +7,7 @@ opens them, invokes scripts, downloads packages or discovers folders in HOME.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import os
@@ -22,6 +23,8 @@ from jarvis_core.profiles import ProfileError, agent_identity
 
 _MANIFEST_LIMIT = 32768
 _PRIVATE_NAMES = {"auth.json", "history.json", "history.jsonl", "credentials.json", ".env"}
+_RESOURCE_BYTES = 65536
+_LIBRARY_BYTES = 131072
 
 
 class SkillError(ValueError):
@@ -171,7 +174,8 @@ def _parse(text: str) -> tuple[str, str, str, tuple[str, ...]]:
         key, separator, value = stripped.partition(":")
         if (
             not separator
-            or key not in {"name", "description", "resources"}
+            or key not in {"name", "description", "resources", "version", "argument-hint",
+                           "user-invocable", "arguments", "metadata"}
             or key in header
             or line[0].isspace()
         ):
@@ -193,9 +197,107 @@ def _parse(text: str) -> tuple[str, str, str, tuple[str, ...]]:
     resources = tuple(_resource(item) for item in resources)
     if len(set(resources)) != len(resources):
         raise SkillError("skill_resource_list_invalid")
+    _metadata(header)
     body = "".join(lines[closing + 1 :])
     _text(body, _MANIFEST_LIMIT)
     return name, description, body, resources
+
+
+def _metadata(header):
+    version = _scalar(header.get("version", "0.0.0"))
+    if not re.fullmatch(r"[0-9]{1,6}\.[0-9]{1,6}\.[0-9]{1,6}(?:-[A-Za-z0-9.-]{1,40})?", version):
+        raise SkillError("skill_version_invalid")
+    hint = _scalar(header.get("argument-hint", ""))
+    _text(hint, 512, empty=True)
+    user_invocable = header.get("user-invocable", "true")
+    if user_invocable not in {"true", "false"}:
+        raise SkillError("skill_metadata_invalid")
+    try:
+        arguments = json.loads(header.get("arguments", "[]"), object_pairs_hook=_metadata_object)
+        metadata = json.loads(header.get("metadata", "{}"), object_pairs_hook=_metadata_object)
+    except (ValueError, UnicodeError, RecursionError):
+        raise SkillError("skill_metadata_invalid") from None
+    if not isinstance(arguments, list) or len(arguments) > 8:
+        raise SkillError("skill_arguments_invalid")
+    names = set()
+    for argument in arguments:
+        if (not isinstance(argument, dict)
+                or set(argument) != {"name", "type", "required", "description"}
+                or not isinstance(argument["name"], str)
+                or not re.fullmatch(r"[a-z][a-z0-9_]{0,31}", argument["name"])
+                or argument["name"] in names
+                or not isinstance(argument["type"], str)
+                or argument["type"] not in {"string", "integer", "boolean"}
+                or type(argument["required"]) is not bool):
+            raise SkillError("skill_arguments_invalid")
+        _text(argument["description"], 256)
+        names.add(argument["name"])
+    if (not isinstance(metadata, dict) or set(metadata) - {"license", "homepage", "tags"}
+            or len(json.dumps(metadata).encode()) > 2048):
+        raise SkillError("skill_metadata_invalid")
+    for key in ("license", "homepage"):
+        if key in metadata:
+            _text(metadata[key], 512)
+    if "tags" in metadata and (not isinstance(metadata["tags"], list)
+            or len(metadata["tags"]) > 16
+            or any(not isinstance(tag, str) or not tag or len(tag.encode()) > 64
+                   for tag in metadata["tags"])):
+        raise SkillError("skill_metadata_invalid")
+    return {"version": version, "argument_hint": hint, "user_invocable": user_invocable == "true",
+            "arguments": arguments, "metadata": metadata}
+
+
+def _metadata_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise SkillError("skill_metadata_invalid")
+        result[key] = value
+    return result
+
+
+def skill_metadata(text):
+    _parse(text)
+    header = {}
+    for line in text.splitlines()[1:]:
+        if line == "---":
+            break
+        if line.strip() and not line.strip().startswith("#"):
+            key, _, value = line.partition(":")
+            header[key] = value.strip()
+    return _metadata(header)
+
+
+def _files(value, text):
+    if not isinstance(value, dict) or len(value) > 32:
+        raise SkillError("skill_library_invalid")
+    resources = _parse(text)[3]
+    total = 0
+    for path, encoded in value.items():
+        if path not in resources:
+            raise SkillError("skill_resource_path_invalid")
+        try:
+            raw = base64.b64decode(encoded, validate=True)
+        except (ValueError, TypeError):
+            raise SkillError("skill_library_invalid") from None
+        total += len(raw)
+        if len(raw) > _RESOURCE_BYTES or total > _LIBRARY_BYTES:
+            raise SkillError("skill_library_limit")
+
+
+@dataclass(frozen=True)
+class SkillLibraryPreview:
+    manifest: SkillPreview
+    files: tuple[tuple[str, str], ...]
+    sha256: str
+
+    def public(self):
+        return {"skill_sha256": self.manifest.sha256, "library_sha256": self.sha256,
+                "name": self.manifest.name, "description": self.manifest.description,
+                "metadata": skill_metadata(self.manifest.text),
+                "files": [{"path": path, "bytes": len(base64.b64decode(data)),
+                           "sha256": hashlib.sha256(base64.b64decode(data)).hexdigest()}
+                          for path, data in self.files]}
 
 
 def _initial() -> dict:
@@ -215,7 +317,7 @@ def _validate(value) -> None:
     counts = {}
     for skill_id, row in value["skills"].items():
         _identity(skill_id)
-        if not isinstance(row, dict) or set(row) != {
+        required = {
             "agent_id",
             "text",
             "sha256",
@@ -227,13 +329,36 @@ def _validate(value) -> None:
             "created_ns",
             "updated_ns",
             "provenance",
-        }:
+        }
+        if not isinstance(row, dict) or set(row) not in (required, required | {"history", "files"}):
             raise SkillError("skill_registry_invalid")
         _agent(row["agent_id"])
         counts[row["agent_id"]] = counts.get(row["agent_id"], 0) + 1
         if counts[row["agent_id"]] > 32:
             raise SkillError("skill_agent_limit")
         _parse(row["text"])
+        if "history" in row:
+            _files(row["files"], row["text"])
+            if not isinstance(row["history"], list) or len(row["history"]) > 3:
+                raise SkillError("skill_history_limit")
+            revisions = set()
+            for snapshot in row["history"]:
+                if (not isinstance(snapshot, dict) or set(snapshot) != {
+                        "revision", "text", "sha256", "files", "created_ns", "provenance"}):
+                    raise SkillError("skill_history_invalid")
+                _revision(snapshot["revision"])
+                _parse(snapshot["text"])
+                _digest(snapshot["sha256"])
+                _files(snapshot["files"], snapshot["text"])
+                if (snapshot["revision"] >= row["revision"]
+                        or snapshot["revision"] in revisions
+                        or hashlib.sha256(snapshot["text"].encode()).hexdigest()
+                        != snapshot["sha256"]
+                        or type(snapshot["created_ns"]) is not int
+                        or snapshot["created_ns"] < 0
+                        or snapshot["provenance"] not in {"imported_snapshot", "edited_snapshot"}):
+                    raise SkillError("skill_history_invalid")
+                revisions.add(snapshot["revision"])
         _digest(row["sha256"])
         if hashlib.sha256(row["text"].encode()).hexdigest() != row["sha256"]:
             raise SkillError("skill_content_corrupt")
@@ -267,6 +392,37 @@ class SkillsStore:
         self.document = PrivateJsonDocument(
             directory, "skills.json", initial=_initial, validate=_validate, max_bytes=4194304
         )
+        self._pending = None
+
+    @property
+    def pending_cleanup(self):
+        return self._pending is not None
+
+    def settle_cleanup(self):
+        if self._pending is not None:
+            self._pending.cleanup()
+            self._pending = None
+        return {"status": "closed", "cleanup_confirmed": True}
+
+    def _publish(self, change, assert_current):
+        if self._pending is not None:
+            raise SkillError("skill_cleanup_pending")
+        try:
+            return self.document.update(change, before_publish=lambda _: assert_current())
+        except BaseException as error:
+            if getattr(error, "owner", None) is not None:
+                self._pending = error.owner
+            raise
+
+    @staticmethod
+    def _remember(row):
+        row.setdefault("history", [])
+        row.setdefault("files", {})
+        if len(row["history"]) >= 3:
+            raise SkillError("skill_history_limit")
+        row["history"].append({"revision": row["revision"], "text": row["text"],
+                               "sha256": row["sha256"], "files": dict(row["files"]),
+                               "created_ns": row["updated_ns"], "provenance": row["provenance"]})
 
     @staticmethod
     def _open_source_directory(directory: Path) -> int:
@@ -371,6 +527,73 @@ class SkillsStore:
         )
 
     @staticmethod
+    def inspect_library(directory: Path):
+        preview = SkillsStore.inspect_directory(directory)
+        parent = SkillsStore._open_source_directory(Path(preview.source_path))
+        try:
+            root = os.fstat(parent)
+            if (root.st_dev, root.st_ino) != preview.source_identity:
+                raise SkillError("skill_source_changed")
+            files, total = {}, 0
+            for path in preview.resources:
+                descriptor, opened_directories = parent, []
+                try:
+                    components = path.split("/")
+                    for component in components[:-1]:
+                        descriptor = os.open(component, os.O_RDONLY | os.O_DIRECTORY
+                                             | os.O_NOFOLLOW, dir_fd=descriptor)
+                        opened_directories.append(descriptor)
+                    source = os.open(components[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                                     dir_fd=descriptor)
+                    try:
+                        info = os.fstat(source)
+                        if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                                or info.st_uid != os.getuid() or info.st_mode & 0o022
+                                or not 0 <= info.st_size <= _RESOURCE_BYTES):
+                            raise SkillError("skill_library_invalid")
+                        data = bytearray()
+                        while chunk := os.read(source, min(8192, _RESOURCE_BYTES + 1 - len(data))):
+                            data.extend(chunk)
+                            if len(data) > _RESOURCE_BYTES:
+                                raise SkillError("skill_library_limit")
+                        final, linked = os.fstat(source), os.stat(
+                            components[-1], dir_fd=descriptor, follow_symlinks=False)
+                        fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
+                        pin = tuple(getattr(info, key) for key in fields)
+                        if any(tuple(getattr(row, key) for key in fields) != pin
+                               for row in (final, linked)):
+                            raise SkillError("skill_source_changed")
+                        total += len(data)
+                        if total > _LIBRARY_BYTES:
+                            raise SkillError("skill_library_limit")
+                        files[path] = base64.b64encode(data).decode()
+                    finally:
+                        os.close(source)
+                finally:
+                    for descriptor in reversed(opened_directories):
+                        os.close(descriptor)
+            if SkillsStore.inspect_directory(directory) != preview:
+                raise SkillError("skill_source_changed")
+        except OSError:
+            raise SkillError("skill_library_unavailable") from None
+        finally:
+            os.close(parent)
+        payload = {"manifest_sha256": preview.sha256, "files": files}
+        digest = hashlib.sha256(json.dumps(payload, sort_keys=True,
+                                           separators=(",", ":")).encode()).hexdigest()
+        return SkillLibraryPreview(preview, tuple(sorted(files.items())), digest)
+
+    def import_library(self, agent_id, directory, *, expected_sha256, expected_library_sha256,
+                       enabled=False, assert_current=lambda: None):
+        _digest(expected_library_sha256)
+        library = self.inspect_library(directory)
+        if library.sha256 != expected_library_sha256:
+            raise SkillError("skill_source_changed")
+        return self.import_directory(agent_id, directory, expected_sha256=expected_sha256,
+                                      enabled=enabled, assert_current=assert_current,
+                                      _library=library)
+
+    @staticmethod
     def _record(skill_id: str, row: dict) -> SkillRecord:
         name, description, _, resources = _parse(row["text"])
         return SkillRecord(
@@ -407,7 +630,8 @@ class SkillsStore:
         return SkillContent(self._record(skill_id, row), row["text"], _parse(row["text"])[2])
 
     def import_directory(
-        self, agent_id: str, directory: Path, *, expected_sha256: str, enabled: bool = False
+        self, agent_id: str, directory: Path, *, expected_sha256: str, enabled: bool = False,
+        assert_current=lambda: None, _library=None,
     ) -> SkillRecord:
         _agent(agent_id)
         _digest(expected_sha256)
@@ -415,6 +639,9 @@ class SkillsStore:
             raise SkillError("skill_enabled_invalid")
         preview = self.inspect_directory(directory)
         if preview.sha256 != expected_sha256:
+            raise SkillError("skill_source_changed")
+        if _library is not None and (not isinstance(_library, SkillLibraryPreview)
+                or _library.manifest != preview):
             raise SkillError("skill_source_changed")
         skill_id = "skill_" + uuid4().hex
         now = time.time_ns()
@@ -440,10 +667,13 @@ class SkillsStore:
                 "created_ns": now,
                 "updated_ns": now,
                 "provenance": "imported_snapshot",
+                "history": [],
+                "files": dict(_library.files) if _library is not None else {},
             }
             return value
 
-        result = self.document.update(change)
+        assert_current()
+        result = self._publish(change, assert_current)
         return self._record(skill_id, result["skills"][skill_id])
 
     @staticmethod
@@ -455,7 +685,8 @@ class SkillsStore:
             raise SkillError("skill_revision_conflict")
         return row
 
-    def _change(self, agent_id, skill_id, expected_revision, expected_sha256, callback):
+    def _change(self, agent_id, skill_id, expected_revision, expected_sha256, callback,
+                assert_current=lambda: None):
         _agent(agent_id)
         _identity(skill_id)
         _revision(expected_revision)
@@ -466,7 +697,8 @@ class SkillsStore:
             callback(value, row)
             return value
 
-        return self.document.update(change)
+        assert_current()
+        return self._publish(change, assert_current)
 
     def update(
         self,
@@ -476,6 +708,7 @@ class SkillsStore:
         text: str,
         expected_revision: int,
         expected_sha256: str,
+        assert_current=lambda: None,
     ) -> SkillRecord:
         _parse(text)
         digest = hashlib.sha256(text.encode()).hexdigest()
@@ -487,6 +720,10 @@ class SkillsStore:
                     for key, item in value["skills"].items()
                 ):
                     raise SkillError("skill_already_imported")
+                self._remember(row)
+                resources = _parse(text)[3]
+                row["files"] = {key: value for key, value in row["files"].items()
+                                if key in resources}
                 row.update(
                     text=text,
                     sha256=digest,
@@ -495,7 +732,8 @@ class SkillsStore:
                     provenance="edited_snapshot",
                 )
 
-        result = self._change(agent_id, skill_id, expected_revision, expected_sha256, apply)
+        result = self._change(agent_id, skill_id, expected_revision, expected_sha256, apply,
+                              assert_current)
         return self._record(skill_id, result["skills"][skill_id])
 
     def set_enabled(
@@ -506,6 +744,7 @@ class SkillsStore:
         *,
         expected_revision: int,
         expected_sha256: str,
+        assert_current=lambda: None,
     ) -> SkillRecord:
         if type(enabled) is not bool:
             raise SkillError("skill_enabled_invalid")
@@ -518,16 +757,117 @@ class SkillsStore:
                     updated_ns=max(time.time_ns(), row["updated_ns"]),
                 )
 
-        result = self._change(agent_id, skill_id, expected_revision, expected_sha256, apply)
+        result = self._change(agent_id, skill_id, expected_revision, expected_sha256, apply,
+                              assert_current)
         return self._record(skill_id, result["skills"][skill_id])
 
     def remove(
-        self, agent_id: str, skill_id: str, *, expected_revision: int, expected_sha256: str
+        self, agent_id: str, skill_id: str, *, expected_revision: int, expected_sha256: str,
+        assert_current=lambda: None,
     ) -> None:
         def apply(value, row):
             del value["skills"][skill_id]
 
-        self._change(agent_id, skill_id, expected_revision, expected_sha256, apply)
+        self._change(agent_id, skill_id, expected_revision, expected_sha256, apply, assert_current)
+
+    def metadata(self, agent_id, skill_id):
+        return skill_metadata(self.get(agent_id, skill_id).text)
+
+    def versions(self, agent_id, skill_id):
+        _agent(agent_id)
+        _identity(skill_id)
+        value = self.document.read()
+        row = value["skills"].get(skill_id)
+        if row is None or row["agent_id"] != agent_id:
+            raise SkillError("skill_not_found")
+        return tuple({"revision": item["revision"], "sha256": item["sha256"],
+                      "version": skill_metadata(item["text"])["version"], "current": index == 0,
+                      "resources_count": len(item.get("files", {}))}
+                     for index, item in enumerate([row, *reversed(row.get("history", []))]))
+
+    def rollback(self, agent_id, skill_id, *, target_revision, expected_revision,
+                 expected_sha256, assert_current=lambda: None):
+        _revision(target_revision)
+
+        def apply(value, row):
+            target = next((item for item in row.get("history", [])
+                           if item["revision"] == target_revision), None)
+            if target is None:
+                raise SkillError("skill_version_not_found")
+            if any(key != skill_id and item["agent_id"] == agent_id
+                   and item["sha256"] == target["sha256"]
+                   for key, item in value["skills"].items()):
+                raise SkillError("skill_already_imported")
+            self._remember(row)
+            row.update(text=target["text"], sha256=target["sha256"], files=dict(target["files"]),
+                       enabled=False, revision=row["revision"] + 1,
+                       updated_ns=max(time.time_ns(), row["updated_ns"]),
+                       provenance="edited_snapshot")
+
+        result = self._change(agent_id, skill_id, expected_revision, expected_sha256, apply,
+                              assert_current)
+        return self._record(skill_id, result["skills"][skill_id])
+
+    def retire_version(self, agent_id, skill_id, *, target_revision, expected_revision,
+                       expected_sha256, assert_current=lambda: None):
+        _revision(target_revision)
+
+        def apply(value, row):
+            target = next((item for item in row.get("history", [])
+                           if item["revision"] == target_revision), None)
+            if target is None:
+                raise SkillError("skill_version_not_found")
+            row["history"].remove(target)
+            row.update(revision=row["revision"] + 1,
+                       updated_ns=max(time.time_ns(), row["updated_ns"]))
+
+        result = self._change(agent_id, skill_id, expected_revision, expected_sha256, apply,
+                              assert_current)
+        return self._record(skill_id, result["skills"][skill_id])
+
+    def resource(self, agent_id, skill_id, path, *, expected_revision, expected_sha256):
+        _resource(path)
+        value = self.document.read()
+        row = self._current(value, _agent(agent_id), _identity(skill_id),
+                            _revision(expected_revision), _digest(expected_sha256))
+        # _revision's legacy validator returns its validated integer.
+        if path not in row.get("files", {}):
+            raise SkillError("skill_resource_not_imported")
+        encoded = row["files"][path]
+        raw = base64.b64decode(encoded, validate=True)
+        return {"path": path, "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(),
+                "content_base64": encoded}
+
+    def invoke(self, agent_id, skill_id, arguments, *, expected_revision, expected_sha256):
+        content = self.get(agent_id, skill_id)
+        _revision(expected_revision)
+        _digest(expected_sha256)
+        if (content.record.revision != expected_revision
+                or content.record.sha256 != expected_sha256):
+            raise SkillError("skill_revision_conflict")
+        metadata = skill_metadata(content.text)
+        if not metadata["user_invocable"]:
+            raise SkillError("skill_not_user_invocable")
+        if not isinstance(arguments, dict):
+            raise SkillError("skill_arguments_invalid")
+        declared = {item["name"]: item for item in metadata["arguments"]}
+        if set(arguments) - set(declared) or any(item["required"] and name not in arguments
+                                                for name, item in declared.items()):
+            raise SkillError("skill_arguments_invalid")
+        kinds = {"string": str, "integer": int, "boolean": bool}
+        for name, value in arguments.items():
+            if type(value) is not kinds[declared[name]["type"]]:
+                raise SkillError("skill_arguments_invalid")
+            if type(value) is str:
+                _text(value, 2048, empty=True)
+            if type(value) is int and not -(2**63) <= value < 2**63:
+                raise SkillError("skill_arguments_invalid")
+        data = json.dumps(arguments, sort_keys=True, ensure_ascii=False, allow_nan=False)
+        return {"skill_id": skill_id, "revision": expected_revision, "sha256": expected_sha256,
+                "text": content.body, "arguments": arguments,
+                "context": ("Habilidad elegida explícitamente: contexto, nunca permisos.\n"
+                            + content.body + "\nArgumentos como datos JSON:\n" + data),
+                "executed_code": False}
 
     def context(self, agent_id: str, *, max_bytes: int = 16000) -> SkillContext:
         _agent(agent_id)

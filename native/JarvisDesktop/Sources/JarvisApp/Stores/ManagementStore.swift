@@ -15,10 +15,12 @@ final class ManagementStore {
     var errorMessage: String?
     var isChanging = false
     var isLoading = false
-    @ObservationIgnored private var client: ManagementClient?
+    var lastMutationReceipt: RPCValue?
+    var extensionCleanupReceipt: RPCValue?
+    @ObservationIgnored var client: ManagementClient?
     @ObservationIgnored private var scope: SessionScope?
-    @ObservationIgnored private var runtimeIsActive: @Sendable () -> Bool = { false }
-    @ObservationIgnored private var generation = 0
+    @ObservationIgnored var runtimeIsActive: @Sendable () -> Bool = { false }
+    @ObservationIgnored var generation = 0
     @ObservationIgnored private var historyRequest = 0
 
     func configure(client: LocalRPCClient) { self.client = ManagementClient(transport: client); runtimeIsActive = { client.isActive } }
@@ -178,7 +180,7 @@ final class ManagementStore {
             "prompt": .string(row.prompt), "agent_id": .string(row.agentID), "workspace_id": .string(row.workspaceID),
             "spec": row.spec, "expected_revision": .number(Double(row.revision))]))
     }
-    private func change(_ method: String, _ params: [String: RPCValue], title: String,
+    func change(_ method: String, _ params: [String: RPCValue], title: String,
                         action: String, detail: String? = nil) async -> Bool {
         guard runtimeIsActive(), !isChanging, let client else { return false }
         isChanging = true; generation += 1
@@ -188,6 +190,14 @@ final class ManagementStore {
         var success = false
         do {
             let result = try await client.mutate(method, params: params)
+            if let receipt = result.object?["receipt"] {
+                guard receipt.object != nil, try JSONEncoder().encode(receipt).count <= 65536 else { throw RPCFailure.invalidResponse }
+                lastMutationReceipt = receipt
+            }
+            if method.hasPrefix("skills."), result["skill"].object == nil,
+               result["receipt"]["status"].string == "publication_unknown" {
+                errorMessage = "La publicación quedó sin confirmar. Se conserva su recibo; actualiza el estado y no reenvíes la operación."
+            } else {
             if method.hasPrefix("agents."), method != "agents.delete" { _ = try AgentDescriptor(result["agent"]) }
             else if method.hasPrefix("skills."), method != "skills.remove" { _ = try SkillDescriptor(result["skill"]) }
             else if method.hasPrefix("schedules."), method != "schedules.remove" { _ = try ScheduleDescriptor(result["schedule"]) }
@@ -196,6 +206,7 @@ final class ManagementStore {
                 guard result[key].bool == (method != "scheduler.stop") else { throw RPCFailure.invalidResponse }
             }
             errorMessage = nil; success = true
+            }
         } catch { report(error) }
         // Read-side reconciliation only; a failed mutation is never resent.
         do {

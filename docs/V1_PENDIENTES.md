@@ -8,6 +8,10 @@ producto anterior sigue en Git y sus inventarios están congelados.
 Alcance inicial elegido: macOS Apple Silicon y Telegram como primer canal externo.
 El dueño aplazó expresamente la app de iPhone; ver [decisiones](rebuild/PHASE_A_TARGETS.md).
 
+El incremento de [MCP, plugins y skills](rebuild/PHASE_A_MCP_EXTENSIONS.md) ya
+conecta sus superficies y está en cualificación nativa/CI. La investigación REA
+acumula 38 lotes y 144 rutas TS/JS seleccionadas; no es cobertura exhaustiva.
+
 ## Fase A — base completa primero
 
 - [x] Limpiar el árbol de trabajo y conservar puntos de recuperación.

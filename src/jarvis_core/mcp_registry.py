@@ -9,7 +9,9 @@ External success is a peer report, never verified physical execution.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
+import ipaddress
 import json
 import math
 import re
@@ -17,6 +19,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from .mcp import (
     LEGACY_VERSION,
@@ -25,9 +28,11 @@ from .mcp import (
     McpClient,
     McpError,
     McpTool,
+    _freeze,
     _json_data,
     _validate,
 )
+from .mcp_public import public_content
 from .runtime import ToolDefinition, ToolResult
 from .state import StateError, ensure_private_directory
 from .tools import ToolCancelled, ToolError, ToolSpec, check_tool_authority
@@ -44,11 +49,18 @@ class ServerSpec:
     server_id: str
     command: tuple[str, ...]
     protocol_version: str
+    transport: str = "stdio"
+    endpoint: str | None = None
+    oauth: Mapping | None = None
+    allow_loopback: bool = False
 
     def __post_init__(self) -> None:
         if (not isinstance(self.server_id, str) or not _SERVER_ID.fullmatch(self.server_id)):
             raise McpRegistryError("mcp_server_id_invalid")
-        if (
+        if (not isinstance(self.transport, str)
+                or self.transport not in {"stdio", "streamable_http", "sse"}):
+            raise McpRegistryError("mcp_transport_invalid")
+        if self.transport == "stdio" and (
             not isinstance(self.command, tuple) or not 1 <= len(self.command) <= 64
             or any(not isinstance(arg, str) or not arg or "\0" in arg
                    or len(arg.encode()) > 8192 for arg in self.command)
@@ -57,9 +69,70 @@ class ServerSpec:
             or Path(self.command[0]).resolve().name in {"sh", "bash", "zsh", "dash", "csh", "fish"}
         ):
             raise McpRegistryError("mcp_server_command_invalid")
+        if type(self.allow_loopback) is not bool:
+            raise McpRegistryError("mcp_network_policy_invalid")
+        if self.transport == "stdio":
+            if self.endpoint is not None or self.oauth is not None or self.allow_loopback:
+                raise McpRegistryError("mcp_transport_configuration_invalid")
+        else:
+            if (self.command != () or not isinstance(self.endpoint, str)
+                    or len(self.endpoint) > 8192):
+                raise McpRegistryError("mcp_endpoint_invalid")
+            try:
+                url = urlsplit(self.endpoint)
+                port = url.port
+            except ValueError:
+                raise McpRegistryError("mcp_endpoint_invalid") from None
+            if (url.scheme not in {"https", "http"} or not url.hostname or url.username
+                    or url.password or url.query or url.fragment or "\\" in self.endpoint
+                    or any(ord(c) < 33 for c in self.endpoint)
+                    or (url.scheme == "http" and not self.allow_loopback)
+                    or (url.scheme == "https" and port not in {None, 443})):
+                raise McpRegistryError("mcp_endpoint_invalid")
+            if url.scheme == "http":
+                try:
+                    loopback = ipaddress.ip_address(url.hostname).is_loopback
+                except ValueError:
+                    loopback = url.hostname == "localhost"
+                if not loopback:
+                    raise McpRegistryError("mcp_endpoint_invalid")
+            if self.oauth is not None:
+                value = _json_data(self.oauth)
+                if (not isinstance(value, dict) or set(value) != {"resource", "client_id", "scopes"}
+                        or not isinstance(value["resource"], str)
+                        or len(value["resource"]) > 8192
+                        or not isinstance(value["client_id"], str) or not value["client_id"]
+                        or len(value["client_id"].encode()) > 2048
+                        or not isinstance(value["scopes"], list) or len(value["scopes"]) > 32
+                        or any(not isinstance(s, str) or not s or len(s.encode()) > 256
+                               or any(ord(c) < 33 for c in s) for s in value["scopes"])):
+                    raise McpRegistryError("mcp_oauth_configuration_invalid")
+                try:
+                    resource = urlsplit(value["resource"])
+                    default_port = 443 if url.scheme == "https" else 80
+                    if (resource.scheme, resource.hostname, resource.port or default_port) != (
+                        url.scheme, url.hostname, port or default_port):
+                        raise ValueError
+                    if (resource.query or resource.fragment or resource.username
+                            or resource.password or "\\" in value["resource"]
+                            or any(ord(c) < 33 for c in value["resource"])):
+                        raise ValueError
+                except ValueError:
+                    raise McpRegistryError("mcp_oauth_configuration_invalid") from None
+                object.__setattr__(self, "oauth", _freeze(value))
         if (not isinstance(self.protocol_version, str)
-                or self.protocol_version not in {LEGACY_VERSION, MODERN_VERSION}):
+                or self.protocol_version not in ({LEGACY_VERSION, MODERN_VERSION, "2024-11-05"}
+                                                if self.transport == "sse" else
+                                                {LEGACY_VERSION, MODERN_VERSION})):
             raise McpRegistryError("mcp_protocol_version_invalid")
+
+    def public(self) -> dict:
+        value = {"server_id": self.server_id, "command": list(self.command),
+                 "protocol_version": self.protocol_version}
+        if self.transport != "stdio":
+            value.update(transport=self.transport, endpoint=self.endpoint,
+                         oauth=_json_data(self.oauth), allow_loopback=self.allow_loopback)
+        return value
 
 
 @dataclass(frozen=True)
@@ -126,12 +199,14 @@ class McpRegistry:
         self._lock = asyncio.Lock()
         self._closed = False
         self.child_custody = None
+        self.credentials = None
+        self.app_result_handler = None
+        self.before_effect = None
 
     @staticmethod
     def _connected(entry: _Entry) -> bool:
         client = entry.client
-        return bool(entry.active and client._ready and not client._failure and not client._closing
-                    and client._process is not None and client._process.returncode is None)
+        return bool(entry.active and client.connected)
 
     def _status(self, entry: _Entry) -> ServerStatus:
         connected = self._connected(entry)
@@ -170,10 +245,10 @@ class McpRegistry:
     def _make_binding(self, entry: _Entry, tool: McpTool) -> _Binding:
         schema_json = _canonical(tool.input_schema)
         identity = _canonical({
-            "server_id": entry.spec.server_id, "command": entry.spec.command,
+            "server_id": entry.spec.server_id, "server_spec": entry.spec.public(),
             "protocol_version": entry.spec.protocol_version,
             "remote_tool": tool.name, "schema": tool.input_schema,
-            "description": tool.description,
+            "description": tool.description, "metadata": tool.metadata,
         })
         digest = hashlib.sha256(identity.encode()).hexdigest()
         name = f"mcp_{entry.spec.server_id}_{digest[:16]}"
@@ -205,18 +280,27 @@ class McpRegistry:
                 server_directory = ensure_private_directory(directory / spec.server_id)
             except StateError:
                 raise McpRegistryError("mcp_registry_directory_invalid") from None
-            client = McpClient(
-                spec.command, server_directory, protocol_version=spec.protocol_version,
-                request_timeout=self.request_timeout, shutdown_timeout=self.shutdown_timeout,
-                max_items=self.max_tools + 1,
-            )
+            options = dict(protocol_version=spec.protocol_version,
+                           request_timeout=self.request_timeout,
+                           shutdown_timeout=self.shutdown_timeout, max_items=self.max_tools + 1)
+            if spec.transport == "stdio":
+                client = McpClient(spec.command, server_directory, **options)
+            else:
+                from .mcp_http import McpHttpClient
+                client = McpHttpClient(spec.endpoint, server_directory,
+                    transport=spec.transport, credentials=(
+                        (lambda resource: self.credentials(spec.server_id, resource))
+                        if self.credentials is not None else None),
+                    allow_loopback=spec.allow_loopback, **options)
+            client.client_capabilities = {"extensions": {
+                "io.modelcontextprotocol/ui": {"mimeTypes": ["text/html;profile=mcp-app"]}}}
             entry = _Entry(spec, client)
             client.child_custody = self.child_custody
             client.authorize = lambda name, arguments: self._authorize(entry, name, arguments)
             self._entries[spec.server_id] = entry
             try:
                 await client.start()
-                tools = await client.list_tools()
+                tools = await client.list_tools() if "tools" in client.capabilities else ()
                 used = sum(len(item.bindings) for item in self._entries.values()
                            if self._connected(item))
                 if len(tools) + used > self.max_tools:
@@ -298,6 +382,14 @@ class McpRegistry:
         return tuple(binding.spec for binding in tuple(self._bindings.values())
                      if self._binding_current(binding))
 
+    def model_visible(self, public_name: str) -> bool:
+        binding = self._bindings.get(public_name)
+        if binding is None:
+            return True
+        ui = binding.tool.metadata.get("ui", {})
+        visibility = ui.get("visibility", ("model", "app")) if isinstance(ui, Mapping) else ()
+        return "model" in visibility
+
     def _validate(self, binding: _Binding, arguments: Mapping) -> None:
         self._assert_binding(binding)
         # One bounded schema implementation is shared with the transport.
@@ -314,6 +406,8 @@ class McpRegistry:
             if cancellation.is_set():
                 raise ToolError("execution_cancelled")
             self._assert_binding(binding)
+            if self.before_effect is not None:
+                self.before_effect()
             # McpClient invokes this synchronously under its write lock, directly
             # before the first byte. Scope, revocation and arguments are checked
             # again here and the one-shot central lease is consumed only here.
@@ -348,11 +442,20 @@ class McpRegistry:
             result = await self._call(binding, arguments, cancellation, dispatch)
             if cancellation.is_set():
                 raise McpCancelled("unknown" if dispatch.started else "not_dispatched")
+            payload = _json_data(result.payload)
+            if self.app_result_handler is not None:
+                # Losing a volatile UI view must not rewrite the received
+                # peer action result, nor make a completed operation replayable.
+                with contextlib.suppress(Exception):
+                    self.app_result_handler(binding.entry.spec.server_id, binding.tool,
+                                            arguments, payload)
+            # App-only metadata is never sent to the model or durable receipts.
+            payload = public_content(payload)
             output = _canonical({
                 "server_id": binding.entry.spec.server_id, "remote_tool": binding.tool.name,
                 "catalog_hash": binding.entry.catalog_hash,
                 "verification": "external_report_only", "verified": False,
-                "effect_status": result.effect_status, "payload": result.payload,
+                "effect_status": result.effect_status, "payload": payload,
             })
             if len(output.encode()) > 131072:
                 return ToolResult(name, False, False, error="mcp_result_limit",

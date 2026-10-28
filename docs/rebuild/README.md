@@ -25,6 +25,10 @@ búsqueda semántica/combinada, indexación de notas aprobadas y contexto por tu
 Su [registro de cualificación](PHASE_A_MEMORY_QUALIFICATION.json) conserva
 intentos fallidos, pruebas con pesos reales y el recorrido nativo con ChatGPT.
 
+El [bloque de MCP y extensiones](PHASE_A_MCP_EXTENSIONS.md) conecta transportes
+HTTP/SSE, OAuth, recursos/prompts, Apps, relay, paquetes propios y versiones de
+skills. Conserva separados implementación, pruebas focales y cualificación nativa.
+
 Se conservan el nombre de producto Jarvis, los identificadores técnicos `jarvis`,
 la interfaz en español y las reglas de privacidad/aprobación. La primera conexión
 de inferencia continúa siendo Codex con ChatGPT; NVIDIA está retirado del producto.

@@ -82,6 +82,7 @@ class McpTool:
     name: str
     description: str
     input_schema: Mapping[str, Any]
+    metadata: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     # Remote readOnlyHint/destructiveHint never grant authority.
     requires_confirmation: Literal[True] = field(default=True, init=False)
 
@@ -140,7 +141,7 @@ def _object_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def _schema(schema: Any, depth: int = 0) -> None:
+def _simple_schema(schema: Any, depth: int = 0) -> None:
     if type(schema) is bool:
         return
     if not isinstance(schema, dict) or depth > 16:
@@ -163,7 +164,7 @@ def _schema(schema: Any, depth: int = 0) -> None:
         if not isinstance(schema["properties"], dict):
             raise McpError("invalid_tool_schema")
         for child in schema["properties"].values():
-            _schema(child, depth + 1)
+            _simple_schema(child, depth + 1)
     if "required" in schema:
         required = schema["required"]
         if (
@@ -174,7 +175,7 @@ def _schema(schema: Any, depth: int = 0) -> None:
             raise McpError("invalid_tool_schema")
     for key in ("items", "additionalProperties"):
         if key in schema:
-            _schema(schema[key], depth + 1)
+            _simple_schema(schema[key], depth + 1)
     for key in ("minLength", "maxLength", "minItems", "maxItems"):
         if key in schema and (type(schema[key]) is not int or schema[key] < 0):
             raise McpError("invalid_tool_schema")
@@ -185,7 +186,7 @@ def _schema(schema: Any, depth: int = 0) -> None:
         raise McpError("invalid_tool_schema")
 
 
-def _validate(value: Any, schema: Mapping[str, Any] | bool) -> None:
+def _simple_validate(value: Any, schema: Mapping[str, Any] | bool) -> None:
     if schema is False:
         raise McpError("invalid_tool_arguments")
     if schema is True:
@@ -207,10 +208,10 @@ def _validate(value: Any, schema: Mapping[str, Any] | bool) -> None:
             raise McpError("invalid_tool_arguments")
         props = schema.get("properties", {})
         for key, item in value.items():
-            _validate(item, props.get(key, schema.get("additionalProperties", True)))
+            _simple_validate(item, props.get(key, schema.get("additionalProperties", True)))
     if isinstance(value, list) and "items" in schema:
         for item in value:
-            _validate(item, schema["items"])
+            _simple_validate(item, schema["items"])
     for keys, measured in (
         (("minLength", "maxLength"), len(value) if isinstance(value, str) else None),
         (("minItems", "maxItems"), len(value) if isinstance(value, list) else None),
@@ -222,6 +223,30 @@ def _validate(value: Any, schema: Mapping[str, Any] | bool) -> None:
             or (high in schema and measured > schema[high])
         ):
             raise McpError("invalid_tool_arguments")
+
+
+def _schema(schema: Any, depth: int = 0) -> None:
+    try:
+        _simple_schema(schema, depth)
+    except McpError:
+        from .mcp_schema import SchemaError, check_schema
+        try:
+            check_schema(_json_data(schema))
+        except SchemaError as error:
+            raise McpError(str(error)) from None
+
+
+def _validate(value: Any, schema: Mapping[str, Any] | bool) -> None:
+    try:
+        _simple_schema(_json_data(schema))
+    except McpError:
+        from .mcp_schema import SchemaError, validate
+        try:
+            validate(_json_data(schema), _json_data(value))
+        except SchemaError as error:
+            raise McpError(str(error)) from None
+    else:
+        _simple_validate(value, schema)
 
 
 def _same_json(left: Any, right: Any) -> bool:
@@ -310,7 +335,13 @@ class McpClient:
         self._resources: set[str] = set()
         self._prompts: set[str] = set()
         self.capabilities: Mapping[str, Any] = MappingProxyType({})
+        self.client_capabilities: Mapping[str, Any] = MappingProxyType({})
         self.notification_methods: list[str] = []
+
+    @property
+    def connected(self) -> bool:
+        return bool(self._ready and not self._failure and not self._closing
+                    and self._process is not None and self._process.returncode is None)
 
     async def start(self) -> McpClient:
         async with self._start_lock:
@@ -361,7 +392,8 @@ class McpClient:
                         raise McpError("invalid_discovery")
                 else:
                     result = await self._request("initialize", {
-                        "protocolVersion": self.protocol_version, "capabilities": {},
+                        "protocolVersion": self.protocol_version,
+                        "capabilities": _json_data(getattr(self, "client_capabilities", {})),
                         "clientInfo": {"name": "Jarvis", "version": "0.1.0a1"},
                     }, ready=False)
                     if result.get("protocolVersion") != self.protocol_version:
@@ -419,7 +451,8 @@ class McpClient:
         if self.protocol_version == MODERN_VERSION:
             params["_meta"] = {
                 "io.modelcontextprotocol/protocolVersion": self.protocol_version,
-                "io.modelcontextprotocol/clientCapabilities": {},
+                "io.modelcontextprotocol/clientCapabilities": _json_data(
+                    getattr(self, "client_capabilities", {})),
                 "io.modelcontextprotocol/clientInfo": {"name": "Jarvis", "version": "0.1.0a1"},
             }
         self._counter += 1
@@ -606,7 +639,10 @@ class McpClient:
             description = item.get("description", "")
             if not isinstance(description, str):
                 raise McpError("invalid_tool_description")
-            tools[name] = McpTool(name, description, _freeze(schema))
+            metadata = _json_data(item.get("_meta", {}))
+            if not isinstance(metadata, dict) or len(json.dumps(metadata).encode()) > 32768:
+                raise McpError("invalid_tool_metadata")
+            tools[name] = McpTool(name, description, _freeze(schema), _freeze(metadata))
         if generation != self._catalog_generations["tools"]:
             raise McpError("catalog_changed")
         self._tools = tools
@@ -673,10 +709,16 @@ class McpClient:
         self._resources = set(uris)
         return tuple(_freeze(item) for item in entries)
 
-    async def read_resource(self, uri: str) -> Mapping[str, Any]:
-        if uri not in self._resources:
+    async def read_resource(
+        self, uri: str, *, dispatch_guard: Callable[[], None] | None = None,
+    ) -> Mapping[str, Any]:
+        declared_ui = any(isinstance(tool.metadata.get("ui"), Mapping)
+                          and tool.metadata["ui"].get("resourceUri") == uri
+                          for tool in self._tools.values())
+        if uri not in self._resources and not declared_ui:
             raise McpError("resource_not_listed")
-        result = await self._request("resources/read", {"uri": uri})
+        result = await self._request("resources/read", {"uri": uri}, effect=True,
+                                     before_dispatch=dispatch_guard)
         if not isinstance(result.get("contents"), list):
             raise McpError("invalid_resource_result")
         return _freeze(result)
@@ -697,7 +739,8 @@ class McpClient:
         return tuple(_freeze(item) for item in entries)
 
     async def get_prompt(
-        self, name: str, arguments: Mapping[str, str] | None = None,
+        self, name: str, arguments: Mapping[str, str] | None = None, *,
+        dispatch_guard: Callable[[], None] | None = None,
     ) -> Mapping[str, Any]:
         if name not in self._prompts:
             raise McpError("prompt_not_listed")
@@ -706,7 +749,8 @@ class McpClient:
             not isinstance(value, str) for value in params.values()
         ):
             raise McpError("invalid_prompt_arguments")
-        result = await self._request("prompts/get", {"name": name, "arguments": params})
+        result = await self._request("prompts/get", {"name": name, "arguments": params},
+                                     effect=True, before_dispatch=dispatch_guard)
         if not isinstance(result.get("messages"), list):
             raise McpError("invalid_prompt_result")
         return _freeze(result)

@@ -511,6 +511,8 @@ def _json_staging(service, staging):
     from jarvis_core.private_json import PrivateJsonStaging
 
     resources = (service.agent_profiles, service.skills, service._telegram_journal)
+    if getattr(service, "plugins", None) is not None:
+        resources += (service.plugins,)
     if any(type(resource) is not BoundProfileResource for resource in resources):
         raise HostProfileError("profile_registry_staging_invalid")
     documents = tuple(resource._resource.document for resource in resources)
@@ -548,9 +550,12 @@ def _inventory(service, *, full_admission=True, staging=None):
         service.profile_lease.assert_admission_current()
     if entries - root_allowed:
         raise HostProfileError("profile_inventory_unclassified")
+    profile_names = {"agents.json", "agents.json.lock", "skills.json", "skills.json.lock"}
+    if getattr(service, "plugins", None) is not None:
+        profile_names.update({"plugins.json", "plugins.json.lock"})
     for document, allowed in (
         (service.agent_profiles.document,
-         {"agents.json", "agents.json.lock", "skills.json", "skills.json.lock"}),
+         profile_names),
         (service._telegram_journal.document,
          {"telegram.json", "telegram.json.lock", "telegram.runner.lock"}),
     ):
@@ -567,10 +572,13 @@ def _states(service, *, staging=None):
     sql = tuple(_sqlite_state(role, store) for role, store in (
         ("state", service.store), ("memory", service.memory), ("schedules", service.schedule_store),
     ))
-    docs = tuple(_json_state(role, document) for role, document in (
+    documents = (
         ("agents", service.agent_profiles.document), ("skills", service.skills.document),
         ("telegram", service._telegram_journal.document),
-    ))
+    )
+    if getattr(service, "plugins", None) is not None:
+        documents += (("plugins", service.plugins.document),)
+    docs = tuple(_json_state(role, document) for role, document in documents)
     return sql, docs
 
 
@@ -936,6 +944,14 @@ def service_blockers(service):
         codes.add("settlement_active")
     if service._retiring_sessions:
         codes.add("session_cleanup_active")
+    for name in ("plugins", "skills"):
+        resource = getattr(service, name, None)
+        if resource is not None and resource.pending_cleanup:
+            codes.add("extensions_cleanup_pending")
+    codes.update(getattr(service, "mcp_network_blockers", ()))
+    product = getattr(service, "mcp_product", None)
+    if product is not None:
+        codes.update(product.blockers)
     if service.scheduler._lease is not None or service.scheduler.active_count:
         codes.add("scheduler_active_or_cleanup")
     if service.process_tools and service.process_tools.has_running:
@@ -966,6 +982,13 @@ def service_blockers(service):
 # Reads may initialize SQLite or provider/pairing state, so ALL handlers are
 # admitted. This set only avoids false generation bumps for unchanged polling.
 READ_RPCS = frozenset({
+    "plugins.list", "plugins.inspect", "plugins.review", "plugins.versions",
+    "plugins.catalog", "plugins.resource", "plugins.mcp.review",
+    "skills.metadata", "skills.versions", "skills.resource", "skills.invoke",
+    "skills.inspect_library", "mcp.catalog", "mcp.content.result", "mcp.apps.document",
+    "mcp.apps.poll", "mcp.oauth.status", "mcp.oauth.discover", "mcp.relay.status",
+    "mcp.relay.review", "mcp.relay.token",
+    "mcp.template.expand",
     "memory.intelligence.status", "memory.intelligence.policy.review",
     "memory.intelligence.job.get", "memory.intelligence.index.verify",
     "automation.status", "automation.poll", "automation.check", "automation.permissions.list",

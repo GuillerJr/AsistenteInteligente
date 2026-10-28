@@ -3,7 +3,7 @@ import Foundation
 /// This host-facing client is separate from inference and tool approvals. Lists
 /// never start a runner, import skills, execute processes or mutate profiles.
 public final class ManagementClient: Sendable {
-    private let transport: LocalRPCClient
+    let transport: LocalRPCClient
     public init(transport: LocalRPCClient) { self.transport = transport }
     public func close() async { await transport.close() }
     public func agents() async throws -> [AgentDescriptor] {
@@ -48,7 +48,7 @@ public final class ManagementClient: Sendable {
         return process
     }
     public func mutate(_ method: String, params: [String: RPCValue], successKey: String? = nil) async throws -> RPCValue {
-        guard ["agents.create", "agents.update", "agents.delete", "skills.import", "skills.update", "skills.enable", "skills.remove",
+        guard ["agents.create", "agents.update", "agents.delete", "skills.import", "skills.update", "skills.enable", "skills.remove", "skills.rollback", "skills.retire_version", "skills.import_library",
                "schedules.create", "schedules.update", "schedules.remove", "scheduler.start", "scheduler.stop"].contains(method) else {
             throw RPCFailure.configuration
         }

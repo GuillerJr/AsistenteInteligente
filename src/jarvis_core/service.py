@@ -27,6 +27,8 @@ from jarvis_core.client_identity import ClientAuthority, ClientIdentityError
 from jarvis_core.codex import CodexClient, CodexError
 from jarvis_core.config import ConfigError, ProfileConfig
 from jarvis_core.delegation import DelegationAPI
+from jarvis_core.extension_hooks import ExtensionHooks
+from jarvis_core.extension_management import ExtensionManagementAPI
 from jarvis_core.host_profile import (
     READ_RPCS,
     BoundProfileResource,
@@ -39,10 +41,12 @@ from jarvis_core.host_profile import (
     service_blockers,
     service_fingerprint,
 )
+from jarvis_core.host_tool_runs import HostToolRuns
 from jarvis_core.local_embeddings import EngineError
 from jarvis_core.maintenance import MaintenanceCoordinator
 from jarvis_core.maintenance_journal import wire
 from jarvis_core.management import ManagementAPI
+from jarvis_core.mcp_network_management import MCPNetworkManagementAPI
 from jarvis_core.mcp_registry import McpRegistry, McpRegistryError, ServerSpec
 from jarvis_core.memory import Citation, MemoryError, MemoryLimits, MemoryScope, MemoryStore
 from jarvis_core.memory_intelligence import MemoryIntelligence, MemoryIntelligenceError
@@ -51,6 +55,8 @@ from jarvis_core.memory_tools import MemoryTools
 from jarvis_core.model_artifacts import ArtifactError
 from jarvis_core.native_automation import NativeAutomationBroker
 from jarvis_core.native_tools import NativeAutomationTools
+from jarvis_core.plugin_packages import PluginError
+from jarvis_core.plugins import PluginsStore
 from jarvis_core.private_json import PrivateJsonError
 from jarvis_core.processes import ProcessTools
 from jarvis_core.profiles import ProfileError, ProfilesStore
@@ -62,7 +68,7 @@ from jarvis_core.protocol import (
 )
 from jarvis_core.provider_choice import ProviderChoice, ProviderChoiceError
 from jarvis_core.recovery_fs import FileIdentity
-from jarvis_core.runtime import AgentRuntime, RunContext, RunHandle, ToolResult
+from jarvis_core.runtime import AgentRuntime, FinalAnswer, RunContext, RunHandle, ToolResult
 from jarvis_core.scheduler import Scheduler, SchedulerError, SchedulerLimits, ScheduleStore
 from jarvis_core.skills import SkillError, SkillsStore
 from jarvis_core.state import (
@@ -75,7 +81,7 @@ from jarvis_core.state import (
 )
 from jarvis_core.telegram import TelegramError
 from jarvis_core.telegram_management import TelegramManagementAPI
-from jarvis_core.tools import ApprovalAuthority, ToolCatalog, ToolError
+from jarvis_core.tools import ApprovalAuthority, ToolCatalog, ToolError, current_tool_operation
 from jarvis_core.web import WebFetchTools
 from jarvis_core.workspace import WorkspaceError, WorkspaceTools
 
@@ -114,11 +120,19 @@ class _ProviderAdapter:
     async def next_step(self, context: RunContext):
         service = self.service
         service._active_ref.set(service._refs[context.run_id])
+        if service.host_tools.get(context.run_id) is not None:
+            service._memory_run_id.set(context.run_id)
+            return service.host_tools.next_step(context)
         epoch = service._provider_epochs[context.run_id]
         token = service._provider_context.set(epoch)
         try:
             service.provider_choice.assert_current(epoch)
-            result = await self.bridge.next_step(context)
+            hook = service.extension_hooks.before(context)
+            if hook is not None:
+                return hook
+            result = await self.bridge.next_step(service.extension_hooks.model_context(context))
+            if isinstance(result, FinalAnswer):
+                result = service.extension_hooks.after(context, result)
             service.provider_choice.assert_current(epoch)
             return result
         except (
@@ -127,6 +141,7 @@ class _ProviderAdapter:
             WorkspaceError,
             ProfileError,
             SkillError,
+            PluginError,
             PrivateJsonError,
             ProviderChoiceError,
             MemoryError,
@@ -142,7 +157,8 @@ class _ProviderAdapter:
 
     async def cleanup(self, context: RunContext) -> None:
         try:
-            await self.bridge.cleanup(context)
+            if self.service.host_tools.get(context.run_id) is None:
+                await self.bridge.cleanup(context)
         finally:
             self.service.native_tools.clear_run(context.run_id)
             self.service._active_ref.set(None)
@@ -169,7 +185,8 @@ class _ApprovalGate:
                 self.service.store.set_run_status(ref, operation.run_id, "running")
 
 
-class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, AutomationAPI):
+class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, AutomationAPI,
+                    ExtensionManagementAPI, MCPNetworkManagementAPI):
     def __init__(self, directory: Path, provider: CodexClient, *,
                  profile_lease: ProfileLease | None = None,
                  bootstrap_public_key: str | None = None) -> None:
@@ -236,6 +253,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         self.config = ProfileConfig(directory)
         self.agent_profiles = ProfilesStore(directory / "profiles")
         self.skills = SkillsStore(directory / "profiles")
+        self.plugins = PluginsStore(directory / "profiles")
         self.schedule_store = ScheduleStore(
             directory / "schedules.sqlite3",
             limits=SchedulerLimits(max_schedules=32, max_prompt_bytes=8000),
@@ -248,10 +266,12 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         self.client_authority.on_revoke = self._client_revoked
         self.mcp = McpRegistry(directory / "mcp")
         self.mcp.child_custody = self.profile_lease.child_custody_fds
+        self.mcp.credentials = self._mcp_credentials
         self.memory = MemoryStore(
             directory / "memory.sqlite3", limits=MemoryLimits(max_document_bytes=16000)
         )
-        for name in ("store", "config", "agent_profiles", "skills", "schedule_store", "memory"):
+        for name in ("store", "config", "agent_profiles", "skills", "plugins",
+                     "schedule_store", "memory"):
             setattr(self, name, BoundProfileResource(
                 getattr(self, name), self.profile_lease, self.profile_gate,
             ))
@@ -265,6 +285,12 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             if self._configured_workspace
             else (ensure_private_directory(directory / "workspace"))
         )
+        self.host_tools = HostToolRuns(self)
+        self.extension_hooks = ExtensionHooks(self)
+        from jarvis_core.mcp_product import McpProduct
+        self.mcp_product = McpProduct(self)
+        self.mcp.app_result_handler = self.mcp_product.capture_tool_result
+        self.mcp.before_effect = self._mcp_effect_guard
         self._configure_tools()
         self.initialize_telegram()
         self.memory_intelligence = MemoryIntelligence(self)
@@ -335,6 +361,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             specs.extend(self.process_tools.specs())
         definitions.extend(self.mcp.definitions())
         specs.extend(self.mcp.specs())
+        definitions.extend(self.mcp_product.definitions())
+        specs.extend(self.mcp_product.specs())
         self._mcp_signature = tuple(spec.name for spec in self.mcp.specs())
         self.catalog = ToolCatalog(definitions, specs, authority=self.authority)
         self._catalog_fingerprint = hashlib.sha256(
@@ -355,6 +383,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             on_tool_result=self._tool_result,
             before_start=self.before_run_start,
         )
+        self.mcp_network_catalog_changed()
 
     def _memory_scope(self, ref: SessionRef) -> MemoryScope:
         scope = MemoryScope(
@@ -374,6 +403,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             handle.cancel()
 
     def _client_revoked(self, client_id):
+        self.mcp_product.client_revoked(client_id)
+        self.mcp_network_client_revoked(client_id)
         for run_id, owner in tuple(self._run_clients.items()):
             if owner != client_id:
                 continue
@@ -390,12 +421,47 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         if owner is not None:
             self.client_authority.lookup(owner, scope="owner")
 
+    def _mcp_effect_guard(self):
+        operation = current_tool_operation()
+        self._assert_run_client(operation.run_id)
+        plan = self.host_tools.get(operation.run_id)
+        if plan is not None:
+            plan.guard()
+        else:
+            self.extension_hooks.is_hook(operation)
+
+    def _mcp_credentials(self, server_id, resource):
+        spec = ServerSpec(**next(s for s in self.config.server_specs
+                                if s["server_id"] == server_id))
+        return self.mcp_network_credentials(spec) if spec.oauth is not None else None
+
+    async def _mcp_authorization_changed(self, server_id):
+        # A new account/grant must never inherit a view of the previous peer.
+        # Disconnect withdraws bindings before its first await and preserves
+        # uncertainty of any in-flight remote effect; it never repeats it.
+        self.mcp_product.server_revoked(server_id)
+        entry = self.mcp._entries.get(server_id)
+        names = {binding.public_name for binding in entry.bindings} if entry else set()
+        for run_id, handle in tuple(self._handles.items()):
+            plan = self.host_tools.get(run_id)
+            if plan is not None and (plan.proposal.tool_name in names
+                    or plan.proposal.arguments.get("server_id") == server_id):
+                handle.cancel()
+        await self.mcp.disconnect(server_id)
+        if not self._handles:
+            self._refresh_mcp_catalog()
+        self.mcp_network_catalog_changed()
+
     @contextmanager
     def _execution_scope(self, operation, grant):
         with self.profile_gate.admit("run.effect", mutating=True, closing=True):
             self._assert_run_client(operation.run_id)
             self.provider_choice.assert_current(self._provider_epochs[operation.run_id])
-            self._adapter.bridge.assert_can_execute(operation.run_id)
+            plan = self.host_tools.get(operation.run_id)
+            if plan is not None:
+                plan.guard()
+            elif not self.extension_hooks.is_hook(operation):
+                self._adapter.bridge.assert_can_execute(operation.run_id)
             with self.authority.execution_scope(operation, grant):
                 yield
 
@@ -439,6 +505,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         }
 
     def _tool_result(self, context: RunContext, result: ToolResult) -> None:
+        self.host_tools.capture(context, result)
         self._event(context, "tool.completed", {"receipt": self._receipt(result)})
 
     @profile_callback("run.prepare")
@@ -455,10 +522,12 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         if self.config.workspace != self._configured_workspace:
             raise ConfigError("workspace_configuration_changed_restart")
         self._assert_workspace_current()
-        self.store.set_run_status(ref, context.run_id, "running")
+        if self.store.get_run(ref, context.run_id).status == "queued":
+            self.store.set_run_status(ref, context.run_id, "running")
         session = self.store.get_session(ref)
         profile = self.agent_profiles.get(session.agent_id)
         skills = self.skills.context(session.agent_id)
+        extensions = self.plugins.context(session.agent_id, max_bytes=8000)
         memory_scope = self._memory_scope(ref)
         client = self._run_clients.get(context.run_id)
         lease = None
@@ -477,6 +546,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                     self._catalog_fingerprint,
                     profile.fingerprint,
                     skills.fingerprint,
+                    extensions["fingerprint"],
                     context.offered_tools,
                     memory_epoch,
                     lease.fingerprint if lease is not None else None,
@@ -512,7 +582,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                            or spec["name"] in context.offered_tools],
             "history": history,
             "instructions": profile.instructions,
-            "context_data": skills.text,
+            "context_data": "\n".join(
+                piece for piece in (skills.text, extensions["text"]) if piece),
         }
         if lease is not None and lease.text:
             result["memory_context"] = lease.text
@@ -569,6 +640,9 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         methods.update(self.delegation_handlers())
         methods.update(self.automation_handlers())
         methods.update(self.memory_intelligence.handlers())
+        methods.update(self.extension_handlers())
+        methods.update(self.mcp_product.handlers())
+        methods.update(self.mcp_network_handlers())
 
         def safe(name, callback, *, closing=False):
             async def invoke(params):
@@ -600,7 +674,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                     raise RpcError(-32020, str(error)) from None
                 except TelegramError as error:
                     raise RpcError(-32036, error.code) from None
-                except (ProfileError, SkillError, PrivateJsonError, SchedulerError) as error:
+                except (ProfileError, SkillError, PluginError,
+                        PrivateJsonError, SchedulerError) as error:
                     raise RpcError(-32035, str(error)) from None
                 except (ConfigError, WorkspaceError, ToolError, McpRegistryError) as error:
                     message = (
@@ -823,14 +898,17 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 }
                 for spec in self.config.server_specs
             ],
-            "supported_protocols": ["2025-11-25", "2026-07-28"],
+            "supported_protocols": ["2024-11-05", "2025-11-25", "2026-07-28"],
         }
 
     @staticmethod
     def _server_spec(params: dict) -> ServerSpec:
-        if not isinstance(params.get("command"), list):
+        command = params.get("command") or []
+        if not isinstance(command, list):
             raise RpcError(-32602, "El comando MCP debe ser una lista de programa y argumentos.")
-        return ServerSpec(params["server_id"], tuple(params["command"]), params["protocol_version"])
+        return ServerSpec(params["server_id"], tuple(command), params["protocol_version"],
+            params.get("transport", "stdio"), params.get("endpoint"), params.get("oauth"),
+            params.get("allow_loopback", False))
 
     def _write_configuration(self, callback) -> None:
         try:
@@ -843,23 +921,25 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
     async def add_mcp(self, params: dict) -> dict:
         _params(
             params,
-            {"server_id", "command", "protocol_version"},
-            {"server_id", "command", "protocol_version"},
+            {"server_id", "command", "protocol_version", "transport", "endpoint", "oauth",
+             "allow_loopback"}, {"server_id", "protocol_version"},
         )
         spec = self._server_spec(params)
         async with self._mcp_maintenance():
             if any(item["server_id"] == spec.server_id for item in self.config.server_specs):
                 raise RpcError(-32602, "Ese identificador MCP ya está configurado.")
             self._write_configuration(
-                lambda: self.config.set_server(spec.server_id, spec.command, spec.protocol_version)
+                lambda: self.config.set_server(spec.server_id, spec.command, spec.protocol_version,
+                    transport=spec.transport, endpoint=spec.endpoint, oauth=spec.oauth,
+                    allow_loopback=spec.allow_loopback)
             )
         return {"configured": True}
 
     async def connect_mcp(self, params: dict) -> dict:
         _params(
             params,
-            {"server_id", "command", "protocol_version"},
-            {"server_id", "command", "protocol_version"},
+            {"server_id", "command", "protocol_version", "transport", "endpoint", "oauth",
+             "allow_loopback"}, {"server_id", "protocol_version"},
         )
         expected = self._server_spec(params)
         async with self._mcp_maintenance():
@@ -893,6 +973,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 item["server_id"] == params["server_id"] for item in self.config.server_specs
             )
             await self.mcp.forget(params["server_id"])
+            await self.close_mcp_network_server(params["server_id"])
             self._write_configuration(lambda: self.config.remove_server(params["server_id"]))
         return {"removed": configured}
 
@@ -1275,9 +1356,17 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         self._run_clients[record.run_id] = authenticated_client.get()
         self._refs[record.run_id] = ref
         self._provider_epochs[record.run_id] = provider_epoch
+        self.host_tools.attach(record.run_id)
+        offered = self._run_offered_tools.get()
+        if offered is None:
+            offered = tuple(spec["name"] for spec in self.catalog.specs()
+                            if spec["name"] != "mcp_app_resource"
+                            and self.mcp.model_visible(spec["name"]))
         handle = self.runtime.start(ref.session_id, message, run_id=record.run_id,
                                     budget=self._run_budget.get(),
-                                    offered_tools=self._run_offered_tools.get())
+                                    offered_tools=offered,
+                                    force_confirmation=(
+                                        self.host_tools.get(record.run_id) is not None))
         self._handles[handle.run_id] = handle
         observer = asyncio.create_task(self._settle(ref, handle))
         self._observers.add(observer)
@@ -1314,6 +1403,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 "answer": result.answer,
                 "answer_source": result.answer_source,
                 "error": error,
+                "error_type": result.error_type,
                 "action_receipts": [self._receipt(item) for item in result.action_receipts],
             }
             self.store.finish_run(
@@ -1330,6 +1420,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             # record remains recoverable as interrupted on the next process start.
             self._closing = True
         finally:
+            self.host_tools.settle(handle.run_id)
+            self.extension_hooks.clear(handle.run_id)
             self._handles.pop(handle.run_id, None)
             self._refs.pop(handle.run_id, None)
             self._run_fingerprints.pop(handle.run_id, None)
@@ -1350,6 +1442,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             "outcome": record.outcome,
             "answer": receipt.get("answer"),
             "error": receipt.get("error"),
+            "error_type": receipt.get("error_type"),
             "answer_source": receipt.get("answer_source"),
             "action_receipts": receipt.get("action_receipts", []),
         }
@@ -1481,6 +1574,9 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             self.web_tools.aclose,
             self.provider.aclose if not provider_close_attempted else None,
             self.mcp.aclose,
+            self.mcp_product.aclose,
+            self.close_mcp_network,
+            self._close_extensions,
         ):
             if closer is not None:
                 try:
@@ -1492,6 +1588,12 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         self.schedule_store.close()
         self.memory.close()
         self.store.close()
+
+    async def _close_extensions(self):
+        self.plugins.settle_cleanup()
+        self.skills.settle_cleanup()
+        if self.plugins.pending_cleanup or self.skills.pending_cleanup:
+            raise TimeoutError("service_cleanup_incomplete")
 
     async def _close_memory_resources(self):
         task = getattr(self, "_memory_close_task", None)
