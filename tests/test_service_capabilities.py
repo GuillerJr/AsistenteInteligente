@@ -440,9 +440,10 @@ async def test_workspace_change_resets_thread_and_restores_only_completed_owned_
     # No owner-configured remote server tool is carried into this new context.
     assert {item["name"] for item in options["tool_specs"]
             if item["name"].startswith("mcp_")} == {
-        "mcp_catalog", "mcp_resource_read", "mcp_prompt_get", "mcp_app_resource",
+        "mcp_catalog", "mcp_resource_read", "mcp_prompt_get",
         "mcp_resource_template_read",
     }
+    assert "mcp_app_resource" not in {item["name"] for item in options["tool_specs"]}
     assert not list(alternate.iterdir())
     assert service._workspace_path == alternate
     events = (await client.call("events.poll", {**ref, "run_id": run_id}))["events"]
