@@ -65,6 +65,15 @@ pruebas focales MCP y 79 de extensiones/skills, además de los contratos previos
 chat y MCP. Los recibos identifican cada árbol comprobado; no sustituyen la suite
 remota del commit final ni un recorrido real de la app.
 
+La [CI del código `c74f924`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40729616173)
+terminó aprobada en ambos sistemas: Python Ubuntu 3 009 aprobadas/46 omitidas,
+Python macOS 3 055 aprobadas, Swift 452 pruebas/1 omitida/0 fallos. También
+pasaron el bundle nativo de desarrollo, wheel, sdist y smoke aislado. Los guards
+confirmaron limpieza y fuentes sin cambios. La verificación nativa del respaldo
+acepta ahora los ocho roles actuales, manteniendo compatibilidad histórica y
+rechazo de entradas inválidas. Esta CI no sustituye los recorridos de la app
+frente a servicios externos ni cierra la fase A global.
+
 La compilación local se detuvo por `global_storage_guard` tras 13,667 s y un pico
 de 103 165 952 bytes dentro de su volumen. Se conservaron el resultado fallido y
 una reconciliación separada del desmontaje confirmado. Se retiró únicamente su
@@ -82,8 +91,9 @@ El primer arranque del bundle de CI detectó además una incompatibilidad real:
 el servicio anuncia la versión SSE 2024-11-05 y el cliente sólo reconocía las
 dos posteriores. Se corrigió el catálogo nativo, se restringió esa versión al
 transporte SSE y se añadieron regresiones de arranque y compatibilidad. La
-ejecución de esas regresiones y el nuevo recorrido nativo siguen pendientes;
-la comprobación sintáctica no se presenta como compilación ni prueba funcional.
+ejecución de esas regresiones pasó en la CI citada. El nuevo recorrido nativo
+sigue pendiente; la comprobación sintáctica inicial no se presenta como
+compilación ni prueba funcional.
 
 La fase A global continúa abierta: distribución autocontenida y otras familias
 se cualifican por separado. Este documento no declara revisión exhaustiva de

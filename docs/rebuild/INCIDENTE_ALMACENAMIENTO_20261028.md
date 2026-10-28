@@ -64,3 +64,59 @@ En `/private/tmp/jarvis-mcp-native-qualification-20261028/`:
 Los temporales pueden ser retirados por macOS; este documento conserva las
 medidas relevantes. No acredita ausencia de otras causas de almacenamiento ni
 el cierre de la cualificación funcional de MCP, plugins y skills.
+
+## Investigación tras reiniciar el Mac
+
+El reinicio del dueño conservó macOS 27.0.1 (26A434) y creó el proceso `dasd`
+PID 404, que siguió cerca del 100 % de CPU. Las primeras cuatro muestras
+directas de 45 s pasaron de 221 453 774 848 a 224 637 288 448 B libres. Esto
+acredita recuperación de espacio durante ese intervalo, no la desaparición del
+atasco de CPU.
+
+Monitor de Actividad permitió obtener una muestra nativa sin leer bases de
+datos: el hilo `com.apple.PerfPowerServicesReader.SQLite` aparece en las 1 757
+muestras dentro de esta cadena:
+
+```text
+PPSRequestDispatcher dataForRequest:withError:
+PPSSQLiteTimeSeriesIngester parseDataForRequest:outError:
+PPSSQLiteQuery enumerateProperties:error:enumerationHandler:
+PPSSQLiteDatabase _stepStatement:hasRow:error:
+sqlite3_step → sqlite3VdbeExec / comparación de registros B-tree
+```
+
+El inspector de archivos abiertos y un `lsof` autenticado por el dueño vinculan
+ese trabajo con la familia exacta:
+`/private/var/db/powerlog/Library/PerfPowerTelemetry/BackgroundProcessing/CurrentBackgroundProcessingDB.BGSQL`,
+su `-wal` y su `-shm`. Los dos únicos procesos registrados con archivos abiertos
+en esa familia fueron `dasd` (404, lectura de DB/WAL) y `PerfPowerServices`
+(409, lectura/escritura). Los tres archivos sumaban 19 962 512 B lógicos. No se
+leyeron esquemas, filas, SQL de consultas ni datos personales de esa base.
+
+La evidencia identifica el camino ocupado en PowerLog; **no demuestra
+corrupción ni establece qué registros o consulta producen el atasco**. No se
+ha borrado ni renombrado esta familia ni el almacén `DuetActivityScheduler`.
+
+Evidencia local en `/private/tmp/jarvis-dasd-diagnostico-20261028/`:
+
+- `dasd-404.sample.txt`: 159 244 B, SHA-256
+  `33583b0c412e055574c432216cc7baf87706d5524628def537d582969497e2e1`.
+- `powerlog-holders.raw`: metadatos de descriptores, SHA-256
+  `a8e6f43667a7c4f73f9852f147149b7dcc5566a45f21652aaa78052fb110e9c9`.
+- `powerlog-stat.txt` y `space-direct.txt`: identidades, tamaños y espacio.
+
+El catálogo oficial ofrece macOS 27.2 (26B123), 6 067 473 KiB, con reinicio.
+El dueño autorizó instalarla antes de intervenir manualmente el almacén. Se
+inició únicamente su descarga con `softwareupdate --download`; la instalación,
+autenticación/reinicio del dueño y las mediciones posteriores están pendientes.
+No se acepta una licencia automáticamente ni se fuerza el reinicio. Las notas
+de Apple no acreditan una corrección específica de DASD/PowerLog:
+[versión publicada](https://developer.apple.com/news/releases/?id=10262026d),
+[cambios de macOS](https://support.apple.com/en-us/127257).
+
+La reparación manual reversible queda sin ejecutar. Requeriría parar sus
+servicios sin desactivar protecciones, confirmar ausencia de conexiones y
+conservar la familia completa antes de permitir su regeneración. SQLite
+[advierte sobre renombrar bases todavía abiertas](https://sqlite.org/howtocorrupt.html#unlinking_or_renaming_a_database_file_while_in_use).
+La actualización autorizada no se presenta como solución comprobada hasta
+observar su resultado en este Mac.
