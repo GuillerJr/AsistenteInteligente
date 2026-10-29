@@ -149,16 +149,62 @@
         "failures": 0
       },
       "bundle_packages_smoke": "passed",
-      "live_unknown_id_group_qualification": "pending",
+      "live_unknown_id_group_qualification": "passed_owner_only_standard_group_setup_and_text",
       "full_ci_qualification": true
     },
     {
       "commit": "5fc755c74cade3668c630cf32ce805a2688af8c8",
       "short_commit": "5fc755c",
-      "status": "pending_at_this_checkpoint",
+      "status": "superseded_by_passed_descendant_CI_a638652",
       "implemented_increment": "Deliver the complete approved receipt and extracted output before CAS-bound visual content, preserving run and operation authority.",
       "live_mixed_grounding": "passed_with_native_95009a1_and_exact_backend_5fc755c",
-      "full_ci_qualification": false
+      "full_ci_qualification": false,
+      "exact_commit_CI_outcome_not_asserted_here": true,
+      "superseding_ci_run_id": 40912057424
+    },
+    {
+      "commit": "a638652a39675f3eae2973879442e1b451ea11e8",
+      "short_commit": "a638652",
+      "run_id": 40912057424,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40912057424",
+      "status": "passed",
+      "ubuntu_python": {
+        "passed": 3440,
+        "skipped": 46
+      },
+      "macos_python": {
+        "passed": 3486
+      },
+      "macos_swift": {
+        "executed": 583,
+        "skipped": 1,
+        "failures": 0
+      },
+      "bundle_packages_smoke": "passed",
+      "full_ci_qualification": true
+    },
+    {
+      "commit": "9cc72fc72f5a9c3df9ab8e4bf8d78b9ff2c73e99",
+      "short_commit": "9cc72fc",
+      "run_id": 40915075100,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40915075100",
+      "status": "passed",
+      "implemented_increment": "A typed predispatch approval denial settles failed/known only after confirmed cleanup and known earlier receipts; uncertain effects and lost ACKs retain their previous treatment.",
+      "live_denial_after_final_restart": "passed",
+      "ubuntu_python": {
+        "passed": 3447,
+        "skipped": 46
+      },
+      "macos_python": {
+        "passed": 3493
+      },
+      "macos_swift": {
+        "executed": 583,
+        "skipped": 1,
+        "failures": 0
+      },
+      "bundle_packages_smoke_cleanup": "passed",
+      "full_ci_qualification": true
     }
   ],
   "native_cases": [
@@ -396,8 +442,8 @@
     }
   ],
   "telegram_live_checkpoint": {
-    "status": "setup_and_text_passed_attachment_voice_lifecycle_pending",
-    "evidence_source": "Owner confirmations and delegated native UI observations in the isolated synthetic profile; detailed read-only journal/SQL oracle is not yet executed.",
+    "status": "setup_text_documents_single_upload_and_corrected_denial_passed_voice_revocation_pending",
+    "evidence_source": "Owner confirmations, delegated native UI observations and bounded read-only route/session/run oracles from the isolated synthetic profile. No Telegram identifiers, names or screenshots are included here.",
     "token_entered_only_by_owner": true,
     "token_or_credentials_read_by_agent": false,
     "private_route": {
@@ -419,15 +465,102 @@
       "claim_confirmed_in_native_UI": true,
       "route_created_with_separate_session": true,
       "sum_2_plus_2": 4,
-      "owner_confirmed_reply": true
+      "owner_confirmed_reply": true,
+      "revalidated_after_backend9cc_restart": true,
+      "fresh_code_pasted_without_reading_or_logging": true,
+      "same_route_and_session_preserved_after_revalidation": true
     },
     "enabled_routes": 2,
     "channel_activated_after_native_review": true,
     "telegram_IDs_usernames_group_names_and_pairing_codes_not_recorded_here": true,
+    "document_import_and_read": {
+      "status": "passed_private_and_group",
+      "source_bytes": 119,
+      "source_sha256": "b3f286831dfc6956c883c21337a9708bbc2b47b5a135d47be3b8f820a9e0d6a9",
+      "marker_recovered_in_both_chats": "TOPACIO 4826",
+      "separate_conversation_scopes_preserved": true,
+      "inspection_approved_in_native_Jarvis": true
+    },
+    "legacy_upload_denial": {
+      "run_id": "c1c8ccf133af4c85995e325ede013786",
+      "status": "failed",
+      "outcome": "unknown",
+      "error": "approval_denied",
+      "prior_known_metadata_reads": 1,
+      "upload_action_receipts": 0,
+      "actual_uploads_observed": 0,
+      "native_rejection_selected": true,
+      "legacy_UI_warning_observed": "resultado anterior sin confirmar",
+      "warning_is_not_evidence_of_lost_upload_ACK": true,
+      "historical_record_preserved": true,
+      "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-telegram-live-oracle-denied-legacy.json",
+      "oracle_sha256": "b46bd1e0dac9cf659f4bd305fff5328cf9a5e96d3474fa6f15af8d17065cf581"
+    },
+    "fresh_group_upload_after_denial": {
+      "run_id": "94e3877e1845408688a0c2c166337edd",
+      "status": "completed",
+      "outcome": "known",
+      "fresh_incoming_message": true,
+      "action_receipts": 2,
+      "upload_action_receipts": 1,
+      "fresh_native_upload_approval": true,
+      "external_Telegram_API_ACK": true,
+      "transport_ACK_independently_verified": false,
+      "owner_confirmed_exact_file_received_once": true,
+      "source_bytes": 119,
+      "source_sha256": "b3f286831dfc6956c883c21337a9708bbc2b47b5a135d47be3b8f820a9e0d6a9",
+      "denied_request_not_automatically_replayed": true,
+      "answer_sha256": "ab319146387e7388efea78c4302ae055604dcc7ca65fe4cf6229a01b57e18e9e"
+    },
+    "corrected_upload_denial_after_restart": {
+      "backend_source_commit": "9cc72fc72f5a9c3df9ab8e4bf8d78b9ff2c73e99",
+      "run_id": "7314b43ab6ba4c1cbf2d755048e28eaa",
+      "status": "failed",
+      "outcome": "known",
+      "error": "approval_denied",
+      "prior_known_metadata_reads": 1,
+      "prior_metadata_tool": "media_list",
+      "upload_action_receipts": 0,
+      "native_rejection_selected_by_delegated_agent": true,
+      "typed_denial_correction_live_qualified": true,
+      "denied_proposal_not_dispatched_or_replayed": true,
+      "legacy_unknown_denial_record_preserved": true,
+      "bounded_final_oracle_execution": "pending_host_signal"
+    },
+    "voice_arrival_diagnostic": {
+      "status": "addressing_issue_identified_real_voice_transcription_pending",
+      "observed_UI_causes": [
+        "The group voice note was sent without replying to the bot.",
+        "The copied command started with an opening quote rather than a directly addressed bot command."
+      ],
+      "privacy_delivery_did_not_supply_those_messages_to_Jarvis": true,
+      "reader_stopped_not_supported_by_probe": true,
+      "fresh_unquoted_probe_run_id_prefix": "2e465",
+      "fresh_unquoted_probe_recovered": "MARCADOR RECEPCIÓN 4271",
+      "probe_proves_text_admission_not_voice_transcription": true
+    },
+    "final_backend_restart": {
+      "backend_source_commit": "9cc72fc72f5a9c3df9ab8e4bf8d78b9ff2c73e99",
+      "native_source_commit": "95009a114bdbead44cdc03d40ef753abc9c017b1",
+      "provenance": "/private/tmp/jarvis-telegram-voice-media-live-20261029/prepared-launch-9cc72fc.json",
+      "provenance_sha256": "9a5772d97ebdd5712fb99601eaa3f13e6805028c46885f007a23c9cb6d32f6f0",
+      "backend_sha256": "bc3e57de22a0ada0017423d6f9f0d7e503ab7416460be909b8f1c0539482e8fe",
+      "native_binary_sha256_unchanged": "e86699ea7063e36e00136e8efe1d2c7f5df753f7e29bd9af34ff182ae88979e3",
+      "wrapper_sha256_unchanged": "1e697d18b84d45705d4a1f246c9c1681f968e081e54ca770811816c7dae11a0c",
+      "provisional_signature_unchanged": true,
+      "development_bundle_with_external_python": true,
+      "service_PID_at_checkpoint": 62987,
+      "watch_PID_at_checkpoint": 41182,
+      "durable_routes_preserved": true,
+      "owner_must_reenter_RAM_only_bot_token": true,
+      "post_restart_bot_connection": "connected",
+      "same_routes_and_sessions_revalidated": true,
+      "channel_active_after_revalidation": true,
+      "corrected_denial_live_qualification": "passed"
+    },
     "pending": [
-      "Read-only correlation of Telegram routes/events with their exact durable sessions and runs",
-      "Real Telegram document and voice attachment import/inspection",
-      "Fresh approved attachment upload and denial/revocation no-effect cases"
+      "Real addressed Telegram voice attachment import and local transcription",
+      "Revocation and final bounded shutdown/resource checks"
     ]
   },
   "oracle_checkpoints": [
@@ -463,15 +596,36 @@
       "raw_media_payloads_found": false,
       "scan_issues": [],
       "temporary_artifact_paths_are_not_durable_storage_claims": true
+    },
+    {
+      "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-telegram-live-oracle-setup.json",
+      "sha256": "5c9bb276939621efd89df57ef3d9d5780128737ebba2497a6499ee1a1218e1ff",
+      "scope": "Two separate private/group route sessions and initial owner-confirmed text replies; no Telegram identifiers or message bodies exposed.",
+      "sql_mode": "ro",
+      "query_only": true,
+      "scanned_sql_text_bytes": 1808,
+      "pattern_scan_issues": []
+    },
+    {
+      "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-telegram-live-oracle-stall.json",
+      "sha256": "72a59b96aa5cb62e15c228a1b06f798aa10ba0546e071bd722cc18bf8285877b",
+      "script": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualify-telegram-oracle-v2.py",
+      "script_sha256": "078d5c090e59d827b433c5af56f3a4c762809e0ac2fb4391fff184f2f91f2d16",
+      "scope": "Legacy denied upload after known media_list, followed by a fresh successful group upload with an external ACK. Disk inference is separate from the delegated native rejection and owner's actual file receipt confirmation.",
+      "sql_mode": "ro",
+      "query_only": true,
+      "scanned_sql_text_bytes": 40837,
+      "pattern_scan_issues": [],
+      "scan_is_not_a_complete_byte_for_byte_media_payload_comparison": true
     }
   ],
   "pending_corrections": [
     {
       "case": "approved_CAS_visual_receipt_text_delivery",
-      "status": "published_and_live_mixed_grounding_passed_exact_commit_CI_pending",
+      "status": "live_mixed_grounding_and_descendant_CI_passed_final_increment_pending",
       "correction_commit": "5fc755c74cade3668c630cf32ce805a2688af8c8",
       "change_under_review": "Include the complete approved technical receipt and extracted output before the approved image in the CAS-bound SDK visual delivery.",
-      "reason": "The 5fc mixed run now recovers colors, OCR, actual sampled frame times, partial-video scope and Office/CSV markers with citations. Exact-commit CI remains pending; prior failed grounding is preserved.",
+      "reason": "The 5fc mixed run recovers colors, OCR, actual sampled frame times, partial-video scope and Office/CSV markers with citations. Descendants a638652 and 9cc72fc passed full CI; prior failed grounding remains preserved.",
       "live_qualification_run_id": "8ec9197af330475ab69cc174716e855a",
       "must_preserve": [
         "Exact run/operation/receipt/image binding",
@@ -481,6 +635,17 @@
         "Historical failed grounding remains recorded"
       ],
       "closed": false
+    },
+    {
+      "case": "typed_predispatch_denial_after_known_metadata_read",
+      "status": "passed_full_CI_and_real_native_denial_after_restart",
+      "correction_commit": "9cc72fc72f5a9c3df9ab8e4bf8d78b9ff2c73e99",
+      "historical_denied_run_id": "c1c8ccf133af4c85995e325ede013786",
+      "qualified_denied_run_id": "7314b43ab6ba4c1cbf2d755048e28eaa",
+      "qualified_ci_run_id": 40915075100,
+      "expected_behavior": "failed/known only for runtime-typed gate denial after confirmed cleanup and all earlier receipts known; never dispatch or replay the denied proposal.",
+      "preserved_behavior": "Lost upload ACK, uncertain earlier effects, cancellation and failed cleanup remain unknown.",
+      "closed": true
     }
   ],
   "manual_budget": {
@@ -490,11 +655,27 @@
     "free_space_floor_gib": 25,
     "only_synthetic_content": true
   },
+  "resource_checkpoints": [
+    {
+      "watch_receipt": "/private/tmp/jarvis-telegram-voice-media-live-20261029/watch-5fc-backend-completed.json",
+      "sha256": "fa486a08e858615b93ef4d40c250e3185834f7813877e77d3c9bdb1bb41ab227",
+      "backend_commit": "5fc755c74cade3668c630cf32ce805a2688af8c8",
+      "peak_allocated_bytes": 115503104,
+      "budget_mib": 384,
+      "elapsed_seconds": 3429.625,
+      "deadline_seconds": 3600,
+      "stop_reason": "owned_app_exited",
+      "observer_sent_termination": false,
+      "provider_growth_allocated_bytes": 0,
+      "only_synthetic_roots_measured": true,
+      "credential_contents_read": false,
+      "final_backend9cc_watch_completion": "pending"
+    }
+  ],
   "remaining_in_selected_increment": [
-    "Complete exact-commit CI for 5fc755c; its real mixed citation grounding has passed with the native 95009a1 development bundle",
     "wake effective-mode controlled repetition and Talk live",
-    "Complete the journal/SQL oracle after successful native unknown-ID group discovery, existing-DM proof renewal and owner-confirmed private/group sums",
-    "live Telegram private/group attachments, local voice, approved upload and denial/revocation",
+    "Qualify local Telegram voice with a correctly addressed group reply",
+    "Qualify revocation and execute the bounded final Telegram oracle; corrected denial failed/known and exact-commit 9cc CI have passed",
     "final context/cleanup/resource receipts"
   ]
 }

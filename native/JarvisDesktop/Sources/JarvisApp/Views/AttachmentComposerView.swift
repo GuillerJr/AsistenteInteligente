@@ -113,35 +113,35 @@ struct AttachmentComposerView: View {
     }
 }
 
-@MainActor @Observable private final class MediaPlayback {
-    var player: AVPlayer?
-    var issue: String?
-    private var source: MemoryMediaAsset?
-    func prepare(_ preview: MediaPreview) {
-        stop()
-        do {
-            let source = try MemoryMediaAsset(data: preview.data, mimeType: preview.playbackMIME ?? preview.attachment.mime)
-            self.source = source; player = AVPlayer(playerItem: AVPlayerItem(asset: source.asset))
-        } catch { issue = "El formato no admite reproducción local en este Mac." }
-    }
-    func stop() { player?.pause(); player?.replaceCurrentItem(with: nil); player = nil; source?.close(); source = nil; issue = nil }
-}
-
 struct MediaPreviewView: View {
     let preview: MediaPreview
     @Environment(\.dismiss) private var dismiss
     @State private var playback = MediaPlayback()
     @State private var picture: NSImage?
     @State private var text: String?
+    @State private var metadata: MediaPreviewMetadata?
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack { Text(preview.attachment.name).font(.headline); Spacer(); Button("Cerrar") { dismiss() } }
-            Text("\(preview.attachment.mime) · \(preview.data.count) bytes\nSHA-256: \(preview.attachment.sha256)")
+            Text("Original · \(preview.attachment.mime) · \(preview.attachment.bytes) bytes\nSHA-256: \(preview.attachment.sha256)")
                 .font(.caption.monospaced()).textSelection(.enabled)
+            if let metadata, metadata.isDerived {
+                Text("Reproducción local derivada · \(metadata.playbackMIME) · \(metadata.playbackBytes) bytes\nSHA-256: \(metadata.playbackSHA256)")
+                    .font(.caption.monospaced()).textSelection(.enabled)
+            }
             Text("Vista local en memoria. El contenido sigue siendo externo y no se ejecuta.").font(.caption).foregroundStyle(.secondary)
             if let picture { Image(nsImage: picture).resizable().scaledToFit().frame(maxWidth: 600, maxHeight: 400) }
             if let text { ScrollView { Text(text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }.frame(height: 280) }
             if ["audio", "video"].contains(preview.attachment.kind) {
+                Picker("Salida local", selection: Binding(get: { playback.selectedOutputID ?? "" }, set: { playback.selectOutput($0.isEmpty ? nil : $0) })) {
+                    Text("Predeterminada del sistema").tag("")
+                    ForEach(playback.availableOutputs) { device in Text(device.name).tag(device.id) }
+                    if let selected = playback.selectedOutputID, !playback.availableOutputs.contains(where: { $0.id == selected }) {
+                        Text("Salida ya no disponible").tag(selected)
+                    }
+                }
+                Text("Sólo salidas locales conectadas. Esta elección afecta a este reproductor y no cambia la salida del Mac.")
+                    .font(.caption).foregroundStyle(.secondary)
                 if let player = playback.player {
                     MemoryMediaPlayerView(player: player).frame(height: preview.attachment.kind == "video" ? 280 : 64)
                 }
@@ -154,6 +154,8 @@ struct MediaPreviewView: View {
         .onAppear { prepare() }.onDisappear { playback.stop(); picture = nil; text = nil }
     }
     private func prepare() {
+        do { metadata = try MediaPreviewMetadata(preview) }
+        catch { text = "La identidad de los bytes no coincide con este adjunto. No se abrió la vista previa."; return }
         if preview.attachment.kind == "image" {
             guard let source = CGImageSourceCreateWithData(preview.data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
                   let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
@@ -178,7 +180,7 @@ struct MediaPreviewView: View {
 import AVKit
 private struct MemoryMediaPlayerView: NSViewRepresentable {
     let player: AVPlayer
-    func makeNSView(context: Context) -> AVPlayerView { let view = AVPlayerView(); view.player = player; view.controlsStyle = .inline; return view }
+    func makeNSView(context: Context) -> AVPlayerView { let view = AVPlayerView(); view.player = player; view.controlsStyle = .inline; view.showsSharingServiceButton = false; return view }
     func updateNSView(_ view: AVPlayerView, context: Context) { view.player = player }
     static func dismantleNSView(_ view: AVPlayerView, coordinator: ()) { view.player?.pause(); view.player = nil }
 }

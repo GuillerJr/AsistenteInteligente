@@ -77,6 +77,20 @@ private actor NativeMediaRPCFixture {
 }
 
 final class NativeMediaAttachmentsTests: XCTestCase {
+    func testDerivedOggPreviewMetadataNeverMixesSourceIdentityWithWaveSize() async throws {
+        let original = Data("OggS SYNTHETIC SOURCE METADATA".utf8), wave = NativeMediaFixtures.wav()
+        let fixture = NativeMediaRPCFixture(original)
+        let attachment = try MediaAttachment(await fixture.existing(kind: "audio", mime: "audio/ogg"))
+        let preview = MediaPreview(attachment: attachment, data: wave, playbackMIME: "audio/wav", playbackSHA: MediaFilePolicy.digest(wave))
+        let metadata = try MediaPreviewMetadata(preview)
+        XCTAssertTrue(metadata.isDerived); XCTAssertEqual(metadata.sourceMIME, "audio/ogg")
+        XCTAssertEqual(metadata.sourceBytes, original.count); XCTAssertEqual(metadata.sourceSHA256, MediaFilePolicy.digest(original))
+        XCTAssertEqual(metadata.playbackMIME, "audio/wav"); XCTAssertEqual(metadata.playbackBytes, wave.count)
+        XCTAssertEqual(metadata.playbackSHA256, MediaFilePolicy.digest(wave))
+        XCTAssertNotEqual(metadata.sourceBytes, metadata.playbackBytes); XCTAssertNotEqual(metadata.sourceSHA256, metadata.playbackSHA256)
+        XCTAssertThrowsError(try MediaPreviewMetadata(MediaPreview(attachment: attachment, data: wave, playbackMIME: "audio/wav", playbackSHA: attachment.sha256)))
+        XCTAssertThrowsError(try MediaPreviewMetadata(MediaPreview(attachment: attachment, data: wave, playbackMIME: "audio/wav")))
+    }
     @MainActor private func store(_ fixture: NativeMediaRPCFixture, allow: Bool = true) -> MediaAttachmentsStore {
         MediaAttachmentsStore(request: { try await fixture.call($0, $1) }, isActive: { true },
             confirmReview: { _, _, _, current in allow && current() })

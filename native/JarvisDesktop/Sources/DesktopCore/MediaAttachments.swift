@@ -66,6 +66,32 @@ public struct MediaPreview: Identifiable {
     }
 }
 
+/// Original and playable bytes have distinct identities after local decoding.
+/// This value contains metadata only and never disguises WAV as the Ogg source.
+public struct MediaPreviewMetadata: Equatable, Sendable {
+    public let sourceMIME: String
+    public let sourceBytes: Int
+    public let sourceSHA256: String
+    public let playbackMIME: String
+    public let playbackBytes: Int
+    public let playbackSHA256: String
+    public let isDerived: Bool
+    public init(_ preview: MediaPreview) throws {
+        let mime = preview.playbackMIME ?? preview.attachment.mime
+        let digest = preview.playbackSHA ?? preview.attachment.sha256
+        guard !preview.attachment.revoked, !preview.data.isEmpty, preview.data.count <= 16 * 1024 * 1024,
+              ManagementValidation.hash(digest), MediaFilePolicy.digest(preview.data) == digest,
+              (preview.playbackMIME == nil) == (preview.playbackSHA == nil) else { throw RPCFailure.invalidResponse }
+        let derived = mime != preview.attachment.mime || digest != preview.attachment.sha256
+        if derived {
+            guard preview.attachment.kind == "audio", preview.attachment.mime == "audio/ogg", mime == "audio/wav",
+                  digest != preview.attachment.sha256 else { throw RPCFailure.invalidResponse }
+        } else { guard preview.data.count == preview.attachment.bytes else { throw RPCFailure.invalidResponse } }
+        sourceMIME = preview.attachment.mime; sourceBytes = preview.attachment.bytes; sourceSHA256 = preview.attachment.sha256
+        playbackMIME = mime; playbackBytes = preview.data.count; playbackSHA256 = digest; isDerived = derived
+    }
+}
+
 @MainActor @Observable public final class MediaAttachmentsStore {
     public typealias Confirmation = @MainActor (String, String, String, () -> Bool) -> Bool
     public private(set) var attachments: [MediaAttachment] = []
