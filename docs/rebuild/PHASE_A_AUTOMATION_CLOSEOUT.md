@@ -1,10 +1,10 @@
-# Automatización — alcance nativo elegido verificado, CI final pendiente
+# Automatización — cierre del incremento elegido
 
-**Estado: awaiting_final_ci.** Los ocho recorridos nativos finitos y el cierre
-presupuestado del checkpoint 09df están verificados. selected_increment_complete=false:
-faltan CI y recorrido mínimo del bundle final después de corregir DTO de
-recuperación, ACK parcial y retry de cierre de flujos. phase_a_complete=false;
-phase_b_started=false. Este cierre en curso no acredita paridad universal.
+**Estado: qualified_selected_increment.** Los nueve recorridos nativos de los
+checkpoints 09df/d474, diagnóstico y cierre están verificados. El producto d474
+permanece idéntico en 1481983; su CI exacta 40877800263 pasó completa.
+selected_increment_complete=true, phase_a_complete=false y phase_b_started=false.
+No quedan pendientes dentro del incremento elegido; no se declara paridad universal.
 
 ## Identidad y alcance
 
@@ -138,26 +138,91 @@ por salida de su app y no enviaron señales de terminación. Sólo midieron la r
 propia; no leyeron contenidos de credenciales. Esa observación no atribuye el
 consumo global del sistema al producto ni a otras aplicaciones.
 
-## Pendientes finales de aceptación del incremento
+## AUT-N09 — bundle posterior a las correcciones, Doctor y cierre
 
-Falta la CI completa del commit final exacto. La ejecución 40770485931 de
-0796921 aprobó Ubuntu: 3245 pruebas, 46 omitidas, 191,73 segundos, limpieza
-confirmada y pico asignado de 538.660.864 bytes. macOS compiló el bundle pero
-falló 15 casos Swift de recuperación/mantenimiento con invalidResponse.
-La corrección de esos DTO está en curso. Se investigan además ACK parcial y retry
-de cierre de flujos; sus arreglos productivos requieren regresiones y un recorrido
-mínimo con el bundle final de CI. No se declara esta CI verde ni se atribuyen a
-ese nuevo bundle los oráculos anteriores.
+launch-final.json identifica el artefacto 12873226089 producido por CI
+40817429936 para d4746eaee62acb5cb60f300134b91a7825d4ef45. Su ZIP tiene
+SHA-256 0c54fd81dfea827d4cfe9047138cd6011116e99603b0094bcf3114b3c7e04573;
+el archivo del bundle, da28a4441674a85596127b7960302091c037ff062310afc357414e0f1091465f.
+Binario original: 8c202876fd05e549b35df67abe95836a675d927b4b969c2ab28dc75dface1675;
+binario de prueba: 479ab3798dfeef6ebe9964820adbbfb0b6bdf4ecc5801f50245415242a719bde;
+wrapper: 5d5d17b5b455ff83e592b079c5c11683d53c7ae42d7df5548650dc943d31020c.
+Sigue siendo una app de desarrollo con Python externo.
 
-La relación de fuentes 09df→079 sólo cubre un cambio de test. No se extiende
-automáticamente a un arreglo productivo posterior: conservar la identidad del
-bundle nativo observado y registrar el ámbito de la corrección, su commit y su
-CI exacta. El resultado final pendiente no invalida los oráculos del recorrido
-09df, pero éstos tampoco sustituyen la validación final del paquete.
+El control cacheado del arnés se reinició porque dos bundles sintéticos compartían
+identificador. No se atribuye ese incidente del ensayo al producto ni se presenta
+como una falla de la app personal. El lanzamiento final usa ruta única e
+identificador local.jarvis.automation.d4746ea.final, con fuentes validadas.
+La app del dueño quedó intacta y el agente no leyó ni copió credenciales.
+
+final-bundle-oracle.json registra el flujo be92dd9d20164716a8d0f05e9f5fdf07 y
+ejecución fda7ba72af3b47958b4976e8dd424c49, completed/known, respuesta real de
+Codex WEBHOOK JARVIS 8124 y cero recibos de acciones. El marcador quedó visible
+en la GUI. No se activó el programador ni se abrió webhook; los archivos negativos
+anteriores siguieron ausentes.
+
+El Doctor nativo f11b549e71cb4f6eae0045e792129f50 terminó y mostró
+automations, schedules y state correctos. Su estado global permaneció parcial
+por registros opcionales ausentes, no por corrupción de los presentes. El Doctor
+no usó inferencia ni abrió cuentas.
+
+final-bundle-close-oracle.json conserva salida desde el menú nativo, ausencia de
+las apps/servicios propios, lease del perfil liberada, socket retirado y puerto
+cerrado. El observador midió 108.523.520 bytes de pico bajo 256 MiB durante
+217,51 segundos, terminó al salir la app y no envió señales. Conservó originales
+y la instalación del dueño. Este cierre sólo se refiere al ámbito propio medido.
+
+### Correspondencia exacta de producto d474 → 1481983
+
+Las revisiones 855b689 y 1481983 cambian únicamente cuatro archivos de tests.
+Estas identidades Git permanecen iguales entre el bundle observado d474 y la
+revisión 14819831499ec4472bba506f820eb51f56b29149:
+
+| Árbol | SHA Git |
+| --- | --- |
+| src | 13e01c6ee7689af65691e91c71b3e6958d95bd5f |
+| native/JarvisDesktop/Sources | a086570256fa4c685dab7b1d31f76541a9d2b323 |
+| script | ba30714fe48809f948b2c725b5d51876a76a095c |
+| .github | 29b5332217a941d7c420c687d7f284354f13fc82 |
+
+Los oráculos iniciales conservan su identidad 09df; el recorrido posterior d474
+acredita el producto después de corregir DTO, ACK parcial y cierre. Ninguno se
+convierte por sí solo en suite verde. La correspondencia de árboles permite
+relacionar el último recorrido con 1481983 sin atribuirle un binario recompilado
+que no se haya observado.
+
+## CI exacta aprobada
+
+La [ejecución 40877800263](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40877800263) para
+14819831499ec4472bba506f820eb51f56b29149 terminó correctamente en ambos jobs.
+Paquetes sdist/wheel y smoke de instalación también aprobaron. Todos los
+supervisores confirmaron limpieza y fuentes sin cambios.
+
+| Plataforma / etapa | Resultado | Tiempo de pruebas / supervisor | Pico asignado remoto |
+| --- | --- | --- | --- |
+| [Ubuntu](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40877800263/job/123461038043), Python | 3247 aprobadas, 46 omitidas | 270,80 / 272,135 s | 538.669.056 bytes |
+| [macOS](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40877800263/job/123461038818), Python | 3293 aprobadas, cero omitidas | 325,05 / 326,56 s | 956.030.976 bytes |
+| macOS, Swift | 487 casos, uno omitido y cero fallos | 182,299 / 256,959 s | 1.463.570.432 bytes |
+| macOS, bundle | Compilación aprobada | supervisor 99,271 s | 376.807.424 bytes |
+
+Esas cifras de suites/compilación pertenecen a runners remotos. No se ejecutaron
+suites completas ni compilaciones locales. Se conservan por separado los
+recorridos nativos, sus oráculos y los intentos fallidos de abajo.
+
+### Alcance de las mediciones locales
+
+El pico nativo final de 108.523.520 bytes y el presupuesto de 256 MiB cubren sólo
+la raíz QA nueva. Un inventario final de metadatos du registró 105.984 KiB en esa
+raíz, 22.020 KiB en las particiones REA y 196.204 KiB en el HOME sintético
+previamente autorizado del proveedor. Este último estaba fuera de la raíz
+vigilada y ya existía; no hay medida inicial que permita atribuirle crecimiento.
+No se leyeron ni borraron contenidos de autenticación o historial. Los 197 GiB
+libres observados son una muestra del disco, no una certificación de consumo
+global o una cuota aplicada a recursos externos.
 
 ## Contratos automatizados complementarios
 
-Estos casos existen en fuentes y complementan los ocho recorridos GUI; el resultado global final depende de CI:
+Estos contratos complementan los recorridos GUI de ambos checkpoints y aprobaron en la CI exacta:
 
 - Zona IANA, huecos/repeticiones DST, cron de cinco campos, coalescencia y heartbeat diurno/nocturno.
 - Wake durable, CAS, duplicados, resultado incierto y convivencia con slots de calendario.
@@ -180,22 +245,39 @@ once incompatible con el momento de la inyección. Se corrigió en 0796921 usand
 un evento explícito. Su job Swift fue cancelado; el artefacto compilado conserva
 identidad propia y no se convierte en suite verde. El primer ce9582a también
 terminó con Swift cancelado. Ningún intento cancelado/sustituido demuestra
-validación aprobada. El registro deja un next_attempt pendiente para la revisión
-final, sin inventar SHA, run o resultado.
+validación aprobada. La corrección productiva quedó en d4746ea / 40817429936. Ubuntu aprobó
+3247 pruebas y omitió 46 en 189,70 segundos; pico asignado 538.710.016 bytes y
+limpieza confirmada. macOS compiló el bundle, pero no compiló las pruebas por
+una propiedad del fixture que colisionaba con NSObject.hash. La corrección
+855b689 sólo cambia pruebas.
 
-## Integración de la matriz después de completar aceptación
+855b689 / 40876539585 aprobó Ubuntu con 3247 pruebas, 46 omitidas y 271,49
+segundos; pico 538.660.864 bytes y limpieza confirmada. Swift ejecutó 487 casos,
+uno omitido y tres fallidos: dos perfiles artificiales no incluían automation.json,
+por lo que Doctor devolvía correctamente parcial; otro assert histórico esperaba
+ocho elementos donde ahora hay nueve. 1481983 corrige esas expectativas/perfiles
+de prueba sin cambiar el producto. Su CI 40877800263 finalmente pasó completa, como registra la sección anterior.
+Los fallos anteriores no se borran ni se presentan como suites verdes.
 
-1. Sólo después de la CI y recorrido mínimo del bundle final actualizar P-AUTOMATION-EVENTS a qualified_selected_increment, enlazando registro, cierre y oráculos saneados.
-2. Reconciliar P-SCHEDULER: retirar los anuncios de futura cualificación de este mismo incremento una vez acreditado. Mantener límites de sintaxis, daemon OS, relay remoto y notificaciones.
-3. Añadir evidencia a A-46 y A-47: programación/persistencia/pausa; evento local y webhook autenticado con checkpoint y negativos correlacionados. Conservar el vocabulario de la matriz y describir exactamente la aceptación satisfecha. Cerrar el incremento finito no demuestra equivalencia universal de esas familias.
-4. Reconciliar V1_PENDIENTES y README para no volver a ofrecer este bloque terminado como pendiente. No reabrir incrementos de recuperación, núcleo, Mac/navegador, memoria y MCP ya cualificados.
-5. Mantener phase_a_complete=false y phase_b_started=false; no añadir plataformas, proveedores, canales ni opcionales sin su elección.
+## Reconciliación de la matriz
+
+P-AUTOMATION-EVENTS y P-SCHEDULER quedan qualified_selected_increment, con cero
+pendientes dentro del incremento elegido y enlaces a este cierre y al registro.
+A-46 y A-47 conservan estado de familia amplia parcial: este cierre acredita sus
+recorridos elegidos, no sintaxis, plataformas o integraciones universales.
+
+El último registro de progreso apunta a automatización y conserva MCP/extensiones
+como incremento cualificado anterior. V1_PENDIENTES y README ya no ofrecen este
+bloque como pendiente. Se mantienen 52 familias parciales y 28 sin implementar,
+ninguna familia amplia completa, con fase A abierta y fase B sin comenzar.
+Los cierres previos de recuperación, núcleo, Mac/navegador, memoria y MCP se
+conservan y no vuelven a abrirse por esta reconciliación.
 
 ## Límites
 
 Incluye calendario/heartbeat/wake del motor local abierto, hooks declarativos, flujos de hasta 16 pasos, autoridad normal del chat, webhook HMAC loopback y controles/historia nativos. No instala daemon/login item, no despierta físicamente el Mac, no publica puerto de Internet ni ejecuta módulos OpenClaw, shell o expresiones arbitrarias como hook. No acredita iPhone, push, voz continua, otro proveedor o distribución autocontenida/notarizada; corresponden a otros bloques.
 
-## Manifiesto de archivos que sustentan este borrador
+## Manifiesto de archivos que sustentan el cierre
 
 Oráculos originales en /private/tmp/jarvis-automation-live-20261028. El registro JSON conserva también sus datos seleccionados:
 
@@ -215,5 +297,8 @@ Oráculos originales en /private/tmp/jarvis-automation-live-20261028. El registr
 | final-close-oracle.json | 871 | 55a36fca819438cf2d989272dfbe6a63fcc6fa79571b9862065085193818db88 |
 | watch-first-close.json | 439 | 3799566be379f8bbfde6a9a951aca456fed78c2de54975c730d4c623ca454ee1 |
 | watch-final-close.json | 438 | 67abe105f15686eaea7b522677964c0750eda0aa09ca6bc56ee16fa43c4e2aa9 |
+| launch-final.json | 1183 | 11dd2fb1606447f55436bbd5d9e8f1de7285dac95a0bc92fe99e4b2325ec5931 |
+| final-bundle-oracle.json | 809 | 0670da916081a3f164fe8374d0075a4280b4a8472ad390dca9434d6f20746cad |
+| final-bundle-close-oracle.json | 811 | d02ac1810e898681fe4afdd207a6b107efacd47a577f40f185512e18c14b623d |
 
-Sólo se leyeron oráculos propios y documentación del repositorio. No se consultaron directorios del proveedor, autenticación ni datos del dueño. El registro PHASE_A_AUTOMATION_QUALIFICATION.json conserva los resultados y manifiestos completos de este alcance.
+La consolidación usa oráculos propios y documentación del repositorio. El almacenamiento del HOME sintético del proveedor se midió únicamente como metadatos agregados; no se leyeron contenidos de autenticación, historial personal ni datos privados del dueño. El registro PHASE_A_AUTOMATION_QUALIFICATION.json conserva los resultados y manifiestos completos de este alcance.

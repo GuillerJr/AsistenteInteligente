@@ -17,16 +17,15 @@ rutas TS/JS seleccionadas; no es cobertura exhaustiva.
 
 ## Fase A — base completa primero
 
-El [incremento de automatización](rebuild/PHASE_A_AUTOMATION.md) conecta cron,
-heartbeat, wake, hooks, webhook local y flujos con checkpoints. Está implementado
-y sus ocho recorridos nativos elegidos están verificados, incluidos suspensión,
-revocación, cancelación, reinicio desarmado y cierre. Sigue **awaiting_final_ci**:
-falta corregir los DTO de recuperación y aprobar la CI completa de la revisión
-final y comprobar el bundle final tras los ajustes de ACK/cierre de flujos;
-ver [registro](rebuild/PHASE_A_AUTOMATION_QUALIFICATION.json) y
-[cierre en curso](rebuild/PHASE_A_AUTOMATION_CLOSEOUT.md). La matriz pasa a 52 familias parciales y 28
-sin implementar, sin declarar completa ninguna familia amplia. REA conserva 41
-lotes y 155 rutas TS/JS únicas, con cobertura global todavía parcial.
+El [incremento de automatización](rebuild/PHASE_A_AUTOMATION.md) está cualificado
+en el alcance elegido: cron, heartbeat, wake, hooks, webhook local y flujos con
+checkpoints. Nueve recorridos nativos, diagnóstico y cierre tienen oráculos
+separados; el producto del bundle d474 es idéntico al de 1481983, cuya
+[CI exacta](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40877800263) pasó completa.
+Ver [registro](rebuild/PHASE_A_AUTOMATION_QUALIFICATION.json) y
+[cierre](rebuild/PHASE_A_AUTOMATION_CLOSEOUT.md). No quedan pendientes dentro de
+ese incremento. La matriz conserva 52 familias parciales y 28 sin implementar,
+ninguna familia amplia completa; REA mantiene 41 lotes y 155 rutas TS/JS.
 
 - [x] Limpiar el árbol de trabajo y conservar puntos de recuperación.
 - [x] Conservar inventarios de capacidades del Jarvis anterior para la fase posterior.
@@ -435,7 +434,7 @@ acreditan sus 177 conectores. El relay no es un servicio OAuth de Internet; las
 capacidades de Apps no anunciadas, los servicios no elegidos y la distribución
 autocontenida se mantienen separados. La fase A sigue abierta y B no ha comenzado.
 
-## Automatización — recorridos elegidos verificados, CI final pendiente
+## Automatización — incremento elegido cualificado
 
 - [x] Implementar cron IANA, heartbeat con franja y wake durable sin replay.
 - [x] Conectar hooks declarativos, HMAC loopback y flujos con checkpoints.
@@ -445,7 +444,8 @@ autocontenida se mantienen separados. La fase A sigue abierta y B no ha comenzad
 - [x] Revocar, suspender/reanudar y cancelar desde la app durante aprobación pendiente; archivos ausentes y resultados desconocidos conservados.
 - [x] Reabrir con reglas/recibos persistentes, motores y webhook detenidos, sin nueva inferencia.
 - [x] Confirmar cierre propio y picos de 58.634.240 y 58.650.624 bytes bajo 256 MiB; originales conservados.
-- [ ] Aprobar Python, Swift, bundle, paquetes y smoke del commit final exacto y comprobar su recorrido nativo mínimo tras los ajustes de ACK/cierre de flujos. Ubuntu de 0796921 pasó; Swift macOS falló por DTO de recuperación y requiere corrección/CI posterior.
+- [x] Verificar el bundle d474 posterior a las correcciones con Codex real, Doctor nativo y salida limpia; pico final de 108.523.520 bytes bajo 256 MiB, sin señal del observador.
+- [x] Aprobar Python, Swift, bundle, paquetes y smoke de la revisión exacta 1481983: CI 40877800263 completa en Ubuntu y macOS. Los fallos anteriores de DTO, compilación del fixture y expectativas de mantenimiento se conservan en el registro.
 
 Este incremento local no instala un daemon OS, despierta físicamente el Mac o
 publica un webhook de Internet. No acredita push, iPhone ni distribución; esos

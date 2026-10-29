@@ -1,13 +1,14 @@
 # Variante propia inspirada en OpenClaw — base limpia
 
-La [continuación de automatización](PHASE_A_AUTOMATION.md) implementa cron,
-heartbeat, wake y eventos con flujos reanudables propios. Sus ocho recorridos
-nativos elegidos, reinicio desarmado y cierre presupuestado están verificados.
-El estado sigue **awaiting_final_ci**: falta corregir los DTO de recuperación y
-aprobar la CI completa del commit final y su recorrido nativo mínimo tras las
-correcciones de ACK/cierre de flujos. Ver [registro](PHASE_A_AUTOMATION_QUALIFICATION.json)
-y [cierre en curso](PHASE_A_AUTOMATION_CLOSEOUT.md). REA conserva 41 lotes y 155
-rutas TS/JS seleccionadas; no es revisión exhaustiva.
+El [incremento de automatización](PHASE_A_AUTOMATION.md) está cualificado en
+su alcance elegido: cron/heartbeat/wake, eventos, webhook HMAC loopback y flujos
+con checkpoints. Los recorridos nativos y cierre del bundle d474 se relacionan
+con el producto idéntico de 1481983; su [CI exacta](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40877800263) pasó completa.
+El [registro](PHASE_A_AUTOMATION_QUALIFICATION.json) y el
+[cierre](PHASE_A_AUTOMATION_CLOSEOUT.md) conservan los fallos anteriores.
+REA mantiene 41 lotes y 155 rutas TS/JS seleccionadas; no es revisión exhaustiva.
+La matriz conserva 52 familias parciales y 28 sin implementar: este cierre no
+completa la fase A ni inicia B.
 
 Decisión del dueño, 24-10-2026: construir la nueva variante de Jarvis **en este
 repositorio**, con implementación propia y arquitectura informada por el estudio

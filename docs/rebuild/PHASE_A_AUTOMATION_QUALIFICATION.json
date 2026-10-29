@@ -1,7 +1,7 @@
 {
   "format": "jarvis-phase-a-automation-qualification/1",
-  "status": "awaiting_final_ci",
-  "selected_increment_complete": false,
+  "status": "qualified_selected_increment",
+  "selected_increment_complete": true,
   "phase_a_complete": false,
   "phase_b_started": false,
   "local_full_suites_or_builds": false,
@@ -100,15 +100,116 @@
       },
       "qualified": false,
       "remaining": "Publicar la corrección y verificar todas las etapas de CI para el commit final exacto."
+    },
+    {
+      "commit": "d4746eaee62acb5cb60f300134b91a7825d4ef45",
+      "run_id": 40817429936,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40817429936",
+      "ubuntu": {
+        "status": "success",
+        "passed": 3247,
+        "skipped": 46,
+        "elapsed_seconds": 189.7,
+        "peak_allocated_bytes": 538710016,
+        "cleanup": "confirmed"
+      },
+      "macos": {
+        "status": "failure",
+        "bundle_build": "success",
+        "swift_tests": "compile_failure",
+        "failure_summary": "Colisión de la propiedad hash del fixture con NSObject.hash; corregida sólo en tests en 855b689."
+      },
+      "qualified": false
+    },
+    {
+      "commit": "855b689f0c80de532d8a84484eadd4fee5cadbff",
+      "run_id": 40876539585,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40876539585",
+      "ubuntu": {
+        "status": "success",
+        "passed": 3247,
+        "skipped": 46,
+        "elapsed_seconds": 271.49,
+        "peak_allocated_bytes": 538660864,
+        "cleanup": "confirmed"
+      },
+      "macos": {
+        "status": "failure",
+        "swift_tests": "failure",
+        "cases": 487,
+        "skipped": 1,
+        "failed": 3,
+        "failure_summary": "Dos perfiles fixture sin automation.json producen correctamente Doctor partial; otro assert histórico esperaba ocho elementos en vez de nueve. Corregidos sólo en tests en 1481983."
+      },
+      "qualified": false
+    },
+    {
+      "commit": "14819831499ec4472bba506f820eb51f56b29149",
+      "run_id": 40877800263,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40877800263",
+      "status": "success",
+      "qualified": true,
+      "note": "Todos los jobs y etapas de la revisión exacta terminaron correctamente. Los intentos fallidos/cancelados anteriores se conservan.",
+      "ubuntu": {
+        "status": "success",
+        "job_id": 123461038043,
+        "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40877800263/job/123461038043",
+        "passed": 3247,
+        "skipped": 46,
+        "elapsed_seconds": 270.8,
+        "guard_elapsed_seconds": 272.135,
+        "peak_allocated_bytes": 538669056,
+        "cleanup": "confirmed",
+        "source_unchanged": true,
+        "sdist": "success",
+        "wheel": "success",
+        "installation_smoke": "success"
+      },
+      "macos": {
+        "status": "success",
+        "job_id": 123461038818,
+        "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40877800263/job/123461038818",
+        "python": {
+          "passed": 3293,
+          "skipped": 0,
+          "elapsed_seconds": 325.05,
+          "guard_elapsed_seconds": 326.56,
+          "peak_allocated_bytes": 956030976,
+          "cleanup": "confirmed",
+          "source_unchanged": true
+        },
+        "swift": {
+          "executed": 487,
+          "skipped": 1,
+          "failed": 0,
+          "elapsed_seconds": 182.299,
+          "guard_elapsed_seconds": 256.959,
+          "peak_allocated_bytes": 1463570432,
+          "cleanup": "confirmed",
+          "source_unchanged": true
+        },
+        "bundle_build": {
+          "status": "success",
+          "guard_elapsed_seconds": 99.271,
+          "peak_allocated_bytes": 376807424,
+          "cleanup": "confirmed",
+          "source_unchanged": true
+        },
+        "sdist": "success",
+        "wheel": "success",
+        "installation_smoke": "success",
+        "cleanup": "confirmed",
+        "source_unchanged": true
+      }
     }
   ],
   "native_qualification": {
-    "status": "checkpoint_native_cases_verified_final_bundle_recheck_pending",
+    "status": "qualified_selected_native_scope",
     "budget_mib": 256,
     "profile": "synthetic_only",
     "owner_approvals_delegated": true,
     "owner_installed_app_modified": false,
-    "complete": false,
+    "complete": true,
     "launch": {
       "architecture": "arm64",
       "archive_sha256": "c8b09a6ab7dcdd8a66440455fdb0f00ede2e06e94d9de5f88f844ff69e9f6216",
@@ -463,6 +564,60 @@
           "negative_files_absent": true,
           "observed_unix": 1793222964.60802
         }
+      },
+      {
+        "id": "AUT-N09",
+        "result": "pass",
+        "scope": "Recorrido mínimo del bundle d474 tras las correcciones: Codex real, diagnóstico nativo sin inferencia, motores detenidos y salida limpia.",
+        "oracle": {
+          "format": "jarvis-automation-final-bundle-recheck/1",
+          "bundle_commit": "d4746eaee62acb5cb60f300134b91a7825d4ef45",
+          "flow_id": "be92dd9d20164716a8d0f05e9f5fdf07",
+          "run_id": "fda7ba72af3b47958b4976e8dd424c49",
+          "status": "completed",
+          "outcome": "known",
+          "answer": "WEBHOOK JARVIS 8124",
+          "action_receipts": [],
+          "native_ui_complete_and_marker_visible": true,
+          "scheduler_not_activated": true,
+          "webhook_not_opened": true,
+          "negative_files_absent": true,
+          "observed_unix": 1793278830.109072,
+          "native_doctor": {
+            "operation_id": "f11b549e71cb4f6eae0045e792129f50",
+            "completed": true,
+            "automations": "ok",
+            "schedules": "ok",
+            "state": "ok",
+            "global": "partial_expected_missing_optional_registries",
+            "inference_not_used": true
+          },
+          "final_engines_stopped": true
+        },
+        "closure": {
+          "format": "jarvis-automation-final-bundle-close/1",
+          "native_quit_selected": true,
+          "owned_app_and_service_processes_exited": true,
+          "profile_lease_released": true,
+          "unix_socket_removed": true,
+          "webhook_port_closed": true,
+          "originals_preserved": true,
+          "owner_app_untouched": true,
+          "watch": {
+            "format": "jarvis-automation-manual-watch/1",
+            "peak_allocated_bytes": 108523520,
+            "budget_mib": 256,
+            "deadline_seconds": 3600,
+            "elapsed_seconds": 217.51,
+            "stop_reason": "owned_app_exited",
+            "observer_sent_termination": false,
+            "app_pid": 25718,
+            "app_start_identity_sha256": "49bb624397e3cd0608e6aed457c5bd19150551b518401a21ceb48068e5d1eb34",
+            "only_owned_root_measured": true,
+            "owner_credential_contents_read": false
+          },
+          "observed_unix": 1793278852.9649348
+        }
       }
     ],
     "closure": {
@@ -598,6 +753,21 @@
         "file": "/private/tmp/jarvis-automation-live-20261028/watch-final-close.json",
         "bytes": 438,
         "sha256": "67abe105f15686eaea7b522677964c0750eda0aa09ca6bc56ee16fa43c4e2aa9"
+      },
+      {
+        "file": "/private/tmp/jarvis-automation-live-20261028/launch-final.json",
+        "bytes": 1183,
+        "sha256": "11dd2fb1606447f55436bbd5d9e8f1de7285dac95a0bc92fe99e4b2325ec5931"
+      },
+      {
+        "file": "/private/tmp/jarvis-automation-live-20261028/final-bundle-oracle.json",
+        "bytes": 809,
+        "sha256": "0670da916081a3f164fe8374d0075a4280b4a8472ad390dca9434d6f20746cad"
+      },
+      {
+        "file": "/private/tmp/jarvis-automation-live-20261028/final-bundle-close-oracle.json",
+        "bytes": 811,
+        "sha256": "d02ac1810e898681fe4afdd207a6b107efacd47a577f40f185512e18c14b623d"
       }
     ],
     "scope_limits": [
@@ -607,38 +777,177 @@
     ],
     "observed_checkpoint_cases_complete": true,
     "final_bundle_recheck": {
-      "status": "pending",
-      "reason": "El bundle 09df observado precede a correcciones productivas posteriores de ACK parcial y retry de cierre de flujos; falta un recorrido mínimo sobre el bundle final de CI."
+      "status": "verified",
+      "launch": {
+        "architecture": "arm64",
+        "archive_sha256": "da28a4441674a85596127b7960302091c037ff062310afc357414e0f1091465f",
+        "binary_sha256": "8c202876fd05e549b35df67abe95836a675d927b4b969c2ab28dc75dface1675",
+        "commit": "d4746eaee62acb5cb60f300134b91a7825d4ef45",
+        "development_bundle": true,
+        "external_python_required": true,
+        "format": "jarvis-automation-native-launch/1",
+        "run_id": "40817429936",
+        "artifact_zip_sha256": "0c54fd81dfea827d4cfe9047138cd6011116e99603b0094bcf3114b3c7e04573",
+        "test_binary_sha256": "479ab3798dfeef6ebe9964820adbbfb0b6bdf4ecc5801f50245415242a719bde",
+        "wrapper_sha256": "5d5d17b5b455ff83e592b079c5c11683d53c7ae42d7df5548650dc943d31020c",
+        "source_tree": "13e01c6ee7689af65691e91c71b3e6958d95bd5f",
+        "manual_budget_mib": 256,
+        "deadline_seconds": 3600,
+        "prepared_unix": 1793278268.2061582,
+        "account_credentials_copied_or_read_by_agent": false,
+        "previous_authorized_synthetic_provider_home_reused": true,
+        "profile": "/private/tmp/jarvis-automation-live-20261028/state",
+        "bundle_identifier": "local.jarvis.automation.d4746ea.final",
+        "test_bundle_path": "/private/tmp/jarvis-automation-live-20261028/native-final-855b689/Jarvis.app"
+      },
+      "artifact_id": 12873226089,
+      "oracle": {
+        "format": "jarvis-automation-final-bundle-recheck/1",
+        "bundle_commit": "d4746eaee62acb5cb60f300134b91a7825d4ef45",
+        "flow_id": "be92dd9d20164716a8d0f05e9f5fdf07",
+        "run_id": "fda7ba72af3b47958b4976e8dd424c49",
+        "status": "completed",
+        "outcome": "known",
+        "answer": "WEBHOOK JARVIS 8124",
+        "action_receipts": [],
+        "native_ui_complete_and_marker_visible": true,
+        "scheduler_not_activated": true,
+        "webhook_not_opened": true,
+        "negative_files_absent": true,
+        "observed_unix": 1793278830.109072,
+        "native_doctor": {
+          "operation_id": "f11b549e71cb4f6eae0045e792129f50",
+          "completed": true,
+          "automations": "ok",
+          "schedules": "ok",
+          "state": "ok",
+          "global": "partial_expected_missing_optional_registries",
+          "inference_not_used": true
+        },
+        "final_engines_stopped": true
+      },
+      "closure": {
+        "format": "jarvis-automation-final-bundle-close/1",
+        "native_quit_selected": true,
+        "owned_app_and_service_processes_exited": true,
+        "profile_lease_released": true,
+        "unix_socket_removed": true,
+        "webhook_port_closed": true,
+        "originals_preserved": true,
+        "owner_app_untouched": true,
+        "watch": {
+          "format": "jarvis-automation-manual-watch/1",
+          "peak_allocated_bytes": 108523520,
+          "budget_mib": 256,
+          "deadline_seconds": 3600,
+          "elapsed_seconds": 217.51,
+          "stop_reason": "owned_app_exited",
+          "observer_sent_termination": false,
+          "app_pid": 25718,
+          "app_start_identity_sha256": "49bb624397e3cd0608e6aed457c5bd19150551b518401a21ceb48068e5d1eb34",
+          "only_owned_root_measured": true,
+          "owner_credential_contents_read": false
+        },
+        "observed_unix": 1793278852.9649348
+      },
+      "production_identity_matches_reviewed_commit": true,
+      "reviewed_commit": "14819831499ec4472bba506f820eb51f56b29149",
+      "non_product_diff": [
+        "native/JarvisDesktop/Tests/DesktopCoreTests/AutomationRecoveryContractTests.swift",
+        "native/JarvisDesktop/Tests/DesktopCoreTests/MaintenanceIntegrationTests.swift",
+        "native/JarvisDesktop/Tests/DesktopCoreTests/MaintenancePluginCompatibilityTests.swift",
+        "tests/test_automation_doctor.py"
+      ]
+    },
+    "harness_isolation_incident": {
+      "scope": "synthetic_test_bundles_only",
+      "reason": "Dos bundles sintéticos compartían identificador y se reinició el control cacheado; no se atribuye este incidente del arnés al producto.",
+      "resolution": "Ruta única y bundle_identifier local.jarvis.automation.d4746ea.final para el lanzamiento final, con identidad de fuentes validada.",
+      "owner_app_untouched": true,
+      "product_failure": false,
+      "source": "Observación operativa del ensayo comunicada por root."
+    },
+    "resource_scope_metadata": {
+      "measurement": "Metadatos du; sin leer contenidos de credenciales o historial.",
+      "qa_root_kib": 105984,
+      "reference_partitions_kib": 22020,
+      "preexisting_authorized_synthetic_provider_home_kib": 196204,
+      "provider_home_inside_qa_watch": false,
+      "provider_home_initial_baseline_available": false,
+      "provider_home_growth_attributed": false,
+      "provider_home_contents_read_or_deleted": false,
+      "disk_free_gib_observed": 197,
+      "limit": "Los picos observados de 108523520 bytes y el presupuesto de 256 MiB corresponden sólo a la raíz QA nueva; no al HOME previo del proveedor ni al consumo global del Mac."
     }
   },
   "limits": [
     "No se declara equivalencia exhaustiva por análisis estático ni por fixtures.",
     "Webhook local loopback, sin publicación Internet o daemon OS.",
-    "Firma/distribución autocontenida y notificaciones push pertenecen a otros bloques."
+    "Firma/distribución autocontenida y notificaciones push pertenecen a otros bloques.",
+    "La vigilancia nativa de 256 MiB mide sólo la raíz QA nueva. El HOME sintético autorizado del proveedor ya existía fuera de ella; no hay línea base inicial para atribuir crecimiento ni se certifica el almacenamiento global."
   ],
   "source_identity": {
-    "native_bundle_commit": "09df67826ff522bcbfa9dfaeeadafc5f399d504a",
-    "reviewed_commit": "07969218cff872e78f02df819e906ba08cc4ce17",
+    "checkpoint_native_bundle_commit": "09df67826ff522bcbfa9dfaeeadafc5f399d504a",
+    "native_bundle_commit": "d4746eaee62acb5cb60f300134b91a7825d4ef45",
+    "reviewed_commit": "14819831499ec4472bba506f820eb51f56b29149",
     "reviewed_commit_diff_from_bundle": [
-      "tests/test_service_scheduler_events.py"
+      "native/JarvisDesktop/Tests/DesktopCoreTests/AutomationRecoveryContractTests.swift",
+      "native/JarvisDesktop/Tests/DesktopCoreTests/MaintenanceIntegrationTests.swift",
+      "native/JarvisDesktop/Tests/DesktopCoreTests/MaintenancePluginCompatibilityTests.swift",
+      "tests/test_automation_doctor.py"
     ],
-    "final_revision_pending": true,
-    "note": "La correspondencia productiva 09df→079 no se extrapola a la corrección posterior de DTO de recuperación. La automatización nativa observada conserva su identidad; el paquete final requiere otra CI exacta."
-  },
-  "remaining": [
-    "CI completa del commit final exacto después de corregir DTO de recuperación, ACK parcial y retry de cierre de flujos.",
-    "Recorrido nativo mínimo del bundle final compilado en CI para verificar que las correcciones conservan el alcance observado.",
-    "Conservar identidad 09df de los oráculos previos y registrar identidad/oráculos nuevos del bundle final; no extrapolar igualdad de código posterior."
-  ],
-  "next_attempt": {
-    "status": "pending",
-    "commit": null,
-    "run_id": null,
-    "requirements": [
-      "Corrección de DTO nativo de recuperación.",
-      "Regresiones de ACK parcial y retry de cierre de flujos.",
-      "Ubuntu y macOS completos, Swift/bundle, wheel/sdist y smoke.",
-      "Recorrido mínimo con la identidad del bundle final."
+    "production_diff_from_bundle": [],
+    "final_revision_pending": false,
+    "note": "Las revisiones 855b689 y 1481983 cambian sólo tests: producto, scripts y CI del bundle d474 permanecen idénticos. La CI exacta 40877800263 de 1481983 terminó correctamente en Ubuntu y macOS.",
+    "matching_product_trees": {
+      "src": "13e01c6ee7689af65691e91c71b3e6958d95bd5f",
+      "native/JarvisDesktop/Sources": "a086570256fa4c685dab7b1d31f76541a9d2b323",
+      "script": "ba30714fe48809f948b2c725b5d51876a76a095c",
+      ".github": "29b5332217a941d7c420c687d7f284354f13fc82"
+    },
+    "tree_equality_verified_between": [
+      "d4746eaee62acb5cb60f300134b91a7825d4ef45",
+      "14819831499ec4472bba506f820eb51f56b29149"
     ]
+  },
+  "remaining": [],
+  "updated_date": "2026-10-29",
+  "final_ci": {
+    "commit": "14819831499ec4472bba506f820eb51f56b29149",
+    "run_id": 40877800263,
+    "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40877800263",
+    "status": "success",
+    "jobs": [
+      {
+        "id": 123461038043,
+        "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40877800263/job/123461038043",
+        "status": "success"
+      },
+      {
+        "id": 123461038818,
+        "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40877800263/job/123461038818",
+        "status": "success"
+      }
+    ],
+    "all_stages_complete": true
+  },
+  "qualification_basis": {
+    "ci_commit": "14819831499ec4472bba506f820eb51f56b29149",
+    "ci_run_id": 40877800263,
+    "native_bundle_commit": "d4746eaee62acb5cb60f300134b91a7825d4ef45",
+    "production_trees_identical": true,
+    "native_cases": [
+      "AUT-N01",
+      "AUT-N02",
+      "AUT-N03",
+      "AUT-N04",
+      "AUT-N05",
+      "AUT-N06",
+      "AUT-N07",
+      "AUT-N08",
+      "AUT-N09"
+    ],
+    "remaining_in_selected_increment": [],
+    "family_or_universal_parity_claimed": false
   }
 }
