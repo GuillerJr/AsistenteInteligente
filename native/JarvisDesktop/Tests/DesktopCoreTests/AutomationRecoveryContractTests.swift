@@ -4,7 +4,7 @@ import XCTest
 
 final class AutomationRecoveryContractTests: XCTestCase {
     private let originalRoles = ["state", "memory", "schedules", "agents", "skills", "telegram", "configuration_portable"]
-    private let hash = String(repeating: "f", count: 64)
+    private let fixtureDigest = String(repeating: "f", count: 64)
 
     private func wrap(_ metadata: RPCValue) throws -> RPCValue {
         .object([
@@ -23,7 +23,7 @@ final class AutomationRecoveryContractTests: XCTestCase {
         metadata["source"] = .array(roles.map(source))
         if restoring {
             metadata["kind"] = .string("restore.stage")
-            metadata["manifest_sha256"] = .string(hash)
+            metadata["manifest_sha256"] = .string(fixtureDigest)
             metadata["artifact_id"] = .string(String(repeating: "b", count: 32))
             metadata["source_artifact_identity"] = metadata["destination_identity"]
             metadata["disarms"] = .array((disarms ?? MaintenanceValidation.disarms.sorted()).map(RPCValue.string))
@@ -99,7 +99,7 @@ final class AutomationRecoveryContractTests: XCTestCase {
             "counts": .array([.array([.string(sqlite ? "wake_events" : "automation_flows"), .number(0)])]),
             "inspection_source": .string(sqlite ? "host_ram_snapshot" : "metadata"),
             "snapshot_byte_length": sqlite ? .number(4096) : .null,
-            "snapshot_sha256": sqlite ? .string(hash) : .null,
+            "snapshot_sha256": sqlite ? .string(fixtureDigest) : .null,
         ])
     }
 
@@ -132,8 +132,8 @@ final class AutomationRecoveryContractTests: XCTestCase {
                 "verification": .object([
                     "artifact_id": .string(String(repeating: "d", count: 32)),
                     "profile_id": .string("synthetic_profile"), "generation": .number(7),
-                    "manifest_sha256": .string(hash), "root_identity": RestoreFixture.identity,
-                    "resource_hashes": .array(roles.map { .array([.string($0), .string(hash)]) }),
+                    "manifest_sha256": .string(fixtureDigest), "root_identity": RestoreFixture.identity,
+                    "resource_hashes": .array(roles.map { .array([.string($0), .string(fixtureDigest)]) }),
                     "excluded": .array(MaintenanceValidation.exclusions.sorted().map(RPCValue.string)),
                     "authenticity": .string("not_established"),
                 ]),
