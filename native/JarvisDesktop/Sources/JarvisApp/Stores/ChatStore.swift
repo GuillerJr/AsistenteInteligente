@@ -189,9 +189,15 @@ final class ChatStore {
             return
         }
         draft = value
-        dictationNotice = transcript.completion == .partialAtStop
-            ? "Se añadió un dictado parcial al borrador. Revísalo antes de enviarlo."
-            : "Dictado local añadido al borrador. Revísalo antes de enviarlo."
+        let mode: String
+        switch transcript.captureMode {
+        case .dictation: mode = "Dictado local"
+        case .extendedDictation: mode = "Dictado prolongado local"
+        case .wakePhrase: mode = transcript.wakeMatched ? "Frase de activación detectada" : "Frase de activación sin confirmar"
+        }
+        dictationNotice = mode + (transcript.completion == .partialAtStop
+            ? " · Texto parcial añadido al borrador. Revísalo antes de enviarlo."
+            : " · Texto añadido al borrador. Revísalo antes de enviarlo.")
     }
 
     private var voiceConversationContext: LocalVoiceConversationContext? {

@@ -142,8 +142,25 @@ final class NativeMediaExecutorTests: XCTestCase {
         XCTAssertEqual(result["segments"].array?.count, 3); XCTAssertEqual(result["truncated"], .bool(true))
         XCTAssertEqual(result["metadata"]["sampling"], .string("start_middle_end_nearest_frame"))
         XCTAssertEqual(result["metadata"]["sampled_times"].array?.count, 3)
+        let times = try XCTUnwrap(result["metadata"]["sampled_times"].array).compactMap { item -> Double? in
+            if case .number(let value) = item { return value }; return nil
+        }
+        XCTAssertEqual(times.count, 3); guard times.count == 3 else { return }
+        XCTAssertEqual(Set(times).count, 3, "Tres objetivos no pueden observar sólo el keyframe inicial")
+        XCTAssertGreaterThan(times[1], 0.3); XCTAssertGreaterThan(times[2], 0.9)
+        XCTAssertEqual(result["metadata"]["generator_tolerance_seconds"], .number(0))
         for segment in result["segments"].array ?? [] { XCTAssertTrue(segment["locator"].string?.hasPrefix("frame:") == true) }
         try assertFrame(result)
+    }
+    func testDistantKeyframeCannotMasqueradeAsMiddleOrEndObservation() throws {
+        XCTAssertNoThrow(try NativeMediaDecoder.checkedSampleTime(0, requested: 0, duration: 2, framePeriod: 0.5))
+        XCTAssertNoThrow(try NativeMediaDecoder.checkedSampleTime(1.5, requested: 1.999, duration: 2, framePeriod: 0.5))
+        for requested in [1.0, 1.999] {
+            XCTAssertThrowsError(try NativeMediaDecoder.checkedSampleTime(0, requested: requested, duration: 2, framePeriod: 0.5)) {
+                XCTAssertEqual($0 as? NativeMediaIssue, .decoderFailed)
+            }
+        }
+        XCTAssertThrowsError(try NativeMediaDecoder.checkedSampleTime(.nan, requested: 0, duration: 2, framePeriod: 0.5))
     }
     @MainActor func testRevocationIsCheckedAfterLoadingBeforeDecoderOrTranscriber() async throws {
         let payload = NativeMediaFixtures.wav(), host = NativeMediaExecutor()

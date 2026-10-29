@@ -30,12 +30,26 @@ extension NativeMediaDecoder {
                            "external_references_opened": .bool(false),
                            "transcription_requested": .bool(request.action == "transcribe")]
         guard request.kind == "video", let track = videoTracks.first else { return result }
-        let size = try await track.load(.naturalSize), transform = try await track.load(.preferredTransform)
+        let size: CGSize, transform: CGAffineTransform
+        let minimumPeriod: Double, nominalRate: Double
+        do {
+            size = try await track.load(.naturalSize)
+            transform = try await track.load(.preferredTransform)
+            minimumPeriod = try await track.load(.minFrameDuration).seconds
+            nominalRate = Double(try await track.load(.nominalFrameRate))
+        } catch { try cancellation.check(); throw NativeMediaIssue.decoderFailed }
+        try cancellation.check()
         let dimensions = try checkedVideoDimensions(size, transform: transform)
         let width = dimensions.width, height = dimensions.height
+        let framePeriod = minimumPeriod.isFinite && minimumPeriod > 0 ? minimumPeriod : 1 / nominalRate
+        guard framePeriod.isFinite, framePeriod > 0, framePeriod <= 120 else { throw NativeMediaIssue.unsupported }
         let generator = AVAssetImageGenerator(asset: source.asset)
         generator.appliesPreferredTrackTransform = true
         generator.maximumSize = CGSize(width: 1200, height: 1200)
+        // The default tolerance is infinite and can return the first keyframe
+        // for all three targets. Exact requests force decoding at each target.
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = .zero
         let generatorRegistration = cancellation.register { generator.cancelAllCGImageGeneration() }
         defer { cancellation.remove(generatorRegistration); generator.cancelAllCGImageGeneration() }
         let requested = [0.0, duration / 2, max(0, duration - 0.001)]
@@ -46,7 +60,7 @@ extension NativeMediaDecoder {
             do { sample = try await generator.image(at: CMTime(seconds: seconds, preferredTimescale: 600)) }
             catch { try cancellation.check(); throw NativeMediaIssue.decoderFailed }
             let actual = sample.actualTime.seconds
-            guard actual.isFinite, actual >= 0, actual <= duration + 0.1 else { throw NativeMediaIssue.decoderFailed }
+            try checkedSampleTime(actual, requested: seconds, duration: duration, framePeriod: framePeriod)
             try cancellation.check()
             let text = try recognize(sample.image, locale: request.locale, cancellation: cancellation)
             let locator = "frame:\(index + 1)@" + String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), actual)
@@ -55,11 +69,23 @@ extension NativeMediaDecoder {
         }
         result.metadata["dimensions"] = .object(["width": .number(width.rounded()), "height": .number(height.rounded())])
         result.metadata["sampled_times"] = .array(actualTimes)
+        result.metadata["requested_times"] = .array(requested.map(RPCValue.number))
+        result.metadata["frame_period_seconds"] = .number(framePeriod)
+        result.metadata["generator_tolerance_seconds"] = .number(0)
         result.metadata["sampling"] = .string("start_middle_end_nearest_frame")
         result.metadata["ocr_on_device"] = .bool(true)
         result.truncated = true // Three samples never assert observation of an entire video.
         result.frame = try frame(contactSheet(pictures, columns: 3), cancellation: cancellation)
         return result
+    }
+
+    static func checkedSampleTime(_ actual: Double, requested: Double, duration: Double, framePeriod: Double) throws {
+        guard actual.isFinite, requested.isFinite, duration.isFinite, framePeriod.isFinite,
+              actual >= 0, requested >= 0, requested < duration, duration > 0, duration <= 120,
+              framePeriod > 0, framePeriod <= 120,
+              actual <= duration, abs(actual - requested) <= framePeriod + 1 / 600.0 else {
+            throw NativeMediaIssue.decoderFailed
+        }
     }
 
     static func checkedVideoDimensions(_ size: CGSize, transform: CGAffineTransform) throws -> CGSize {

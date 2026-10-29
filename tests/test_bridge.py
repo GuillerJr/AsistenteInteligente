@@ -11,7 +11,10 @@ from contextlib import contextmanager
 from dataclasses import asdict, replace
 from uuid import uuid4
 
+import pytest
+
 from jarvis_core.bridge import CodexBridge
+from jarvis_core.codex import ApprovedToolImage
 from jarvis_core.runtime import AgentRuntime, RunPhase, ToolDefinition, ToolResult
 from jarvis_core.service import JarvisService
 from jarvis_core.tools import ApprovalAuthority, ToolCatalog, ToolSpec, check_tool_authority
@@ -511,3 +514,71 @@ async def test_read_only_callback_returns_actual_receipt_without_human_ticket(tm
     assert json.loads(result.action_receipts[0].output)["text"] == "contenido sintético"
     assert len(peer.replies) == 1 and not bridge._turns
     await authority.close()
+
+
+@pytest.mark.parametrize("parallel", [False, True])
+@pytest.mark.parametrize("handoff", [False, True])
+async def test_two_image_receipts_cannot_displace_later_document_receipts(
+    tmp_path, parallel, handoff,
+):
+    """Real runtime approvals, synthetic pixels/peer; no model-consumption claim."""
+    name = "fixture_media_read"
+    outputs = ["IMAGE JARVIS42", "VIDEO JARVIS42", "DOCUMENT OFFICE6421", "CSV7319"]
+    images = {0: "data:image/jpeg;base64,U1lOVEhFVElDX0lNQUdF",
+              1: "data:image/jpeg;base64,U1lOVEhFVElDX1ZJREVP"}
+    executions, consumed = [], []
+
+    async def execute(arguments, cancellation):
+        check_tool_authority(name, arguments)
+        check_tool_authority(name, arguments, commit=True)
+        executions.append(arguments["index"])
+        return ToolResult(name, True, True, output=outputs[arguments["index"]])
+
+    peer = FakeCodexPeer({"mixed": [(name, {"index": i}) for i in range(4)]},
+                         parallel=parallel)
+    peer.supports_approved_media_handoff = handoff
+    definition = ToolDefinition(name, lambda arguments: None, execute,
+                                requires_confirmation=True)
+    spec = ToolSpec(name, "Lectura de corpus sintético", {"type": "object"})
+    bundle = runtime_bundle(tmp_path, peer, definitions=(definition,), specs=(spec,))
+    authority, bridge, receipts, start = bundle[2], bundle[3], bundle[5], bundle[8]
+
+    def take_frame(receipt):
+        consumed.append(receipt.operation_id)
+        return images.get(outputs.index(receipt.output))
+
+    bridge.take_tool_image = take_frame
+    try:
+        handle = start("mixed")
+        decisions = [await synthetic_decision(authority, handle) for _ in range(4)]
+        result = await settled(handle)
+        assert result.status == "completed" and len(peer.replies) == len(receipts) == 4
+        assert len({row.operation_id for row in decisions}) == 4
+        assert len(consumed) == len(set(consumed)) == 4
+        assert sorted(executions) == [0, 1, 2, 3]
+        delivered = {}
+        for reply in peer.replies:
+            assert reply["success"] is True
+            payload = json.loads(reply["contentItems"][0]["text"])
+            assert payload == asdict(next(r for r in receipts
+                                         if r.operation_id == payload["operation_id"]))
+            assert payload["verified"] is True and payload["effect_status"] == "known"
+            items = reply["contentItems"]
+            assert items[1]["type"] == "inputText" and items[1]["text"].endswith(payload["output"])
+            delivered[payload["output"]] = [item["imageUrl"] for item in items
+                                             if item["type"] == "inputImage"]
+            carrier = reply.get("_jarvis_approved_image")
+            if handoff and payload["output"] in outputs[:2]:
+                assert isinstance(carrier, ApprovedToolImage)
+                assert carrier.run_id == handle.run_id
+                assert carrier.operation_id == payload["operation_id"]
+                assert carrier.tool_name == name
+                assert "data:image" not in repr(carrier)
+            else:
+                assert carrier is None
+        assert delivered == {text: ([images[index]] if index in images else [])
+                             for index, text in enumerate(outputs)}
+        assert peer.calls[0][1].get("host_run_id") == (handle.run_id if handoff else None)
+        assert not bridge._turns and not authority.list_pending()
+    finally:
+        await authority.close()

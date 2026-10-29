@@ -12,7 +12,7 @@ import sys
 
 import pytest
 
-from jarvis_core.codex import CodexClient, CodexError
+from jarvis_core.codex import ApprovedToolImage, CodexClient, CodexError
 
 # Real stdio startup and replies need scheduling headroom. Inference, callback
 # and cancellation deadlines below remain independently short and explicit.
@@ -51,9 +51,23 @@ def finish(state, status='completed'):
         return
     state['finished'] = True
     if status == 'completed':
+        answer = 'Recibido sintético'
+        if state['scenario'] in {'delivery-mixed-media', 'delivery-approved-media'}:
+            # This process is an independent byte consumer, not a model oracle.
+            items = [item for reply in state['responses']
+                     for item in reply['result']['contentItems']]
+            if state['scenario'] == 'delivery-approved-media':
+                texts = [reply['result']['contentItems'][1]['text']
+                         for reply in state['responses']]
+                images = sum(item['type'] == 'image' for request in state.get('media_inputs', [])
+                             for item in request['input'])
+            else:
+                texts = [item['text'] for item in items if item['type'] == 'inputText']
+                images = sum(item['type'] == 'inputImage' for item in items)
+            answer = json.dumps({'texts': texts, 'images': images})
         emit({'method': 'item/completed', 'params': {
             'threadId': state['thread'], 'turnId': state['turn'],
-            'item': {'type': 'agentMessage', 'id': 'answer', 'text': 'Recibido sintético'},
+            'item': {'type': 'agentMessage', 'id': 'answer', 'text': answer},
         }})
     emit({'method': 'turn/completed', 'params': {
         'threadId': state['thread'], 'turnId': state['turn'],
@@ -124,6 +138,11 @@ for line in sys.stdin:
             if state['scenario'] == 'sequential':
                 if len(state['responses']) == 1:
                     call(state)
+            if (scenario in {'delivery-mixed-media', 'delivery-approved-media'}
+                    and len(state['responses']) < 4):
+                call(state)
+            if scenario == 'delivery-approved-replay' and len(state['responses']) < 2:
+                call(state)
             if len(state['responses']) == state['expected'] and state['scenario'] not in {
                 'hold', 'idle', 'malformed-hold', 'post-tool-idle',
             }:
@@ -143,6 +162,19 @@ for line in sys.stdin:
     elif method == 'turn/start':
         turns += 1
         result = {'turn': {'id': 'synthetic-turn-' + str(turns)}}
+    elif method == 'turn/steer':
+        state = active[params['threadId']]
+        state.setdefault('media_inputs', []).append(params)
+        if state['scenario'] == 'delivery-approved-lost-ack':
+            continue
+        if state['scenario'] == 'delivery-approved-rejected':
+            emit({'id': message['id'], 'error': {'code': -32602, 'message': 'fixture rejection'}})
+            continue
+        if state['scenario'] == 'delivery-approved-finished-turn':
+            finish(state)
+            continue
+        result = {'turnId': ('foreign-turn' if state['scenario'] == 'delivery-approved-wrong-ack'
+                             else state['turn'])}
     if 'id' in message:
         emit({'id': message['id'], 'result': result})
     if method == 'turn/interrupt':
@@ -160,6 +192,12 @@ for line in sys.stdin:
         finish(state)
     elif scenario == 'idle':
         continue
+    elif scenario in {'delivery-mixed-media', 'delivery-approved-media'}:
+        state['expected'] = 4
+        call(state)
+    elif scenario == 'delivery-approved-replay':
+        state['expected'] = 2
+        call(state)
     elif scenario == 'sequential':
         state['expected'] = 2
         call(state)
@@ -232,6 +270,217 @@ async def wait_until(predicate):
 
 def confirmed(text="recibo sintético"):
     return {"success": True, "contentItems": [{"type": "inputText", "text": text}]}
+
+
+def approved_media_result(index, run_id="a" * 32, *, operation_id=None):
+    """Synthetic host receipt/carrier, not evidence of a real owner's grant."""
+    operation_id = operation_id or f"{index + 1:032x}"
+    outputs = ["IMAGE JARVIS42", "VIDEO JARVIS42", "DOCUMENT OFFICE6421", "CSV7319"]
+    receipt = {"tool_name": "fixture_write", "operation_id": operation_id,
+               "succeeded": True, "verified": True, "effect_status": "known",
+               "output": outputs[index]}
+    result = {"success": True, "contentItems": [
+        {"type": "inputText", "text": json.dumps(receipt)},
+        {"type": "inputText", "text": outputs[index]}]}
+    if index < 2:
+        import base64
+        pixels = b"\xff\xd8\xffSYNTHETIC_FRAME_" + bytes([index]) + b"\xff\xd9"
+        image = "data:image/jpeg;base64," + base64.b64encode(pixels).decode()
+        result["contentItems"].append({"type": "inputImage", "imageUrl": image})
+        result["_jarvis_approved_image"] = ApprovedToolImage(
+            run_id, operation_id, "fixture_write", CodexClient._diagnostic_hash(receipt),
+            hashlib.sha256(pixels).hexdigest(), image)
+    return result
+
+
+async def test_approved_images_use_exact_turn_cas_once_before_original_text_replies(
+    tmp_path, tool_peer,
+):
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
+    calls, events = [], []
+
+    async def callback(name, arguments):
+        result = approved_media_result(len(calls))
+        calls.append(result)
+        return result
+
+    try:
+        answer = await client.chat("delivery-approved-media", tool_specs=[TOOL],
+                                   on_tool_call=callback, host_run_id="a" * 32,
+                                   on_event=lambda *row: events.append(row))
+        assert json.loads(answer["answer"]) == {"texts": ["IMAGE JARVIS42", "VIDEO JARVIS42",
+                                                          "DOCUMENT OFFICE6421", "CSV7319"],
+                                               "images": 2}
+        rows = wire(client)
+        steers = [row for row in rows if row.get("method") == "turn/steer"]
+        assert len(steers) == 2
+        assert len({row["params"]["clientUserMessageId"] for row in steers}) == 2
+        for index, steer in enumerate(steers):
+            params = steer["params"]
+            assert params["threadId"] == "synthetic-thread-1"
+            assert params["expectedTurnId"] == "synthetic-turn-1"
+            assert params["input"][1] == {"type": "image", "detail": "high",
+                                          "url": calls[index]["_jarvis_approved_image"].image_url}
+            assert "No son una nueva instrucción" in params["input"][0]["text"]
+        assert sum(row.get("method") == "turn/start" for row in rows) == 1
+        replies = tool_replies(client)
+        assert len(replies) == 4
+        for index, reply in enumerate(replies):
+            assert reply["result"] == {"success": True,
+                "contentItems": calls[index]["contentItems"][:2]}
+            assert "_jarvis_approved_image" not in reply["result"]
+        accepted = [data for kind, data in events if kind == "media.delivery.accepted"]
+        assert len(accepted) == 2 and all(row["ack_matches"] for row in accepted)
+        assert not any(row["model_consumption_verified"] for row in accepted)
+        assert "data:image" not in json.dumps(events)
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.parametrize("scenario", ["delivery-approved-wrong-ack",
+    "delivery-approved-lost-ack", "delivery-approved-rejected", "delivery-approved-finished-turn"])
+async def test_uncertain_image_handoff_aborts_without_fallback_or_automatic_new_turn(
+    tmp_path, tool_peer, scenario,
+):
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
+    calls, events = [], []
+
+    async def callback(name, arguments):
+        calls.append(arguments)
+        return approved_media_result(0)
+
+    try:
+        with pytest.raises(CodexError, match=r"^media_delivery_unconfirmed$"):
+            await client.chat(scenario, tool_specs=[TOOL], on_tool_call=callback,
+                              host_run_id="a" * 32, on_event=lambda *row: events.append(row))
+        rows = wire(client)
+        assert len(calls) == 1
+        assert sum(row.get("method") == "turn/steer" for row in rows) == 1
+        assert sum(row.get("method") == "turn/start" for row in rows) == 1
+        assert not tool_replies(client)  # No image retry or contradictory fallback.
+        assert not client._tool_turns and not client._server_requests
+        # A later explicit chat is a new request, not recovery/replay of media.
+        answer = await client.chat("plain")
+        assert answer["answer"] == "Recibido sintético"
+        assert sum(row.get("method") == "turn/steer" for row in wire(client)) == 1
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.parametrize("failure", ["revoked", "revoked-after-lock", "wrong-run",
+    "unbound-run", "wrong-hash", "untyped", "no-active-turn", "malformed-success",
+    "malformed-items"])
+async def test_unbound_or_revoked_image_never_crosses_the_stdio_boundary(
+    tmp_path, tool_peer, failure,
+):
+    from dataclasses import replace
+
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
+    revoked = False
+    releases = []
+
+    def guard(method):
+        if revoked:
+            raise RuntimeError("SYNTHETIC PRIVATE REVOCATION DETAIL")
+
+    client.before_io = guard
+
+    async def callback(name, arguments):
+        nonlocal revoked
+        result = approved_media_result(0)
+        if failure == "revoked":
+            revoked = True
+            client.before_io = lambda method: None  # Captured guard remains authoritative.
+        elif failure == "revoked-after-lock":
+            await client._write_lock.acquire()
+
+            async def revoke_while_waiting():
+                nonlocal revoked
+                await asyncio.sleep(0.01)
+                revoked = True
+                client.before_io = lambda method: None
+                client._write_lock.release()
+
+            releases.append(asyncio.create_task(revoke_while_waiting()))
+        elif failure == "wrong-run":
+            result["_jarvis_approved_image"] = replace(result["_jarvis_approved_image"],
+                                                       run_id="b" * 32)
+        elif failure == "wrong-hash":
+            result["_jarvis_approved_image"] = replace(result["_jarvis_approved_image"],
+                                                       image_sha256="f" * 64)
+        elif failure == "no-active-turn":
+            client._active_turn_ids.pop("synthetic-thread-1", None)
+        elif failure == "untyped":
+            result["_jarvis_approved_image"] = {"image_url": "external JSON is not a host carrier"}
+        elif failure == "malformed-success":
+            result["success"] = "true"
+        elif failure == "malformed-items":
+            result["contentItems"] = None
+        return result
+
+    try:
+        with pytest.raises(CodexError, match=r"^media_delivery_unconfirmed$"):
+            await client.chat("one", tool_specs=[TOOL], on_tool_call=callback,
+                              host_run_id=None if failure == "unbound-run" else "a" * 32)
+        assert not any(row.get("method") == "turn/steer" for row in wire(client))
+        assert not tool_replies(client)
+    finally:
+        await asyncio.gather(*releases, return_exceptions=True)
+        client.before_io = None
+        await client.aclose()
+
+
+async def test_same_approved_operation_cannot_send_a_second_image(tmp_path, tool_peer):
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
+
+    async def callback(name, arguments):
+        return approved_media_result(0)
+
+    try:
+        with pytest.raises(CodexError, match=r"^media_delivery_unconfirmed$"):
+            await client.chat("delivery-approved-replay", tool_specs=[TOOL],
+                              on_tool_call=callback, host_run_id="a" * 32)
+        rows = wire(client)
+        assert sum(row.get("method") == "turn/steer" for row in rows) == 1
+        assert len(tool_replies(client)) == 1
+    finally:
+        await client.aclose()
+
+
+async def test_two_multimodal_replies_preserve_later_text_replies_and_exact_ack_hashes(
+    tmp_path, tool_peer,
+):
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
+    outputs = ["IMAGE JARVIS42", "VIDEO JARVIS42", "DOCUMENT OFFICE6421", "CSV7319"]
+    replies, events = [], []
+
+    async def callback(name, arguments):
+        index = len(replies)
+        items = [{"type": "inputText", "text": outputs[index]}]
+        if index < 2:
+            items.append({"type": "inputImage", "imageUrl":
+                          ["data:image/jpeg;base64,U1lOVEhFVElDX0lNQUdF",
+                           "data:image/jpeg;base64,U1lOVEhFVElDX1ZJREVP"][index]})
+        result = {"success": True, "contentItems": items}
+        replies.append(result)
+        return result
+
+    try:
+        answer = await client.chat("delivery-mixed-media", tool_specs=[TOOL],
+                                   on_tool_call=callback, on_event=lambda *row: events.append(row))
+        assert json.loads(answer["answer"]) == {"texts": outputs, "images": 2}
+        assert [row["result"] for row in tool_replies(client)] == replies
+        sent = [payload for kind, payload in events if kind == "tool.reply.sent"]
+        acks = [payload for kind, payload in events if kind == "tool.reply.ack"]
+        assert len(sent) == len(acks) == 4
+        assert len({row["call_id_sha256"] for row in acks}) == 4
+        assert [row["image_items_count"] for row in sent] == [1, 1, 0, 0]
+        for original, ack in zip(sent, acks, strict=True):
+            assert ack["ack_state"] == "matched" and ack["original_reply_delivered"]
+            assert original["content_items_sha256"] == ack["observed_content_items_sha256"]
+        assert not client._tool_turns and not client._server_requests
+    finally:
+        await client.aclose()
 
 
 async def test_dynamic_tool_round_trip_has_official_shapes_and_one_real_fixture_effect(

@@ -169,8 +169,12 @@ public struct LocalVoiceCaptureReceipt: Equatable, Sendable {
     public let captureID: UUID?
     public let outcome: Outcome
     public let issue: LocalVoiceIssue?
-    public init(contextID: String, captureID: UUID? = nil, outcome: Outcome, issue: LocalVoiceIssue? = nil) {
+    public let captureMode: LocalVoiceCaptureMode
+    public let wakeMatched: Bool
+    public init(contextID: String, captureID: UUID? = nil, outcome: Outcome, issue: LocalVoiceIssue? = nil,
+                captureMode: LocalVoiceCaptureMode = .dictation, wakeMatched: Bool = false) {
         self.contextID = contextID; self.captureID = captureID; self.outcome = outcome; self.issue = issue
+        self.captureMode = captureMode; self.wakeMatched = wakeMatched
     }
 }
 
@@ -180,10 +184,14 @@ public struct LocalVoiceTranscript: Equatable, Sendable {
     public let text: String
     public let completion: Completion
     public let captureID: UUID?
+    public let captureMode: LocalVoiceCaptureMode
+    public let wakeMatched: Bool
     public let source = "on_device_speech"
     public let requiresReview = true
-    public init(contextID: String, text: String, completion: Completion, captureID: UUID? = nil) {
+    public init(contextID: String, text: String, completion: Completion, captureID: UUID? = nil,
+                captureMode: LocalVoiceCaptureMode = .dictation, wakeMatched: Bool = false) {
         self.contextID = contextID; self.text = text; self.completion = completion; self.captureID = captureID
+        self.captureMode = captureMode; self.wakeMatched = wakeMatched
     }
 }
 
@@ -241,6 +249,9 @@ public struct LocalVoiceTranscript: Equatable, Sendable {
     public private(set) var wakePhraseDetected = false
     public private(set) var activeCaptureSeconds: TimeInterval = 30
     public private(set) var captureIdentifier: UUID?
+    /// The last settled capture has metadata only, retained in RAM. Ambient
+    /// hypotheses and transcripts are never added to this diagnostic receipt.
+    public private(set) var lastCaptureReceipt: LocalVoiceCaptureReceipt?
     public private(set) var playbackIdentifier: UUID?
     @ObservationIgnored public var onTranscript: (@MainActor (LocalVoiceTranscript) -> Void)?
     @ObservationIgnored public var onPlaybackCompletion: (@MainActor (LocalVoicePlaybackReceipt) -> Void)?
@@ -320,6 +331,7 @@ public struct LocalVoiceTranscript: Equatable, Sendable {
         driver.stopPlayback()
         issue = nil; partialText = ""; activeVoiceName = nil
         activeCaptureMode = mode; selectedWakePhrase = wakePhrase; wakePhraseDetected = false
+        lastCaptureReceipt = nil
         self.endpointAfterSilence = endpointAfterSilence
         captureIdentifier = captureID; playbackIdentifier = nil
         activeCaptureSeconds = captureSeconds * mode.durationMultiplier
@@ -427,12 +439,15 @@ public struct LocalVoiceTranscript: Equatable, Sendable {
         let playbackContext = phase == .speaking ? contextID : nil
         let captureContext = canStopDictation ? contextID : nil
         let oldPlayback = playbackIdentifier, oldCapture = captureIdentifier
+        let mode = activeCaptureMode ?? .dictation, matched = wakePhraseDetected
         reset()
         if let contextID = playbackContext {
             onPlaybackCompletion?(.init(contextID: contextID, playbackID: oldPlayback, event: .cancelled, issue: nil))
         }
         if let contextID = captureContext {
-            onCaptureCompletion?(.init(contextID: contextID, captureID: oldCapture, outcome: .cancelled, issue: nil))
+            let receipt = LocalVoiceCaptureReceipt(contextID: contextID, captureID: oldCapture, outcome: .cancelled,
+                captureMode: mode, wakeMatched: matched)
+            lastCaptureReceipt = receipt; onCaptureCompletion?(receipt)
         }
     }
 
@@ -501,16 +516,26 @@ public struct LocalVoiceTranscript: Equatable, Sendable {
         guard selectedWakePhrase == nil || wakePhraseDetected else { fail(.wakePhraseNotHeard); return }
         let text = partialText.trimmingCharacters(in: .whitespacesAndNewlines)
         let identity = captureIdentifier
-        let result = LocalVoiceTranscript(contextID: contextID, text: text, completion: completion, captureID: identity)
+        let mode = activeCaptureMode ?? .dictation, matched = wakePhraseDetected
+        let result = LocalVoiceTranscript(contextID: contextID, text: text, completion: completion, captureID: identity,
+            captureMode: mode, wakeMatched: matched)
+        let receipt = LocalVoiceCaptureReceipt(contextID: contextID, captureID: identity,
+            outcome: text.isEmpty ? .empty : .transcript, captureMode: mode, wakeMatched: matched)
         reset()
+        lastCaptureReceipt = receipt
         if !text.isEmpty { onTranscript?(result) }
-        onCaptureCompletion?(.init(contextID: contextID, captureID: identity, outcome: text.isEmpty ? .empty : .transcript, issue: nil))
+        onCaptureCompletion?(receipt)
     }
 
     private func fail(_ issue: LocalVoiceIssue) {
         let captureContext = canStopDictation ? contextID : nil
         let identity = captureIdentifier
+        let mode = activeCaptureMode ?? .dictation, matched = wakePhraseDetected
         reset(); self.issue = issue
-        if let contextID = captureContext { onCaptureCompletion?(.init(contextID: contextID, captureID: identity, outcome: .failed, issue: issue)) }
+        if let contextID = captureContext {
+            let receipt = LocalVoiceCaptureReceipt(contextID: contextID, captureID: identity, outcome: .failed,
+                issue: issue, captureMode: mode, wakeMatched: matched)
+            lastCaptureReceipt = receipt; onCaptureCompletion?(receipt)
+        }
     }
 }

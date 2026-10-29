@@ -8,11 +8,14 @@ Cleanup owns the Codex task and every pending response until they settle.
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
 import inspect
 import json
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass, field
 
+from jarvis_core.codex import ApprovedToolImage
 from jarvis_core.runtime import FinalAnswer, RunContext, ToolProposal
 
 
@@ -51,6 +54,8 @@ class CodexBridge:
             params = self.prepare(context)
             if inspect.isawaitable(params):
                 params = await params
+            if getattr(self.provider, "supports_approved_media_handoff", False):
+                params = {**params, "host_run_id": context.run_id}
             proposals: asyncio.Queue = asyncio.Queue(maxsize=16)
             futures: set[asyncio.Future] = set()
 
@@ -115,16 +120,24 @@ class CodexBridge:
                             + receipt.output,
                         }
                     )
+                image_binding = None
                 if self.take_tool_image is not None:
                     image = self.take_tool_image(receipt)
                     if image is not None:
                         items.append({"type": "inputImage", "imageUrl": image})
-                turn.waiting.set_result(
-                    {
-                        "success": receipt.succeeded,
-                        "contentItems": items,
-                    }
-                )
+                        if getattr(self.provider, "supports_approved_media_handoff", False):
+                            pixels = base64.b64decode(image.split(",", 1)[1], validate=True)
+                            receipt_digest = hashlib.sha256(json.dumps(
+                                payload, sort_keys=True, ensure_ascii=False,
+                                allow_nan=False, separators=(",", ":")).encode()).hexdigest()
+                            image_binding = ApprovedToolImage(
+                                context.run_id, receipt.operation_id, receipt.tool_name,
+                                receipt_digest,
+                                hashlib.sha256(pixels).hexdigest(), image)
+                result = {"success": receipt.succeeded, "contentItems": items}
+                if image_binding is not None:
+                    result["_jarvis_approved_image"] = image_binding
+                turn.waiting.set_result(result)
             turn.receipt_count += 1
             turn.waiting = None
         proposed = asyncio.create_task(turn.proposals.get())

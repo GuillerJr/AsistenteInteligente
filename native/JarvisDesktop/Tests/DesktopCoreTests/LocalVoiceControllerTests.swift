@@ -573,6 +573,37 @@ final class LocalVoiceControllerTests: XCTestCase {
         XCTAssertEqual(f.controller.phase, .idle)
     }
 
+    @MainActor func testSelectedWakeModeAndSettledMetadataFollowEffectiveCaptureRatherThanLaterPreferences() {
+        let f = Fixture()
+        f.controller.preferences.mode = .wakePhrase; f.controller.preferences.wakePhrase = "Jarvis"
+        f.controller.startSelectedDictation(contextID: "synthetic-wake"); f.driver.authorize()
+        let identity = f.controller.captureIdentifier
+        XCTAssertEqual(f.controller.activeCaptureMode, .wakePhrase); XCTAssertNil(f.controller.lastCaptureReceipt)
+        f.controller.preferences.mode = .dictation
+        f.driver.recognitionReceivers[0](.partial("Esto se descarta, Jarvis el marcador es 42"))
+        XCTAssertEqual(f.controller.partialText, "el marcador es 42")
+        f.driver.recognitionReceivers[0](.final("Esto se descarta, Jarvis el marcador es 42"))
+        XCTAssertEqual(f.sink.values.first?.text, "el marcador es 42")
+        XCTAssertEqual(f.sink.values.first?.captureMode, .wakePhrase); XCTAssertEqual(f.sink.values.first?.wakeMatched, true)
+        XCTAssertEqual(f.controller.lastCaptureReceipt?.captureID, identity)
+        XCTAssertEqual(f.controller.lastCaptureReceipt?.captureMode, .wakePhrase)
+        XCTAssertEqual(f.controller.lastCaptureReceipt?.wakeMatched, true)
+        XCTAssertNil(f.controller.activeCaptureMode)
+    }
+
+    @MainActor func testCancellingWakeCaptureKeepsPreferencesAndOnlySettlesMetadataWithoutAmbientText() {
+        let f = Fixture(); f.controller.preferences.mode = .wakePhrase; f.controller.preferences.wakePhrase = "Jarvis"
+        let preferences = f.controller.preferences
+        f.controller.startSelectedDictation(contextID: "synthetic-wake"); f.driver.authorize()
+        let identity = f.controller.captureIdentifier
+        f.driver.recognitionReceivers[0](.partial("Esto se descarta sin activación"))
+        f.controller.cancel()
+        XCTAssertEqual(f.controller.preferences, preferences); XCTAssertTrue(f.sink.values.isEmpty)
+        XCTAssertEqual(f.controller.lastCaptureReceipt, .init(contextID: "synthetic-wake", captureID: identity,
+            outcome: .cancelled, captureMode: .wakePhrase, wakeMatched: false))
+        XCTAssertTrue(f.controller.partialText.isEmpty)
+    }
+
     @MainActor func testWakePhraseWholeWordAndWithdrawnHypothesisCannotPublishAnUntriggeredDraft() {
         let f = Fixture()
         f.controller.startDictation(contextID: "one", mode: .wakePhrase, wakePhrase: "Jarvis"); f.driver.authorize()

@@ -21,6 +21,8 @@ public enum RunPresentation {
             return "Se interrumpió la conexión con Codex. La consulta no se repetirá automáticamente."
         case "codex_cleanup_incomplete":
             return "El cliente oficial no confirmó su cierre. No se enviarán mensajes nuevos hasta que termine la limpieza."
+        case "media_delivery_unconfirmed":
+            return "No se confirmó la entrega de la imagen al turno de Codex. La ejecución se detuvo; los recibos de herramientas se conservan y la imagen no se reenviará automáticamente."
         case "codex_turn_failed", "turn_failed": return "Codex no pudo completar esta consulta."
         default: return "La ejecución no pudo completarse. Consulta su estado antes de volver a enviar."
         }

@@ -71,6 +71,29 @@
         "elapsed_seconds": 310.97
       },
       "macos_package_build_smoke": "passed"
+    },
+    {
+      "commit": "f356e40c0e58332db4c62984bb3ac4c14bfb3c3a",
+      "short_commit": "f356e40",
+      "run_id": 40899643599,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40899643599",
+      "status": "passed",
+      "ubuntu_python": {
+        "passed": 3411,
+        "skipped": 46,
+        "elapsed_seconds": 299.14
+      },
+      "macos_python": {
+        "passed": 3457,
+        "elapsed_seconds": 326.59
+      },
+      "macos_swift": {
+        "executed": 571,
+        "skipped": 1,
+        "failures": 0,
+        "elapsed_seconds": 229.25
+      },
+      "bundle_packages_smoke": "passed"
     }
   ],
   "native_cases": [
@@ -144,6 +167,37 @@
       "marker42_recovered": true,
       "original_hash_shown_with_citation": true,
       "audio_transmitted_to_model": false
+    },
+    {
+      "case": "mixed_visual_office_csv_real_codex",
+      "status": "failed_model_grounding_despite_matching_transport_ack",
+      "run_id": "933b1a70063346c3937d364574991082",
+      "verified_actions": 4,
+      "matching_sdk_acknowledgements": 4,
+      "raw_media_absent_from_SQL": true,
+      "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-corpus-oracle-initial-v2.json"
+    },
+    {
+      "case": "isolated_image_new_session",
+      "status": "failed_model_grounding",
+      "technical_OCR_frame_receipt_verified": true
+    },
+    {
+      "case": "office_csv_control_without_images",
+      "status": "passed",
+      "document_marker": "JARVIS OFFICE 6421",
+      "table_markers": [
+        42,
+        7319
+      ],
+      "citations": "logical page1 and rows2/3"
+    },
+    {
+      "case": "wake_phrase_real_microphone",
+      "status": "failed_expected_prefix_filtering",
+      "actual_draft": "BORRADOR ACTIVACIÓN\nEsto se descarta Jarvis de marcadores42",
+      "effective_capture_mode_not_recorded_in_previous_bundle": true,
+      "followup": "metadata-only effective-mode receipt plus controlled repetition required"
     }
   ],
   "manual_budget": {
@@ -154,9 +208,10 @@
     "only_synthetic_content": true
   },
   "remaining_in_selected_increment": [
-    "exact commit CI",
-    "native integrated corpus with real Codex",
-    "live Telegram account verification",
-    "local Speech TCC/acoustic qualification"
+    "CI and real image grounding after approved CAS-bound visual handoff",
+    "wake effective-mode controlled repetition and Talk live",
+    "bounded group discovery before configuring group without prior ID",
+    "live Telegram private/group account and attachments",
+    "final context/cleanup/resource receipts"
   ]
 }
