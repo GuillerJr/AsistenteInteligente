@@ -393,7 +393,10 @@ async def test_attachment_reply_uses_central_approval_and_exact_incoming_destina
     assert not service._telegram_run_context
 
 
-async def test_denied_attachment_reply_never_uploads(telegram_service):
+@pytest.mark.parametrize("prior_metadata_read", [False, True])
+async def test_denied_attachment_reply_never_uploads_and_accepts_new_message(
+    telegram_service, prior_metadata_read
+):
     service, client, peer, bot, _root = telegram_service
     route = await ready(client)
     manifest = output_fixture(service, route)
@@ -403,6 +406,8 @@ async def test_denied_attachment_reply_never_uploads(telegram_service):
             {"attachment_id": manifest.attachment_id, "sha256": manifest.sha256},
         )
     ]
+    if prior_metadata_read:
+        peer.plans["archivo denegado"].insert(0, ("media_list", {}))
     await bot.updates.put([fresh_update(text="archivo denegado")])
     card = await approval(client, route)
     await client.call(
@@ -415,8 +420,23 @@ async def test_denied_attachment_reply_never_uploads(telegram_service):
         },
     )
     final = await event(client)
-    assert final["status"] == "failed" and not bot.uploads and not bot.sent()
+    assert final["status"] == "failed" and final["outcome"] == "known"
+    assert final["error_code"] == "approval_denied" and not bot.uploads and not bot.sent()
+    receipt = (await client.call("runs.get", {
+        "session_id": route["session_id"], "run_id": final["run_id"],
+    }))["run"]
+    assert receipt["error"] == "approval_denied" and receipt["outcome"] == "known"
+    assert [item["tool_name"] for item in receipt["action_receipts"]] == (
+        ["media_list"] if prior_metadata_read else []
+    )
+    assert all(item["effect_status"] == "known" for item in receipt["action_receipts"])
     assert not service._handles and not service.authority.list_pending()
+    assert (await client.call("telegram.status"))["running"]
+    await bot.updates.put([fresh_update(2, text="mensaje nuevo tras rechazar")])
+    following = await event(client, 2)
+    assert following["status"] == "completed" and following["outcome"] == "known"
+    assert len(bot.sent()) == 1 and not bot.uploads and len(peer.calls) == 2
+    assert (await event(client))["run_id"] == final["run_id"]
 
 
 async def test_old_remembered_attachment_rule_cannot_authorize_new_destination_run(

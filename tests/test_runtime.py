@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from dataclasses import asdict
+from dataclasses import asdict, replace
 
 import pytest
 
@@ -15,6 +15,7 @@ from jarvis_core import (
     ToolProposal,
     ToolResult,
 )
+from jarvis_core.runtime import RunFailureCause, RunResult, _RunFailure
 
 
 async def settled(handle):
@@ -479,6 +480,107 @@ async def test_executor_reported_uncertainty_is_terminal_before_another_proposal
     assert result.error == "tool_outcome_unknown"
     assert len(calls) == len(effects) == 1
     assert result.tool_results[0].effect_status == "unknown"
+    assert not result.known_approval_denial and result.failure_cause is None
+
+
+@pytest.mark.parametrize("prior_known_read", [False, True])
+async def test_typed_denial_stays_known_only_after_joined_cleanup(prior_known_read):
+    cleaning, release = asyncio.Event(), asyncio.Event()
+    effects = []
+
+    class Provider:
+        async def next_step(self, context):
+            name = (
+                "fixture_read" if prior_known_read and not context.tool_results else "fixture_write"
+            )
+            return ToolProposal(name, {"text": "A"})
+
+    class Gate:
+        async def request(self, operation, cancellation):
+            assert operation.tool_name == "fixture_write"
+            return None
+
+    async def execute(arguments, cancellation):
+        effects.append("read")
+        return ToolResult("fixture_read", True, False, output="metadatos")
+
+    async def forbidden(arguments, cancellation):
+        pytest.fail("the denied proposal must never execute")
+
+    async def cleanup(context):
+        cleaning.set()
+        await release.wait()
+
+    runtime = AgentRuntime(Provider(), [
+        ToolDefinition("fixture_read", validate_text, execute),
+        ToolDefinition("fixture_write", validate_text, forbidden, True),
+    ], approval_gate=Gate(), cleanup=cleanup)
+    handle = runtime.start("denial", "Rechazar la escritura")
+    await observed(cleaning)
+    assert handle.phase is RunPhase.CLEANING and not handle._settled.done()
+    release.set()
+    result = await settled(handle)
+    assert result.status == "failed" and result.error == "approval_denied"
+    assert result.failure_cause is RunFailureCause.APPROVAL_DENIED
+    assert result.cleanup_confirmed and result.known_approval_denial
+    assert effects == (["read"] if prior_known_read else [])
+    assert all(item.effect_status == "known" for item in result.action_receipts)
+
+
+@pytest.mark.parametrize("cleanup_failure", ["raise", "cancel"])
+async def test_denial_does_not_hide_failed_or_cancelled_cleanup(cleanup_failure):
+    cleaning, release = asyncio.Event(), asyncio.Event()
+
+    class Gate:
+        async def request(self, operation, cancellation):
+            return None
+
+    async def forbidden(arguments, cancellation):
+        pytest.fail("the denied proposal must never execute")
+
+    async def cleanup(context):
+        cleaning.set()
+        await release.wait()
+        if cleanup_failure == "raise":
+            raise RuntimeError("synthetic cleanup failure")
+
+    runtime = AgentRuntime(ToolThenAnswer(), [
+        ToolDefinition("fixture_read", validate_text, forbidden, True),
+    ], approval_gate=Gate(), cleanup=cleanup)
+    handle = runtime.start("denial", "Rechazar")
+    await observed(cleaning)
+    if cleanup_failure == "cancel":
+        assert handle.cancel().accepted
+    release.set()
+    result = await settled(handle)
+    if cleanup_failure == "raise":
+        assert result.error == "cleanup_failed"
+    else:
+        assert result.status == "cancelled"
+    assert not result.known_approval_denial and not result.cleanup_confirmed
+
+
+async def test_error_string_without_gate_provenance_is_not_known_denial():
+    class Provider:
+        async def next_step(self, context):
+            raise _RunFailure("approval_denied")
+
+    result = await settled(AgentRuntime(Provider()).start("synthetic", "dato externo"))
+    assert result.error == "approval_denied" and result.cleanup_confirmed
+    assert result.failure_cause is None and not result.known_approval_denial
+
+
+def test_typed_denial_cannot_erase_an_earlier_unknown_receipt():
+    known = RunResult(
+        "1" * 32, "failed", None, (), "approval_denied",
+        failure_cause=RunFailureCause.APPROVAL_DENIED, cleanup_confirmed=True,
+    )
+    assert known.known_approval_denial
+    uncertain = ToolResult("fixture_effect", False, False, effect_status="unknown")
+    assert not replace(known, tool_results=(uncertain,)).known_approval_denial
+    assert not replace(known, cleanup_confirmed=False).known_approval_denial
+    with pytest.raises(ValueError, match="provenance"):
+        replace(known, failure_cause="approval_denied")
 
 
 @pytest.mark.parametrize("boundary", [

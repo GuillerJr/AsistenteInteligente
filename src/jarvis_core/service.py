@@ -1452,6 +1452,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         result = await handle.await_settled()
         error = result.error
         try:
+            error_overridden = handle.run_id in self._errors
             error = self._errors.pop(handle.run_id, result.error)
             receipt = {
                 "answer": result.answer,
@@ -1460,10 +1461,9 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 "error_type": result.error_type,
                 "action_receipts": [self._receipt(item) for item in result.action_receipts],
             }
-            known_host_denial = (
-                self.host_tools.get(result.run_id) is not None
-                and result.status == "failed" and error == "approval_denied"
-                and not result.action_receipts
+            known_denial = (
+                not error_overridden and result.known_approval_denial
+                and error == result.error
             )
             self.store.finish_run(
                 ref,
@@ -1472,7 +1472,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 receipt=receipt,
                 assistant_text=result.answer,
                 clear_provider_thread=result.status != "completed",
-                outcome="known" if result.status == "completed" or known_host_denial else "unknown",
+                outcome="known" if result.status == "completed" or known_denial else "unknown",
             )
             if handle.run_id not in self._automation_origins and not ref.temporary:
                 try:

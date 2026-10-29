@@ -161,6 +161,12 @@ class CancelReceipt:
     accepted: bool
 
 
+class RunFailureCause(StrEnum):
+    """Runtime provenance; never inferred from model text or an error string."""
+
+    APPROVAL_DENIED = "approval_denied"
+
+
 @dataclass(frozen=True)
 class RunResult:
     """Completion labels the model turn; action evidence remains in separate receipts."""
@@ -172,13 +178,33 @@ class RunResult:
     error: str | None = None
     answer_source: Literal["model", "host"] | None = None
     error_type: str | None = None
+    failure_cause: RunFailureCause | None = None
+    cleanup_confirmed: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "error_type", _safe_error_type(self.error_type))
+        if self.failure_cause is not None and type(self.failure_cause) is not RunFailureCause:
+            raise ValueError("invalid runtime failure provenance")
+        if type(self.cleanup_confirmed) is not bool:
+            raise ValueError("invalid cleanup confirmation")
 
     @property
     def action_receipts(self) -> tuple[ToolResult, ...]:
         return self.tool_results
+
+    @property
+    def known_approval_denial(self) -> bool:
+        """The denied proposal never dispatched; earlier receipts remain known.
+
+        This does not identify the approver or turn known external reports into
+        independently verified effects. Any earlier uncertainty is preserved.
+        """
+        return (
+            self.status == "failed" and self.error == "approval_denied"
+            and self.failure_cause is RunFailureCause.APPROVAL_DENIED
+            and self.cleanup_confirmed
+            and all(item.effect_status == "known" for item in self.action_receipts)
+        )
 
 
 class RunHandle:
@@ -224,10 +250,19 @@ class RunHandle:
 
 
 class _RunFailure(Exception):
+    cause: RunFailureCause | None = None
+
     def __init__(self, code: str, *, error_type: str | None = None) -> None:
         super().__init__(code)
         self.code = code
         self.error_type = _safe_error_type(error_type)
+
+
+class _ApprovalDenied(_RunFailure):
+    cause = RunFailureCause.APPROVAL_DENIED
+
+    def __init__(self) -> None:
+        super().__init__("approval_denied")
 
 
 def _arguments_json(value: Mapping[str, Any]) -> str:
@@ -379,7 +414,9 @@ class AgentRuntime:
                         else type(error).__name__
                     )
                     outcome = RunResult(
-                        context.run_id, "failed", None, tuple(results), code, error_type=error_type
+                        context.run_id, "failed", None, tuple(results), code,
+                        error_type=error_type,
+                        failure_cause=error.cause if isinstance(error, _RunFailure) else None,
                     )
                 finally:
                     handle._phase = RunPhase.CLEANING
@@ -395,6 +432,8 @@ class AgentRuntime:
                             cancellation_type = await self._finish_cleanup(final_context)
                             if cancellation_type and outcome.error_type is None:
                                 outcome = replace(outcome, error_type=cancellation_type)
+                            if cancellation_type is None:
+                                outcome = replace(outcome, cleanup_confirmed=True)
                         except BaseException as error:
                             self._failed_cleanup_sessions.add(context.session_id)
                             outcome = RunResult(
@@ -405,6 +444,8 @@ class AgentRuntime:
                                 "cleanup_failed",
                                 error_type=type(error).__name__,
                             )
+                    else:
+                        outcome = replace(outcome, cleanup_confirmed=True)
                     if handle._cancellation.is_set() and outcome.error != "cleanup_failed":
                         outcome = RunResult(
                             context.run_id,
@@ -520,7 +561,7 @@ class AgentRuntime:
             handle._phase = RunPhase.RUNNING
             self._check_cancelled(handle)
             if not isinstance(grant, ApprovalGrant) or grant.digest != digest:
-                raise _RunFailure("approval_denied")
+                raise _ApprovalDenied()
         self._check_cancelled(handle)
         try:
             tool.validate(arguments)
