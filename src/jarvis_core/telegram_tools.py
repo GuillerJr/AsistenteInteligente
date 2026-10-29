@@ -36,7 +36,7 @@ class TelegramReplyTools:
     def validate(arguments):
         if (
             not isinstance(arguments, Mapping)
-            or set(arguments) - {"attachment_id", "sha256", "caption"}
+            or set(arguments) - {"attachment_id", "sha256", "caption", "delivery"}
             or {"attachment_id", "sha256"} - set(arguments)
             or not isinstance(arguments["attachment_id"], str)
             or not re.fullmatch(r"[a-f0-9]{32}", arguments["attachment_id"])
@@ -44,6 +44,11 @@ class TelegramReplyTools:
             or not re.fullmatch(r"[a-f0-9]{64}", arguments["sha256"])
         ):
             raise ToolError("telegram_attachment_arguments_invalid")
+        if (
+            not isinstance(arguments.get("delivery", "document"), str)
+            or arguments.get("delivery", "document") not in {"document", "voice"}
+        ):
+            raise ToolError("telegram_attachment_delivery_invalid")
         caption = arguments.get("caption", "")
         try:
             if (
@@ -63,16 +68,19 @@ class TelegramReplyTools:
         return (
             ToolSpec(
                 NAME,
-                "Envía un adjunto de esta conversación como archivo al mensaje de Telegram "
+                "Envía un adjunto de esta conversación al mensaje de Telegram "
                 "que originó la ejecución. No elige otro destino. Requiere aprobación nueva "
                 "del dueño y el SHA-256 exacto; hasta 5 MiB. El recibo de Telegram es externo, "
-                "sin verificación independiente.",
+                "sin verificación independiente. delivery=document envía un archivo y es "
+                "el modo predeterminado; delivery=voice envía sólo Ogg OPUS como nota de voz, "
+                "hasta 120 segundos, sin grabar ni modificar el audio.",
                 {
                     "type": "object",
                     "properties": {
                         "attachment_id": {"type": "string", "pattern": "^[a-f0-9]{32}$"},
                         "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
                         "caption": {"type": "string", "maxLength": 1024},
+                        "delivery": {"type": "string", "enum": ["document", "voice"]},
                     },
                     "required": ["attachment_id", "sha256"],
                     "additionalProperties": False,
@@ -110,6 +118,9 @@ class TelegramReplyTools:
             payload, manifest = source.payload, source.manifest
             if not 1 <= len(payload) <= MAX_ATTACHMENT_BYTES:
                 return ToolResult(NAME, False, False, error="telegram_attachment_limit")
+            delivery = arguments.get("delivery", "document")
+            if delivery == "voice" and (manifest.kind != "audio" or manifest.mime != "audio/ogg"):
+                return ToolResult(NAME, False, False, error="telegram_voice_format_invalid")
 
             def before_dispatch():
                 nonlocal dispatched
@@ -129,13 +140,18 @@ class TelegramReplyTools:
                 check_tool_authority(NAME, arguments, commit=True)
                 dispatched = True
 
-            sent = await channel.client.send_document(
+            send = (
+                channel.client.send_voice if delivery == "voice" else channel.client.send_document
+            )
+            preparation = {"preparation_guard": guard} if delivery == "voice" else {}
+            sent = await send(
                 incoming,
                 payload,
                 manifest.name,
                 manifest.mime,
                 arguments.get("caption", ""),
                 before_dispatch=before_dispatch,
+                **preparation,
             )
             value = {
                 "delivery": "telegram_api_ack",
@@ -145,6 +161,7 @@ class TelegramReplyTools:
                 "attachment_id": manifest.attachment_id,
                 "sha256": manifest.sha256,
                 "byte_length": manifest.byte_length,
+                "delivery_mode": delivery,
             }
             return ToolResult(NAME, True, False, output=json.dumps(value, sort_keys=True))
         except asyncio.CancelledError as error:

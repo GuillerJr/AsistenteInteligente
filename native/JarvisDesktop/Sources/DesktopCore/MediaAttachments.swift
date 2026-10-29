@@ -11,11 +11,20 @@ public struct MediaAttachment: Identifiable, Equatable, Sendable {
     public let kind: String
     public let bytes: Int
     public let sha256: String
+    public let source: String
     public let revoked: Bool
+    /// Catalog metadata does not grant permission to inspect or send content.
+    /// Legacy manifests preserve unknown order and provenance as nil.
+    public let importedAtUnixMilliseconds: Int?
+    public let catalogSequence: Int?
+    public let ingressRunID: String?
+    public let sourceKind: String?
     public init(_ value: RPCValue) throws {
+        let legacyKeys: Set<String> = ["format", "attachment_id", "session_id", "workspace_id", "temporary", "name", "mime", "kind", "byte_length", "sha256", "source", "revoked"]
+        let catalogKeys: Set<String> = ["imported_at_unix_ms", "catalog_sequence", "ingress_run_id", "source_kind"]
         guard let row = value.object,
-              Set(row.keys) == ["format", "attachment_id", "session_id", "workspace_id", "temporary", "name", "mime", "kind", "byte_length", "sha256", "source", "revoked"],
-              value["format"] == .string("jarvis-attachment/1"),
+              (value["format"] == .string("jarvis-attachment/1") && Set(row.keys) == legacyKeys)
+                || (value["format"] == .string("jarvis-attachment/2") && Set(row.keys) == legacyKeys.union(catalogKeys)),
               let id = value["attachment_id"].string, ManagementValidation.identifier(id),
               let session = value["session_id"].string, ManagementValidation.identifier(session),
               let temporary = value["temporary"].bool,
@@ -29,7 +38,31 @@ public struct MediaAttachment: Identifiable, Equatable, Sendable {
               let revoked = value["revoked"].bool else { throw RPCFailure.invalidResponse }
         self.id = id; scope = SessionScope(sessionID: session, temporary: temporary)
         workspaceID = workspace; self.name = name; self.mime = mime; self.kind = kind
-        self.bytes = bytes; sha256 = sha; self.revoked = revoked
+        self.bytes = bytes; sha256 = sha; self.source = source; self.revoked = revoked
+        if value["format"] == .string("jarvis-attachment/2") {
+            guard let imported = value["imported_at_unix_ms"].integer, imported > 0,
+                  let sequence = value["catalog_sequence"].integer, sequence > 0,
+                  value["ingress_run_id"] == .null || value["ingress_run_id"].string.map({ ManagementValidation.identifier($0) }) == true,
+                  value["source_kind"] == .null || value["source_kind"].string.map({ ["photo", "document", "audio", "voice", "video", "animation"].contains($0) }) == true else { throw RPCFailure.invalidResponse }
+            importedAtUnixMilliseconds = imported; catalogSequence = sequence
+            ingressRunID = value["ingress_run_id"].string; sourceKind = value["source_kind"].string
+        } else {
+            importedAtUnixMilliseconds = nil; catalogSequence = nil
+            ingressRunID = nil; sourceKind = nil
+        }
+    }
+    /// Arrival sequence is scoped to one conversation. Timestamps and UUIDs do
+    /// not establish chronology. Legacy rows follow with a stable ID order.
+    /// The store rejects duplicate sequences; the ID tie break is defensive.
+    public static func catalogOrder(_ rows: [Self]) -> [Self] {
+        rows.sorted { left, right in
+            switch (left.catalogSequence, right.catalogSequence) {
+            case let (a?, b?): a == b ? left.id < right.id : a > b
+            case (_?, nil): true
+            case (nil, _?): false
+            case (nil, nil): left.id < right.id
+            }
+        }
     }
     public var review: RPCValue { .object(["attachment_id": .string(id), "name": .string(name),
         "byte_length": .number(Double(bytes)), "sha256": .string(sha256), "mime": .string(mime)]) }
@@ -158,7 +191,9 @@ public struct MediaPreviewMetadata: Equatable, Sendable {
         do {
             let reply = try await request("media.list", scope.params)
             let rows = try ManagementValidation.rows(reply["attachments"], limit: 32, parse: MediaAttachment.init)
+            let sequences = rows.compactMap(\.catalogSequence)
             guard rows.allSatisfy({ $0.scope == scope }), Set(rows.map(\.id)).count == rows.count,
+                  Set(sequences).count == sequences.count,
                   reply["workspace_files_included_in_profile_backup"].bool == false,
                   reply["temporary_storage"] == .string("memory_only") else { throw RPCFailure.invalidResponse }
             guard epoch == generation, self.scope == scope, isActive() else { return }
@@ -166,7 +201,7 @@ public struct MediaPreviewMetadata: Equatable, Sendable {
                 rows.contains { row in row.id == id && !row.revoked && attachments.contains(row) }
             }
             if let preview, !rows.contains(where: { $0 == preview.attachment && !$0.revoked }) { self.preview = nil }
-            attachments = rows
+            attachments = MediaAttachment.catalogOrder(rows)
             errorMessage = nil
         } catch { if epoch == generation { errorMessage = error.localizedDescription } }
     }
@@ -219,9 +254,10 @@ public struct MediaPreviewMetadata: Equatable, Sendable {
             let result = try MediaAttachment(reply["attachment"])
             guard reply["status"] == .string("complete"), result.id == id,
                   result.sha256 == hash, result.bytes == data.count, result.name == name,
-                  !result.revoked, result.scope == scope else { throw RPCFailure.invalidResponse }
+                  !result.revoked, result.scope == scope, preservesCatalogSequence(result) else { throw RPCFailure.invalidResponse }
             guard current() else { return }
-            attachments.append(result); if selectedIDs.count < 8 { selectedIDs.append(result.id) }
+            attachments = MediaAttachment.catalogOrder(attachments + [result])
+            if selectedIDs.count < 8 { selectedIDs.append(result.id) }
             errorMessage = nil
         } catch {
             // No effect is resent after a lost reply. A status read can identify
@@ -230,8 +266,9 @@ public struct MediaPreviewMetadata: Equatable, Sendable {
             if current(), status?["status"] == .string("complete"),
                let value = status?["attachment"], let result = try? MediaAttachment(value),
                result.scope == scope, result.sha256 == hash, result.id == id,
-               result.bytes == data.count, result.name == name, !result.revoked {
-                attachments.removeAll { $0.id == id }; attachments.append(result)
+               result.bytes == data.count, result.name == name, !result.revoked, preservesCatalogSequence(result) {
+                attachments.removeAll { $0.id == id }
+                attachments = MediaAttachment.catalogOrder(attachments + [result])
                 if !selectedIDs.contains(id), selectedIDs.count < 8 { selectedIDs.append(id) }
                 errorMessage = nil
             } else {
@@ -239,6 +276,10 @@ public struct MediaPreviewMetadata: Equatable, Sendable {
                 if current() { errorMessage = "La importación no se confirmó. Actualiza los adjuntos antes de intentarlo de nuevo." }
             }
         }
+    }
+    private func preservesCatalogSequence(_ attachment: MediaAttachment) -> Bool {
+        guard let sequence = attachment.catalogSequence else { return true }
+        return !attachments.contains { $0.id != attachment.id && $0.catalogSequence == sequence }
     }
     public func openPreview(_ attachment: MediaAttachment) async {
         await own { await self.performPreview(attachment) }

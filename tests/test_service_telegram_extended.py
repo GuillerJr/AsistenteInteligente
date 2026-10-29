@@ -513,6 +513,11 @@ async def test_incoming_document_imports_locally_and_requires_separate_inspectio
     rows = (await client.call("media.list", {"session_id": route["session_id"]}))["attachments"]
     assert len(rows) == 1 and rows[0]["source"] == "telegram"
     attachment = rows[0]
+    assert attachment["format"] == "jarvis-attachment/2"
+    assert attachment["ingress_run_id"] == imported["run_id"]
+    assert attachment["source_kind"] == "document" and attachment["catalog_sequence"] == 1
+    assert 0 < attachment["imported_at_unix_ms"] < 2**53
+    assert "file_id" not in attachment and "chat_id" not in attachment
     assert payload.decode() not in json.dumps(peer.calls)
     assert attachment["sha256"] in peer.calls[0][1]["context_data"]
     assert "media_inspect" in peer.calls[0][1]["context_data"]

@@ -30,10 +30,41 @@ async def test_media_list_uses_active_session_without_an_approval_lease(media_se
     result = await settled(client, ref, run["run_id"])
     action = result["action_receipts"][0]
     assert result["status"] == "completed" and action["succeeded"] and action["verified"]
-    data = json.loads(action["output"])
+    # Durable receipts deliberately retain only a preview; the provider gets
+    # the complete text result, including chronology and the full manifest.
+    data = json.loads(json.loads(peer.replies[0]["contentItems"][0]["text"])["output"])
     assert [x["attachment_id"] for x in data["attachments"]] == [row["attachment_id"]]
     assert foreign["attachment_id"] not in action["output"]
+    assert data["catalog_order"] == "known_catalog_sequence_desc_then_legacy_id"
+    assert data["legacy_chronology"] == "unknown"
+    assert data["metadata_grants_authority"] is False
     assert not service.authority.list_pending()
+
+
+async def test_model_catalog_identifies_newest_identically_named_import_and_keeps_other_chat_out(
+    media_service,
+):
+    service, client, peer, _root = media_service
+    ref, other = await session(client), await session(client)
+    first = await imported(client, ref, b"PRIMERA NOTA 1642", name="nota.txt")
+    second = await imported(client, ref, b"SEGUNDA NOTA 2973", name="nota.txt")
+    foreign = await imported(client, other, b"OTRO CHAT 5384", name="nota.txt")
+    peer.plans["identifica ultima nota"] = [("media_list", {})]
+    run = await client.call("runs.start", {**ref, "message": "identifica ultima nota"})
+    result = await settled(client, ref, run["run_id"])
+    full = json.loads(peer.replies[-1]["contentItems"][0]["text"])["output"]
+    catalog = json.loads(full)
+    assert result["status"] == "completed" and result["outcome"] == "known"
+    assert [r["attachment_id"] for r in catalog["attachments"]] == [
+        second["attachment_id"], first["attachment_id"]
+    ]
+    assert [r["catalog_sequence"] for r in catalog["attachments"]] == [2, 1]
+    assert all(r["name"] == "nota.txt" for r in catalog["attachments"])
+    assert foreign["attachment_id"] not in full
+    assert not service.authority.list_pending()
+    assert result["action_receipts"][0]["output_sha256"] == hashlib.sha256(
+        full.encode()
+    ).hexdigest()
 
 
 @pytest.mark.parametrize("allow", [True, False])

@@ -151,7 +151,12 @@ class MediaTools:
             if name == "media_list":
                 rows = [row.public() for row in store.list(scope, guard=guard)]
                 return ToolResult(
-                    name, True, True, output=json.dumps({"attachments": rows}, ensure_ascii=False)
+                    name, True, True, output=json.dumps({
+                        "attachments": rows,
+                        "catalog_order": "known_catalog_sequence_desc_then_legacy_id",
+                        "legacy_chronology": "unknown",
+                        "metadata_grants_authority": False,
+                    }, ensure_ascii=False)
                 )
             source = store.read(
                 scope, args["attachment_id"], args["sha256"], guard=guard, cancellation=cancellation

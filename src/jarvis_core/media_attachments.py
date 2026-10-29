@@ -15,6 +15,7 @@ import os
 import re
 import stat
 import threading
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from functools import wraps
@@ -25,7 +26,9 @@ from .media_sources import read_media_source
 from .workspace import WorkspaceError, WorkspaceTools, _fingerprint
 
 DIRECTORY = ".jarvis-attachments"
-FORMAT = "jarvis-attachment/1"
+LEGACY_FORMAT = "jarvis-attachment/1"
+FORMAT = "jarvis-attachment/2"
+_MAX_SAFE_INTEGER = 9007199254740991
 _ID = re.compile(r"[a-f0-9]{32}")
 _HASH = re.compile(r"[a-f0-9]{64}")
 _DIR = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
@@ -44,6 +47,8 @@ _MANIFEST_KEYS = {
     "source",
     "revoked",
 }
+_CATALOG_KEYS = {"imported_at_unix_ms", "catalog_sequence", "ingress_run_id", "source_kind"}
+_SOURCE_KINDS = {"photo", "document", "audio", "voice", "video", "animation"}
 
 
 def _identity(value, pattern):
@@ -93,12 +98,19 @@ class AttachmentManifest:
     sha256: str
     source: str
     revoked: bool = False
+    imported_at_unix_ms: int | None = None
+    catalog_sequence: int | None = None
+    ingress_run_id: str | None = None
+    source_kind: str | None = None
 
     def public(self):
-        return {
-            "format": FORMAT,
+        value = {
+            "format": FORMAT if self.catalog_sequence is not None else LEGACY_FORMAT,
             **{key: getattr(self, key) for key in _MANIFEST_KEYS - {"format"}},
         }
+        if self.catalog_sequence is not None:
+            value.update({key: getattr(self, key) for key in _CATALOG_KEYS})
+        return value
 
 
 @dataclass(frozen=True)
@@ -262,8 +274,10 @@ class AttachmentStore:
             raise MediaError("media_manifest_invalid") from None
         if (
             not isinstance(value, dict)
-            or set(value) != _MANIFEST_KEYS
-            or value["format"] != FORMAT
+            or not (
+                (set(value) == _MANIFEST_KEYS and value["format"] == LEGACY_FORMAT)
+                or (set(value) == _MANIFEST_KEYS | _CATALOG_KEYS and value["format"] == FORMAT)
+            )
             or value["attachment_id"] != attachment_id
             or value["session_id"] != scope.session_id
             or value["workspace_id"] != scope.workspace_id
@@ -278,6 +292,13 @@ class AttachmentStore:
             or re.fullmatch(r"[a-z][a-z0-9_]{0,31}", value["source"]) is None
         ):
             raise MediaError("media_manifest_invalid")
+        if value["format"] == FORMAT:
+            if any(
+                type(value[key]) is not int or not 1 <= value[key] <= _MAX_SAFE_INTEGER
+                for key in ("imported_at_unix_ms", "catalog_sequence")
+            ):
+                raise MediaError("media_manifest_invalid")
+            self._provenance(value["ingress_run_id"], value["source_kind"])
         media_name(value["name"])
         _identity(value["sha256"], _HASH)
         manifest = AttachmentManifest(**{k: v for k, v in value.items() if k != "format"})
@@ -297,6 +318,59 @@ class AttachmentStore:
         if marker != expected:
             raise MediaError("media_manifest_invalid")
         return replace(manifest, revoked=True)
+
+    @staticmethod
+    def _provenance(ingress_run_id, source_kind):
+        if ingress_run_id is not None:
+            _identity(ingress_run_id, _ID)
+        if source_kind is not None and (
+            not isinstance(source_kind, str) or source_kind not in _SOURCE_KINDS
+        ):
+            raise MediaError("media_source_invalid")
+
+    @staticmethod
+    def _ordered(rows):
+        # Legacy metadata cannot establish chronology. Keep it separate rather
+        # than assigning a date from an inode that may have been restored.
+        return tuple(sorted(rows, key=lambda row: (
+            row.catalog_sequence is None, -(row.catalog_sequence or 0), row.attachment_id
+        )))
+
+    def _catalog(self, parent, scope):
+        entries = os.listdir(parent)
+        if len(entries) > self.limits.max_session_attachments * 3:
+            raise MediaError("media_store_limit")
+        rows = [
+            self._manifest(parent, scope, name[:-5])
+            for name in entries
+            if re.fullmatch(r"[a-f0-9]{32}\.json", name)
+        ]
+        sequences = [row.catalog_sequence for row in rows if row.catalog_sequence is not None]
+        if len(sequences) != len(set(sequences)):
+            raise MediaError("media_catalog_conflict")
+        return rows
+
+    @staticmethod
+    def _catalogued(row, rows):
+        sequence = max((r.catalog_sequence or 0 for r in rows), default=0) + 1
+        imported_at = time.time_ns() // 1000000
+        if not 1 <= sequence <= _MAX_SAFE_INTEGER or not 1 <= imported_at <= _MAX_SAFE_INTEGER:
+            raise MediaError("media_catalog_limit")
+        return replace(row, catalog_sequence=sequence, imported_at_unix_ms=imported_at)
+
+    @staticmethod
+    def _same_import(previous, candidate):
+        if any(
+            getattr(previous, key) != getattr(candidate, key)
+            for key in _MANIFEST_KEYS - {"format"}
+        ):
+            return False
+        # A repeated import must retain its first publication time/order. A
+        # legacy original remains legacy instead of inventing old provenance.
+        return previous.catalog_sequence is None or (
+            previous.ingress_run_id == candidate.ingress_run_id
+            and previous.source_kind == candidate.source_kind
+        )
 
     def _inventory(self, root, scope):
         total = session_total = files = session_files = 0
@@ -403,6 +477,8 @@ class AttachmentStore:
         cancellation=None,
         deadline=None,
         source="composer",
+        ingress_run_id=None,
+        source_kind=None,
     ):
         with self._mutex:
             self._guard(scope, guard, cancellation, deadline)
@@ -410,6 +486,7 @@ class AttachmentStore:
             kind = sniff_media(payload, name, mime, limits=self.limits)
             if not isinstance(source, str) or re.fullmatch(r"[a-z][a-z0-9_]{0,31}", source) is None:
                 raise MediaError("media_source_invalid")
+            self._provenance(ingress_run_id, source_kind)
             row = AttachmentManifest(
                 attachment_id,
                 scope.session_id,
@@ -421,19 +498,24 @@ class AttachmentStore:
                 len(payload),
                 hashlib.sha256(payload).hexdigest(),
                 source,
+                ingress_run_id=ingress_run_id,
+                source_kind=source_kind,
             )
             if scope.temporary:
                 key = (scope.session_id, attachment_id)
                 previous = self._temporary.get(key)
                 if previous is not None:
-                    if previous.manifest != row or previous.payload != payload:
+                    if not self._same_import(previous.manifest, row) or previous.payload != payload:
                         raise MediaError("media_attachment_conflict")
                     return previous.manifest
                 self._temporary_quota(scope, len(payload))
                 self._guard(scope, guard, cancellation, deadline)
+                row = self._catalogued(row, [
+                    r.manifest for r in self._temporary.values()
+                    if r.manifest.session_id == scope.session_id
+                ])
                 self._temporary[key] = AttachmentRead(payload, row)
                 return row
-            serialized = json.dumps(row.public(), sort_keys=True, ensure_ascii=False).encode()
 
             def check():
                 self._guard(scope, guard, cancellation, deadline)
@@ -447,7 +529,7 @@ class AttachmentStore:
                 except FileNotFoundError:
                     previous = None
                 if previous is not None:
-                    if previous != row:
+                    if not self._same_import(previous, row):
                         raise MediaError("media_attachment_conflict")
                     actual = self._read_file(
                         fd, attachment_id + ".blob", self.limits.max_file_bytes
@@ -466,6 +548,8 @@ class AttachmentStore:
                         effect_status="unknown",
                         attachment_id=attachment_id,
                     )
+                row = self._catalogued(row, self._catalog(fd, scope))
+                serialized = json.dumps(row.public(), sort_keys=True, ensure_ascii=False).encode()
                 total, session_total, files, session_files = self._inventory(root, scope)
                 temporary_rows = list(self._temporary.values())
                 session_temporary = [
@@ -558,24 +642,17 @@ class AttachmentStore:
             if guard is not None:
                 guard()
             if scope.temporary:
-                return tuple(
+                return self._ordered(
                     row.manifest
-                    for key, row in sorted(self._temporary.items())
+                    for key, row in self._temporary.items()
                     if key[0] == scope.session_id
                 )
             with self._locked() as root, self._session(root, scope) as fd:
                 if fd is None:
                     return ()
-                entries = os.listdir(fd)
-                if len(entries) > self.limits.max_session_attachments * 3:
-                    raise MediaError("media_store_limit")
-                rows = [
-                    self._manifest(fd, scope, name[:-5])
-                    for name in sorted(entries)
-                    if re.fullmatch(r"[a-f0-9]{32}\.json", name)
-                ]
+                rows = self._catalog(fd, scope)
                 self._same_session(root, fd, scope)
-                return tuple(rows)
+                return self._ordered(rows)
 
     @_public_io
     def read(

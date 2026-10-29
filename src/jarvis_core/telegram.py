@@ -329,7 +329,7 @@ class TelegramHTTPTransport:
 
 class TelegramClient:
     def __init__(self, token: str, *, transport=None, file_transport=None,
-                 document_transport=None, timeout=20):
+                 document_transport=None, voice_transport=None, timeout=20):
         if not isinstance(token, str) or _TOKEN.fullmatch(token) is None:
             raise TelegramError("telegram_token_invalid")
         if (
@@ -343,6 +343,7 @@ class TelegramClient:
         self._transport = transport or TelegramHTTPTransport()
         self._file_transport = file_transport
         self._document_transport = document_transport
+        self._voice_transport = voice_transport
         self.timeout, self.identity, self.closed = timeout, None, False
 
     def __repr__(self):
@@ -617,6 +618,107 @@ class TelegramClient:
                 or type(document.get("file_size")) is not int
                 or document["file_size"] != len(payload)):
             raise TelegramError("telegram_delivery_ack_invalid", effect_status="unknown")
+        try:
+            return _integer(result.get("message_id"), minimum=1, maximum=(1 << 31) - 1)
+        except TelegramError:
+            raise TelegramError("telegram_delivery_ack_invalid", effect_status="unknown") from None
+
+    async def send_voice(self, incoming, payload, name, mime, caption, *, before_dispatch,
+                         preparation_guard=None):
+        from jarvis_core.media_documents import MediaError
+        from jarvis_core.telegram_content import MAX_ATTACHMENT_BYTES
+        from jarvis_core.telegram_files import TelegramVoiceTransport, validate_voice_payload
+        from jarvis_core.tools import ToolError
+
+        if (self.identity is None or self.closed or not isinstance(incoming, IncomingMessage)
+                or type(payload) is not bytes or not 1 <= len(payload) <= MAX_ATTACHMENT_BYTES
+                or not callable(before_dispatch)
+                or (preparation_guard is not None and not callable(preparation_guard))):
+            raise TelegramError("telegram_attachment_not_authorized")
+        _chat_id(incoming.chat_id, kind=incoming.chat_type)
+        _integer(incoming.message_id, minimum=1, maximum=(1 << 31) - 1)
+        _text(name, 256)
+        _text(caption, 4096, empty=True)
+        if (any(ord(c) < 32 or c in '\\"/' for c in name) or mime != "audio/ogg"
+                or len(caption.encode("utf-16-le")) // 2 > 1024):
+            raise TelegramError("telegram_attachment_invalid")
+        identity = self.identity
+
+        def prepare():
+            # This is a pure read/context gate. The grant-consuming callback is
+            # reserved for the one POST, immediately before its wire write.
+            if self.closed or self.identity is not identity or self._token is None:
+                raise TelegramError("telegram_attachment_not_authorized")
+            if preparation_guard is not None:
+                preparation_guard()
+
+        prepare()
+        await validate_voice_payload(payload, mime,
+                                     expected_sha256=hashlib.sha256(payload).hexdigest(),
+                                     guard=prepare)
+        prepare()
+
+        wire_admitted = False
+        callback_error = None
+
+        def wire_guard():
+            nonlocal wire_admitted, callback_error
+            try:
+                prepare()
+                before_dispatch()
+            except (MediaError, ToolError) as error:
+                callback_error = error
+                raise
+            wire_admitted = True
+
+        transport = self._voice_transport or TelegramVoiceTransport(
+            connector=getattr(self._transport, "_connector", None))
+        try:
+            response = await transport(incoming, payload, name, mime, caption, self._token,
+                                       self.timeout, wire_guard)
+            result = self._decode_response(response, "POST")
+        except TelegramError:
+            if callback_error is not None and not wire_admitted:
+                raise callback_error from None
+            raise
+        except asyncio.CancelledError:
+            raise
+        except (MediaError, ToolError):
+            if not wire_admitted:
+                raise
+            raise TelegramError(
+                "telegram_attachment_delivery_unconfirmed", effect_status="unknown"
+            ) from None
+        except Exception:
+            raise TelegramError(
+                "telegram_attachment_delivery_unconfirmed", effect_status="unknown"
+            ) from None
+        voice = result.get("voice") if isinstance(result, dict) else None
+        sender = result.get("from") if isinstance(result, dict) else None
+        reply = result.get("reply_to_message") if isinstance(result, dict) else None
+        if (not isinstance(result, dict) or not isinstance(result.get("chat"), dict)
+                or type(result["chat"].get("id")) is not int
+                or result["chat"]["id"] != incoming.chat_id
+                or result["chat"].get("type") != incoming.chat_type
+                or (result.get("message_thread_id") is not None
+                    and type(result["message_thread_id"]) is not int)
+                or result.get("message_thread_id") != incoming.message_thread_id
+                or not isinstance(sender, dict) or type(sender.get("id")) is not int
+                or sender["id"] != identity.bot_id or sender.get("is_bot") is not True
+                or not isinstance(reply, dict) or type(reply.get("message_id")) is not int
+                or reply["message_id"] != incoming.message_id
+                or not isinstance(voice, dict)
+                or any(not isinstance(voice.get(key), str) or not 1 <= len(voice[key]) <= 512
+                       or any(ord(c) < 33 for c in voice[key])
+                       for key in ("file_id", "file_unique_id"))
+                or type(voice.get("duration")) is not int or not 0 <= voice["duration"] <= 120
+                or ("mime_type" in voice and (not isinstance(voice["mime_type"], str)
+                    or voice["mime_type"] not in {"audio/ogg", "audio/opus"}))
+                or ("file_size" in voice and (type(voice["file_size"]) is not int
+                    or not 1 <= voice["file_size"] <= MAX_ATTACHMENT_BYTES))):
+            raise TelegramError("telegram_delivery_ack_invalid", effect_status="unknown")
+        # Optional remote MIME/size are reported metadata, not proof that the
+        # server preserved the submitted bytes, container or original SHA.
         try:
             return _integer(result.get("message_id"), minimum=1, maximum=(1 << 31) - 1)
         except TelegramError:
@@ -1391,6 +1493,7 @@ class TelegramChannel:
 
     async def _run(self):
         rate_retries = 0
+        transport_failures = 0
         try:
             while not self._stop.is_set():
                 self._guard_configuration()
@@ -1405,6 +1508,18 @@ class TelegramChannel:
                         self._poll_offset, before_dispatch=self._guard_configuration
                     )
                 except TelegramError as error:
+                    if self._stop.is_set():
+                        raise
+                    # Only this read-only GET may recover, after its transport
+                    # closed/aborted the previous stream. No epoch, inbox offset,
+                    # runner lease or reviewed authority is recreated here.
+                    if error.code == "telegram_transport_failed" and error.effect_status == "known":
+                        transport_failures += 1
+                        if transport_failures < 3:
+                            self.error_code = "telegram_reconnecting"
+                            await self._wait_poll_recovery(transport_failures)
+                            continue
+                        raise
                     if (
                         error.code == "telegram_rate_limited"
                         and error.retry_after
@@ -1417,7 +1532,11 @@ class TelegramChannel:
                             pass
                         continue
                     raise
+                if self._stop.is_set():
+                    break
                 rate_retries = 0
+                transport_failures = 0
+                self.error_code = None
                 for update in updates:
                     await self._process(update)
                 if updates:
@@ -1431,15 +1550,26 @@ class TelegramChannel:
         except asyncio.CancelledError:
             pass
         except (TelegramError, PrivateJsonError) as error:
-            self.error_code = error.code
+            if not (self._stop.is_set() and self.error_code not in {None, "telegram_reconnecting"}):
+                self.error_code = error.code
         except Exception:
-            self.error_code = "telegram_runner_failed"
+            if not (self._stop.is_set() and self.error_code not in {None, "telegram_reconnecting"}):
+                self.error_code = "telegram_runner_failed"
         finally:
+            if self.error_code == "telegram_reconnecting":
+                self.error_code = None
             self._stop.set()
             self._send_tickets.clear()
             if self._lease is not None:
                 os.close(self._lease)
                 self._lease = None
+
+    async def _wait_poll_recovery(self, delay):
+        """A bounded, stop-aware wait; never reconnects or resets inbox state."""
+        try:
+            await asyncio.wait_for(self._stop.wait(), delay)
+        except TimeoutError:
+            pass
 
     async def stop(self):
         self._stop.set()

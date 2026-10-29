@@ -18,7 +18,12 @@ aprobó Ubuntu y compiló el bundle/helper, pero Swift tuvo un fallo entre 614
 casos (uno omitido). Los 13 casos del monitor pasaron; falló el oráculo asíncrono
 de cancelación del navegador. Se preparó una corrección sólo de esa prueba.
 MacPython, paquetes y smoke posteriores no se ejecutaron: todavía faltan la CI
-completa del nuevo commit y la repetición real de voz con su bundle.
+completa del nuevo commit y la repetición real de voz con su bundle en ese
+checkpoint histórico. La [CI completa de `f5e78ea`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40943870771)
+aprobó después 3448 casos Python en Ubuntu (46 omitidos), 3494 en macOS y 614
+casos Swift (uno omitido, cero fallos), incluidos los 13 del monitor y los tres
+del navegador. También pasaron bundle/helper, paquetes, smoke y limpieza. Su
+artefacto quedó preparado y todavía no se lanzó: la CI no acredita voz ni TCC.
 
 Telegram acredita privado y grupo separados, documento con marcador/fuente,
 envío recibido por el dueño, rechazo sin subida, retirada con original intacto
@@ -27,6 +32,41 @@ real acredita contenido y fuentes de DOCX/CSV, imagen y vídeo parcial después 
 corregir la entrega conjunta de texto e imágenes aprobados. WAV/Ogg se
 transcribieron localmente; el dueño confirmó una lectura audible y dictado sin
 envío automático.
+
+Dos notas de voz nuevas recibidas realmente en el grupo, de 109420 y 58701
+bytes, acreditaron importación aislada, procesamiento local aprobado y respuesta
+correlacionada del bot. Ambas inspecciones terminaron conocidas y verificadas,
+pero ninguna recuperó el marcador esperado. La causa sigue sin establecerse
+entre captura y reconocimiento. Se conservan sus huellas y resultados fallidos;
+no se transcribe aquí contenido que podría proceder del ambiente. Este recorrido
+no cierra la fidelidad de voz de Telegram y no se harán más grabaciones del
+entorno para repetirlo.
+
+También se observó una detención con `telegram_transport_failed`: no había
+eventos activos ni efectos nuevos inciertos, y el Ogg de control enviado
+mientras el lector estaba inactivo no se importó. La reactivación explícita de
+las mismas rutas admitió un mensaje nuevo con marcador 7721. Ese resultado
+acredita reanudación de texto, sin replay; no acredita la llegada de aquel Ogg
+ni establece la causa concreta de red.
+
+La segunda nota reveló un fallo del catálogo: los manifiestos v1 no tienen hora
+de importación ni relación con el ingreso, y su orden por ID no identifica la
+«última nota» entre nombres iguales. Se escribió un catálogo v2 con secuencia por
+sesión bajo el bloqueo de publicación, hora UTC en milisegundos y procedencia
+mínima mediante ejecución interna y tipo de adjunto. La secuencia define el
+orden incluso si retrocede el reloj; los originales v1 conservan su cronología
+desconocida y no se reescriben. Estos metadatos no autorizan lecturas ni envíos.
+El cambio y sus pruebas esperan la CI del nuevo commit y un recorrido real.
+
+En el mismo checkpoint se escribieron recuperación acotada sólo para fallos
+conocidos del GET de actualizaciones y envío explícito `delivery=voice` mediante
+[sendVoice oficial](https://core.telegram.org/bots/api#sendvoice). Este último
+acepta originales Ogg OPUS de hasta 5 MiB y 120 segundos, verificados localmente
+antes de una sola subida aprobada al destino de origen. El modo predeterminado
+sigue siendo documento. No cambia el audio ni captura micrófono; un ACK incierto
+no habilita reintentos. Ambos cambios están pendientes de CI completa y prueba
+real. El siguiente recorrido usará dos archivos Opus sintéticos como notas
+nativas de Telegram para verificar marcadores y orden sin captar el ambiente.
 
 Los ocho formatos adicionales acreditaron una inspección por archivo, recibos
 conocidos, originales y copias CAS con huellas coincidentes y marcadores/citas
@@ -57,8 +97,9 @@ repitió. Los dos intentos de micrófono posteriores se detuvieron antes del
 estímulo con el aviso de cambio de entrada; conservaron el borrador y no enviaron
 un run. La fuente trataba cualquier notificación de configuración como cambio
 de entrada, sin comprobar su identidad. La causa concreta de hardware de esos
-intentos no quedó establecida; faltan la validación completa de la corrección y
-su repetición real. Los procesos del harness fallido se cerraron
+intentos no quedó establecida. La corrección pasó después la CI completa de
+`f5e78ea`; su repetición real de wake/Talk sigue pendiente junto con los cambios
+posteriores de Telegram y catálogo. Los procesos del harness fallido se cerraron
 de forma explícita y los originales se conservaron. Ver el
 [contrato de arranque QA](NATIVE_QA_LAUNCH.md).
 
@@ -69,13 +110,28 @@ CoreAudio y se conserva como intento no cualificado. Tras desconectar realmente
 esa salida, la UI la retiró, detuvo el reproductor y no pasó al altavoz. Cerrar y
 abrir de nuevo volvió a posición cero, pausado y sin reutilizar la selección
 anterior. El preview Ogg distinguió original y WAV derivado en RAM y avanzó tras
-reproducirlo; ese clip no tiene confirmación acústica independiente. No se midió
+reproducirlo hasta el final de 3,80425 segundos; ese clip no tiene confirmación
+acústica independiente. El vídeo llegó al final de dos segundos, permitió buscar
+al segundo uno y mostró los colores y marcador esperados. El recibo suplementario
+conserva el original de las pruebas anteriores. No se midió
 la salida global antes de las primeras selecciones ni se infiere el instante
 interno de liberación de memoria desde la UI.
 
-Quedan la voz real recibida por Telegram tras reconectar el bot, wake/Talk con
-el monitor corregido y CI completa, y los recibos finales de cierre/custodia.
-Los permisos concedidos y los WAV preparados no acreditan esos recorridos.
+El recorrido `dbad498` terminó con Salir en la interfaz. El supervisor devolvió
+cero únicamente tras confirmar limpieza de las siete identidades observadas
+incluido el helper, sin señales ni incidencias, y la liberación del lease
+exacto del perfil. Observó un máximo de 346034176 bytes durante 3488,88 segundos,
+dentro del presupuesto observado de 384 MiB. Esto no proporciona un código
+`waitpid` de salida de la app nativa ni una cuota física dura. Con autorización
+del dueño se subió temporalmente la salida de volumen cero/silenciada a 0,3/no
+silenciada para el segundo intento; tras el cierre se restauró cero/silenciada,
+sin alterar rutas, balance o emparejamiento. No se deduce de ello la causa del
+fallo de transcripción.
+
+Quedan la CI completa del commit con catálogo/recuperación/sendVoice, las dos
+notas controladas de Telegram y su identificación/transcripción, wake/Talk con
+el monitor corregido y el cierre/custodia del nuevo recorrido. Los permisos
+concedidos, la preparación del artefacto y los WAV no acreditan esos pasos.
 
 ## Contratos incorporados
 

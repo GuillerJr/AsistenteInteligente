@@ -518,6 +518,8 @@ class MediaManagementAPI:
                 attachment_id=identity,
                 guard=guard,
                 source="telegram",
+                ingress_run_id=run_id,
+                source_kind=item.kind,
             )
             imported.append(row.public())
         message = incoming.text or "Revisa los adjuntos que envié."

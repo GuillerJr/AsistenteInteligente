@@ -44,10 +44,12 @@ final class AccessStore {
     var toolsEnabled = false
 
     @ObservationIgnored private var client: LocalRPCClient?
+    @ObservationIgnored private var request: MaintenanceClient.Request?
     @ObservationIgnored private var context: SessionScope?
     @ObservationIgnored private var documentOffset = 0
     @ObservationIgnored private var memoryGeneration = 0
 
+    init(request: MaintenanceClient.Request? = nil) { self.request = request }
     func configure(client: LocalRPCClient) { self.client = client }
     func close() async { await client?.close() }
 
@@ -62,6 +64,7 @@ final class AccessStore {
     }
 
     private func rpc(_ method: String, _ params: [String: RPCValue] = [:]) async throws -> RPCValue {
+        if let request { return try await request(method, params) }
         guard let client else { throw RPCFailure.unavailable }
         return try await client.call(method, params: params)
     }
@@ -123,6 +126,21 @@ final class AccessStore {
         guard let file = attachments.first(where: { $0.id == id && $0.sha256 == hash && $0.scope == operation.scope && !$0.revoked }) else { throw RPCFailure.invalidResponse }
         var detail = "Archivo: \(file.name) · \(file.bytes) bytes\nSHA-256: \(file.sha256)"
         if operation.toolName == "telegram_send_attachment" {
+            guard let arguments = args.object,
+                  Set(arguments.keys).isSubset(of: ["attachment_id", "sha256", "caption", "delivery"]),
+                  ManagementValidation.identifier(id), ManagementValidation.hash(hash) else { throw RPCFailure.invalidResponse }
+            let delivery: String
+            if let value = arguments["delivery"] {
+                guard let mode = value.string, ["document", "voice"].contains(mode) else { throw RPCFailure.invalidResponse }
+                delivery = mode
+            } else { delivery = "document" }
+            let caption: String
+            if let value = arguments["caption"] {
+                guard let text = value.string, !text.contains("\0"), text.utf8.count <= 4096,
+                      text.utf16.count <= 1024 else { throw RPCFailure.invalidResponse }
+                caption = text
+            } else { caption = "" }
+            guard delivery != "voice" || (file.kind == "audio" && file.mime == "audio/ogg") else { throw RPCFailure.invalidResponse }
             let target = try await rpc("telegram.destination", ["session_id": .string(operation.scope.sessionID), "run_id": .string(operation.runID)])
             guard target["session_id"] == .string(operation.scope.sessionID), target["run_id"] == .string(operation.runID),
                   let chat = target["chat_id"].integer, chat != 0,
@@ -131,6 +149,9 @@ final class AccessStore {
                   target["maximum_attachment_bytes"].integer == 5 * 1024 * 1024,
                   file.bytes <= 5 * 1024 * 1024 else { throw RPCFailure.invalidResponse }
             let thread = target["message_thread_id"].integer.map(String.init) ?? "sin tema"
+            detail += "\nFormato de envío: \(delivery == "voice" ? "nota de voz Ogg/Opus" : "archivo")."
+            if delivery == "voice" { detail += "\nAntes del envío se comprobará Opus y el límite de 120 segundos; si no cumple, no se enviará." }
+            detail += caption.isEmpty ? "\nTexto adjunto: sin texto." : "\nTexto adjunto literal: «\(caption)»"
             detail += "\nDestino fijado: Telegram \(kind), chat \(chat), tema \(thread), respuesta al mensaje \(message).\nSe enviarán los bytes de este archivo; una respuesta de Telegram no acredita su lectura por el destinatario."
         } else {
             detail += "\nAnálisis local; el texto extraído y la observación visual podrán enviarse a Codex. No ejecuta macros o enlaces y no verifica la veracidad del contenido."

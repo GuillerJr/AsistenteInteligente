@@ -12,6 +12,8 @@ import json
 import re
 import secrets
 import ssl
+import threading
+import time
 
 from jarvis_core.telegram import _TOKEN, TelegramCancelled, TelegramError, TelegramHTTPTransport
 from jarvis_core.telegram_content import MAX_ATTACHMENT_BYTES
@@ -86,8 +88,70 @@ class TelegramFileTransport:
                     TelegramHTTPTransport._abort(writer)
 
 
-class TelegramDocumentTransport:
+async def validate_voice_payload(
+    payload, mime, *, expected_sha256=None, guard, cancellation=None, deadline=None
+):
+    """Validate the original Ogg OPUS locally; never re-encode uploaded bytes.
+
+    The codec runs with the existing per-block bounds. Cancellation keeps custody
+    until that worker joins; a deadline cannot forcibly stop an in-progress C
+    decoder call. This is preparation, not the effect/approval commit callback.
+    """
+    from jarvis_core.media_audio import decode_ogg_to_wav
+    from jarvis_core.media_documents import MediaError, MediaLimits
+
+    if not callable(guard):
+        raise TelegramError("telegram_attachment_not_authorized")
+    if type(payload) is not bytes or not 1 <= len(payload) <= MAX_ATTACHMENT_BYTES:
+        raise TelegramError("telegram_attachment_limit")
+    if mime != "audio/ogg" or not payload.startswith(b"OggS"):
+        raise TelegramError("telegram_voice_format_invalid")
+    stop = threading.Event()
+    limit = time.monotonic() + 20
+    if deadline is not None:
+        limit = min(limit, deadline)
+
+    def current():
+        if cancellation is not None and cancellation.is_set():
+            raise TelegramCancelled("known")
+        guard()
+
+    def inspect():
+        current()
+        decoded = decode_ogg_to_wav(
+            payload, expected_sha256=expected_sha256,
+            limits=MediaLimits(max_file_bytes=16 * 1024 * 1024, max_duration_seconds=120),
+            guard=current, cancellation=stop, deadline=limit,
+        )
+        if decoded.source_subtype != "OPUS":
+            raise TelegramError("telegram_voice_codec_invalid")
+        current()
+        return decoded.duration_seconds
+
+    task = asyncio.create_task(asyncio.to_thread(inspect))
+    try:
+        return await asyncio.shield(task)
+    except asyncio.CancelledError:
+        stop.set()
+        while not task.done():
+            try:
+                await asyncio.shield(task)
+            except (asyncio.CancelledError, MediaError, TelegramError):
+                continue
+        # Observe cleanup, including a codec error caused by our stop signal;
+        # cancellation remains known because no upload has been dispatched.
+        try:
+            task.result()
+        except (asyncio.CancelledError, MediaError, TelegramError):
+            pass
+        raise TelegramCancelled("known") from None
+
+
+class _TelegramMultipartTransport:
     """One multipart effect, with unknown outcome after any lost write ACK."""
+
+    method = "sendDocument"
+    field = "document"
 
     def __init__(self, *, connector=None):
         self._connector = connector or asyncio.open_connection
@@ -95,12 +159,19 @@ class TelegramDocumentTransport:
     async def __call__(
         self, incoming, payload, name, mime, caption, token, timeout, before_dispatch
     ):
+        from jarvis_core.media_documents import MediaError
+
         if (
             not isinstance(token, str)
             or not _TOKEN.fullmatch(token)
             or not callable(before_dispatch)
         ):
             raise TelegramError("telegram_attachment_not_authorized")
+        if self.field == "voice" and (
+            type(payload) is not bytes or not 1 <= len(payload) <= MAX_ATTACHMENT_BYTES
+            or mime != "audio/ogg" or not payload.startswith(b"OggS")
+        ):
+            raise TelegramError("telegram_voice_format_invalid")
         boundary = "jarvis_" + secrets.token_hex(24)
         if boundary.encode() in payload:
             raise TelegramError("telegram_attachment_invalid")
@@ -110,9 +181,10 @@ class TelegramDocumentTransport:
                 {"message_id": incoming.message_id, "allow_sending_without_reply": False},
                 separators=(",", ":"),
             ),
-            "disable_content_type_detection": "true",
             "allow_paid_broadcast": "false",
         }
+        if self.field == "document":
+            fields["disable_content_type_detection"] = "true"
         if incoming.message_thread_id is not None:
             fields["message_thread_id"] = str(incoming.message_thread_id)
         if caption:
@@ -128,7 +200,7 @@ class TelegramDocumentTransport:
             )
         pieces.append(
             (
-                f'--{boundary}\r\nContent-Disposition: form-data; name="document"; '
+                f'--{boundary}\r\nContent-Disposition: form-data; name="{self.field}"; '
                 f'filename="{name}"\r\nContent-Type: {mime}\r\n\r\n'
             ).encode()
         )
@@ -148,7 +220,7 @@ class TelegramDocumentTransport:
                 dispatched = True
                 writer.write(
                     (
-                        f"POST /bot{token}/sendDocument HTTP/1.1\r\n"
+                        f"POST /bot{token}/{self.method} HTTP/1.1\r\n"
                         "Host: api.telegram.org\r\nConnection: close\r\n"
                         "Accept: application/json\r\n"
                         f"Content-Type: multipart/form-data; boundary={boundary}\r\n"
@@ -158,6 +230,12 @@ class TelegramDocumentTransport:
                 )
                 await writer.drain()
                 return await TelegramHTTPTransport()._read_response(reader)
+        except MediaError:
+            if dispatched:
+                raise TelegramError(
+                    "telegram_attachment_delivery_unconfirmed", effect_status="unknown"
+                ) from None
+            raise
         except TelegramError as error:
             if dispatched:
                 raise TelegramError(error.code, effect_status="unknown") from None
@@ -179,3 +257,14 @@ class TelegramDocumentTransport:
                     raise TelegramCancelled("unknown" if dispatched else "known") from None
                 except (OSError, TimeoutError):
                     TelegramHTTPTransport._abort(writer)
+
+
+class TelegramDocumentTransport(_TelegramMultipartTransport):
+    """Backward-compatible document upload, with one irreversible POST."""
+
+
+class TelegramVoiceTransport(_TelegramMultipartTransport):
+    """Original validated Ogg OPUS bytes as a playable Telegram voice note."""
+
+    method = "sendVoice"
+    field = "voice"

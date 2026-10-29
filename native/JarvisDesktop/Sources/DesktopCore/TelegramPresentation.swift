@@ -9,6 +9,8 @@ public enum TelegramPresentation {
             return "Revisa el token del bot y conecta Telegram de nuevo. El token no se guarda."
         case "telegram_transport_failed":
             return "No se pudo completar la comunicación con Telegram. Revisa la conexión y actualiza el estado."
+        case "telegram_reconnecting":
+            return "Reconectando la lectura de Telegram… La espera es limitada; el estado se actualizará al recuperar la conexión."
         case "telegram_connect_timeout":
             return "Se agotó la espera para verificar la identidad y conexión del bot. Actualiza el estado antes de intentarlo de nuevo."
         case "telegram_webhook_timeout":

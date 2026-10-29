@@ -4,6 +4,7 @@ import fcntl
 import hashlib
 import json
 import os
+import shutil
 import stat
 import threading
 import time
@@ -41,7 +42,8 @@ def test_artifact_bytes_manifest_scope_hash_and_permissions_survive_reopen(attac
     root, store, scope = attachments
     row = ingest(store, scope)
     assert row.sha256 == hashlib.sha256(b"MARCADOR ADJUNTO 8654").hexdigest()
-    assert row.public()["format"] == "jarvis-attachment/1"
+    assert row.public()["format"] == "jarvis-attachment/2"
+    assert row.catalog_sequence == 1 and 0 < row.imported_at_unix_ms < 2**53
     assert "payload" not in row.public() and "path" not in row.public()
     folder = root / DIRECTORY / SESSION
     assert stat.S_IMODE(folder.stat().st_mode) == 0o700
@@ -282,3 +284,152 @@ def test_persistent_import_also_accounts_for_retained_temporary_bytes(attachment
         ingest(store, scope, identity="d" * 32)
     assert store.read(temporary, ATTACHMENT, row.sha256, guard=lambda: None).payload
     assert not list((root / DIRECTORY / SESSION).glob("*.blob"))
+
+
+@pytest.mark.parametrize("temporary", [False, True])
+def test_latest_same_name_uses_publication_order_even_when_wall_clock_moves_back(
+    attachments, monkeypatch, temporary
+):
+    root, store, scope = attachments
+    scope = AttachmentScope(scope.session_id, scope.workspace_id, temporary)
+    monkeypatch.setattr("jarvis_core.media_attachments.time.time_ns", lambda: 2000000000000)
+    first = ingest(store, scope, b"PRIMERA NOTA", identity="f" * 32,
+                   source="telegram", ingress_run_id="1" * 32, source_kind="voice")
+    monkeypatch.setattr("jarvis_core.media_attachments.time.time_ns", lambda: 1000000000000)
+    second = ingest(store, scope, b"SEGUNDA NOTA", identity="0" * 32,
+                    source="telegram", ingress_run_id="2" * 32, source_kind="voice")
+    assert first.name == second.name
+    assert first.imported_at_unix_ms > second.imported_at_unix_ms
+    assert [r.attachment_id for r in store.list(scope)] == [
+        second.attachment_id, first.attachment_id
+    ]
+    assert [r.catalog_sequence for r in store.list(scope)] == [2, 1]
+    assert ingest(store, scope, b"PRIMERA NOTA", identity="f" * 32,
+                  source="telegram", ingress_run_id="1" * 32, source_kind="voice") == first
+    assert second.public()["source_kind"] == "voice"
+    assert second.public()["ingress_run_id"] == "2" * 32
+    other = AttachmentScope("d" * 32, WORKSPACE, temporary)
+    assert store.list(other) == ()
+    if temporary:
+        assert not list(root.iterdir())
+
+
+def test_legacy_dates_stay_unknown_and_copied_catalog_keeps_original_order(attachments, tmp_path):
+    root, store, scope = attachments
+    legacy = ingest(store, scope)
+    file = root / DIRECTORY / SESSION / (legacy.attachment_id + ".json")
+    value = json.loads(file.read_text())
+    for key in ("imported_at_unix_ms", "catalog_sequence", "ingress_run_id", "source_kind"):
+        value.pop(key)
+    value["format"] = "jarvis-attachment/1"
+    original = json.dumps(value, sort_keys=True).encode()
+    file.write_bytes(original)
+    store.close()
+    fresh = AttachmentStore(WorkspaceTools(root), WORKSPACE)
+    old = fresh.list(scope)[0]
+    assert old.catalog_sequence is None and old.imported_at_unix_ms is None
+    assert old.public() == value
+    assert ingest(fresh, scope, ingress_run_id="1" * 32, source_kind="document") == old
+    assert file.read_bytes() == original
+    newest = ingest(fresh, scope, b"NOTA NUEVA", identity="0" * 32)
+    assert newest.catalog_sequence == 1 and fresh.list(scope) == (newest, old)
+    copied = tmp_path.resolve() / "copied-workspace"
+    shutil.copytree(root, copied)
+    restored = AttachmentStore(WorkspaceTools(copied), WORKSPACE)
+    assert restored.list(scope) == (newest, old)
+    assert (copied / DIRECTORY / SESSION / file.name).read_bytes() == original
+
+
+def test_revoked_catalog_sequence_is_not_reused_and_provenance_is_not_authority(attachments):
+    _root, store, scope = attachments
+    first = ingest(store, scope, ingress_run_id="1" * 32, source_kind="document")
+    revoked = store.revoke(scope, first.attachment_id, first.sha256, guard=lambda: None)
+    second = ingest(store, scope, identity="0" * 32)
+    assert revoked.catalog_sequence == 1 and second.catalog_sequence == 2
+    assert store.list(scope) == (second, revoked)
+    with pytest.raises(MediaError, match="media_attachment_revoked"):
+        store.read(scope, revoked.attachment_id, revoked.sha256, guard=lambda: None)
+    with pytest.raises(MediaError, match="media_authority_required"):
+        store.read(scope, second.attachment_id, second.sha256, guard=None)
+    with pytest.raises(MediaError, match="media_attachment_conflict"):
+        ingest(store, scope, identity=second.attachment_id, ingress_run_id="2" * 32)
+
+
+def test_two_store_instances_cannot_publish_duplicate_catalog_sequence(attachments, monkeypatch):
+    root, store, scope = attachments
+    entered, release, failures, result = threading.Event(), threading.Event(), [], []
+    original = store._catalogued
+
+    def hold(row, rows):
+        entered.set()
+        assert release.wait(3)
+        return original(row, rows)
+
+    monkeypatch.setattr(store, "_catalogued", hold)
+
+    def publish():
+        try:
+            result.append(ingest(store, scope))
+        except BaseException as error:
+            failures.append(error)
+
+    worker = threading.Thread(target=publish)
+    worker.start()
+    try:
+        assert entered.wait(3)
+        other = AttachmentStore(WorkspaceTools(root), WORKSPACE)
+        with pytest.raises(MediaError, match="media_store_busy"):
+            ingest(other, scope, identity="0" * 32)
+    finally:
+        release.set()
+        worker.join(3)
+    assert not worker.is_alive() and not failures and result[0].catalog_sequence == 1
+    second = ingest(other, scope, identity="0" * 32)
+    assert [r.catalog_sequence for r in other.list(scope)] == [2, 1]
+    assert second.catalog_sequence == 2
+
+
+@pytest.mark.parametrize("key,value", [
+    ("catalog_sequence", True), ("catalog_sequence", 0),
+    ("catalog_sequence", 2**53), ("imported_at_unix_ms", None),
+    ("imported_at_unix_ms", -1), ("imported_at_unix_ms", 1.5),
+    ("imported_at_unix_ms", True), ("imported_at_unix_ms", 2**53),
+    ("ingress_run_id", "a" * 31), ("source_kind", "raw_chat_id"),
+])
+def test_catalog_metadata_rejects_invalid_or_lossy_wire_values(attachments, key, value):
+    root, store, scope = attachments
+    row = ingest(store, scope)
+    file = root / DIRECTORY / SESSION / (row.attachment_id + ".json")
+    manifest = json.loads(file.read_text())
+    manifest[key] = value
+    file.write_text(json.dumps(manifest))
+    with pytest.raises(MediaError):
+        store.list(scope)
+
+
+def test_duplicate_catalog_sequence_is_ambiguous_instead_of_fake_latest(attachments):
+    root, store, scope = attachments
+    ingest(store, scope)
+    second = ingest(store, scope, identity="0" * 32)
+    file = root / DIRECTORY / SESSION / (second.attachment_id + ".json")
+    manifest = json.loads(file.read_text())
+    manifest["catalog_sequence"] = 1
+    file.write_text(json.dumps(manifest))
+    with pytest.raises(MediaError, match="media_catalog_conflict"):
+        store.list(scope)
+    with pytest.raises(MediaError, match="media_catalog_conflict"):
+        ingest(store, scope, identity="d" * 32)
+
+
+def test_catalog_sequence_exhaustion_fails_before_publishing_another_original(attachments):
+    root, store, scope = attachments
+    first = ingest(store, scope)
+    folder = root / DIRECTORY / SESSION
+    file = folder / (first.attachment_id + ".json")
+    manifest = json.loads(file.read_text())
+    manifest["catalog_sequence"] = 2**53 - 1
+    file.write_text(json.dumps(manifest))
+    before = {p.name: p.read_bytes() for p in folder.iterdir()}
+    with pytest.raises(MediaError, match="media_catalog_limit"):
+        ingest(store, scope, identity="0" * 32)
+    assert {p.name: p.read_bytes() for p in folder.iterdir()} == before
