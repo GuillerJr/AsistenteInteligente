@@ -9,7 +9,8 @@ import QALaunchSupport
             let arguments = Array(CommandLine.arguments.dropFirst())
             guard arguments.count == 4, arguments[0] == "--request", arguments[2] == "--receipt" else { throw QALaunchIssue.arguments }
             let coordinator = QALaunchCoordinator(driver: QALaunchWorkspaceDriver())
-            _ = try await coordinator.launch(requestURL: URL(fileURLWithPath: arguments[1]), receiptURL: URL(fileURLWithPath: arguments[3]))
+            _ = try await coordinator.launch(requestURL: QALaunchAdmission.fileURL(from: arguments[1], isDirectory: false),
+                                             receiptURL: QALaunchAdmission.fileURL(from: arguments[3], isDirectory: false))
             print("Lanzamiento confirmado; consulta el recibo sintético.")
         } catch let failure as QALaunchUncertainFailure {
             // The ordinary receipt could not retain disk custody. Preserve only bounded,

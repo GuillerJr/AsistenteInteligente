@@ -254,6 +254,99 @@
       "second_physical_output_acoustic_qualification": "pending_owner_connected_second_physical_output; fixtures do not establish acoustic routing",
       "A58_or_selected_block_closed": false,
       "full_local_suites_or_builds": false
+    },
+    {
+      "commit": "52e4e9c03b1f00069b0dcca5e60593a06dcdea40",
+      "short_commit": "52e4e9c",
+      "run_id": 40931168066,
+      "run_attempt": 1,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40931168066",
+      "status": "completed_failure_due_to_macos_hosted_capacity",
+      "ubuntu_job": 123649664371,
+      "ubuntu_python": {
+        "passed": 3448,
+        "skipped": 46,
+        "elapsed_seconds": 284.75,
+        "exit_code": 0,
+        "cleanup_status": "confirmed",
+        "source_unchanged": true
+      },
+      "macos_job": 123649664739,
+      "macos": {
+        "conclusion": "cancelled",
+        "runner_id": 0,
+        "runner_label": "macos-26",
+        "steps_executed": 0,
+        "compilation_executed": false,
+        "swift_tests_executed": false,
+        "artifact_produced": false,
+        "failure_annotation": "The job was not acquired by Runner of type hosted even after multiple attempts",
+        "capacity_notices": 3,
+        "billing_or_invalid_runner_label_not_established": true
+      },
+      "receipt": "/private/tmp/jarvis-telegram-voice-media-live-20261029/ci-52e4e9c-attempt1-capacity-result.json",
+      "receipt_sha256": "2722e25db66f9e5e85349cbb75140e98b88ba8e31d210c7745335aefa3bdcbda",
+      "full_ci_qualification": false,
+      "local_builds_or_suites": false
+    },
+    {
+      "commit": "52e4e9c03b1f00069b0dcca5e60593a06dcdea40",
+      "short_commit": "52e4e9c",
+      "run_id": 40931168066,
+      "run_attempt": 2,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40931168066/attempts/2",
+      "status": "failed_QA_launcher_Swift_path_admission_contract",
+      "retry": "single_targeted_macos_job_retry_after_confirmed_hosted_capacity_failure",
+      "macos_job": 123658762643,
+      "same_code_and_runner_label": true,
+      "automatic_further_retries": false,
+      "ubuntu_inherited_from_attempt1": {
+        "passed": 3448,
+        "skipped": 46,
+        "reexecuted": false
+      },
+      "macos_bundle_and_QA_helper_build": "passed",
+      "macos_swift": {
+        "executed": 604,
+        "skipped": 1,
+        "failures": 13,
+        "unexpected_failures": 7,
+        "elapsed_seconds": 223.271
+      },
+      "QA_launcher_contract_suite": {
+        "executed": 11,
+        "failures": 13,
+        "unexpected_failures": 7,
+        "elapsed_seconds": 1.198,
+        "failing_gate": "QALaunchAdmission.swift syntheticPath line143 Foundation-normalized path comparison",
+        "kernel_self_process_identity_probe": "passed"
+      },
+      "other_native_tests": {
+        "executed_inventory": 593,
+        "failures": 0,
+        "full_run_skipped_total": 1
+      },
+      "macos_python": "not_executed_after_swift_failure",
+      "macos_package_build_smoke": "not_executed_after_swift_failure",
+      "resource_receipts": {
+        "build_exit_code": 0,
+        "swift_exit_code": 1,
+        "cleanup_status": "confirmed",
+        "source_unchanged": true
+      },
+      "targeted_retry_receipt": "/private/tmp/jarvis-telegram-voice-media-live-20261029/ci-52e4e9c-attempt2-targeted-retry.json",
+      "targeted_retry_receipt_sha256": "b0d1eb159ab1cafe285ae24dc6c14d0fc23288a0ca34ef3653a23938ab36ffdb",
+      "result_receipt": "/private/tmp/jarvis-telegram-voice-media-live-20261029/ci-52e4e9c-attempt2-swift-result.json",
+      "result_receipt_sha256": "29951fbb39f343ad330bb5f55ffc7ce37ab46cb39f9b17efe0ffe61f43363e74",
+      "cause_assessment": "Foundation path normalization rejected the intended /private/tmp fixture path at QA-helper admission before launch. The prepared correction checks lexical paths with lstat components; raw aliases and dot components remain rejected.",
+      "correction_scope": "QA launcher support and launcher contract tests only; no DesktopCore or JarvisApp product behavior changes",
+      "correction_remote_CI_qualification": "pending_new_commit_and_remote_workflow",
+      "helper_or_app52_launched": false,
+      "full_ci_qualification": false,
+      "local_builds_or_suites": false,
+      "partial_build_artifact_validation_receipt": "/private/tmp/jarvis-telegram-voice-media-live-20261029/artifact-validation-52e4e9c.json",
+      "partial_build_artifact_validation_sha256": "8cc793bb6a9225da739ef104365b792ab7f2ba9d957b3fce26cd13d751667d98",
+      "partial_build_artifact_does_not_override_failed_CI_or_authorize_launch": true
     }
   ],
   "native_cases": [
@@ -947,14 +1040,14 @@
   ],
   "current_native_blocker": {
     "kind": "launcher_fix_remote_CI_pending",
-    "status": "QA_identity_and_cleanup_harness_fix_required_before_live_voice_repetition",
+    "status": "CI52_path_admission_contract_failed_corrected_helper_revision_pending_remote_CI",
     "observed_failure_case": "native201_speech_authorization_QA_launcher_identity_failure",
     "synthetic_failure_receipt": "/private/tmp/jarvis-telegram-voice-media-live-20261029/native201-speech-crash-cause.json",
     "synthetic_failure_receipt_sha256": "1828cf39223c96182188de80caaf6b96c7de6e064d22983b945cb3def2c7fde6",
     "credentials_requested_in_chat": false,
     "Telegram_test_operation_delegated_by_owner": true,
     "no_new_native201_product_qualification_claimed_from_failed_launch": true,
-    "native_NSWorkspace_helper_and_remote_tests": "implementation_prepared_remote_CI_pending",
+    "native_NSWorkspace_helper_and_remote_tests": "build_passed_but_QA_path_contract_failed_lexical_lstat_correction_prepared",
     "replacement_QA_plist": "must_restore_original_MachO_CFBundleExecutable_Jarvis",
     "required_after_remote_CI": "Fresh native launch with correct TCC identity and bounded custody; then repeat speech authorization and Telegram voice without crediting the aborted run.",
     "previous_blocker_checkpoint_preserved_as_history": {
@@ -975,6 +1068,15 @@
       "native_and_backend_source_commit": "201a5b72e930e9fe6083b6d89fcb76391888958e",
       "new_guard_script_sha256": "a2f7da40581c954dfff35012234dc28576e404b8b7c6729d6590c9afb38a9dfe",
       "new_guard_has_pinned_direct_backend_cleanup": true
-    }
+    },
+    "launcher_CI_attempts": {
+      "run_id": 40931168066,
+      "attempt1": "Mac cancelled before execution because hosted arm64 runner was unavailable; Ubuntu passed",
+      "attempt2": "Bundle/helper compiled; QA-launcher path admission tests failed; no full CI qualification",
+      "Ubuntu_not_reexecuted_for_targeted_retry": true,
+      "new_app52_launched": false
+    },
+    "next_required_gate": "New corrected helper commit must pass complete remote CI before the supervisor/helper/app is launched",
+    "launcher_failure_correction_scope": "QALaunchSupport, JarvisQALauncher and their tests; DesktopCore/JarvisApp unchanged"
   }
 }

@@ -53,8 +53,8 @@ public struct QALaunchAdmission: Sendable {
     public static func admit(requestURL: URL, receiptURL: URL) throws -> Self {
         try syntheticPath(requestURL, directory: false)
         try syntheticPath(receiptURL.deletingLastPathComponent(), directory: true)
-        guard receiptURL.isFileURL, receiptURL.path == receiptURL.standardizedFileURL.path,
-              receiptURL.path.hasPrefix("/private/tmp/"),
+        _ = try fileURL(from: receiptURL.path, isDirectory: false)
+        guard receiptURL.isFileURL,
               receiptURL.lastPathComponent.range(of: #"^[A-Za-z0-9._-]{1,100}\.json$"#, options: .regularExpression) != nil
         else { throw QALaunchIssue.path }
         var info = stat()
@@ -115,7 +115,7 @@ public struct QALaunchAdmission: Sendable {
         else { throw QALaunchIssue.arguments }
         for key in ["HOME", "TMPDIR"] {
             guard let path = request.environment[key], path.utf8.count <= 4096 else { throw QALaunchIssue.arguments }
-            try syntheticPath(URL(fileURLWithPath: path, isDirectory: true), directory: true)
+            try syntheticPath(fileURL(from: path, isDirectory: true), directory: true)
         }
         return plistData
     }
@@ -129,25 +129,37 @@ public struct QALaunchAdmission: Sendable {
             guard allowed.contains(flag), seen.insert(flag).inserted, path.hasPrefix("/"), path.utf8.count <= 4096,
                   !path.unicodeScalars.contains(where: { $0.value < 32 || $0.value == 127 })
             else { throw QALaunchIssue.arguments }
-            let url = URL(fileURLWithPath: path)
             if flag == "--python" || flag == "--codex" {
                 var info = stat()
                 guard stat(path, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG, access(path, X_OK) == 0 else { throw QALaunchIssue.arguments }
-            } else { try syntheticPath(url, directory: true) }
+            } else { try syntheticPath(fileURL(from: path, isDirectory: true), directory: true) }
         }
+    }
+
+    /// Lexical admission intentionally does not use Foundation's private-prefix normalization.
+    /// Only explicit /private/tmp paths are accepted; OS lstat checks each component separately.
+    public static func fileURL(from path: String, isDirectory: Bool) throws -> URL {
+        let canonical = isDirectory && path.hasSuffix("/") ? String(path.dropLast()) : path
+        let components = canonical.split(separator: "/", omittingEmptySubsequences: false)
+        guard canonical.hasPrefix("/private/tmp/"), canonical.utf8.count <= 4096,
+              !canonical.unicodeScalars.contains(where: { $0.value < 32 || $0.value == 127 }),
+              components.dropFirst().allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." })
+        else { throw QALaunchIssue.path }
+        return URL(fileURLWithPath: canonical, isDirectory: isDirectory)
     }
 
     static func syntheticPath(_ url: URL, directory: Bool) throws {
         let path = url.path
-        guard url.isFileURL, path.hasPrefix("/private/tmp/"), path == url.standardizedFileURL.path,
-              path == url.resolvingSymlinksInPath().path else { throw QALaunchIssue.path }
-        let components = url.pathComponents
-        var cursor = URL(fileURLWithPath: "/private/tmp", isDirectory: true)
+        guard url.isFileURL else { throw QALaunchIssue.path }
+        _ = try fileURL(from: path, isDirectory: directory)
+        let components = path.split(separator: "/", omittingEmptySubsequences: false)
+        var cursor = "/private/tmp"
         for component in components.dropFirst(3) {
-            cursor.appendPathComponent(component)
+            cursor += "/" + String(component)
             var info = stat()
-            guard lstat(cursor.path, &info) == 0, info.st_uid == geteuid(), (info.st_mode & 0o022) == 0,
-                  (info.st_mode & S_IFMT) != S_IFLNK else { throw QALaunchIssue.ownership }
+            guard lstat(cursor, &info) == 0 else { throw QALaunchIssue.ownership }
+            guard (info.st_mode & S_IFMT) != S_IFLNK else { throw QALaunchIssue.path }
+            guard info.st_uid == geteuid(), (info.st_mode & 0o022) == 0 else { throw QALaunchIssue.ownership }
         }
         var info = stat()
         guard lstat(path, &info) == 0,

@@ -139,8 +139,8 @@ public struct QALaunchUncertainFailure: Error {
             let app = try await driver.open(admission)
             receipt.returnedCandidate = QALaunchCandidate(app)
             guard app.pid > 1, app.bundleID == admission.request.expectedBundleID,
-                  app.bundleURL.standardizedFileURL == admission.appURL,
-                  app.executableURL.standardizedFileURL == admission.executableURL,
+                  app.bundleURL.isFileURL, app.bundleURL.path == admission.appURL.path,
+                  app.executableURL.isFileURL, app.executableURL.path == admission.executableURL.path,
                   app.launchDate.timeIntervalSince1970 >= receipt.launchRequestedUnix - 1,
                   app.launchDate <= now().addingTimeInterval(2) else { throw QALaunchIssue.returnedApplication }
             guard let process = observe(app.pid), process.pid == app.pid,

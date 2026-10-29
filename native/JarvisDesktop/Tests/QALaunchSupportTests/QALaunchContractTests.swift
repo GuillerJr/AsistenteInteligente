@@ -4,6 +4,20 @@ import XCTest
 @testable import QALaunchSupport
 
 final class QALaunchContractTests: XCTestCase {
+    func testLexicalPrivateTmpAdmissionDoesNotCollapseItsPrefixOrAcceptAliasesAndDotComponents() throws {
+        let fixture = try QALaunchFixture(); defer { fixture.remove() }
+        let request = try QALaunchAdmission.fileURL(from: fixture.requestURL.path, isDirectory: false)
+        XCTAssertEqual(request.path, fixture.requestURL.path)
+        XCTAssertNoThrow(try fixture.admit())
+        for invalid in [fixture.root.path + "/./request.json", fixture.root.path + "/../request.json",
+                        fixture.root.path + "//request.json", fixture.requestURL.path.replacingOccurrences(of: "/private/tmp/", with: "/tmp/")] {
+            XCTAssertThrowsError(try QALaunchAdmission.fileURL(from: invalid, isDirectory: false)) {
+                XCTAssertEqual($0 as? QALaunchIssue, .path)
+            }
+        }
+        XCTAssertEqual(try QALaunchAdmission.fileURL(from: fixture.root.path + "/", isDirectory: true).path, fixture.root.path)
+    }
+
     func testAdmissionRequiresRealNativeMainAndVoiceUsageDescriptions() throws {
         let fixture = try QALaunchFixture(); defer { fixture.remove() }
         let admission = try fixture.admit()
