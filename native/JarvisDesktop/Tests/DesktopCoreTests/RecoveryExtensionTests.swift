@@ -29,10 +29,14 @@ enum RecoveryFixture {
 private actor RecoveryWire {
     var calls: [String] = [], rows: [RPCValue] = []
     var loseSubmit = false, loseRead = false, ticket = false
+    var ticketOnSubmit = false
+    var decisions: [[String: RPCValue]] = []
     var gate: RecoveryGate?
     func configure(loseSubmit: Bool = false, loseRead: Bool = false) { self.loseSubmit = loseSubmit; self.loseRead = loseRead }
     func setRows(_ rows: [RPCValue], ticket: Bool = false) { self.rows = rows; self.ticket = ticket }
     func setGate(_ gate: RecoveryGate?) { self.gate = gate }
+    func publishTicketOnSubmit() { ticketOnSubmit = true }
+    func recordedDecisions() -> [[String: RPCValue]] { decisions }
     func count(_ method: String) -> Int { calls.filter { $0 == method }.count }
     func request(_ method: String, _ params: [String: RPCValue]) async throws -> RPCValue {
         calls.append(method)
@@ -47,8 +51,9 @@ private actor RecoveryWire {
             return try RecoveryFixture.operation(kind: method, phase: "complete")
         case "workspace.backup.create":
             rows = [try RecoveryFixture.operation()]
+            ticket = ticketOnSubmit
             if loseSubmit { throw RPCFailure.disconnected }; return rows[0]
-        case "maintenance.decide": return .object(["accepted": .bool(true)])
+        case "maintenance.decide": decisions.append(params); return .object(["accepted": .bool(true)])
         case "maintenance.cleanup":
             let old = try XCTUnwrap(rows.first?.object); var row = old
             row["cleanup_owner_pending"] = .bool(false); row["phase"] = .string("failed"); rows = [.object(row)]; return rows[0]
@@ -58,8 +63,15 @@ private actor RecoveryWire {
 }
 private actor RecoveryGate {
     var released = false
+    private var entered = false
+    private let onEntry: @Sendable () -> Void
     var waiters: [CheckedContinuation<Void, Never>] = []
-    func wait() async { if released { return }; await withCheckedContinuation { waiters.append($0) } }
+    init(onEntry: @escaping @Sendable () -> Void = {}) { self.onEntry = onEntry }
+    func wait() async {
+        if !entered { entered = true; onEntry() }
+        if released { return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
     func release() { released = true; let current = waiters; waiters.removeAll(); for waiter in current { waiter.resume() } }
 }
 private final class RecoveryTicketChanges: @unchecked Sendable {
@@ -100,6 +112,21 @@ final class RecoveryExtensionTests: XCTestCase {
         await store.prepareWorkspaceBackup(entries: [try RecoveryWorkspaceEntry(path: "selected.txt")], parent: "/private/tmp/fixture-parent", name: "portable")
         XCTAssertNotNil(store.preview, store.errorMessage ?? "sin revisión")
     }
+    @MainActor private func submitWithVisibleTicket(_ store: RecoveryExtensionStore,
+                                                  wire: RecoveryWire) async throws -> MaintenanceApproval {
+        // Publish a coherent host state before submit starts its background
+        // reader. Await the observable publication, never an arbitrary number
+        // of refresh/yield calls that can all skip the same in-flight read.
+        await wire.publishTicketOnSubmit()
+        await store.submit()
+        if let approval = store.approval { return approval }
+        // submit clears the old card before its RPC. Observe only after that
+        // reset so nil-to-nil invalidation cannot satisfy this publication.
+        let published = expectation(description: "Approval was published by the submitted operation")
+        withObservationTracking { _ = store.approval } onChange: { published.fulfill() }
+        await fulfillment(of: [published], timeout: 1)
+        return try XCTUnwrap(store.approval, store.errorMessage ?? "no approval after publication")
+    }
     @MainActor func testLostSubmissionACKReconcilesExactReviewWithoutResend() async throws {
         let wire = RecoveryWire(); await wire.configure(loseSubmit: true); let store = store(wire)
         try await prepare(store); await store.submit()
@@ -128,24 +155,24 @@ final class RecoveryExtensionTests: XCTestCase {
         await captured.close(); await store.close()
     }
     @MainActor func testOwnerClickDuringStatusReadIsNotLostOrRebound() async throws {
-        let wire = RecoveryWire(); let store = store(wire); try await prepare(store); await store.submit()
-        await wire.setRows([try RecoveryFixture.operation()], ticket: true)
-        for _ in 0..<100 { await store.refresh(); if store.approval != nil { break }; await Task.yield() }
-        let ticket = try XCTUnwrap(store.approval); XCTAssertTrue(store.canDecide)
-        let gate = RecoveryGate(); await wire.setGate(gate)
+        let wire = RecoveryWire(); let store = store(wire); try await prepare(store)
+        let ticket = try await submitWithVisibleTicket(store, wire: wire); XCTAssertTrue(store.canDecide)
+        let entered = expectation(description: "The overlapping status read is held before its response")
+        let gate = RecoveryGate(onEntry: { entered.fulfill() }); await wire.setGate(gate)
         let refresh = Task { await store.refresh() }
-        for _ in 0..<100 where !store.isRefreshing { await Task.yield() }
+        await fulfillment(of: [entered], timeout: 1)
         XCTAssertTrue(store.isRefreshing); XCTAssertTrue(store.canDecide)
         await store.decide(allow: false, ticket: ticket)
-        let decisions = await wire.count("maintenance.decide"); XCTAssertEqual(decisions, 1)
+        let decisions = await wire.recordedDecisions()
+        XCTAssertEqual(decisions, [ticket.params.merging(["allow": .bool(false)]) { _, new in new }])
         await gate.release(); await refresh.value; await wire.setGate(nil)
+        XCTAssertNil(store.approval, "A pre-decision status response must not recreate the retired ticket")
+        XCTAssertEqual(store.operation?.id, ticket.operationID)
         await store.close()
     }
     @MainActor func testIdenticalPollDoesNotWithdrawOrRecreateDisplayedTicket() async throws {
-        let wire = RecoveryWire(), store = store(wire); try await prepare(store); await store.submit()
-        await wire.setRows([try RecoveryFixture.operation()], ticket: true)
-        for _ in 0..<100 { await store.refresh(); if store.approval != nil { break }; await Task.yield() }
-        let ticket = try XCTUnwrap(store.approval), changes = RecoveryTicketChanges()
+        let wire = RecoveryWire(), store = store(wire); try await prepare(store)
+        let ticket = try await submitWithVisibleTicket(store, wire: wire), changes = RecoveryTicketChanges()
         withObservationTracking { _ = store.approval } onChange: { changes.changed() }
         await store.refresh()
         XCTAssertEqual(store.approval?.id, ticket.id); XCTAssertTrue(store.canDecide)

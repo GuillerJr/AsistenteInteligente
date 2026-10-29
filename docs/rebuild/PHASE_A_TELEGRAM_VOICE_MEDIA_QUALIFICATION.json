@@ -133,10 +133,31 @@
       "short_commit": "95009a1",
       "run_id": 40906647805,
       "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40906647805",
-      "status": "pending_at_this_checkpoint",
+      "status": "passed",
       "implemented_increment": "Owner-reviewed unknown-ID group discovery, exact fresh-private-owner proof, new-route confirmation and renewal of an existing private route without moving its session.",
       "local_verification": "Ruff, Python AST and diff whitespace only; no local suites or builds.",
+      "ubuntu_python": {
+        "passed": 3438,
+        "skipped": 46
+      },
+      "macos_python": {
+        "passed": 3484
+      },
+      "macos_swift": {
+        "executed": 583,
+        "skipped": 1,
+        "failures": 0
+      },
+      "bundle_packages_smoke": "passed",
       "live_unknown_id_group_qualification": "pending",
+      "full_ci_qualification": true
+    },
+    {
+      "commit": "5fc755c74cade3668c630cf32ce805a2688af8c8",
+      "short_commit": "5fc755c",
+      "status": "pending_at_this_checkpoint",
+      "implemented_increment": "Deliver the complete approved receipt and extracted output before CAS-bound visual content, preserving run and operation authority.",
+      "live_mixed_grounding": "passed_with_native_95009a1_and_exact_backend_5fc755c",
       "full_ci_qualification": false
     }
   ],
@@ -283,6 +304,55 @@
       "oracle_sha256": "4a55287ed5af1b65f31b048f352d4afbfbb31f893e9d8305a0cb27d61f743b25"
     },
     {
+      "case": "cas_receipt_text_mixed_image_video_office_csv_real_codex_5fc",
+      "status": "passed_technical_decode_and_model_grounding",
+      "run_id": "8ec9197af330475ab69cc174716e855a",
+      "session_id": "af742c6065e044d7a4cd0d692ffa0fa1",
+      "native_source_commit": "95009a114bdbead44cdc03d40ef753abc9c017b1",
+      "backend_source_commit": "5fc755c74cade3668c630cf32ce805a2688af8c8",
+      "source_provenance": "/private/tmp/jarvis-telegram-voice-media-live-20261029/prepared-launch-media-text-fix.json",
+      "source_provenance_sha256": "a2b1e8c17ceebac890e630945a9200ca7abfb90b7a661461c85aa6d44f20277a",
+      "development_bundle_with_external_python": true,
+      "media_inspect_count": 4,
+      "verified_known_receipts": 4,
+      "source_hashes_match": true,
+      "cas_visual_delivery": {
+        "accepted_events": 2,
+        "operation_and_run_bindings_match": true,
+        "ack_matches": true,
+        "unconfirmed_deliveries": 0,
+        "physical_verified": false,
+        "model_consumption_verified_by_transport_ack": false
+      },
+      "model_observations": {
+        "JARVIS_42_recovered": true,
+        "red_recovered": true,
+        "blue_recovered": true,
+        "actual_frame_locators": [
+          "frame:1@0.000",
+          "frame:2@1.000",
+          "frame:3@1.500"
+        ],
+        "video_duration_seconds": 2,
+        "bounded_video_sampling_reported_as_partial": true,
+        "explicit_source_and_frame_citations": true,
+        "office_marker": "JARVIS OFFICE 6421",
+        "csv_markers": [
+          42,
+          7319
+        ],
+        "states_content_unavailable": false,
+        "complete_grounding_pass": true,
+        "external_content_truth_independently_verified": false
+      },
+      "answer_bytes": 1140,
+      "answer_sha256": "799ae1362d9fe14bde1122f1349d635da5ffcc8cf44d7dbf3040bb5ec7c6b0d3",
+      "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-corpus-oracle-v3-5fc.json",
+      "oracle_sha256": "1abdaebbc9468f2b14675efae85f3474aeaa2edd4c910672606f0783827d95fd",
+      "does_not_qualify_real_telegram_delivery_or_acoustic_recording": true,
+      "exact_backend_commit_ci": "pending_at_this_checkpoint"
+    },
+    {
       "case": "cas_bound_isolated_video_real_codex_639",
       "product_commit": "639b3ec46d130315c8da06067eb5f587c495815c",
       "status": "partial_visual_grounding_pass_receipt_metadata_and_citations_missing",
@@ -325,6 +395,41 @@
       "oracle_sha256": "4a55287ed5af1b65f31b048f352d4afbfbb31f893e9d8305a0cb27d61f743b25"
     }
   ],
+  "telegram_live_checkpoint": {
+    "status": "setup_and_text_passed_attachment_voice_lifecycle_pending",
+    "evidence_source": "Owner confirmations and delegated native UI observations in the isolated synthetic profile; detailed read-only journal/SQL oracle is not yet executed.",
+    "token_entered_only_by_owner": true,
+    "token_or_credentials_read_by_agent": false,
+    "private_route": {
+      "created_from_fresh_pairing": true,
+      "allow_attachments": true,
+      "revision": 2,
+      "pairing_renewed_after_policy_change": true,
+      "existing_session_preserved": true,
+      "sum_2_plus_2": 4,
+      "owner_confirmed_reply": true,
+      "native_UI_reply_observed": true,
+      "tools_used_for_sum": false
+    },
+    "group_route": {
+      "discovered_without_manually_entering_group_ID": true,
+      "chat_type": "group",
+      "message_thread_id": null,
+      "only_owner_and_bot_in_test_group": true,
+      "claim_confirmed_in_native_UI": true,
+      "route_created_with_separate_session": true,
+      "sum_2_plus_2": 4,
+      "owner_confirmed_reply": true
+    },
+    "enabled_routes": 2,
+    "channel_activated_after_native_review": true,
+    "telegram_IDs_usernames_group_names_and_pairing_codes_not_recorded_here": true,
+    "pending": [
+      "Read-only correlation of Telegram routes/events with their exact durable sessions and runs",
+      "Real Telegram document and voice attachment import/inspection",
+      "Fresh approved attachment upload and denial/revocation no-effect cases"
+    ]
+  },
   "oracle_checkpoints": [
     {
       "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-corpus-oracle-initial-v2.json",
@@ -345,14 +450,29 @@
       "scanned_sql_text_bytes": 85653,
       "raw_media_payloads_found": false,
       "temporary_artifact_paths_are_not_durable_storage_claims": true
+    },
+    {
+      "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-corpus-oracle-v3-5fc.json",
+      "sha256": "1abdaebbc9468f2b14675efae85f3474aeaa2edd4c910672606f0783827d95fd",
+      "script": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualify-corpus-oracle-v3.py",
+      "script_sha256": "e76c08986316f1df5b08af300a82fa8224a5da0e2a1a5653610683d6b87b8a3f",
+      "scope": "The new 5fc mixed run passes all four technical receipts and model marker/color/source/frame grounding with two accepted CAS deliveries. Earlier failed runs remain preserved and still make the all-history aggregate false; they are not replaced by the passing latest mixed case.",
+      "sql_mode": "ro",
+      "query_only": true,
+      "scanned_sql_text_bytes": 116287,
+      "raw_media_payloads_found": false,
+      "scan_issues": [],
+      "temporary_artifact_paths_are_not_durable_storage_claims": true
     }
   ],
   "pending_corrections": [
     {
       "case": "approved_CAS_visual_receipt_text_delivery",
-      "status": "working_fix_pending_publication_CI_and_live_qualification",
+      "status": "published_and_live_mixed_grounding_passed_exact_commit_CI_pending",
+      "correction_commit": "5fc755c74cade3668c630cf32ce805a2688af8c8",
       "change_under_review": "Include the complete approved technical receipt and extracted output before the approved image in the CAS-bound SDK visual delivery.",
-      "reason": "Image/video pixels now recover colors and OCR, but the model still lacks explicit source/frame citations or reports unavailable receipt metadata.",
+      "reason": "The 5fc mixed run now recovers colors, OCR, actual sampled frame times, partial-video scope and Office/CSV markers with citations. Exact-commit CI remains pending; prior failed grounding is preserved.",
+      "live_qualification_run_id": "8ec9197af330475ab69cc174716e855a",
       "must_preserve": [
         "Exact run/operation/receipt/image binding",
         "Fresh authority checks before delivery",
@@ -371,10 +491,10 @@
     "only_synthetic_content": true
   },
   "remaining_in_selected_increment": [
-    "Complete CI and real image/video/mixed citation grounding after the pending approved CAS receipt-text delivery correction",
+    "Complete exact-commit CI for 5fc755c; its real mixed citation grounding has passed with the native 95009a1 development bundle",
     "wake effective-mode controlled repetition and Talk live",
-    "Qualify implemented unknown-ID group discovery from 95009a1 in CI and with the owner-only test group, including existing-DM fresh-proof renewal",
-    "live Telegram private/group account and attachments",
+    "Complete the journal/SQL oracle after successful native unknown-ID group discovery, existing-DM proof renewal and owner-confirmed private/group sums",
+    "live Telegram private/group attachments, local voice, approved upload and denial/revocation",
     "final context/cleanup/resource receipts"
   ]
 }
