@@ -11,10 +11,16 @@ final class TelegramStore {
     var isChanging = false
     var isLoading = false
     var pairing: TelegramPairingStatus?
+    var groupPairing: TelegramGroupPairingStatus?
+    var copiedGroupChallengeID: String?
+    var pairingActive: Bool { pairing?.active == true || groupPairing?.active == true }
+    var mayReduceAuthority: Bool { runtimeIsActive() && !isChanging }
     var openingChallengeID: String?
     private(set) var secretResetID = 0
     @ObservationIgnored private var client: TelegramClient?
     @ObservationIgnored private var pairingClient: TelegramPairingClient?
+    @ObservationIgnored private var groupPairingClient: TelegramGroupPairingClient?
+    @ObservationIgnored private let commandCopier = TelegramCommandCopier()
     @ObservationIgnored private let opener = TelegramNativeOpener()
     @ObservationIgnored private var runtimeIsActive: @Sendable () -> Bool = { false }
     @ObservationIgnored private var generation = 0
@@ -23,12 +29,14 @@ final class TelegramStore {
         runtimeIsActive = { client.isActive }
         self.client = TelegramClient(transport: client)
         pairingClient = TelegramPairingClient(transport: client)
+        groupPairingClient = TelegramGroupPairingClient(transport: client)
     }
     func clearSecretInput() { secretResetID += 1 }
 
     func close() async {
         generation += 1; secretResetID += 1
-        snapshot = nil; events = []; pairing = nil; errorMessage = nil
+        snapshot = nil; events = []; pairing = nil; groupPairing = nil; copiedGroupChallengeID = nil; errorMessage = nil
+        commandCopier.clearOwnedCommand()
         await client?.close()
     }
 
@@ -41,8 +49,10 @@ final class TelegramStore {
             let status = try await client.status()
             let history = try await client.history()
             let pairing = try await pairingClient?.status()
+            let group = try await groupPairingClient?.status()
             guard version == generation else { return }
-            snapshot = status; events = history.events; self.pairing = pairing; errorMessage = nil
+            snapshot = status; events = history.events; self.pairing = pairing; groupPairing = group; errorMessage = nil
+            if group?.state != "listening" || !status.connected { commandCopier.clearOwnedCommand() }
         } catch {
             if version == generation { errorMessage = TelegramPresentation.errorMessage(error) }
         }
@@ -68,7 +78,7 @@ final class TelegramStore {
     }
 
     func createRoute(chatID: Int, agentID: String) async -> Bool {
-        guard let client, let snapshot, !snapshot.running, pairing?.active != true else { return false }
+        guard let client, let snapshot, !snapshot.running, !pairingActive else { return false }
         let detail = "Se creará una conversación persistente nueva para este chat privado, con el agente elegido. No se reutiliza otra conversación. Al activar el canal, el texto se enviará a Codex con ChatGPT; las herramientas seguirán esperando la aprobación del dueño en Jarvis.\n\n" +
             ManagementValidation.json(.object(["chat_id": .number(Double(chatID)), "agent_id": .string(agentID),
                                                "workspace_id": .string(snapshot.workspaceID)]))
@@ -78,7 +88,7 @@ final class TelegramStore {
     }
 
     func removeRoute(_ route: TelegramRouteSnapshot) async {
-        guard let client, let snapshot, !snapshot.running, pairing?.active != true else { return }
+        guard let client, let snapshot, !snapshot.running, !pairingActive else { return }
         await change(title: "Quitar ruta de Telegram", action: "Quitar esta ruta",
                      detail: "Se dejarán de aceptar mensajes de este chat cuando se active el canal. La conversación de Jarvis se conserva.\n\n" + ManagementValidation.json(route.reviewValue)) {
             try await client.removeRoute(route)
@@ -86,9 +96,9 @@ final class TelegramStore {
     }
 
     func start(workspacePath: String?) async {
-        guard let client, let snapshot, snapshot.connected, !snapshot.running, pairing?.active != true else { return }
+        guard let client, let snapshot, snapshot.connected, !snapshot.running, !pairingActive else { return }
         await change(title: "Activar el canal de Telegram", action: "Activar estas rutas",
-                     detail: "Jarvis consultará Telegram y responderá sólo a los chats privados de esta lista. El texto se enviará a Codex con ChatGPT. No se aceptan grupos ni adjuntos. Ningún mensaje de Telegram aprueba herramientas: las decisiones reales siguen en las tarjetas nativas de Jarvis. Revisa bot, agentes, conversaciones y carpeta exactos.\n\nCarpeta actual: " + (workspacePath ?? "Espacio privado de Jarvis") + "\n\n" + ManagementValidation.json(snapshot.reviewValue)) {
+                     detail: "Jarvis consultará Telegram y responderá sólo a las rutas de esta lista. En grupos se aceptarán únicamente los remitentes y el tema revisados. El texto se enviará a Codex con ChatGPT. Los adjuntos sólo se podrán inspeccionar tras tu aprobación nativa y cuando la ruta los admita. Ningún mensaje de Telegram aprueba herramientas: las decisiones reales siguen en Jarvis. Revisa bot, destinos, remitentes, agentes, conversaciones y carpeta exactos.\n\nCarpeta actual: " + (workspacePath ?? "Espacio privado de Jarvis") + "\n\n" + ManagementValidation.json(snapshot.reviewValue)) {
             try await client.start(configurationHash: snapshot.configurationHash)
         }
     }
@@ -102,7 +112,7 @@ final class TelegramStore {
     }
 
     func pairingReview(agentID: String) async -> TelegramPairingReview? {
-        guard runtimeIsActive(), !isChanging, let pairingClient else { return nil }
+        guard runtimeIsActive(), !isChanging, groupPairing?.active != true, let pairingClient else { return nil }
         do {
             let result = try await pairingClient.review(agentID: agentID)
             errorMessage = nil; return result
@@ -110,7 +120,7 @@ final class TelegramStore {
     }
 
     func startPairing(_ review: TelegramPairingReview, updateConsumption: Bool, noOtherConsumer: Bool) async -> Bool {
-        guard runtimeIsActive(), !isChanging, let pairingClient, updateConsumption, noOtherConsumer else { return false }
+        guard runtimeIsActive(), !isChanging, groupPairing?.active != true, let pairingClient, updateConsumption, noOtherConsumer else { return false }
         return await pairingChange(title: "Iniciar enlace privado con Telegram", action: "Iniciar este enlace",
             detail: "Durante un máximo de 180 segundos se leerán y avanzarán las actualizaciones del bot, incluso las ignoradas. Confirmas que este bot no tiene otro consumidor: el bloqueo de Jarvis sólo excluye lectores locales. Telegram conservará el mensaje de inicio con el código privado; Jarvis no lo mostrará ni enviará al modelo. Si no se puede abrir Telegram, el intento se cancelará. Todavía no se crea una ruta ni se activa el canal.\n\n" + ManagementValidation.json(review.reviewValue)) {
                 .state(try await pairingClient.start(review, acknowledgeUpdateConsumption: updateConsumption,
@@ -175,7 +185,7 @@ final class TelegramStore {
         isChanging = true; generation += 1
         let version = generation
         defer { isChanging = false }
-        guard OwnerManagementReview.confirm(title: title, action: action, detail: detail, isCurrent: runtimeIsActive) else { return false }
+        guard OwnerManagementReview.confirm(title: title, action: action, detail: detail, isCurrent: { self.generation == version && self.runtimeIsActive() }) else { return false }
         var success = false
         do {
             let result = try await operation()
@@ -190,8 +200,10 @@ final class TelegramStore {
         do {
             let state = try await pairingClient.status()
             let status = try await client.status()
+            let group = try await groupPairingClient?.status()
             guard version == generation else { return false }
-            pairing = state; snapshot = status
+            pairing = state; snapshot = status; groupPairing = group
+            if group?.state != "listening" || !status.connected { commandCopier.clearOwnedCommand() }
         } catch { if version == generation, errorMessage == nil { errorMessage = TelegramPresentation.errorMessage(error) } }
         return success
     }
@@ -203,7 +215,7 @@ final class TelegramStore {
         isChanging = true; generation += 1
         let version = generation
         defer { isChanging = false }
-        guard OwnerManagementReview.confirm(title: title, action: action, detail: detail, isCurrent: runtimeIsActive) else { return false }
+        guard OwnerManagementReview.confirm(title: title, action: action, detail: detail, isCurrent: { self.generation == version && self.runtimeIsActive() }) else { return false }
         var success = false
         do {
             let result = try await operation()
@@ -218,11 +230,126 @@ final class TelegramStore {
             let status = try await client.status()
             let history = try await client.history()
             let pairing = try await pairingClient?.status()
+            let group = try await groupPairingClient?.status()
             guard version == generation else { return false }
-            snapshot = status; events = history.events; self.pairing = pairing
+            snapshot = status; events = history.events; self.pairing = pairing; groupPairing = group
+            if group?.state != "listening" || !status.connected { commandCopier.clearOwnedCommand() }
         } catch {
             if version == generation, errorMessage == nil { errorMessage = TelegramPresentation.errorMessage(error) }
         }
+        return success
+    }
+}
+
+@MainActor private final class TelegramCommandCopier: TelegramNativeCommandCopier {
+    private var ownedChangeCount: Int?
+    private var expiry: Task<Void, Never>?
+    func copyTelegramCommand(_ command: String) -> Bool {
+        clearOwnedCommand()
+        NSPasteboard.general.prepareForNewContents(with: [.currentHostOnly])
+        guard NSPasteboard.general.setString(command, forType: .string) else { return false }
+        ownedChangeCount = NSPasteboard.general.changeCount
+        expiry = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(180)) } catch { return }
+            self?.clearOwnedCommand()
+        }
+        return true
+    }
+    func clearOwnedCommand() {
+        expiry?.cancel(); expiry = nil
+        if let ownedChangeCount, NSPasteboard.general.changeCount == ownedChangeCount { NSPasteboard.general.clearContents() }
+        ownedChangeCount = nil
+    }
+    deinit { expiry?.cancel() }
+}
+
+extension TelegramStore {
+    func createRoute(chatID: Int, agentID: String, policy: TelegramRoutePolicy) async -> Bool {
+        guard let client, let snapshot, !snapshot.running, !pairingActive else { return false }
+        var review = policy.params; review["chat_id"] = .number(Double(chatID)); review["agent_id"] = .string(agentID)
+        review["workspace_id"] = .string(snapshot.workspaceID)
+        return await change(title: "Crear ruta de Telegram", action: "Crear esta ruta", detail:
+            "Se creará una conversación nueva. El grupo requiere además una prueba fresca desde un remitente autorizado antes de activarse. Los adjuntos requieren una aprobación separada para leerlos; esta opción sólo admite su recepción.\n\n" + ManagementValidation.json(.object(review))) {
+                try await client.createRoute(chatID: chatID, agentID: agentID, policy: policy)
+            }
+    }
+    func updateRoute(_ route: TelegramRouteSnapshot, policy: TelegramRoutePolicy, enabled: Bool) async -> Bool {
+        guard let client, let snapshot, !snapshot.running, !pairingActive, snapshot.routes.contains(route) else { return false }
+        var review = policy.params; review["enabled"] = .bool(enabled)
+        return await change(title: "Cambiar ruta de Telegram", action: "Guardar esta política", detail:
+            "Conserva agente y conversación. Cambia sólo esta revisión y revoca su prueba anterior; los grupos deberán verificarse otra vez. Los archivos requieren su propia aprobación de lectura.\n\nActual:\n" + ManagementValidation.json(route.reviewValue) + "\n\nNueva:\n" + ManagementValidation.json(.object(review))) {
+                try await client.updateRoute(route, policy: policy, enabled: enabled)
+            }
+    }
+    func cancelEvent(_ event: TelegramEventSnapshot) async {
+        guard runtimeIsActive(), !isChanging, let client, event.canCancel, events.contains(event) else { return }
+        isChanging = true; generation += 1; let version = generation
+        defer { isChanging = false }
+        let detail: RPCValue = .object(["epoch": .number(Double(event.epoch)), "update_id": .number(Double(event.updateID)),
+            "run_id": event.runID.map(RPCValue.string) ?? .null, "chat_id": event.chatID.map { .number(Double($0)) } ?? .null,
+            "sender_id": event.senderID.map { .number(Double($0)) } ?? .null,
+            "message_thread_id": event.messageThreadID.map { .number(Double($0)) } ?? .null,
+            "route_revision": event.routeRevision.map { .number(Double($0)) } ?? .null])
+        guard OwnerManagementReview.confirm(title: "Cancelar una ejecución de Telegram", action: "Cancelar esta ejecución", detail:
+            "Sólo cancela este evento y su ejecución exacta. Los efectos despachados pueden quedar sin confirmar; no se reenvían automáticamente.\n\n" + ManagementValidation.json(detail), isCurrent: { self.generation == version && self.runtimeIsActive() }) else { return }
+        do { try await client.cancelEvent(event); if version == generation { errorMessage = nil } }
+        catch { if version == generation { errorMessage = TelegramPresentation.errorMessage(error) } }
+        do {
+            let history = try await client.history(); let status = try await client.status()
+            if version == generation { events = history.events; snapshot = status }
+        } catch { if version == generation, errorMessage == nil { errorMessage = TelegramPresentation.errorMessage(error) } }
+    }
+    func groupPairingReview(route: TelegramRouteSnapshot) async -> TelegramGroupPairingReview? {
+        guard runtimeIsActive(), !isChanging, !pairingActive, let groupPairingClient else { return nil }
+        do { return try await groupPairingClient.review(route: route) }
+        catch { errorMessage = TelegramPresentation.errorMessage(error); return nil }
+    }
+    func startGroupPairing(_ review: TelegramGroupPairingReview, updateConsumption: Bool, noOtherConsumer: Bool) async -> Bool {
+        guard !pairingActive, let groupPairingClient else { return false }
+        return await groupChange(title: "Verificar grupo de Telegram", action: "Iniciar esta prueba", detail:
+            "Durante 180 segundos Jarvis leerá y avanzará las actualizaciones del bot, incluidas las ignoradas. Confirma que no hay otro consumidor. Copiarás un código de un solo uso y lo publicarás tú en el grupo y tema exactos desde un remitente autorizado. Telegram conservará ese mensaje. No se activa la ruta ni se envía el código al modelo.\n\n" + ManagementValidation.json(review.reviewValue)) {
+                _ = try await groupPairingClient.start(review, updateConsumption: updateConsumption, noOtherConsumer: noOtherConsumer)
+            }
+    }
+    func copyGroupPairingCommand() async {
+        guard let groupPairingClient, let groupPairing, groupPairing.state == "listening", let challenge = groupPairing.base.challengeID,
+              copiedGroupChallengeID != challenge else { return }
+        _ = await groupChange(title: "Copiar código privado del grupo", action: "Copiar este código", detail:
+            "El portapapeles de este Mac se sustituirá por un código privado de un solo uso, sin compartirlo con otros dispositivos. Pégalo tú en el grupo y tema revisados antes de que caduque. Jarvis borrará su copia al terminar el enlace o tras tres minutos si el portapapeles no cambió. No lo envíes a otros chats ni a Codex. Jarvis no publicará ningún mensaje por ti.\n\n" + ManagementValidation.json(groupPairing.claimReviewValue)) {
+                self.copiedGroupChallengeID = challenge
+                let version = self.generation
+                try await groupPairingClient.copy(groupPairing, using: self.commandCopier) { self.generation == version && self.runtimeIsActive() }
+            }
+    }
+    func cancelGroupPairing() async {
+        guard let groupPairingClient else { return }
+        _ = await groupChange(title: "Cancelar prueba del grupo", action: "Cancelar esta prueba", detail:
+            "Se detendrá el lector de esta prueba. La ruta se conserva y seguirá necesitando una prueba fresca.") { _ = try await groupPairingClient.cancel() }
+    }
+    func confirmGroupPairing(_ claim: TelegramGroupPairingStatus) async {
+        guard let groupPairingClient, let snapshot, let route = snapshot.routes.first(where: { $0.chatID == claim.chatID }) else { return }
+        _ = await groupChange(title: "Confirmar grupo y remitente", action: "Verificar esta ruta", detail:
+            "Revisa el destino, tema y remitente que publicaron el código exacto. Esta prueba se conserva sólo en memoria y se pierde al desconectar o cambiar la configuración. No activa el canal.\n\n" + ManagementValidation.json(claim.claimReviewValue) + "\n\n" + ManagementValidation.json(route.reviewValue)) {
+                let version = self.generation
+                let result = try await groupPairingClient.confirm(claim, route: route, snapshot: snapshot)
+                if self.generation == version, self.runtimeIsActive() { self.snapshot = result }
+            }
+    }
+    private func groupChange(title: String, action: String, detail: String, operation: () async throws -> Void) async -> Bool {
+        guard runtimeIsActive(), !isChanging, let groupPairingClient, let client else { return false }
+        isChanging = true; generation += 1; let version = generation
+        defer { isChanging = false }
+        guard OwnerManagementReview.confirm(title: title, action: action, detail: detail, isCurrent: { self.generation == version && self.runtimeIsActive() }) else { return false }
+        var success = false
+        do { try await operation(); if version == generation { success = true; errorMessage = nil } }
+        catch { if version == generation { errorMessage = (error as? TelegramGroupCommandFailure)?.localizedDescription ?? TelegramPresentation.errorMessage(error) } }
+        do {
+            let state = try await groupPairingClient.status(); let status = try await client.status()
+            if version == generation {
+                groupPairing = state; snapshot = status
+                if state.state != "listening" || !status.connected { commandCopier.clearOwnedCommand() }
+            }
+        } catch { if version == generation, errorMessage == nil { errorMessage = TelegramPresentation.errorMessage(error) } }
         return success
     }
 }

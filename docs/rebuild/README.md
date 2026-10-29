@@ -6,9 +6,14 @@ con checkpoints. Los recorridos nativos y cierre del bundle d474 se relacionan
 con el producto idéntico de 1481983; su [CI exacta](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40877800263) pasó completa.
 El [registro](PHASE_A_AUTOMATION_QUALIFICATION.json) y el
 [cierre](PHASE_A_AUTOMATION_CLOSEOUT.md) conservan los fallos anteriores.
-REA mantiene 41 lotes y 155 rutas TS/JS seleccionadas; no es revisión exhaustiva.
+REA mantiene 45 lotes y 171 rutas TS/JS seleccionadas; no es revisión exhaustiva.
 La matriz conserva 52 familias parciales y 28 sin implementar: este cierre no
 completa la fase A ni inicia B.
+
+El bloque de **Telegram, voz, documentos y multimedia** incorpora rutas de grupo,
+adjuntos por sesión, codecs locales y conversación por voz explícita. Está en
+[cualificación integrada](PHASE_A_TELEGRAM_VOICE_MEDIA.md);
+no se presenta como cerrado antes de CI y recorridos nativos del producto.
 
 Decisión del dueño, 24-10-2026: construir la nueva variante de Jarvis **en este
 repositorio**, con implementación propia y arquitectura informada por el estudio

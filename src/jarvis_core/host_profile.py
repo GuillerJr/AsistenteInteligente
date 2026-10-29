@@ -939,6 +939,10 @@ def service_fingerprint(service):
 
 def service_blockers(service):
     codes = set()
+    if hasattr(service, "_media_expire_uploads"):
+        service._media_expire_uploads()
+    if any(row["status"] == "receiving" for row in getattr(service, "_media_uploads", {}).values()):
+        codes.add("media_import_active")
     if service._closing:
         codes.add("service_closing")
     if service._maintenance:
@@ -979,11 +983,12 @@ def service_blockers(service):
                                 or (channel._worker is not None and not channel._worker.done())
                                 or channel._send_tickets):
         codes.add("telegram_active_or_cleanup")
-    pairing = service._telegram_pairing
-    if pairing is not None and (pairing._lease is not None
+    for pairing in (service._telegram_pairing,
+                    getattr(service, "_telegram_group_pairing", None)):
+        if pairing is not None and (pairing._lease is not None
                                 or (pairing._worker is not None and not pairing._worker.done())
                                 or (pairing._expiry is not None and not pairing._expiry.done())):
-        codes.add("pairing_active_or_cleanup")
+            codes.add("pairing_active_or_cleanup")
     for entry in service.mcp._entries.values():
         client = entry.client
         process = client._process
@@ -998,6 +1003,8 @@ def service_blockers(service):
 # Reads may initialize SQLite or provider/pairing state, so ALL handlers are
 # admitted. This set only avoids false generation bumps for unchanged polling.
 READ_RPCS = frozenset({
+    "media.list", "media.read", "media.playback.read", "media.upload.status", "media.worker.read",
+    "telegram.group.pairing.review", "telegram.group.pairing.status", "telegram.destination",
     "automation.list", "automation.webhook.status",
     "plugins.list", "plugins.inspect", "plugins.review", "plugins.versions",
     "plugins.catalog", "plugins.resource", "plugins.mcp.review",

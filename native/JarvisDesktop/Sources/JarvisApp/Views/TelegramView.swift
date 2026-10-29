@@ -4,8 +4,6 @@ import SwiftUI
 struct TelegramView: View {
     @Bindable var store: ChatStore
     @State private var token = ""
-    @State private var chatID = ""
-    @State private var agentID = "jarvis"
 
     private var editable: Bool { store.canChangeSession && !store.telegram.isChanging }
 
@@ -13,13 +11,14 @@ struct TelegramView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Telegram").font(.title2.weight(.semibold))
-                Text("Un bot propio para chats privados que elijas. Cada ruta usa una conversación nueva de Jarvis y conserva las aprobaciones nativas.")
+                Text("Un bot propio para chats y grupos que elijas. Cada ruta conserva su conversación y las aprobaciones nativas de Jarvis.")
                     .foregroundStyle(.secondary)
                 if let snapshot = store.telegram.snapshot {
                     status(snapshot)
                     if !snapshot.connected { connection }
                     TelegramPairingView(store: store)
-                    routes(snapshot)
+                    TelegramGroupPairingView(store: store)
+                    TelegramRoutesView(store: store, snapshot: snapshot)
                     controls(snapshot)
                 } else {
                     Text("Actualiza el estado para revisar la configuración del canal.").foregroundStyle(.secondary)
@@ -57,7 +56,7 @@ struct TelegramView: View {
                     .foregroundStyle(.red)
             }
             if !snapshot.restoredPairingRequiredChatIDs.isEmpty {
-                Text("Hay rutas conservadas pendientes de un enlace nuevo con Telegram. Usa «Revisar e iniciar enlace…» para cada chat habilitado; después podrás activar el canal.")
+                Text("Prueba fresca requerida para alguna ruta habilitada. Enlaza cada chat privado o verifica su grupo y tema exactos antes de activar el canal.")
                     .font(.caption).foregroundStyle(.orange)
             }
             DisclosureGroup("Carpeta e identidad de configuración") {
@@ -84,49 +83,16 @@ struct TelegramView: View {
         }
     }
 
-    private func routes(_ snapshot: TelegramSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Rutas privadas (\(snapshot.routes.count)/32)").font(.headline)
-            ForEach(snapshot.routes) { route in
-                VStack(alignment: .leading, spacing: 7) {
-                    Text("Chat \(route.chatID)").font(.headline)
-                    Text("Agente: \(store.management.agents.first(where: { $0.id == route.agentID })?.name ?? route.agentID)")
-                    Text("Versión \(route.revision) · \(route.enabled ? "habilitada" : "deshabilitada")")
-                        .font(.caption).foregroundStyle(.secondary)
-                    HStack {
-                        Button("Abrir conversación") { Task { await store.openScheduledSession(route.sessionID) } }
-                            .disabled(!store.canChangeSession)
-                        Button("Quitar…", role: .destructive) { Task { await store.telegram.removeRoute(route) } }
-                            .disabled(!editable || snapshot.running || store.telegram.pairing?.active == true)
-                    }
-                }.padding(12).background(.quaternary, in: .rect(cornerRadius: 8))
-            }
-            if snapshot.routes.isEmpty { Text("No hay chats autorizados para este bot.").foregroundStyle(.secondary) }
-            TextField("ID numérico positivo de chat privado", text: $chatID).textFieldStyle(.roundedBorder)
-                .disabled(!editable || snapshot.running || store.telegram.pairing?.active == true)
-            Picker("Agente de la nueva ruta", selection: $agentID) {
-                ForEach(store.management.agents) { Text($0.name).tag($0.id) }
-            }.disabled(!editable || snapshot.running || store.telegram.pairing?.active == true)
-            Button("Añadir ruta…") {
-                guard let identity = TelegramValidation.chatID(chatID) else { return }
-                Task { if await store.telegram.createRoute(chatID: identity, agentID: agentID) { chatID = "" } }
-            }.disabled(!editable || snapshot.running || store.telegram.pairing?.active == true || snapshot.routes.count >= 32 || TelegramValidation.chatID(chatID) == nil ||
-                       !store.management.agents.contains(where: { $0.id == agentID }) ||
-                       snapshot.routes.contains(where: { $0.chatID == TelegramValidation.chatID(chatID) }))
-            if snapshot.running { Text("Detén el canal antes de modificar sus rutas.").font(.caption).foregroundStyle(.secondary) }
-        }
-    }
-
     private func controls(_ snapshot: TelegramSnapshot) -> some View {
         HStack {
             if snapshot.running {
-                Button("Detener canal…") { Task { await store.telegram.stop() } }.disabled(!editable)
+                Button("Detener canal…") { Task { await store.telegram.stop() } }.disabled(!store.telegram.mayReduceAuthority)
             } else {
                 Button("Activar canal…") { Task { await store.telegram.start(workspacePath: store.access.workspacePath) } }
-                    .disabled(!editable || !snapshot.connected || store.telegram.pairing?.active == true || !snapshot.restoredPairingRequiredChatIDs.isEmpty || !snapshot.routes.contains(where: \.enabled))
+                    .disabled(!editable || !snapshot.connected || store.telegram.pairingActive || !snapshot.restoredPairingRequiredChatIDs.isEmpty || !snapshot.routes.contains(where: \.enabled))
             }
             if snapshot.connected {
-                Button("Desconectar…", role: .destructive) { Task { await store.telegram.disconnect() } }.disabled(!editable)
+                Button("Desconectar…", role: .destructive) { Task { await store.telegram.disconnect() } }.disabled(!store.telegram.mayReduceAuthority)
             }
         }
     }
@@ -142,6 +108,13 @@ struct TelegramView: View {
                         Text(event.outcome == "unknown" ? "Resultado sin confirmar" : event.outcome == "pending" ? "Resultado pendiente" : "Estado registrado")
                             .font(.caption).foregroundStyle(.secondary)
                         if let chat = event.chatID { Text("Chat \(chat) · \(event.agentID ?? "sin agente")").font(.caption) }
+                        if let sender = event.senderID { Text("Remitente \(sender) · \(event.chatType?.label ?? "Privado")").font(.caption) }
+                        if let topic = event.messageThreadID { Text("Tema \(topic)").font(.caption) }
+                        if event.attachmentCount > 0 { Text("Un adjunto recibido; lectura sujeta a aprobación.").font(.caption) }
+                        if event.canCancel {
+                            Button("Cancelar esta ejecución…", role: .destructive) { Task { await store.telegram.cancelEvent(event) } }
+                                .disabled(!store.telegram.mayReduceAuthority)
+                        }
                         if let message = event.outgoingMessageID { Text("Telegram confirmó el mensaje saliente \(message).").font(.caption) }
                         if event.replyTruncated { Text("La respuesta se recortó por el límite del canal.").font(.caption) }
                         if let session = event.sessionID {

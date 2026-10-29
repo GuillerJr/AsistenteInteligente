@@ -120,8 +120,8 @@ class NativeAutomationBroker:
             not _id(value["host_id"])
             or not isinstance(value["capabilities"], list)
             or not value["capabilities"]
-            or len(value["capabilities"]) > 2
-            or set(value["capabilities"]) - {"desktop", "browser"}
+            or len(value["capabilities"]) > 3
+            or set(value["capabilities"]) - {"desktop", "browser", "media"}
             or len(set(value["capabilities"])) != len(value["capabilities"])
         ):
             raise RpcError(-32602, "El trabajador nativo no es válido.")
@@ -294,8 +294,12 @@ class NativeAutomationBroker:
             self._cancel(row)
 
     async def execute(
-        self, tool, command, arguments, original, cancellation, *, session_id, run_id, guard
+        self, tool, command, arguments, original, cancellation, *, session_id, run_id, guard,
+        timeout=None,
     ):
+        if timeout is not None and (command != "media.inspect" or type(timeout) not in {int, float}
+                                    or not 0 < timeout <= 180):
+            raise ToolError("native_timeout_invalid")
         family = command.split(".", 1)[0].split("_", 1)[0]
         if self.closed or self.closing or self.host_id is None or family not in self.capabilities:
             return {
@@ -332,7 +336,7 @@ class NativeAutomationBroker:
             contextvars.copy_context(),
             cancellation,
             asyncio.get_running_loop().create_future(),
-            self.clock() + self.timeout,
+            self.clock() + (self.timeout if timeout is None else timeout),
             guard,
         )
         self.work[operation_id] = row

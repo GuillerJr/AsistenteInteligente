@@ -14,6 +14,19 @@ public enum TelegramValidation {
         return value
     }
 
+    public static func groupChatID(_ value: String) -> Int? {
+        let text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.range(of: "^-[1-9][0-9]{0,15}\\z", options: .regularExpression) != nil,
+              let number = Int(text), number >= -maximumIdentity else { return nil }
+        return number
+    }
+
+    static func routeIdentity(_ value: RPCValue, type: TelegramChatType? = nil) -> Int? {
+        guard let number = integer(value, minimum: -maximumIdentity), number != 0,
+              type == nil || (type == .privateChat ? number > 0 : number < 0) else { return nil }
+        return number
+    }
+
     static func integer(_ value: RPCValue, minimum: Int = 0, maximum: Int = maximumIdentity) -> Int? {
         guard let result = value.integer, result >= minimum, result <= maximum else { return nil }
         return result
@@ -35,17 +48,64 @@ public enum TelegramValidation {
     }
 }
 
+public enum TelegramChatType: String, CaseIterable, Hashable, Sendable {
+    case privateChat = "private", group, supergroup
+    public var label: String {
+        switch self { case .privateChat: return "Privado"; case .group: return "Grupo"; case .supergroup: return "Supergrupo" }
+    }
+}
+
+public struct TelegramRoutePolicy: Equatable, Sendable {
+    public let chatType: TelegramChatType
+    public let allowedSenderIDs: [Int]
+    public let messageThreadID: Int?
+    public let allowAttachments: Bool
+
+    public init(chatType: TelegramChatType, allowedSenderIDs: [Int] = [], messageThreadID: Int? = nil, allowAttachments: Bool = false) throws {
+        guard allowedSenderIDs.count <= 32, Set(allowedSenderIDs).count == allowedSenderIDs.count,
+              allowedSenderIDs.allSatisfy({ $0 > 0 && $0 <= TelegramValidation.maximumIdentity }),
+              (chatType == .privateChat ? allowedSenderIDs.isEmpty : !allowedSenderIDs.isEmpty),
+              messageThreadID == nil || (chatType == .supergroup && messageThreadID! > 0 && messageThreadID! <= 2_147_483_647)
+        else { throw RPCFailure.configuration }
+        self.chatType = chatType; self.allowedSenderIDs = allowedSenderIDs; self.messageThreadID = messageThreadID; self.allowAttachments = allowAttachments
+    }
+
+    init(_ value: RPCValue) throws {
+        guard let kind = value["chat_type"].string.flatMap(TelegramChatType.init(rawValue:)),
+              let rows = value["allowed_sender_ids"].array, let attachments = value["allow_attachments"].bool else { throw RPCFailure.invalidResponse }
+        let senders = try rows.map { row -> Int in
+            guard let number = TelegramValidation.integer(row, minimum: 1) else { throw RPCFailure.invalidResponse }; return number
+        }
+        let thread = value["message_thread_id"] == .null ? nil : TelegramValidation.integer(value["message_thread_id"], minimum: 1, maximum: 2_147_483_647)
+        guard value["message_thread_id"] == .null || thread != nil else { throw RPCFailure.invalidResponse }
+        do { try self.init(chatType: kind, allowedSenderIDs: senders, messageThreadID: thread, allowAttachments: attachments) }
+        catch { throw RPCFailure.invalidResponse }
+    }
+
+    public var params: [String: RPCValue] {
+        ["chat_type": .string(chatType.rawValue), "allowed_sender_ids": .array(allowedSenderIDs.map { .number(Double($0)) }),
+         "message_thread_id": messageThreadID.map { .number(Double($0)) } ?? .null, "allow_attachments": .bool(allowAttachments)]
+    }
+}
+
 public struct TelegramRouteSnapshot: Identifiable, Equatable, Sendable {
     public let chatID: Int
     public let agentID: String
     public let sessionID: String
     public let revision: Int
     public let enabled: Bool
+    public let policy: TelegramRoutePolicy
+    private let extended: Bool
+    public var chatType: TelegramChatType { policy.chatType }
     public var id: Int { chatID }
 
     public init(_ value: RPCValue) throws {
-        guard let object = value.object, Set(object.keys) == ["chat_id", "agent_id", "session_id", "revision", "enabled"],
-              let chat = TelegramValidation.integer(value["chat_id"], minimum: 1),
+        let base: Set<String> = ["chat_id", "agent_id", "session_id", "revision", "enabled"]
+        let extra: Set<String> = ["chat_type", "allowed_sender_ids", "message_thread_id", "allow_attachments"]
+        guard let object = value.object, Set(object.keys) == base || Set(object.keys) == base.union(extra) else { throw RPCFailure.invalidResponse }
+        extended = Set(object.keys) != base
+        policy = try (extended ? TelegramRoutePolicy(value) : TelegramRoutePolicy(chatType: .privateChat))
+        guard let chat = TelegramValidation.routeIdentity(value["chat_id"], type: policy.chatType),
               let agent = value["agent_id"].string, ManagementValidation.identifier(agent, agent: true),
               let session = value["session_id"].string, ManagementValidation.identifier(session),
               let revision = value["revision"].integer, revision > 0,
@@ -54,8 +114,10 @@ public struct TelegramRouteSnapshot: Identifiable, Equatable, Sendable {
     }
 
     public var reviewValue: RPCValue {
-        .object(["chat_id": .number(Double(chatID)), "agent_id": .string(agentID), "session_id": .string(sessionID),
-                 "revision": .number(Double(revision)), "enabled": .bool(enabled)])
+        var row: [String: RPCValue] = ["chat_id": .number(Double(chatID)), "agent_id": .string(agentID), "session_id": .string(sessionID),
+                 "revision": .number(Double(revision)), "enabled": .bool(enabled)]
+        if extended { row.merge(policy.params) { _, new in new } }
+        return .object(row)
     }
 }
 
@@ -81,7 +143,9 @@ public struct TelegramSnapshot: Equatable, Sendable {
         let routes = try ManagementValidation.rows(value["routes"], limit: 32, parse: TelegramRouteSnapshot.init)
         guard Set(routes.map(\.chatID)).count == routes.count else { throw RPCFailure.invalidResponse }
         guard let requiredRows = value["restored_pairing_required_chat_ids"].array, requiredRows.count <= 32 else { throw RPCFailure.invalidResponse }
-        let required = try requiredRows.map { try ChannelReconciliationValidation.identity($0) }
+        let required = try requiredRows.map { row -> Int in
+            guard let number = TelegramValidation.routeIdentity(row) else { throw RPCFailure.invalidResponse }; return number
+        }
         // The reader may still own an in-flight poll when a route loses its
         // fresh proof. Keep that ownership visible so Stop remains available.
         guard Set(required).count == required.count, required.allSatisfy({ id in routes.contains { $0.chatID == id && $0.enabled } }) else { throw RPCFailure.invalidResponse }
@@ -133,11 +197,18 @@ public struct TelegramEventSnapshot: Identifiable, Equatable, Sendable {
     public let outgoingMessageID: Int?
     public let replyHash: String?
     public let replyTruncated: Bool
+    public let chatType: TelegramChatType?
+    public let senderID: Int?
+    public let messageThreadID: Int?
+    public let attachmentCount: Int
+    public var canCancel: Bool { status == "dispatching" && runID != nil && routeRevision != nil }
     public var id: String { "\(epoch):\(updateID)" }
 
     public init(_ value: RPCValue) throws {
-        guard let object = value.object, Set(object.keys) == ["update_id", "epoch", "chat_id", "message_id", "agent_id", "session_id",
-                "route_revision", "status", "outcome", "run_id", "error_code", "outgoing_message_id", "reply_sha256", "reply_truncated"],
+        let base: Set<String> = ["update_id", "epoch", "chat_id", "message_id", "agent_id", "session_id",
+                "route_revision", "status", "outcome", "run_id", "error_code", "outgoing_message_id", "reply_sha256", "reply_truncated"]
+        let extra: Set<String> = ["chat_type", "sender_id", "message_thread_id", "attachment_count"]
+        guard let object = value.object, Set(object.keys) == base || Set(object.keys) == base.union(extra),
               let update = TelegramValidation.integer(value["update_id"]), let epoch = TelegramValidation.integer(value["epoch"]),
               let status = value["status"].string,
               ["claimed", "dispatching", "send_pending", "completed", "ignored", "failed", "interrupted", "cancelled"].contains(status),
@@ -147,15 +218,25 @@ public struct TelegramEventSnapshot: Identifiable, Equatable, Sendable {
         else { throw RPCFailure.invalidResponse }
         let chat: Int?, message: Int?, agent: String?, session: String?, revision: Int?
         if value["chat_id"] != .null {
-            guard let chatValue = TelegramValidation.integer(value["chat_id"], minimum: 1),
+            guard let kind = Set(object.keys) == base ? TelegramChatType.privateChat : value["chat_type"].string.flatMap(TelegramChatType.init(rawValue:)),
+                  let chatValue = TelegramValidation.routeIdentity(value["chat_id"], type: kind),
                   let messageValue = TelegramValidation.integer(value["message_id"], minimum: 1, maximum: 2_147_483_647),
                   let agentValue = value["agent_id"].string, ManagementValidation.identifier(agentValue, agent: true),
                   let sessionValue = value["session_id"].string, ManagementValidation.identifier(sessionValue),
                   let revisionValue = value["route_revision"].integer, revisionValue > 0 else { throw RPCFailure.invalidResponse }
             chat = chatValue; message = messageValue; agent = agentValue; session = sessionValue; revision = revisionValue
+            if Set(object.keys) != base {
+                guard let sender = TelegramValidation.integer(value["sender_id"], minimum: 1),
+                      let count = TelegramValidation.integer(value["attachment_count"], maximum: 1),
+                      kind != .privateChat || sender == chatValue else { throw RPCFailure.invalidResponse }
+                let thread = value["message_thread_id"] == .null ? nil : TelegramValidation.integer(value["message_thread_id"], minimum: 1, maximum: 2_147_483_647)
+                guard value["message_thread_id"] == .null || (kind == .supergroup && thread != nil) else { throw RPCFailure.invalidResponse }
+                chatType = kind; senderID = sender; messageThreadID = thread; attachmentCount = count
+            } else { chatType = .privateChat; senderID = chatValue; messageThreadID = nil; attachmentCount = 0 }
         } else {
-            guard ["message_id", "agent_id", "session_id", "route_revision"].allSatisfy({ value[$0] == .null }) else { throw RPCFailure.invalidResponse }
+            guard Set(object.keys) == base, ["message_id", "agent_id", "session_id", "route_revision"].allSatisfy({ value[$0] == .null }) else { throw RPCFailure.invalidResponse }
             chat = nil; message = nil; agent = nil; session = nil; revision = nil
+            chatType = nil; senderID = nil; messageThreadID = nil; attachmentCount = 0
         }
         let outgoing: Int?
         if value["outgoing_message_id"] == .null { outgoing = nil }

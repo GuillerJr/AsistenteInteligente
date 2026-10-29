@@ -50,6 +50,9 @@ from jarvis_core.maintenance_journal import wire
 from jarvis_core.management import ManagementAPI
 from jarvis_core.mcp_network_management import MCPNetworkManagementAPI
 from jarvis_core.mcp_registry import McpRegistry, McpRegistryError, ServerSpec
+from jarvis_core.media_attachments import AttachmentScope
+from jarvis_core.media_documents import MediaError
+from jarvis_core.media_management import MediaManagementAPI
 from jarvis_core.memory import Citation, MemoryError, MemoryLimits, MemoryScope, MemoryStore
 from jarvis_core.memory_intelligence import MemoryIntelligence, MemoryIntelligenceError
 from jarvis_core.memory_policy import MemoryPolicyError
@@ -83,6 +86,7 @@ from jarvis_core.state import (
 )
 from jarvis_core.telegram import TelegramError
 from jarvis_core.telegram_management import TelegramManagementAPI
+from jarvis_core.telegram_tools import TelegramReplyTools
 from jarvis_core.tools import ApprovalAuthority, ToolCatalog, ToolError, current_tool_operation
 from jarvis_core.web import WebFetchTools
 from jarvis_core.workspace import WorkspaceError, WorkspaceTools
@@ -116,7 +120,7 @@ class _ProviderAdapter:
             on_event=service._event,
             on_thread=service._bind_thread,
             on_turn_closed=service._provider_turn_closed,
-            take_tool_image=service.native_tools.take_frame,
+            take_tool_image=service._take_tool_image,
         )
 
     async def next_step(self, context: RunContext):
@@ -152,6 +156,7 @@ class _ProviderAdapter:
             EngineError,
             ArtifactError,
             AutomationFlowError,
+            MediaError,
         ) as error:
             service._errors[context.run_id] = str(error)
             raise
@@ -164,6 +169,7 @@ class _ProviderAdapter:
                 await self.bridge.cleanup(context)
         finally:
             self.service.native_tools.clear_run(context.run_id)
+            self.service.media_tools.clear_run(context.run_id)
             self.service._active_ref.set(None)
             self.service._memory_run_id.set(None)
 
@@ -189,7 +195,7 @@ class _ApprovalGate:
 
 
 class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, AutomationAPI,
-                    AutomationEventsAPI,
+                    AutomationEventsAPI, MediaManagementAPI,
                     ExtensionManagementAPI, MCPNetworkManagementAPI):
     def __init__(self, directory: Path, provider: CodexClient, *,
                  profile_lease: ProfileLease | None = None,
@@ -292,6 +298,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         self.host_tools = HostToolRuns(self)
         self.extension_hooks = ExtensionHooks(self)
         self.initialize_automation_events(directory)
+        self.initialize_media()
         from jarvis_core.mcp_product import McpProduct
         self.mcp_product = McpProduct(self)
         self.mcp.app_result_handler = self.mcp_product.capture_tool_result
@@ -354,6 +361,11 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             permissions=self.automation_permissions, workspace=lambda: self.workspace_tools)
         definitions.extend(self.native_tools.definitions())
         specs.extend(self.native_tools.specs())
+        definitions.extend(self.media_tools.definitions())
+        specs.extend(self.media_tools.specs())
+        self.telegram_tools = TelegramReplyTools(self)
+        definitions.extend(self.telegram_tools.definitions())
+        specs.extend(self.telegram_tools.specs())
         if self.workspace_tools:
             definitions.extend(self.workspace_tools.definitions())
             specs.extend(self.workspace_tools.specs())
@@ -408,6 +420,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             handle.cancel()
 
     def _client_revoked(self, client_id):
+        self._media_client_revoked(client_id)
+        self._telegram_client_revoked(client_id)
         self.mcp_product.client_revoked(client_id)
         self.mcp_network_client_revoked(client_id)
         if getattr(self, "_scheduler_owner", None) == client_id:
@@ -566,6 +580,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                     context.offered_tools,
                     memory_epoch,
                     lease.fingerprint if lease is not None else None,
+                    self._media_session_fingerprint(ref),
                 ]
             ).encode()
         ).hexdigest()
@@ -590,6 +605,11 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 self._event(
                     context, "context.restored", {"messages": len(history), "budget_bytes": 16000}
                 )
+        context_text = "\n".join(piece for piece in (
+            self._media_context(context.run_id, ref), skills.text, extensions["text"]) if piece)
+        if len(context_text.encode()) > 16000:
+            context_text = (context_text.encode()[:15900].decode("utf-8", errors="ignore")
+                            + "\n[Contexto externo truncado por el presupuesto del turno.]")
         result = {
             "thread_id": thread_id,
             "temporary": ref.temporary,
@@ -598,8 +618,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                            or spec["name"] in context.offered_tools],
             "history": history,
             "instructions": profile.instructions,
-            "context_data": "\n".join(
-                piece for piece in (skills.text, extensions["text"]) if piece),
+            "context_data": context_text,
         }
         if lease is not None and lease.text:
             result["memory_context"] = lease.text
@@ -656,6 +675,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         methods.update(self.delegation_handlers())
         methods.update(self.automation_handlers())
         methods.update(self.automation_event_handlers())
+        methods.update(self.media_handlers())
         methods.update(self.memory_intelligence.handlers())
         methods.update(self.extension_handlers())
         methods.update(self.mcp_product.handlers())
@@ -691,6 +711,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                     raise RpcError(-32020, str(error)) from None
                 except TelegramError as error:
                     raise RpcError(-32036, error.code) from None
+                except MediaError as error:
+                    raise RpcError(-32039, error.code) from None
                 except (ProfileError, SkillError, PluginError,
                         PrivateJsonError, SchedulerError, AutomationFlowError) as error:
                     raise RpcError(-32035, str(error)) from None
@@ -1040,6 +1062,9 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 or (not params["allow"] and mode != "operation")):
             raise RpcError(-32602, "El alcance del permiso no es válido.")
         context = self._permission_context(item) if item is not None else None
+        if (item is not None and item.tool_name == "telegram_send_attachment"
+                and mode != "operation"):
+            raise RpcError(-32602, "Enviar un adjunto a Telegram exige una aprobación nueva.")
         if mode != "operation" and (context is None or (ref.temporary and mode == "always")):
             raise RpcError(-32602, "Este permiso requiere una conversación local durable.")
         accepted = self.authority.decide(item.approval_id, params["allow"]) if item else False
@@ -1268,6 +1293,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             if self.process_tools:
                 await self.process_tools.close_scope(ref.session_id)
             if ref.temporary:
+                for media in self._media_stores.values():
+                    media.clear_temporary(AttachmentScope(ref.session_id, media.workspace_id, True))
                 await self.memory_intelligence.forget_temporary(ref)
                 self._memory_scope(ref)
                 for scope in self._temporary_memory_scopes.get(ref.session_id, ()):
@@ -1319,7 +1346,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         }
 
     async def start_run(self, params: dict) -> dict:
-        _params(params, _BASE | {"message", "request_id"}, {"session_id", "message"})
+        _params(params, _BASE | {"message", "request_id", "attachment_ids"},
+                {"session_id", "message"})
         if self._closing:
             raise RpcError(-32011, "Jarvis está cerrando el servicio.")
         if self._provider_transition is not None:
@@ -1338,6 +1366,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         message = params["message"]
         if not isinstance(message, str) or not message.strip() or len(message.encode()) > 32000:
             raise RpcError(-32602, "El mensaje debe tener entre 1 y 32000 bytes.")
+        media_selection = self._media_selection(ref, params.get("attachment_ids", []))
         request_id = params.get("request_id")
         if request_id is not None:
             if request_id in self._refs and self._refs[request_id] != ref:
@@ -1358,6 +1387,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 )
                 if original is None or original.text != message:
                     raise RpcError(-32012, "La solicitud ya corresponde a otro mensaje.")
+                if self._media_recorded_selection(ref, request_id) != media_selection:
+                    raise RpcError(-32012, "La solicitud ya corresponde a otros adjuntos.")
                 return {"run_id": previous.run_id, "status": previous.status}
         if self._busy(ref) and not self._allow_enqueue.get():
             raise RpcError(-32011, "Espera a que termine la ejecución de esta conversación.")
@@ -1366,6 +1397,9 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         writer = self.profile_gate.hold("run.owner", mutating=True, closing=True)
         try:
             record = self.store.create_run(ref, run_id=request_id, user_text=message)
+            if media_selection:
+                self.store.append_event(ref, record.run_id, "media.references",
+                                        {"attachments": media_selection})
         except BaseException:
             writer.close()
             raise
@@ -1378,6 +1412,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         if offered is None:
             offered = tuple(spec["name"] for spec in self.catalog.specs()
                             if spec["name"] != "mcp_app_resource"
+                            and (spec["name"] != "telegram_send_attachment"
+                                 or record.run_id in getattr(self, "_telegram_run_context", {}))
                             and self.mcp.model_visible(spec["name"]))
         handle = self.runtime.start(ref.session_id, message, run_id=record.run_id,
                                     budget=self._run_budget.get(),
@@ -1549,6 +1585,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
 
     async def _close(self) -> None:
         self._closing = True
+        self._media_cancel_uploads()
         self.profile_gate.begin_close()
         if self.maintenance_coordinator is not None:
             await self.maintenance_coordinator.aclose()
@@ -1629,6 +1666,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                     resource_errors.append(error)
         if resource_errors:
             raise resource_errors[0]
+        self.close_media()
         self.schedule_store.close()
         self.memory.close()
         self.store.close()

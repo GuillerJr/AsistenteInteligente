@@ -93,13 +93,17 @@ def _valid(value):
 
 
 def _channel_receipt(row, receipt):
+    from jarvis_core.telegram import TelegramError, _route
+
+    policy = {"chat_type", "allowed_sender_ids", "message_thread_id", "allow_attachments"}
     required = {"operation_id", "purpose", "request_digest", "status", "effect_status",
                 "bot_id", "chat_id", "route_revision_before", "route_revision_after",
                 "enabled_before", "enabled_after", "configuration_hash_before",
                 "configuration_hash_after", "error_code", "cleanup_pending", "network_started",
                 "provider_started", "grants_restored", "historical_events_replayed",
                 "permits_replay"}
-    if (set(receipt) != required or receipt["operation_id"] != row["operation_id"]
+    if (set(receipt) not in (required, required | policy)
+            or receipt["operation_id"] != row["operation_id"]
             or receipt["purpose"] != row["purpose"]
             or receipt["request_digest"] != row["review_digest"]
             or receipt["status"] not in {"completed", "failed", "cancelled", "unknown"}
@@ -113,9 +117,15 @@ def _channel_receipt(row, receipt):
             or type(receipt["enabled_after"]) is not bool
             or receipt["enabled_before"] is receipt["enabled_after"]):
         raise PrivateJsonError("maintenance_journal_invalid")
-    for key in ("bot_id", "chat_id", "route_revision_before"):
+    for key in ("bot_id", "route_revision_before"):
         if type(receipt[key]) is not int or not 1 <= receipt[key] < 1 << 52:
             raise PrivateJsonError("maintenance_journal_invalid")
+    try:
+        _route({"chat_id": receipt["chat_id"], "agent_id": "jarvis", "session_id": "a" * 32,
+                "revision": 1, "enabled": False,
+                **{key: receipt[key] for key in policy if key in receipt}})
+    except TelegramError:
+        raise PrivateJsonError("maintenance_journal_invalid") from None
     for key in ("request_digest", "configuration_hash_before", "configuration_hash_after"):
         item = receipt[key]
         if item is None and key == "configuration_hash_after":

@@ -5,6 +5,8 @@ import json
 import os
 import ssl
 import stat
+from email import policy
+from email.parser import BytesParser
 from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
 
@@ -64,6 +66,9 @@ class FakeBot:
         self.post_release.set()
         self.custom_body = None
         self.poll_count = 0
+        self.files = {}
+        self.chat_types = {}
+        self.uploads = []
 
     async def start(self):
         self.server = await asyncio.start_server(self.handle, "127.0.0.1", 0)
@@ -112,14 +117,38 @@ class FakeBot:
             assert fields["host"] == "api.telegram.org" and version == "HTTP/1.1"
             parts = urlsplit(path)
             api_method = parts.path.rsplit("/", 1)[-1]
-            assert parts.path.startswith("/bot" + TOKEN + "/")
+            file_request = parts.path.startswith("/file/bot" + TOKEN + "/")
+            assert file_request or parts.path.startswith("/bot" + TOKEN + "/")
             if verb == "POST":
                 body = await reader.readexactly(int(fields["content-length"]))
-                parameters = json.loads(body)
+                if fields.get("content-type", "").startswith("multipart/form-data;"):
+                    multipart = BytesParser(policy=policy.default).parsebytes(
+                        ("MIME-Version: 1.0\r\nContent-Type: " + fields["content-type"]
+                         + "\r\n\r\n").encode() + body)
+                    assert multipart.is_multipart()
+                    parameters = {}
+                    upload = {}
+                    for part in multipart.iter_parts():
+                        key = part.get_param("name", header="content-disposition")
+                        if key == "document":
+                            upload = {"name": part.get_filename(), "mime": part.get_content_type(),
+                                      "data": part.get_payload(decode=True)}
+                        else:
+                            parameters[key] = part.get_payload(decode=True).decode()
+                    for key in ("chat_id", "message_thread_id"):
+                        if key in parameters:
+                            parameters[key] = int(parameters[key])
+                    self.uploads.append({**upload, "parameters": dict(parameters)})
+                else:
+                    parameters = json.loads(body)
             else:
                 parameters = {key: values[0] for key, values in parse_qs(parts.query).items()}
+            if file_request:
+                api_method = "downloadFile"
+                parameters = {"file_path": parts.path.split("/file/bot" + TOKEN + "/", 1)[1]}
             self.requests.append((verb, api_method, parameters))
             status, result = 200, {}
+            payload = None
             if api_method == "getMe":
                 result = {
                     "id": BOT if self.mode != "wrong-bot" else BOT + 1,
@@ -148,8 +177,34 @@ class FakeBot:
                 else:
                     result = {
                         "message_id": 500 if self.mode != "invalid-ack" else True,
-                        "chat": {"id": parameters["chat_id"], "type": "private"},
+                        "chat": {"id": parameters["chat_id"],
+                                 "type": self.chat_types.get(parameters["chat_id"],
+                                    "supergroup" if parameters["chat_id"] < 0 else "private")},
                     }
+                    if "message_thread_id" in parameters:
+                        result["message_thread_id"] = parameters["message_thread_id"]
+            elif api_method == "getFile":
+                row = self.files[parameters["file_id"]]
+                result = {"file_id": parameters["file_id"], "file_unique_id": row["file_unique_id"],
+                          "file_path": row["file_path"], "file_size": len(row["data"])}
+            elif api_method == "downloadFile":
+                row = next(row for row in self.files.values()
+                           if row["file_path"] == parameters["file_path"])
+                payload = row["data"]
+            elif api_method == "sendDocument":
+                self.post_received.set()
+                await self.post_release.wait()
+                if self.mode == "drop-document":
+                    return
+                document = self.uploads[-1]
+                result = {"message_id": 501, "chat": {"id": parameters["chat_id"],
+                    "type": self.chat_types.get(parameters["chat_id"],
+                        "supergroup" if parameters["chat_id"] < 0 else "private")},
+                    "document": {"file_name": document["name"],
+                        "file_size": len(document["data"]) + (self.mode == "invalid-document-size"),
+                        "file_id": "UPLOADED_SYNTHETIC", "file_unique_id": "UPLOADED_UNIQUE"}}
+                if "message_thread_id" in parameters:
+                    result["message_thread_id"] = parameters["message_thread_id"]
             else:
                 raise AssertionError("unexpected API method")
             value = {"ok": True, "result": result}
@@ -160,7 +215,8 @@ class FakeBot:
                     "description": "NEVER LEAK " + TOKEN,
                     "parameters": {"retry_after": 1},
                 }
-            raw = self.custom_body if self.custom_body is not None else json.dumps(value).encode()
+            raw = payload if payload is not None else (
+                self.custom_body if self.custom_body is not None else json.dumps(value).encode())
             if self.mode == "redirect":
                 writer.write(
                     b"HTTP/1.1 302 Redirect\r\nLocation: https://evil.invalid/\r\n"
@@ -351,6 +407,10 @@ async def test_telegram_text_never_becomes_an_approval_command(channel_factory, 
         "session_id",
         "text",
         "route_revision",
+        "chat_type",
+        "sender_id",
+        "message_thread_id",
+        "attachments",
     }
     assert "authorize" not in repr(received[0]) and "approve" not in repr(received[0])
 

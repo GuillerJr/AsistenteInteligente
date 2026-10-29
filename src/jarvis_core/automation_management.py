@@ -49,6 +49,10 @@ class AutomationAPI:
         }
 
     def _decide_remembered(self, operation, view):
+        if operation.tool_name == "telegram_send_attachment":
+            # Its destination belongs to the live incoming message, rather than
+            # model arguments; an old argument rule cannot authorize a new send.
+            return
         context = self._permission_context(operation)
         if context is None:
             return

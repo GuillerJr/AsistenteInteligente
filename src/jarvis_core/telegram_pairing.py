@@ -44,6 +44,7 @@ class TelegramPairing:
         self._worker = self._expiry = self._lease = None
         self._stop = asyncio.Event()
         self._link_retrieved = False
+        self.host_guard = None
 
     @property
     def busy(self):
@@ -131,6 +132,8 @@ class TelegramPairing:
             raise TelegramError("telegram_configuration_changed")
         if self.client.identity is None or self.client.identity.bot_id != self.journal.bot_id:
             raise TelegramError("telegram_bot_changed")
+        if self.host_guard is not None:
+            self.host_guard()
 
     def native_uri(self, challenge_id):
         self._check_expiry()
@@ -150,6 +153,8 @@ class TelegramPairing:
 
     def consume(self, *, claim_id, agent_id, expected_profile_revision):
         self._check_expiry()
+        if self.host_guard is not None:
+            self.host_guard()
         claim = self._claim
         if (
             self.state != "claimed"
@@ -199,6 +204,10 @@ class TelegramPairing:
             return None
         return chat["id"], message["message_id"]
 
+    def _make_claim(self, chat_id):
+        return PairingClaim(uuid4().hex, self.challenge_id, chat_id, self.agent_id,
+                            self.agent_revision, self.client.identity.bot_id, self.expires_at)
+
     async def _run(self):
         offset = 0
         try:
@@ -225,15 +234,7 @@ class TelegramPairing:
                         )
                         if matched is not None:
                             self._guard()
-                            self._claim = PairingClaim(
-                                uuid4().hex,
-                                self.challenge_id,
-                                chat_id,
-                                self.agent_id,
-                                self.agent_revision,
-                                self.client.identity.bot_id,
-                                self.expires_at,
-                            )
+                            self._claim = self._make_claim(chat_id)
                             self.state = "claimed"
                             return
                     if updates:

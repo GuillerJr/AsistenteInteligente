@@ -9,6 +9,7 @@ public enum LocalVoiceIssue: Error, Equatable, Sendable {
     case microphoneDenied, speechDenied, onDeviceUnavailable, captureFailed
     case recognitionFailed, noLocalVoice, playbackFailed, invalidContext, textLimit
     case authorizationTimeout, playbackTimeout, busy, configuration
+    case invalidSettings, wakePhraseNotHeard, interrupted, inputChanged, cleanupUnconfirmed
 
     public var message: String {
         switch self {
@@ -25,6 +26,11 @@ public enum LocalVoiceIssue: Error, Equatable, Sendable {
         case .playbackTimeout: "Se detuvo la lectura al alcanzar su límite de tiempo."
         case .busy: "Termina el dictado actual antes de iniciar otra operación de voz."
         case .configuration: "El paquete de Jarvis no incluye la configuración de permisos de voz. Revisa su instalación."
+        case .invalidSettings: "Revisa el idioma, la voz local y la frase de activación antes de iniciar."
+        case .wakePhraseNotHeard: "No se detectó la frase de activación. No se añadió texto al borrador."
+        case .interrupted: "La voz local se interrumpió. El micrófono se cerró; vuelve a iniciarlo cuando quieras."
+        case .inputChanged: "Cambió el dispositivo o el formato de entrada. El dictado se detuvo sin reiniciarse."
+        case .cleanupUnconfirmed: "El reconocimiento anterior aún está cerrándose. El micrófono permanece detenido; vuelve a intentarlo después."
         }
     }
 }
@@ -106,6 +112,8 @@ public struct LocalSpeechSegments: Sendable {
     public init(maximumBytes: Int = 16000) { self.maximumBytes = maximumBytes }
 
     public var text: String { Self.join(finalized.map(\.text) + (volatile.map { [$0.text] } ?? [])) }
+    public var finalizedText: String { Self.join(finalized.map(\.text)) }
+    public var hasUnfinalizedText: Bool { volatile.map { !$0.text.isEmpty } ?? false }
 
     public mutating func accept(text: String, start: Double, end: Double, isFinal: Bool) throws -> String {
         guard start.isFinite, end.isFinite, start >= 0, end >= start else { throw LocalVoiceIssue.recognitionFailed }
@@ -145,13 +153,38 @@ public enum LocalPlaybackEvent: Equatable, Sendable {
     case finished, cancelled, failed
 }
 
+public struct LocalVoicePlaybackReceipt: Equatable, Sendable {
+    public let contextID: String
+    public let playbackID: UUID?
+    public let event: LocalPlaybackEvent
+    public let issue: LocalVoiceIssue?
+    public init(contextID: String, playbackID: UUID? = nil, event: LocalPlaybackEvent, issue: LocalVoiceIssue? = nil) {
+        self.contextID = contextID; self.playbackID = playbackID; self.event = event; self.issue = issue
+    }
+}
+
+public struct LocalVoiceCaptureReceipt: Equatable, Sendable {
+    public enum Outcome: Equatable, Sendable { case transcript, empty, cancelled, failed }
+    public let contextID: String
+    public let captureID: UUID?
+    public let outcome: Outcome
+    public let issue: LocalVoiceIssue?
+    public init(contextID: String, captureID: UUID? = nil, outcome: Outcome, issue: LocalVoiceIssue? = nil) {
+        self.contextID = contextID; self.captureID = captureID; self.outcome = outcome; self.issue = issue
+    }
+}
+
 public struct LocalVoiceTranscript: Equatable, Sendable {
     public enum Completion: Equatable, Sendable { case recognizedFinal, partialAtStop }
     public let contextID: String
     public let text: String
     public let completion: Completion
+    public let captureID: UUID?
     public let source = "on_device_speech"
     public let requiresReview = true
+    public init(contextID: String, text: String, completion: Completion, captureID: UUID? = nil) {
+        self.contextID = contextID; self.text = text; self.completion = completion; self.captureID = captureID
+    }
 }
 
 @MainActor public protocol LocalVoiceCancellation: AnyObject {
@@ -203,7 +236,15 @@ public struct LocalVoiceTranscript: Equatable, Sendable {
     public private(set) var partialText = ""
     public private(set) var contextID: String?
     public private(set) var activeVoiceName: String?
+    public var preferences = LocalVoicePreferences()
+    public private(set) var activeCaptureMode: LocalVoiceCaptureMode?
+    public private(set) var wakePhraseDetected = false
+    public private(set) var activeCaptureSeconds: TimeInterval = 30
+    public private(set) var captureIdentifier: UUID?
+    public private(set) var playbackIdentifier: UUID?
     @ObservationIgnored public var onTranscript: (@MainActor (LocalVoiceTranscript) -> Void)?
+    @ObservationIgnored public var onPlaybackCompletion: (@MainActor (LocalVoicePlaybackReceipt) -> Void)?
+    @ObservationIgnored public var onCaptureCompletion: (@MainActor (LocalVoiceCaptureReceipt) -> Void)?
 
     @ObservationIgnored private let driver: any LocalVoiceDriver
     @ObservationIgnored private let clock: any LocalVoiceClock
@@ -214,6 +255,10 @@ public struct LocalVoiceTranscript: Equatable, Sendable {
     @ObservationIgnored private var permission: (any LocalVoiceCancellation)?
     @ObservationIgnored private var preparation: (any LocalVoiceCancellation)?
     @ObservationIgnored private var deadline: (any LocalVoiceCancellation)?
+    @ObservationIgnored private var selectedWakePhrase: String?
+    @ObservationIgnored private var silenceDeadline: (any LocalVoiceCancellation)?
+    @ObservationIgnored private var endpointAfterSilence: TimeInterval?
+    @ObservationIgnored private var silenceGeneration: UInt64 = 0
 
     public init(driver: any LocalVoiceDriver, clock: (any LocalVoiceClock)? = nil,
                 captureSeconds: TimeInterval = 30, playbackSeconds: TimeInterval = 120,
@@ -230,9 +275,9 @@ public struct LocalVoiceTranscript: Equatable, Sendable {
     deinit {
         // Views still cancel synchronously on disappearance/session change.
         // This fallback retains the adapter until its SDK resources are released.
-        let driver = driver, permission = permission, preparation = preparation, deadline = deadline
+        let driver = driver, permission = permission, preparation = preparation, deadline = deadline, silenceDeadline = silenceDeadline
         Task { @MainActor in
-            permission?.cancel(); preparation?.cancel(); deadline?.cancel()
+            permission?.cancel(); preparation?.cancel(); deadline?.cancel(); silenceDeadline?.cancel()
             driver.cancelRecognition(); driver.stopPlayback()
         }
     }
@@ -245,18 +290,39 @@ public struct LocalVoiceTranscript: Equatable, Sendable {
         switch phase {
         case .idle: return "Voz local · El dictado se añade al borrador para que lo revises."
         case .authorizing: return "Preparando el dictado local y esperando permisos…"
-        case .listening: return "Dictando en este Mac · Máximo 30 segundos"
+        case .listening:
+            if activeCaptureMode == .wakePhrase && !wakePhraseDetected {
+                return "Escucha local activada por ti · Esperando la frase de activación · Máximo \(Int(activeCaptureSeconds)) segundos"
+            }
+            return "Dictando en este Mac · Máximo \(Int(activeCaptureSeconds)) segundos · Revisa el borrador antes de enviar"
         case .finishing: return "Finalizando el dictado local…"
         case .speaking: return "Leyendo con una voz local…"
         }
     }
 
-    public func startDictation(contextID: String, localeIdentifier: String = "es-ES") {
+    public func startSelectedDictation(contextID: String) {
+        let settings = preferences
+        startDictation(contextID: contextID, localeIdentifier: settings.localeIdentifier,
+                       mode: settings.mode, wakePhrase: settings.mode == .wakePhrase ? settings.wakePhrase : nil)
+    }
+
+    public func startDictation(contextID: String, localeIdentifier: String = "es-ES",
+                               mode: LocalVoiceCaptureMode = .dictation, wakePhrase: String? = nil, captureID: UUID = UUID(),
+                               endpointAfterSilence: TimeInterval? = nil) {
         guard canStartDictation else { issue = .busy; return }
         guard validContext(contextID) else { issue = .invalidContext; return }
+        guard LocalSpeechPolicy.canonicalLocale(localeIdentifier) != nil,
+              mode != .wakePhrase || wakePhrase.map(LocalWakePhrasePolicy.isValid) == true,
+              endpointAfterSilence.map({ $0.isFinite && (0.5...3).contains($0) }) ?? true else {
+            issue = .invalidSettings; return
+        }
         invalidate()
         driver.stopPlayback()
         issue = nil; partialText = ""; activeVoiceName = nil
+        activeCaptureMode = mode; selectedWakePhrase = wakePhrase; wakePhraseDetected = false
+        self.endpointAfterSilence = endpointAfterSilence
+        captureIdentifier = captureID; playbackIdentifier = nil
+        activeCaptureSeconds = captureSeconds * mode.durationMultiplier
         self.contextID = contextID; phase = .authorizing
         let token = generation
         deadline = clock.schedule(after: 30) { [weak self] in
@@ -284,7 +350,7 @@ public struct LocalVoiceTranscript: Equatable, Sendable {
                             self?.recognition(event, generation: token)
                         }
                         guard self.generation == token, self.phase == .listening else { return }
-                        self.deadline = self.clock.schedule(after: self.captureSeconds) { [weak self] in
+                        self.deadline = self.clock.schedule(after: self.activeCaptureSeconds) { [weak self] in
                             guard let self, self.generation == token, self.phase == .listening else { return }
                             self.stopDictation()
                         }
@@ -303,6 +369,8 @@ public struct LocalVoiceTranscript: Equatable, Sendable {
         guard phase == .listening else { return }
         phase = .finishing
         deadline?.cancel(); deadline = nil
+        silenceDeadline?.cancel(); silenceDeadline = nil
+        silenceGeneration &+= 1
         let token = generation
         driver.finishRecognition()
         guard generation == token, phase == .finishing else { return }
@@ -312,35 +380,75 @@ public struct LocalVoiceTranscript: Equatable, Sendable {
         }
     }
 
-    public func play(text: String, contextID: String, localeIdentifier: String = "es-ES", voiceID: String? = nil) {
+    public func play(text: String, contextID: String, localeIdentifier: String = "es-ES", voiceID: String? = nil, playbackID: UUID = UUID()) {
         guard phase == .idle || phase == .speaking else { issue = .busy; return }
         guard validContext(contextID) else { issue = .invalidContext; return }
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               text.utf8.count <= maxTextBytes else { issue = .textLimit; return }
-        let voices = driver.localVoices(localeIdentifier: localeIdentifier)
+        let voices = availableVoices(localeIdentifier: localeIdentifier)
         let voice = voiceID.flatMap { id in voices.first { $0.id == id } } ?? (voiceID == nil ? voices.first : nil)
         guard let voice else { issue = .noLocalVoice; return }
         invalidate(); driver.stopPlayback()
         phase = .speaking; issue = nil; self.contextID = contextID; activeVoiceName = voice.name
+        playbackIdentifier = playbackID; captureIdentifier = nil
         let token = generation
         do {
             try driver.beginPlayback(text: text, voice: voice) { [weak self] event in
                 guard let self, self.generation == token, self.phase == .speaking else { return }
-                if event == .failed { self.fail(.playbackFailed) }
-                else { self.cancel() }
+                self.endPlayback(event: event, issue: event == .failed ? .playbackFailed : nil)
             }
             guard generation == token, phase == .speaking else { return }
             deadline = clock.schedule(after: playbackSeconds) { [weak self] in
                 guard let self, self.generation == token, self.phase == .speaking else { return }
-                self.fail(.playbackTimeout)
+                self.endPlayback(event: .failed, issue: .playbackTimeout)
             }
-        } catch { fail((error as? LocalVoiceIssue) ?? .playbackFailed) }
+        } catch { endPlayback(event: .failed, issue: (error as? LocalVoiceIssue) ?? .playbackFailed) }
+    }
+
+    public func playSelected(text: String, contextID: String) {
+        play(text: text, contextID: contextID, localeIdentifier: preferences.localeIdentifier, voiceID: preferences.voiceID)
+    }
+
+    /// Called from the explicit voice-settings surface; it never requests TCC.
+    public func availableVoices(localeIdentifier: String) -> [LocalVoiceChoice] {
+        guard let requested = LocalSpeechPolicy.canonicalLocale(localeIdentifier)?.split(separator: "-").first else { return [] }
+        var seen = Set<String>()
+        return Array(driver.localVoices(localeIdentifier: localeIdentifier).filter { value in
+            MacLocalVoicePolicy.isAllowed(identifier: value.id, isPersonalVoice: false)
+                && LocalSpeechPolicy.canonicalLocale(value.language)?.split(separator: "-").first == requested
+                && !value.name.isEmpty && value.name.utf8.count <= 256
+                && !value.name.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+                && seen.insert(value.id).inserted
+        }.prefix(128))
     }
 
     /// The view calls this on conversation change, window close, logout and shutdown.
     public func cancel() {
+        let playbackContext = phase == .speaking ? contextID : nil
+        let captureContext = canStopDictation ? contextID : nil
+        let oldPlayback = playbackIdentifier, oldCapture = captureIdentifier
+        reset()
+        if let contextID = playbackContext {
+            onPlaybackCompletion?(.init(contextID: contextID, playbackID: oldPlayback, event: .cancelled, issue: nil))
+        }
+        if let contextID = captureContext {
+            onCaptureCompletion?(.init(contextID: contextID, captureID: oldCapture, outcome: .cancelled, issue: nil))
+        }
+    }
+
+    private func reset() {
         invalidate(); driver.cancelRecognition(); driver.stopPlayback()
         phase = .idle; issue = nil; partialText = ""; contextID = nil; activeVoiceName = nil
+        activeCaptureMode = nil; selectedWakePhrase = nil; wakePhraseDetected = false
+        captureIdentifier = nil; playbackIdentifier = nil
+        endpointAfterSilence = nil
+    }
+
+    private func endPlayback(event: LocalPlaybackEvent, issue: LocalVoiceIssue?) {
+        let context = contextID
+        let identity = playbackIdentifier
+        reset(); self.issue = issue
+        if let contextID = context { onPlaybackCompletion?(.init(contextID: contextID, playbackID: identity, event: event, issue: issue)) }
     }
 
     private func validContext(_ value: String) -> Bool {
@@ -353,6 +461,8 @@ public struct LocalVoiceTranscript: Equatable, Sendable {
         permission?.cancel(); permission = nil
         preparation?.cancel(); preparation = nil
         deadline?.cancel(); deadline = nil
+        silenceDeadline?.cancel(); silenceDeadline = nil
+        silenceGeneration &+= 1
     }
 
     private func recognition(_ event: LocalRecognitionEvent, generation token: UInt64) {
@@ -360,7 +470,26 @@ public struct LocalVoiceTranscript: Equatable, Sendable {
         switch event {
         case let .partial(text), let .final(text):
             guard text.utf8.count <= maxTextBytes else { fail(.textLimit); return }
-            partialText = text
+            let previous = partialText
+            if let phrase = selectedWakePhrase {
+                if let suffix = LocalWakePhrasePolicy.reviewedSuffix(in: text, phrase: phrase) {
+                    wakePhraseDetected = true; partialText = suffix
+                } else {
+                    guard !wakePhraseDetected else { fail(.recognitionFailed); return }
+                    // Pre-trigger hypotheses remain only in the local SDK. They
+                    // never enter a draft, log, model request or visible preview.
+                    partialText = ""
+                }
+            } else { partialText = text }
+            if phase == .listening, let silence = endpointAfterSilence,
+               partialText != previous, !partialText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                silenceDeadline?.cancel()
+                silenceGeneration &+= 1; let silenceTicket = silenceGeneration
+                silenceDeadline = clock.schedule(after: silence) { [weak self] in
+                    guard let self, self.generation == token, self.silenceGeneration == silenceTicket, self.phase == .listening else { return }
+                    self.stopDictation()
+                }
+            }
             if case .final = event { publish(completion: .recognizedFinal) }
         case .failed: fail(.recognitionFailed)
         case let .issue(issue): fail(issue)
@@ -369,13 +498,19 @@ public struct LocalVoiceTranscript: Equatable, Sendable {
 
     private func publish(completion: LocalVoiceTranscript.Completion) {
         guard let contextID else { cancel(); return }
+        guard selectedWakePhrase == nil || wakePhraseDetected else { fail(.wakePhraseNotHeard); return }
         let text = partialText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let result = LocalVoiceTranscript(contextID: contextID, text: text, completion: completion)
-        cancel()
+        let identity = captureIdentifier
+        let result = LocalVoiceTranscript(contextID: contextID, text: text, completion: completion, captureID: identity)
+        reset()
         if !text.isEmpty { onTranscript?(result) }
+        onCaptureCompletion?(.init(contextID: contextID, captureID: identity, outcome: text.isEmpty ? .empty : .transcript, issue: nil))
     }
 
     private func fail(_ issue: LocalVoiceIssue) {
-        cancel(); self.issue = issue
+        let captureContext = canStopDictation ? contextID : nil
+        let identity = captureIdentifier
+        reset(); self.issue = issue
+        if let contextID = captureContext { onCaptureCompletion?(.init(contextID: contextID, captureID: identity, outcome: .failed, issue: issue)) }
     }
 }

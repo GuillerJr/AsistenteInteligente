@@ -44,4 +44,5 @@ struct PendingSubmission {
     let id: String
     let session: ChatSession
     let text: String
+    var attachmentIDs: [String] = []
 }

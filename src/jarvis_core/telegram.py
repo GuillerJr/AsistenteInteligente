@@ -22,9 +22,13 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 
 from jarvis_core.private_json import PrivateJsonDocument, PrivateJsonError
+
+if TYPE_CHECKING:
+    from jarvis_core.telegram_content import TelegramAttachment
 
 _TOKEN = re.compile(r"([1-9][0-9]{0,18}):[A-Za-z0-9_-]{20,128}")
 _UUID = re.compile(r"[a-f0-9]{32}")
@@ -32,7 +36,7 @@ _AGENT = re.compile(r"[a-z][a-z0-9_-]{0,63}")
 _HASH = re.compile(r"[a-f0-9]{64}")
 _ACTIVE = {"claimed", "dispatching", "send_pending"}
 _FINAL = {"completed", "ignored", "failed", "interrupted", "cancelled"}
-_METHODS = {"getMe", "getWebhookInfo", "getUpdates", "sendMessage"}
+_METHODS = {"getMe", "getWebhookInfo", "getUpdates", "sendMessage", "getFile"}
 
 
 class TelegramError(ValueError):
@@ -51,6 +55,16 @@ class TelegramCancelled(asyncio.CancelledError):
 
 def _integer(value, *, minimum=0, maximum=(1 << 52) - 1) -> int:
     if type(value) is not int or not minimum <= value <= maximum:
+        raise TelegramError("telegram_identity_invalid")
+    return value
+
+
+def _chat_id(value, *, kind="any"):
+    if not isinstance(kind, str) or kind not in {"any", "private", "group", "supergroup"}:
+        raise TelegramError("telegram_identity_invalid")
+    _integer(value, minimum=-((1 << 52) - 1))
+    if (value == 0 or (kind == "private" and value < 0)
+            or (kind in {"group", "supergroup"} and value > 0)):
         raise TelegramError("telegram_identity_invalid")
     return value
 
@@ -99,6 +113,10 @@ class TelegramRoute:
     session_id: str
     revision: int
     enabled: bool = True
+    chat_type: str = "private"
+    allowed_sender_ids: tuple[int, ...] = ()
+    message_thread_id: int | None = None
+    allow_attachments: bool = False
 
 
 @dataclass(frozen=True)
@@ -110,6 +128,10 @@ class IncomingMessage:
     session_id: str
     text: str = field(repr=False)
     route_revision: int = 1
+    chat_type: str = "private"
+    sender_id: int | None = None
+    message_thread_id: int | None = None
+    attachments: tuple[TelegramAttachment, ...] = field(default=(), repr=False)
 
 
 @dataclass(frozen=True)
@@ -242,7 +264,10 @@ class TelegramHTTPTransport:
             except OSError:
                 pass
 
-    async def _read_response(self, reader):
+    async def _read_response(self, reader, *, maximum_bytes=None):
+        maximum = self.max_response_bytes if maximum_bytes is None else maximum_bytes
+        if type(maximum) is not int or not 1 <= maximum <= 5 * 1024 * 1024:
+            raise TelegramError("telegram_transport_limit_invalid")
         line = await reader.readline()
         if (
             len(line) > 8192
@@ -276,7 +301,7 @@ class TelegramHTTPTransport:
                 if len(line) > 128 or re.fullmatch(rb"[0-9A-Fa-f]{1,8}\r\n", line) is None:
                     raise TelegramError("telegram_http_invalid")
                 size = int(line.strip(), 16)
-                if len(body) + size > self.max_response_bytes:
+                if len(body) + size > maximum:
                     raise TelegramError("telegram_response_limit")
                 if size == 0:
                     if await reader.readexactly(2) != b"\r\n":
@@ -291,19 +316,20 @@ class TelegramHTTPTransport:
             if re.fullmatch(rb"[0-9]{1,9}", raw_length) is None:
                 raise TelegramError("telegram_http_invalid")
             length = int(raw_length)
-            if length > self.max_response_bytes:
+            if length > maximum:
                 raise TelegramError("telegram_response_limit")
             return TelegramHTTPResponse(status, await reader.readexactly(length))
         body = bytearray()
-        while piece := await reader.read(min(8192, self.max_response_bytes + 1 - len(body))):
+        while piece := await reader.read(min(8192, maximum + 1 - len(body))):
             body.extend(piece)
-            if len(body) > self.max_response_bytes:
+            if len(body) > maximum:
                 raise TelegramError("telegram_response_limit")
         return TelegramHTTPResponse(status, bytes(body))
 
 
 class TelegramClient:
-    def __init__(self, token: str, *, transport=None, timeout=20):
+    def __init__(self, token: str, *, transport=None, file_transport=None,
+                 document_transport=None, timeout=20):
         if not isinstance(token, str) or _TOKEN.fullmatch(token) is None:
             raise TelegramError("telegram_token_invalid")
         if (
@@ -315,6 +341,8 @@ class TelegramClient:
         self._token = token
         self._token_bot_id = _integer(int(token.split(":", 1)[0]), minimum=1)
         self._transport = transport or TelegramHTTPTransport()
+        self._file_transport = file_transport
+        self._document_transport = document_transport
         self.timeout, self.identity, self.closed = timeout, None, False
 
     def __repr__(self):
@@ -335,6 +363,10 @@ class TelegramClient:
                 "telegram_transport_failed",
                 effect_status="unknown" if method == "POST" else "known",
             ) from None
+        return self._decode_response(response, method)
+
+    @staticmethod
+    def _decode_response(response, method):
         if not isinstance(response, TelegramHTTPResponse) or len(response.body) > 262144:
             raise TelegramError(
                 "telegram_response_invalid",
@@ -462,14 +494,12 @@ class TelegramClient:
     async def send_reply(self, incoming: IncomingMessage, text: str, *, before_dispatch):
         if self.identity is None or not callable(before_dispatch):
             raise TelegramError("telegram_delivery_not_authorized")
-        _integer(incoming.chat_id, minimum=1)
+        _chat_id(incoming.chat_id, kind=incoming.chat_type)
         _integer(incoming.message_id, minimum=1, maximum=(1 << 31) - 1)
         _text(text, 16384)
         if len(text.encode("utf-16-le")) // 2 > 4096:
             raise TelegramError("telegram_reply_limit")
-        result = await self._request(
-            "sendMessage",
-            {
+        parameters = {
                 "chat_id": incoming.chat_id,
                 "text": text,
                 "reply_parameters": {
@@ -478,15 +508,108 @@ class TelegramClient:
                 },
                 "link_preview_options": {"is_disabled": True},
                 "allow_paid_broadcast": False,
-            },
-            guard=before_dispatch,
-        )
+        }
+        if incoming.message_thread_id is not None:
+            parameters["message_thread_id"] = incoming.message_thread_id
+        result = await self._request("sendMessage", parameters, guard=before_dispatch)
         if (
             not isinstance(result, dict)
             or not isinstance(result.get("chat"), dict)
             or result["chat"].get("id") != incoming.chat_id
-            or result["chat"].get("type") != "private"
+            or result["chat"].get("type") != incoming.chat_type
+            or result.get("message_thread_id") != incoming.message_thread_id
         ):
+            raise TelegramError("telegram_delivery_ack_invalid", effect_status="unknown")
+        try:
+            return _integer(result.get("message_id"), minimum=1, maximum=(1 << 31) - 1)
+        except TelegramError:
+            raise TelegramError("telegram_delivery_ack_invalid", effect_status="unknown") from None
+
+    async def download_attachment(self, attachment, *, before_dispatch):
+        from jarvis_core.telegram_content import MAX_ATTACHMENT_BYTES, TelegramAttachment
+        from jarvis_core.telegram_files import TelegramFileTransport, validate_file_path
+
+        if (self.identity is None or self.closed or not isinstance(attachment, TelegramAttachment)
+                or not callable(before_dispatch)):
+            raise TelegramError("telegram_attachment_not_authorized")
+        deadline = asyncio.get_running_loop().time() + self.timeout
+
+        def guard():
+            self._deadline(deadline, "telegram_attachment_timeout")
+            if self.closed or self.identity is None:
+                raise TelegramError("telegram_client_closed")
+            before_dispatch()
+
+        try:
+            async with asyncio.timeout(self.timeout):
+                guard()
+                value = await self._request("getFile", {"file_id": attachment.file_id}, guard=guard)
+                guard()
+                if (not isinstance(value, dict) or value.get("file_id") != attachment.file_id
+                        or value.get("file_unique_id") != attachment.unique_id):
+                    raise TelegramError("telegram_attachment_identity_changed")
+                size = value.get("file_size")
+                if size is not None:
+                    _integer(size, minimum=1, maximum=MAX_ATTACHMENT_BYTES)
+                if (size is not None and attachment.file_size is not None
+                        and size != attachment.file_size):
+                    raise TelegramError("telegram_attachment_identity_changed")
+                path = validate_file_path(value.get("file_path"))
+                transport = self._file_transport or TelegramFileTransport(
+                    connector=getattr(self._transport, "_connector", None))
+                response = await transport(path, self._token,
+                    max(.001, deadline - asyncio.get_running_loop().time()), guard)
+                guard()
+                if (not isinstance(response, TelegramHTTPResponse) or response.status != 200
+                        or not 1 <= len(response.body) <= MAX_ATTACHMENT_BYTES
+                        or any(known is not None and len(response.body) != known
+                               for known in (size, attachment.file_size))):
+                    raise TelegramError("telegram_attachment_bytes_invalid")
+                return response.body
+        except TimeoutError:
+            raise TelegramError("telegram_attachment_timeout") from None
+        except (TelegramError, asyncio.CancelledError):
+            raise
+        except Exception:
+            raise TelegramError("telegram_attachment_transport_failed") from None
+
+    async def send_document(self, incoming, payload, name, mime, caption, *, before_dispatch):
+        from jarvis_core.telegram_content import MAX_ATTACHMENT_BYTES
+        from jarvis_core.telegram_files import TelegramDocumentTransport
+
+        if (self.identity is None or self.closed or not isinstance(incoming, IncomingMessage)
+                or type(payload) is not bytes or not 1 <= len(payload) <= MAX_ATTACHMENT_BYTES
+                or not callable(before_dispatch)):
+            raise TelegramError("telegram_attachment_not_authorized")
+        _chat_id(incoming.chat_id, kind=incoming.chat_type)
+        _integer(incoming.message_id, minimum=1, maximum=(1 << 31) - 1)
+        _text(name, 256)
+        _text(caption, 4096, empty=True)
+        if (any(ord(c) < 32 or c in '\\"/' for c in name)
+                or not isinstance(mime, str)
+                or re.fullmatch(r"[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+", mime) is None
+                or len(mime) > 128 or len(caption.encode("utf-16-le")) // 2 > 1024):
+            raise TelegramError("telegram_attachment_invalid")
+        transport = self._document_transport or TelegramDocumentTransport(
+            connector=getattr(self._transport, "_connector", None))
+        try:
+            response = await transport(incoming, payload, name, mime, caption, self._token,
+                                       self.timeout, before_dispatch)
+            result = self._decode_response(response, "POST")
+        except (TelegramError, asyncio.CancelledError):
+            raise
+        except Exception:
+            raise TelegramError(
+                "telegram_attachment_delivery_unconfirmed", effect_status="unknown"
+            ) from None
+        document = result.get("document") if isinstance(result, dict) else None
+        if (not isinstance(result, dict) or not isinstance(result.get("chat"), dict)
+                or result["chat"].get("id") != incoming.chat_id
+                or result["chat"].get("type") != incoming.chat_type
+                or result.get("message_thread_id") != incoming.message_thread_id
+                or not isinstance(document, dict) or document.get("file_name") != name
+                or type(document.get("file_size")) is not int
+                or document["file_size"] != len(payload)):
             raise TelegramError("telegram_delivery_ack_invalid", effect_status="unknown")
         try:
             return _integer(result.get("message_id"), minimum=1, maximum=(1 << 31) - 1)
@@ -510,15 +633,30 @@ def _journal_initial():
 
 
 def _route(row):
-    if not isinstance(row, dict) or set(row) != {
+    base = {
         "chat_id",
         "agent_id",
         "session_id",
         "revision",
         "enabled",
-    }:
+    }
+    policy = {"chat_type", "allowed_sender_ids", "message_thread_id", "allow_attachments"}
+    if not isinstance(row, dict) or set(row) not in (base, base | policy):
         raise TelegramError("telegram_route_invalid")
-    _integer(row["chat_id"], minimum=1)
+    kind = row.get("chat_type", "private")
+    if not isinstance(kind, str) or kind not in {"private", "group", "supergroup"}:
+        raise TelegramError("telegram_route_invalid")
+    _chat_id(row["chat_id"], kind=kind)
+    senders, thread = row.get("allowed_sender_ids", []), row.get("message_thread_id")
+    if (not isinstance(senders, (list, tuple)) or len(senders) > 32
+            or any(type(item) is not int or not 1 <= item <= (1 << 52) - 1 for item in senders)
+            or len(set(senders)) != len(senders)
+            or (kind == "private" and senders)
+            or (kind != "private" and not senders)
+            or (thread is not None and (kind != "supergroup" or type(thread) is not int
+                                       or not 1 <= thread < (1 << 31)))
+            or type(row.get("allow_attachments", False)) is not bool):
+        raise TelegramError("telegram_route_invalid")
     if (
         not isinstance(row["agent_id"], str)
         or _AGENT.fullmatch(row["agent_id"]) is None
@@ -529,7 +667,7 @@ def _route(row):
         or type(row["enabled"]) is not bool
     ):
         raise TelegramError("telegram_route_invalid")
-    return TelegramRoute(**row)
+    return TelegramRoute(**{**row, "allowed_sender_ids": tuple(senders)})
 
 
 def _journal_validate(value):
@@ -560,16 +698,17 @@ def _journal_validate(value):
         if not isinstance(key, str) or marker is not True:
             raise TelegramError("telegram_journal_invalid")
         parts = key.split(":")
-        if len(parts) != 2 or any(not re.fullmatch(r"[1-9][0-9]{0,15}", part) for part in parts):
+        if (len(parts) != 2 or not re.fullmatch(r"-?[1-9][0-9]{0,15}", parts[0])
+                or not re.fullmatch(r"[1-9][0-9]{0,15}", parts[1])):
             raise TelegramError("telegram_journal_invalid")
-        _integer(int(parts[0]), minimum=1)
+        _chat_id(int(parts[0]))
         _integer(int(parts[1]), minimum=1, maximum=(1 << 31) - 1)
     for key, row in value["routes"].items():
         route = _route(row)
         if key != str(route.chat_id):
             raise TelegramError("telegram_route_invalid")
     for key, row in value["events"].items():
-        if not isinstance(row, dict) or set(row) != {
+        fields = {
             "update_id",
             "epoch",
             "chat_id",
@@ -584,7 +723,9 @@ def _journal_validate(value):
             "outgoing_message_id",
             "reply_sha256",
             "reply_truncated",
-        }:
+        }
+        context = {"chat_type", "sender_id", "message_thread_id", "attachment_count"}
+        if not isinstance(row, dict) or set(row) not in (fields, fields | context):
             raise TelegramError("telegram_journal_invalid")
         _integer(row["update_id"])
         _integer(row["epoch"])
@@ -605,20 +746,33 @@ def _journal_validate(value):
         ):
             raise TelegramError("telegram_journal_invalid")
         if row["chat_id"] is not None:
-            _route(
-                {
-                    "chat_id": row["chat_id"],
-                    "agent_id": row["agent_id"],
-                    "session_id": row["session_id"],
-                    "revision": row["route_revision"],
-                    "enabled": True,
-                }
-            )
+            _chat_id(row["chat_id"])
+            if (not isinstance(row["agent_id"], str) or not _AGENT.fullmatch(row["agent_id"])
+                    or not isinstance(row["session_id"], str)
+                    or not _UUID.fullmatch(row["session_id"])
+                    or type(row["route_revision"]) is not int or row["route_revision"] < 1):
+                raise TelegramError("telegram_journal_invalid")
             _integer(row["message_id"], minimum=1, maximum=(1 << 31) - 1)
+            if "chat_type" in row:
+                kind = row["chat_type"]
+                if not isinstance(kind, str) or kind not in {"private", "group", "supergroup"}:
+                    raise TelegramError("telegram_journal_invalid")
+                _chat_id(row["chat_id"], kind=kind)
+                _integer(row["sender_id"], minimum=1)
+                _integer(row["attachment_count"], maximum=1)
+                thread = row["message_thread_id"]
+                if ((kind == "private" and row["sender_id"] != row["chat_id"])
+                        or (thread is not None and (kind != "supergroup" or type(thread) is not int
+                                                   or not 1 <= thread < (1 << 31)))):
+                    raise TelegramError("telegram_journal_invalid")
+            elif row["chat_id"] < 0:
+                raise TelegramError("telegram_journal_invalid")
         elif any(
             row[key] is not None
             for key in ("message_id", "agent_id", "session_id", "route_revision")
         ):
+            raise TelegramError("telegram_journal_invalid")
+        elif "chat_type" in row:
             raise TelegramError("telegram_journal_invalid")
         if row["outgoing_message_id"] is not None:
             _integer(row["outgoing_message_id"], minimum=1, maximum=(1 << 31) - 1)
@@ -737,16 +891,26 @@ class TelegramJournal:
         except OSError:
             raise TelegramError("telegram_runner_changed") from None
 
-    def set_route(self, chat_id, agent_id, session_id, *, expected_revision=None, enabled=True):
-        _route(
-            {
+    def set_route(self, chat_id, agent_id, session_id, *, expected_revision=None, enabled=True,
+                  chat_type="private", allowed_sender_ids=(), message_thread_id=None,
+                  allow_attachments=False):
+        candidate = {
                 "chat_id": chat_id,
                 "agent_id": agent_id,
                 "session_id": session_id,
                 "revision": 1,
                 "enabled": enabled,
-            }
-        )
+        }
+        candidate.update(chat_type=chat_type, allowed_sender_ids=allowed_sender_ids,
+                         message_thread_id=message_thread_id, allow_attachments=allow_attachments)
+        _route(candidate)
+        if (chat_type == "private" and not allowed_sender_ids and message_thread_id is None
+                and allow_attachments is False):
+            for key in ("chat_type", "allowed_sender_ids", "message_thread_id",
+                        "allow_attachments"):
+                candidate.pop(key)
+        else:
+            candidate["allowed_sender_ids"] = list(allowed_sender_ids)
 
         if expected_revision is not None:
             _integer(expected_revision, minimum=1)
@@ -759,13 +923,8 @@ class TelegramJournal:
                 raise TelegramError("telegram_route_revision_conflict")
             if row is None and len(value["routes"]) >= 32:
                 raise TelegramError("telegram_route_limit")
-            value["routes"][str(chat_id)] = {
-                "chat_id": chat_id,
-                "agent_id": agent_id,
-                "session_id": session_id,
-                "enabled": enabled,
-                "revision": row["revision"] + 1 if row else 1,
-            }
+            value["routes"][str(chat_id)] = {**candidate,
+                "revision": row["revision"] + 1 if row else 1}
             return value
 
         value = self._configuration_update(change)
@@ -779,7 +938,7 @@ class TelegramJournal:
         configuration is checked inside the locked JSON transaction as well as
         by the host's frozen profile cut. Event history is never rewritten.
         """
-        _integer(chat_id, minimum=1)
+        _chat_id(chat_id)
         _integer(expected_revision, minimum=1)
         if (type(enabled) is not bool or not callable(before_publish)
                 or type(expected_configuration_hash) is not str
@@ -802,7 +961,7 @@ class TelegramJournal:
         return _route(value["routes"][str(chat_id)])
 
     def remove_route(self, chat_id, *, expected_revision):
-        _integer(chat_id, minimum=1)
+        _chat_id(chat_id)
 
         if expected_revision is not None:
             _integer(expected_revision, minimum=1)
@@ -818,7 +977,7 @@ class TelegramJournal:
 
     def mark_control_message(self, chat_id, message_id):
         """Keep only physical IDs; never retain nonce, URI or command text."""
-        _integer(chat_id, minimum=1)
+        _chat_id(chat_id)
         _integer(message_id, minimum=1, maximum=(1 << 31) - 1)
         key = str(chat_id) + ":" + str(message_id)
 
@@ -888,6 +1047,10 @@ class TelegramJournal:
                 "reply_sha256": None,
                 "reply_truncated": False,
             }
+            if incoming is not None and (incoming.chat_type != "private" or incoming.attachments):
+                row.update(chat_type=incoming.chat_type, sender_id=incoming.sender_id,
+                           message_thread_id=incoming.message_thread_id,
+                           attachment_count=len(incoming.attachments))
             value["events"][key] = row
             value["offset"] = update_id + 1
             accepted = row["status"] == "claimed"
@@ -923,6 +1086,22 @@ class TelegramJournal:
             )
             return value
 
+        self.document.update(change)
+
+    def attach_run(self, incoming, run_id):
+        if not isinstance(run_id, str) or not _UUID.fullmatch(run_id):
+            raise TelegramError("telegram_run_identity_invalid")
+
+        def change(value):
+            row = value["events"].get(str(value["epoch"]) + ":" + str(incoming.update_id))
+            if (row is None or row["status"] != "dispatching"
+                    or (row["chat_id"], row["message_id"], row["session_id"], row["route_revision"])
+                    != (incoming.chat_id, incoming.message_id, incoming.session_id,
+                        incoming.route_revision)
+                    or row["run_id"] not in {None, run_id}):
+                raise TelegramError("telegram_event_not_active")
+            row["run_id"] = run_id
+            return value
         self.document.update(change)
 
     def _recover_unfinished(self):
@@ -1065,15 +1244,8 @@ class TelegramChannel:
         message = update.get("message")
         if not isinstance(message, dict) or not isinstance(message.get("chat"), dict):
             return None, "telegram_update_ignored"
-        chat, user = message["chat"], message.get("from")
-        if (
-            chat.get("type") != "private"
-            or type(chat.get("id")) is not int
-            or not isinstance(user, dict)
-            or user.get("id") != chat["id"]
-            or type(user.get("id")) is not int
-            or user.get("is_bot") is not False
-        ):
+        chat = message["chat"]
+        if type(chat.get("id")) is not int:
             return None, "telegram_sender_ignored"
         route = next(
             (item for item in self.journal.routes() if item.chat_id == chat["id"] and item.enabled),
@@ -1087,11 +1259,15 @@ class TelegramChannel:
         identity = message.get("message_id")
         try:
             _integer(identity, minimum=1, maximum=(1 << 31) - 1)
-            _text(message.get("text"), 8000)
-        except TelegramError:
-            return None, "telegram_text_unsupported"
+            from jarvis_core.telegram_content import message_content
+
+            text, attachments = message_content(message, route, self.client.identity)
+        except TelegramError as error:
+            supported = error.code.startswith(("telegram_sender", "telegram_thread",
+                                                "telegram_mention", "telegram_attachment"))
+            return None, error.code if supported else "telegram_text_unsupported"
         if re.match(
-            r"^/start(?:$|\s|@)", message["text"]
+            r"^/(?:start|jarvis_pair)(?:$|\s|@)", text
         ) is not None or self.journal.is_control_message(route.chat_id, identity):
             return None, "telegram_control_ignored"
         return IncomingMessage(
@@ -1100,8 +1276,12 @@ class TelegramChannel:
             identity,
             route.agent_id,
             route.session_id,
-            message["text"],
+            text,
             route.revision,
+            route.chat_type,
+            message["from"]["id"],
+            route.message_thread_id,
+            attachments,
         ), None
 
     async def _process(self, update):

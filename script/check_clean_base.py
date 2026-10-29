@@ -38,11 +38,12 @@ RETIRED_FILES = (
 )
 EXTERNAL_RUNTIMES = {"openclaw", "opencode"}
 STDLIB = sys.stdlib_module_names | {"__future__", "jarvis_core"}
-# Signing, the selected CPU embedding engine and offline schema validation.
+# Signing, CPU embeddings, offline schema validation and the chosen local audio codec.
 # No agent framework, GPU runtime or inference fallback; uv.lock binds artifacts.
 SIGNING_DEPENDENCIES = ("cryptography==50.0.2",)
 REVIEWED_DEPENDENCIES = (*SIGNING_DEPENDENCIES, "jsonschema==4.26.0", "numpy==2.3.5",
-                         "onnxruntime==1.31.1", "referencing==0.37.0", "tokenizers==0.22.1")
+                         "onnxruntime==1.31.1", "referencing==0.37.0", "soundfile==0.13.1",
+                         "tokenizers==0.22.1")
 SDIST_REQUIRED = {
     "PKG-INFO", "pyproject.toml", "README.md", "LICENSE", "uv.lock", "MANIFEST.in",
     "script/check_clean_base.py", "script/research_inventory.py", "script/setup_git_gates.sh",
@@ -152,7 +153,7 @@ def _dependencies(values) -> tuple[str, ...]:
 def _check_imports(data: bytes, name: str, dependencies: tuple[str, ...] = ()) -> None:
     allowed = STDLIB | ({"cryptography"} if dependencies else set())
     if dependencies == REVIEWED_DEPENDENCIES:
-        allowed |= {"numpy", "onnxruntime", "tokenizers", "jsonschema", "referencing"}
+        allowed |= {"numpy", "onnxruntime", "tokenizers", "jsonschema", "referencing", "soundfile"}
     tree = ast.parse(data, filename=name)
     dynamic_names = {"eval", "exec", "__import__"}
     for node in ast.walk(tree):
@@ -437,8 +438,10 @@ def smoke_wheel(wheel: Path) -> None:
                "key.public_key().verify(key.sign(b'jarvis offline smoke'),"
                "b'jarvis offline smoke'); "
                if dependencies else "")
-            + ("import numpy, onnxruntime, tokenizers, jsonschema, referencing; "
+            + ("import numpy, onnxruntime, tokenizers, jsonschema, referencing, soundfile; "
                "assert 'CPUExecutionProvider' in onnxruntime.get_available_providers(); "
+               "assert soundfile.__version__ == '0.13.1'; "
+               "assert 'OPUS' in soundfile.available_subtypes('OGG'); "
                "from jarvis_core.mcp import _schema, _validate; "
                "schema={'type':'object','properties':{'x':{'anyOf':[{'type':'string'}]}}}; "
                "_schema(schema); _validate({'x':'JARVIS OFFLINE'},schema); "

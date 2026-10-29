@@ -35,26 +35,24 @@ struct ComposerView: View {
                     }
                 }
             }
+            AttachmentComposerView(store: store)
             VStack(spacing: 10) {
                 TextField("Escribe un mensaje…", text: $store.draft, axis: .vertical)
                     .textFieldStyle(.plain).lineLimit(2...7).focused($focused)
                     .onSubmit { if store.canSend { Task { await store.send() } } }
-                    .disabled(!store.ready || store.activeRunID != nil)
+                    .disabled(!store.ready || store.activeRunID != nil || store.talk.isActive)
                 HStack {
                     Text(store.selected?.temporary == true ? "Chat temporal" : "Codex · ChatGPT")
                         .font(.caption).foregroundStyle(.secondary)
                     Spacer()
-                    if store.voice.canStopDictation {
-                        Button(store.voice.phase == .listening ? "Terminar dictado" : "Cancelar dictado", systemImage: "stop.circle") {
-                            store.voice.stopDictation()
-                        }
-                        Button("Descartar", role: .cancel) { store.stopVoice() }
-                    } else if store.voice.phase == .speaking {
-                        Button("Detener lectura", systemImage: "speaker.slash") { store.stopVoice() }
+                    if store.talk.isActive {
+                        Button("Detener conversación", systemImage: "stop.circle") { store.stopVoice() }
                     } else {
-                        Button("Dictar", systemImage: "mic") { store.startDictation() }
-                            .disabled(!store.canUseVoice)
+                        Button("Conversar por voz", systemImage: "waveform") { store.startVoiceConversation() }
+                            .disabled(!store.canUseVoice || !store.draft.isEmpty || !store.attachments.selectedIDs.isEmpty)
                     }
+                    LocalVoiceControlsView(voice: store.voice, canUseVoice: store.canUseVoice,
+                                           start: store.startDictation, cancel: store.stopVoice)
                     if store.activeRunID != nil {
                         Button("Cancelar", systemImage: "stop.fill") { Task { await store.cancel() } }
                             .disabled(["cancelling", "cleaning"].contains(store.runPhase))
@@ -73,6 +71,15 @@ struct ComposerView: View {
                 Text(store.voice.statusText).font(.caption).foregroundStyle(store.voice.issue == nil ? Color.secondary : Color.red)
                 if !store.voice.partialText.isEmpty {
                     Text(store.voice.partialText).font(.caption).foregroundStyle(.secondary).privacySensitive()
+                }
+            }
+            if store.talk.isActive || store.talk.stopReason != nil {
+                Text(store.talk.statusText).font(.caption).foregroundStyle(.secondary)
+                if store.talk.partialForReview != nil && !store.talk.isActive {
+                    Button("Pasar texto parcial al borrador") { store.preserveSpokenPartial() }
+                }
+                if store.talk.phase == .stopping {
+                    Button("Comprobar cierre de voz") { store.talk.retryCleanup() }
                 }
             }
             if let notice = store.dictationNotice { Text(notice).font(.caption).foregroundStyle(.secondary) }

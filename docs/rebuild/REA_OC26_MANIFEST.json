@@ -1,0 +1,128 @@
+{
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "parts": {
+    "26A": {
+      "reference_commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "sources": [
+        {
+          "reference_path": "extensions/telegram/src/group-access.ts",
+          "analysis_path": "extensions/telegram/src/group-access.ts",
+          "sha256": "c6f2e16f8337c89a52059d23e4323236e9e4255326bdbb8e1b37fa6307077484",
+          "bytes": 4965
+        },
+        {
+          "reference_path": "extensions/telegram/src/bot-handlers.inbound-media.ts",
+          "analysis_path": "extensions/telegram/src/bot-handlers.inbound-media.ts",
+          "sha256": "a75d74ebd9c6961c4c83a6a7816c5d99ce86943801591b4967f8e30d715d4cde",
+          "bytes": 24153
+        },
+        {
+          "reference_path": "extensions/telegram/src/bot-message-dispatch.media-dedup.ts",
+          "analysis_path": "extensions/telegram/src/bot-message-dispatch.media-dedup.ts",
+          "sha256": "c72cffa4e762239212a56377e9fb9a51de8303b9b46f3e7efa7de1d717066c47",
+          "bytes": 1640
+        },
+        {
+          "reference_path": "extensions/telegram/src/chunk-delivery.ts",
+          "analysis_path": "extensions/telegram/src/chunk-delivery.ts",
+          "sha256": "c854537af4fc9ab825f369b3727450ccf50addffa6d33cee8a4387f71be6a19b",
+          "bytes": 3499
+        }
+      ],
+      "total_bytes": 34257
+    },
+    "26B": {
+      "reference_commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "sources": [
+        {
+          "reference_path": "src/infra/voicewake.ts",
+          "analysis_path": "src/infra/voicewake.ts",
+          "sha256": "27a32f23033f0015b6e1905821b1fc02f7f49c6f5dfd7aaf2cc92e8a7bfe9a36",
+          "bytes": 1678
+        },
+        {
+          "reference_path": "src/infra/voicewake-routing.ts",
+          "analysis_path": "src/infra/voicewake-routing.ts",
+          "sha256": "318059c80a3dc83826a1570ce510357a8339195728d864de358f9a341ba14087",
+          "bytes": 4006
+        },
+        {
+          "reference_path": "src/talk/exact-speech-protocol.ts",
+          "analysis_path": "src/talk/exact-speech-protocol.ts",
+          "sha256": "27a4f65cd6bc200face732078e72dbec384094a91062f9551dc95f3d29029c7c",
+          "bytes": 3488
+        },
+        {
+          "reference_path": "src/tts/speech-text.ts",
+          "analysis_path": "src/tts/speech-text.ts",
+          "sha256": "786237ab9a26fe3f54dc39a7ff71afdb7ea8423d47b56da4fb5adafddc9de606",
+          "bytes": 910
+        }
+      ],
+      "total_bytes": 10082
+    },
+    "26C": {
+      "reference_commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "sources": [
+        {
+          "reference_path": "src/media/input-files.ts",
+          "analysis_path": "src/media/input-files.ts",
+          "sha256": "5edbdd6526c6e11e4dbd7c6d36cd4f05d292aed53966fc3a876f477721650e32",
+          "bytes": 14619
+        },
+        {
+          "reference_path": "src/media/pdf-extract.ts",
+          "analysis_path": "src/media/pdf-extract.ts",
+          "sha256": "684c1f53ee79cf171fb19678fb52fddbb84a4bc4cd80200a153437b59cbb6841",
+          "bytes": 4354
+        },
+        {
+          "reference_path": "src/media/attachment-processor.ts",
+          "analysis_path": "src/media/attachment-processor.ts",
+          "sha256": "45292b374b9727df8df86490b7cb6e177ccd44a6540d82cfe74ea5ea793739aa",
+          "bytes": 1252
+        },
+        {
+          "reference_path": "src/media-understanding/file-extraction-limits.ts",
+          "analysis_path": "src/media-understanding/file-extraction-limits.ts",
+          "sha256": "2976f9751e0aeefa8bca1e70aaeecd1218c577c1dc843f36c71eef453b7b8602",
+          "bytes": 2020
+        }
+      ],
+      "total_bytes": 22245
+    },
+    "26D": {
+      "reference_commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "sources": [
+        {
+          "reference_path": "src/media/audio.ts",
+          "analysis_path": "src/media/audio.ts",
+          "sha256": "020dc441363e992ec73c53d6681babcc6ff8047d48521fb7f14ed5b152f01e9e",
+          "bytes": 1271
+        },
+        {
+          "reference_path": "src/media/image-processor.ts",
+          "analysis_path": "src/media/image-processor.ts",
+          "sha256": "8d69a9434c0deeb2ccf7332b3014d9761a08be453776f8878dbd993caa95e72f",
+          "bytes": 4268
+        },
+        {
+          "reference_path": "src/media-understanding/local-audio.ts",
+          "analysis_path": "src/media-understanding/local-audio.ts",
+          "sha256": "d0b661da7f01f5ae4389f207839a1308fb32b6941908d07c884a6d3190c858df",
+          "bytes": 12995
+        },
+        {
+          "reference_path": "src/media-understanding/file-attachment-outcomes.ts",
+          "analysis_path": "src/media-understanding/file-attachment-outcomes.ts",
+          "sha256": "9f35409ecba7d98fe8b24210584385e0cc24406589bcadb2028e28604696fd3c",
+          "bytes": 7630
+        }
+      ],
+      "total_bytes": 26164
+    }
+  },
+  "evidence_export_sha256": "7da1f65fab212366ae9395a05621d45f8485e0da1ccca2c9857a03ae941830e3",
+  "full_export_location": "/private/tmp/jarvis-channel-media-rea-20261029/evidence-26.json",
+  "status": "selected_static_partitions_no_runtime_proof"
+}

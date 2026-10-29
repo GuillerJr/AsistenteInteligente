@@ -7,6 +7,7 @@ import Observation
 final class AccessStore {
     var tools: [ToolDescriptor] = []
     var approvals: [ApprovalOperation] = []
+    var mediaApprovalDetails: [String: String] = [:]
     var workspacePath: String?
     var workspacePrivateDefault = false
     var workspaceAvailable = false
@@ -53,7 +54,7 @@ final class AccessStore {
     func setContext(_ scope: SessionScope?) {
         if scope != context {
             context = scope
-            approvals = []; documents = []; matches = []; verifiedCitations = []
+            approvals = []; mediaApprovalDetails = [:]; documents = []; matches = []; verifiedCitations = []
             documentOffset = 0; memoryGeneration += 1
             isLoadingMemory = false
             memoryQuery = ""; memoryQueryMode = .lexical; memorySearchHasMore = false; memorySearchHasResponse = false; errorMessage = nil
@@ -102,11 +103,51 @@ final class AccessStore {
         guard let values = result["approvals"].array else { throw RPCFailure.invalidResponse }
         let operations = try values.map { try ApprovalOperation($0, expectedScope: scope, expectedRunID: runID) }
         guard Set(operations.map(\.id)).count == operations.count else { throw RPCFailure.invalidResponse }
-        if context == scope { approvals = operations }
+        var details: [String: String] = [:]
+        for operation in operations where ["media_inspect", "telegram_send_attachment"].contains(operation.toolName) {
+            if let detail = try? await attachmentApprovalDetail(operation) { details[operation.id] = detail }
+        }
+        if context == scope { approvals = operations; mediaApprovalDetails = details }
+    }
+
+    func mayApprove(_ operation: ApprovalOperation) -> Bool {
+        !["media_inspect", "telegram_send_attachment"].contains(operation.toolName) || mediaApprovalDetails[operation.id] != nil
+    }
+
+    private func attachmentApprovalDetail(_ operation: ApprovalOperation) async throws -> String {
+        let args = try JSONDecoder().decode(RPCValue.self, from: Data(operation.argumentsJSON.utf8))
+        guard let id = args["attachment_id"].string, let hash = args["sha256"].string else { throw RPCFailure.invalidResponse }
+        let response = try await rpc("media.list", operation.scope.params)
+        guard let rows = response["attachments"].array else { throw RPCFailure.invalidResponse }
+        let attachments = try rows.map(MediaAttachment.init)
+        guard let file = attachments.first(where: { $0.id == id && $0.sha256 == hash && $0.scope == operation.scope && !$0.revoked }) else { throw RPCFailure.invalidResponse }
+        var detail = "Archivo: \(file.name) · \(file.bytes) bytes\nSHA-256: \(file.sha256)"
+        if operation.toolName == "telegram_send_attachment" {
+            let target = try await rpc("telegram.destination", ["session_id": .string(operation.scope.sessionID), "run_id": .string(operation.runID)])
+            guard target["session_id"] == .string(operation.scope.sessionID), target["run_id"] == .string(operation.runID),
+                  let chat = target["chat_id"].integer, chat != 0,
+                  let kind = target["chat_type"].string, ["private", "group", "supergroup"].contains(kind),
+                  let message = target["message_id"].integer, message > 0,
+                  target["maximum_attachment_bytes"].integer == 5 * 1024 * 1024,
+                  file.bytes <= 5 * 1024 * 1024 else { throw RPCFailure.invalidResponse }
+            let thread = target["message_thread_id"].integer.map(String.init) ?? "sin tema"
+            detail += "\nDestino fijado: Telegram \(kind), chat \(chat), tema \(thread), respuesta al mensaje \(message).\nSe enviarán los bytes de este archivo; una respuesta de Telegram no acredita su lectura por el destinatario."
+        } else {
+            detail += "\nAnálisis local; el texto extraído y la observación visual podrán enviarse a Codex. No ejecuta macros o enlaces y no verifica la veracidad del contenido."
+        }
+        return detail
     }
 
     func decide(_ operation: ApprovalOperation, allow: Bool, remember: String = "operation") async {
         guard context == operation.scope, !decidingIDs.contains(operation.id) else { return }
+        if allow && ["media_inspect", "telegram_send_attachment"].contains(operation.toolName) {
+            guard let detail = try? await attachmentApprovalDetail(operation),
+                  context == operation.scope, approvals.contains(operation) else {
+                errorMessage = "No se pudo confirmar el archivo o destino actual. No se autorizó la operación."; return
+            }
+            mediaApprovalDetails[operation.id] = detail
+        }
+        if operation.toolName == "telegram_send_attachment" && remember != "operation" { return }
         guard approvals.contains(operation) else {
             errorMessage = "La solicitud cambió o ya no está pendiente. No se envió la decisión."
             return

@@ -29,7 +29,7 @@ public enum TelegramPresentation {
         case "telegram_configuration_changed", "telegram_route_revision_conflict":
             return "Las rutas cambiaron desde la revisión. Actualiza y vuelve a revisarlas antes de continuar."
         case "telegram_restored_pairing_required", "telegram_restore_fresh_pairing_required":
-            return "Verifica de nuevo cada ruta conservada mediante un enlace privado antes de activar el canal. La aprobación local no sustituye ese enlace."
+            return "Prueba fresca requerida: verifica cada chat privado o grupo y tema exactos antes de activar el canal. La aprobación local no sustituye esa prueba."
         case "telegram_reconciliation_changed", "telegram_reconciliation_no_change":
             return "La ruta o su configuración cambiaron. Actualiza y revisa la operación exacta."
         case "telegram_restore_profile_required":
@@ -40,6 +40,14 @@ public enum TelegramPresentation {
             return "Desconecta el bot actual antes de conectar otro."
         case "telegram_route_limit": return "Se alcanzó el límite de 32 rutas. Revisa las existentes."
         case "telegram_identity_invalid": return "Introduce un identificador numérico positivo de chat privado."
+        case "telegram_route_invalid", "telegram_group_review_required":
+            return "Revisa el tipo de chat, su identificador, los remitentes autorizados y el tema exacto."
+        case "telegram_group_command_required", "telegram_pairing_group_command_required":
+            return "Verifica el grupo copiando el código desde Jarvis y publicándolo tú en el grupo y tema revisados."
+        case "telegram_event_not_active":
+            return "El evento ya no tiene esa ejecución activa. Actualiza los registros; no se cancelará otra ejecución."
+        case "telegram_attachment_limit", "telegram_attachment_invalid", "telegram_file_invalid", "telegram_attachment_disabled":
+            return "El adjunto no está admitido por la política o los límites del canal. Revisa su ruta y solicita una lectura nueva si corresponde."
         case "telegram_pairing_expired", "telegram_pairing_claim_invalid", "telegram_pairing_link_unavailable":
             return "El intento de enlace ya no está vigente. Actualiza el estado e inicia otro si lo necesitas."
         case "telegram_pairing_username_required":

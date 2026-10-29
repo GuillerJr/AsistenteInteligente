@@ -50,4 +50,23 @@ final class NativeAutomationHostTests: XCTestCase {
         XCTAssertThrowsError(try NativeAutomationWork(work(payload: extraBody)))
         XCTAssertThrowsError(try NativeAutomationWork(work(payload: String(repeating: " ", count: 131073))))
     }
+
+    func testOnlySignedMediaWorkCanUseThe180SecondDecoderBudget() throws {
+        let payload = Data("{\\rtf1 fixture}".utf8)
+        var args = NativeMediaFixtures.args(payload, kind: "document", mime: "application/rtf", name: "fixture.rtf")
+        args["operation_id"] = .string(id)
+        var media = try XCTUnwrap(work(arguments: args, command: "media.inspect").object)
+        media["remaining_seconds"] = .number(180)
+        XCTAssertEqual(try NativeAutomationWork(.object(media)).command, "media.inspect")
+        for seconds in [0, 180.01, Double.infinity] {
+            media["remaining_seconds"] = .number(seconds)
+            XCTAssertThrowsError(try NativeAutomationWork(.object(media)))
+        }
+        for command in NativeAutomationWork.commands.subtracting(["media.inspect"]) {
+            var ordinary = try XCTUnwrap(work(command: command).object)
+            ordinary["remaining_seconds"] = .number(24.01)
+            XCTAssertThrowsError(try NativeAutomationWork(.object(ordinary)), command)
+        }
+        XCTAssertEqual(NativeAutomationWork.maximumSeconds("desktop.observe"), 24)
+    }
 }

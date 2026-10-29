@@ -82,4 +82,15 @@ final class LocalSpeechPolicyTests: XCTestCase {
             XCTAssertTrue(segments.text.isEmpty)
         }
     }
+
+    func testFileTranscriptionCanDistinguishFinalTextFromAnUnconfirmedTail() throws {
+        var segments = LocalSpeechSegments()
+        _ = try segments.accept(text: "Frase confirmada.", start: 0, end: 1, isFinal: true)
+        _ = try segments.accept(text: "final pendiente", start: 1, end: 2, isFinal: false)
+        XCTAssertEqual(segments.finalizedText, "Frase confirmada.")
+        XCTAssertTrue(segments.hasUnfinalizedText)
+        _ = try segments.accept(text: "Final confirmado.", start: 1, end: 2, isFinal: true)
+        XCTAssertFalse(segments.hasUnfinalizedText)
+        XCTAssertEqual(segments.finalizedText, "Frase confirmada. Final confirmado.")
+    }
 }

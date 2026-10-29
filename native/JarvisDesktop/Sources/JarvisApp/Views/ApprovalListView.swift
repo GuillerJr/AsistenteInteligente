@@ -28,6 +28,11 @@ private struct ApprovalCard: View {
                 Label("Tu aprobación es necesaria", systemImage: "hand.raised")
                     .font(.headline)
                 Text(operation.toolName).font(.callout.weight(.semibold))
+                if let detail = access.mediaApprovalDetails[operation.id] {
+                    Text(detail).font(.caption).textSelection(.enabled)
+                } else if !access.mayApprove(operation) {
+                    Text("Archivo o destino sin confirmar; no se puede autorizar todavía.").font(.caption).foregroundStyle(.red)
+                }
                 Text("Autoriza únicamente esta operación con estos argumentos:")
                     .font(.caption).foregroundStyle(.secondary)
                 ScrollView([.horizontal, .vertical]) {
@@ -43,13 +48,13 @@ private struct ApprovalCard: View {
                         .disabled(access.decidingIDs.contains(operation.id))
                     Button("Permitir esta operación") { Task { await access.decide(operation, allow: true) } }
                         .buttonStyle(.borderedProminent)
-                        .disabled(expired || access.decidingIDs.contains(operation.id))
+                        .disabled(expired || !access.mayApprove(operation) || access.decidingIDs.contains(operation.id))
                     Menu("Recordar permiso…") {
                         Button("En esta conversación") { Task { await access.decide(operation, allow: true, remember: "session") } }
                         if !operation.scope.temporary {
                             Button("Siempre para este destino") { Task { await access.decide(operation, allow: true, remember: "always") } }
                         }
-                    }.disabled(expired || access.decidingIDs.contains(operation.id))
+                    }.disabled(expired || operation.toolName == "telegram_send_attachment" || !access.mayApprove(operation) || access.decidingIDs.contains(operation.id))
                 }
             }
             .padding(14).background(.quaternary, in: .rect(cornerRadius: 12))

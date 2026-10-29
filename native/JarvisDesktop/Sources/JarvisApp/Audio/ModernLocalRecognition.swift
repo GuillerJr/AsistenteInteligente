@@ -7,6 +7,7 @@ import Foundation
     func start(receive: @escaping @MainActor (LocalRecognitionEvent) -> Void) throws
     func finish()
     func cancel()
+    func waitForCleanup() async
 }
 
 /// Each prepared session owns its analyzer, stream, tasks and (only after start)
@@ -27,6 +28,8 @@ import Foundation
     private var finishTask: Task<Void, Never>?
     private var receiver: (@MainActor (LocalRecognitionEvent) -> Void)?
     private var segments = LocalSpeechSegments()
+    private var captureMonitor: LocalCaptureMonitor?
+    private var cleanupTask: Task<Void, Never>?
 
     private init(transcriber: SpeechTranscriber, analyzer: SpeechAnalyzer, format: AVAudioFormat,
                  continuation: AsyncStream<AnalyzerInput>.Continuation) {
@@ -114,6 +117,13 @@ import Foundation
         tapInstalled = true
         do { audio.prepare(); try audio.start() }
         catch { cancel(); throw LocalVoiceIssue.captureFailed }
+        let monitor = LocalCaptureMonitor(engine: audio, permissionIssue: {
+            LocalCaptureMonitor.permissionFailure() ?? (audio.isRunning ? nil : .inputChanged)
+        }, failed: { [weak self] issue in
+            guard let self, self.active else { return }
+            self.receiver?(.issue(issue))
+        })
+        captureMonitor = monitor; monitor.start()
     }
 
     func finish() {
@@ -141,14 +151,22 @@ import Foundation
         stopInput(finalize: false)
         continuation.finish()
         lastInput = nil
+        let results = resultTask, finish = finishTask, analyzer = analyzer
         resultTask?.cancel(); resultTask = nil
         finishTask?.cancel(); finishTask = nil
-        let analyzer = analyzer
-        // This closure retains only the old analyzer, never a driver or engine.
-        Task { await analyzer.cancelAndFinishNow() }
+        // Retain the exact retired analyzer/tasks until the framework confirms
+        // closure. A later preparation awaits this task before opening input.
+        cleanupTask = Task {
+            await analyzer.cancelAndFinishNow()
+            await results?.value
+            await finish?.value
+        }
     }
 
+    func waitForCleanup() async { await cleanupTask?.value }
+
     private func stopInput(finalize: Bool) {
+        captureMonitor?.stop(); captureMonitor = nil
         if finalize { input?.finish() } else { input?.cancel() }
         input = nil
         if let engine {

@@ -19,7 +19,8 @@ public struct NativeAutomationWork: Sendable {
               arguments["operation_id"]?.string == id,
               let payload = value["payload_json"].string, payload.utf8.count <= 131072,
               SHA256.hash(data: Data(payload.utf8)).map({ String(format: "%02x", $0) }).joined() == digest,
-              let seconds = value["remaining_seconds"].finiteNumber, seconds > 0, seconds <= 24
+              let seconds = value["remaining_seconds"].finiteNumber, seconds > 0,
+              seconds <= Self.maximumSeconds(command)
         else { throw RPCFailure.invalidResponse }
         let decoded = try JSONDecoder().decode(RPCValue.self, from: Data(payload.utf8))
         guard decoded.object?.count == 2, decoded["command"].string == command,
@@ -30,7 +31,8 @@ public struct NativeAutomationWork: Sendable {
     }
     public static let commands: Set<String> = ["desktop.resolve", "desktop.windows", "desktop.observe", "desktop.action",
         "browser_open", "browser_attach", "browser_observe", "browser_action", "browser_navigate",
-        "browser_history", "browser_close", "browser_search", "browser_download"]
+        "browser_history", "browser_close", "browser_search", "browser_download", "media.inspect"]
+    public static func maximumSeconds(_ command: String) -> Double { command == "media.inspect" ? 180 : 24 }
     public func params(hostID: String) -> [String: RPCValue] {
         ["host_id": .string(hostID), "operation_id": .string(id), "nonce": .string(nonce), "digest": .string(digest)]
     }
@@ -51,6 +53,7 @@ private extension RPCValue {
     public private(set) var browserStatus: RPCValue = .null
     public private(set) var permissions: RPCValue = .null
     public var searchTemplate = ""
+    @ObservationIgnored public var mediaTranscriber: (@MainActor (Data, String, String, String, String) async throws -> LocalAudioTranscript)?
     public private(set) var testMode = false
     public private(set) var lifecycleBusy = false
     private enum Lifecycle { case starting, stopping, reconnecting }
@@ -61,6 +64,7 @@ private extension RPCValue {
     @ObservationIgnored private var transport: LocalRPCClient?
     @ObservationIgnored private var desktop = MacAutomationExecutor()
     @ObservationIgnored private var browser = BrowserAutomationExecutor()
+    @ObservationIgnored private var media = NativeMediaExecutor()
     @ObservationIgnored private var hostID = ""
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var polling: Task<Void, Never>?
@@ -87,11 +91,22 @@ private extension RPCValue {
         desktop = MacAutomationExecutor(allowOwnTestWindow: !testOrigins.isEmpty)
         request = { try await transport.call($0, params: $1) }
         browser = BrowserAutomationExecutor(testOrigins: testOrigins)
+        media = NativeMediaExecutor()
         desktop.beforeEffect = { [weak self] id in
             guard let self else { throw RPCFailure.disconnected }; try await self.checkEffect(id)
         }
         browser.beforeEffect = { [weak self] id in
             guard let self else { throw RPCFailure.disconnected }; try await self.checkEffect(id)
+        }
+        media.beforeEffect = { [weak self] id in
+            guard let self else { throw RPCFailure.disconnected }; try await self.checkEffect(id)
+        }
+        media.loadPayload = { [weak self] id in
+            guard let self else { throw RPCFailure.disconnected }; return try await self.readMediaPayload(id)
+        }
+        media.transcribe = { [weak self] data, name, mime, digest, locale in
+            guard let transcribe = self?.mediaTranscriber else { throw NativeMediaIssue.transcriberUnavailable }
+            return try await transcribe(data, name, mime, digest, locale)
         }
         testMode = !testOrigins.isEmpty
     }
@@ -122,7 +137,7 @@ private extension RPCValue {
         hostID = Self.identifier(); submitted.removeAll()
         do {
             let reply = try await request("automation.attach", ["host_id": .string(hostID),
-                "capabilities": .array([.string("desktop"), .string("browser")])])
+                "capabilities": .array([.string("desktop"), .string("browser"), .string("media")])])
             guard epoch == generation, reply["attached"].bool == true,
                   reply["host_id"].string == hostID, reply["permits_replay"].bool == false
             else { throw RPCFailure.invalidResponse }
@@ -145,7 +160,7 @@ private extension RPCValue {
                       values.count <= 8, let cancelled = reply["cancelled"].array,
                       cancelled.count <= 8 else { throw RPCFailure.invalidResponse }
                 for id in cancelled.compactMap(\.string) {
-                    await desktop.cancel(operationID: id); await browser.cancel(operationID: id)
+                    await desktop.cancel(operationID: id); await browser.cancel(operationID: id); await media.cancel(operationID: id)
                 }
                 let work = try values.map(NativeAutomationWork.init)
                 guard Set(work.map(\.id)).count == work.count else { throw RPCFailure.invalidResponse }
@@ -157,7 +172,7 @@ private extension RPCValue {
             } catch {
                 connected = false; statusText = "Automatización desconectada · no se repetirán acciones"
                 errorMessage = error.localizedDescription
-                await desktop.reset(); await browser.reset()
+                await desktop.reset(); await browser.reset(); await media.reset()
                 break
             }
             do { try await Task.sleep(for: .milliseconds(180)) } catch { break }
@@ -174,10 +189,13 @@ private extension RPCValue {
             let permit = try await request("automation.claim", params)
             guard permit["claimed"].bool == true, permit["operation_id"].string == item.id,
                   permit["digest"].string == item.digest, permit["permits_replay"].bool == false,
-                  let remaining = permit["remaining_seconds"].finiteNumber, remaining > 0, remaining <= 24,
+                  let remaining = permit["remaining_seconds"].finiteNumber, remaining > 0,
+                  remaining <= NativeAutomationWork.maximumSeconds(item.command),
                   connected, !stopping, epoch == generation else { throw RPCFailure.invalidResponse }
             admitted[item.id] = item
-            if item.command.hasPrefix("desktop.") {
+            if item.command == "media.inspect" {
+                result = try await media.execute(item.command, arguments: item.arguments)
+            } else if item.command.hasPrefix("desktop.") {
                 result = try await desktop.execute(item.command, arguments: item.arguments)
             } else {
                 let raw = try await browser.execute(item.command, arguments: item.arguments)
@@ -231,6 +249,32 @@ private extension RPCValue {
               result["digest"].string == item.digest, result["permits_replay"].bool == false,
               connected, !stopping else { throw RPCFailure.invalidResponse }
     }
+    private func readMediaPayload(_ id: String) async throws -> Data {
+        guard connected, !stopping, let item = admitted[id], item.command == "media.inspect", let request else {
+            throw RPCFailure.disconnected
+        }
+        let source = try NativeMediaRequest(item.arguments)
+        var payload = Data(), done = false
+        while !done {
+            try Task.checkCancellation(); try await checkEffect(id)
+            guard connected, !stopping, admitted[id]?.digest == item.digest else { throw RPCFailure.disconnected }
+            var params = item.params(hostID: hostID); params["offset"] = .number(Double(payload.count))
+            let reply = try await request("media.worker.read", params)
+            guard let object = reply.object,
+                  Set(object.keys) == ["operation_id", "offset", "next_offset", "bytes", "sha256", "data_base64", "complete"],
+                  reply["operation_id"].string == id, reply["offset"].integer == payload.count,
+                  reply["bytes"].integer == source.byteLength, reply["sha256"].string == source.sourceSHA256,
+                  let encoded = reply["data_base64"].string, encoded.utf8.count <= 174764,
+                  let block = Data(base64Encoded: encoded), !block.isEmpty, block.count <= 131072,
+                  payload.count + block.count <= source.byteLength,
+                  reply["next_offset"].integer == payload.count + block.count,
+                  let complete = reply["complete"].bool,
+                  complete == (payload.count + block.count == source.byteLength) else { throw RPCFailure.invalidResponse }
+            payload.append(block); done = complete
+        }
+        try await checkEffect(id); try source.validate(payload)
+        return payload
+    }
     public func refresh() async {
         guard let request, connected else { return }
         do {
@@ -280,8 +324,8 @@ private extension RPCValue {
     private func stopIdle(handshake: Bool) async -> Bool {
         stopping = true; polling?.cancel(); await polling?.value; polling = nil
         statusText = "Cerrando herramientas y esperando su limpieza real…"
-        for id in Array(active.keys) { await desktop.cancel(operationID: id); await browser.cancel(operationID: id) }
-        await desktop.reset(); await browser.reset()
+        for id in Array(active.keys) { await desktop.cancel(operationID: id); await browser.cancel(operationID: id); await media.cancel(operationID: id) }
+        await desktop.reset(); await browser.reset(); await media.reset()
         for task in Array(active.values) { await task.value }
         var confirmed = true
         if handshake, registered, let request {

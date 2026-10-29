@@ -27,6 +27,7 @@ from .tools import ToolError, ToolSpec, check_tool_authority, revalidate_committ
 _PRIVATE = {
     "auth.json", "history", "history.json", "chat_history.json", "conversations.json",
     ".ssh", ".codex", ".aws", ".gnupg", ".git", ".jarvis", ".venv", ".venv.nosync",
+    ".jarvis-attachments",
     "node_modules", ".env", ".zsh_history", ".bash_history", ".python_history",
     ".git-credentials", ".npmrc", ".netrc", "credentials.json", "cookies", "login data",
     "keychains", "id_rsa", "id_ed25519",

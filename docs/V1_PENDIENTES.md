@@ -12,8 +12,13 @@ El incremento de [MCP, plugins y skills](rebuild/PHASE_A_MCP_EXTENSIONS.md) est�
 cualificado en el alcance elegido; sus [oráculos y CI](rebuild/PHASE_A_MCP_EXTENSIONS_QUALIFICATION.json)
 se conservan junto al [cierre narrativo](rebuild/PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md).
 La matriz actual incluye también automatización: 52 familias parciales y 28 sin
-implementación, ninguna familia amplia completa. REA conserva 41 lotes y 155
+implementación, ninguna familia amplia completa. REA conserva 45 lotes y 171
 rutas TS/JS seleccionadas; no es cobertura exhaustiva.
+
+El bloque de **Telegram, voz, documentos y multimedia** incorpora rutas de grupo,
+adjuntos por sesión, codecs locales y conversación por voz explícita. Está en
+[cualificación integrada](rebuild/PHASE_A_TELEGRAM_VOICE_MEDIA.md);
+no se presenta como cerrado antes de CI y recorridos nativos del producto.
 
 ## Fase A — base completa primero
 
@@ -25,7 +30,7 @@ separados; el producto del bundle d474 es idéntico al de 1481983, cuya
 Ver [registro](rebuild/PHASE_A_AUTOMATION_QUALIFICATION.json) y
 [cierre](rebuild/PHASE_A_AUTOMATION_CLOSEOUT.md). No quedan pendientes dentro de
 ese incremento. La matriz conserva 52 familias parciales y 28 sin implementar,
-ninguna familia amplia completa; REA mantiene 41 lotes y 155 rutas TS/JS.
+ninguna familia amplia completa; REA mantiene 45 lotes y 171 rutas TS/JS.
 
 - [x] Limpiar el árbol de trabajo y conservar puntos de recuperación.
 - [x] Conservar inventarios de capacidades del Jarvis anterior para la fase posterior.
@@ -427,7 +432,7 @@ conserva el estado `qualified_selected_increment`; la fase A global sigue abiert
   CI remota, sin repetir suites ni compilaciones en el Mac.
 
 El checkpoint histórico MCP conserva **38 lotes y 144 rutas TS/JS seleccionadas**;
-el registro actual, ampliado por automatización, conserva 41 lotes y 155 rutas.
+el registro actual, ampliado por automatización, conserva 45 lotes y 171 rutas.
 Los catálogos restantes
 siguen abiertos. Los paquetes propios no son plugins OpenClaw compatibles ni
 acreditan sus 177 conectores. El relay no es un servicio OAuth de Internet; las

@@ -18,11 +18,11 @@ struct TelegramPairingView: View {
             }
             Picker("Agente del nuevo enlace", selection: $agentID) {
                 ForEach(store.management.agents) { Text($0.name).tag($0.id) }
-            }.disabled(!editable || store.telegram.pairing?.active == true)
+            }.disabled(!editable || store.telegram.pairingActive)
             Button("Revisar e iniciar enlace…") {
                 Task { review = await store.telegram.pairingReview(agentID: agentID) }
             }.disabled(!editable || store.telegram.snapshot?.connected != true || store.telegram.snapshot?.running == true ||
-                       store.telegram.pairing?.active == true ||
+                       store.telegram.pairingActive ||
                        !store.management.agents.contains(where: { $0.id == agentID }))
             if store.telegram.snapshot?.connected != true {
                 Text("Conecta primero el bot.").font(.caption).foregroundStyle(.secondary)
@@ -73,7 +73,7 @@ struct TelegramPairingView: View {
         }
         if status.active {
             if let expires = status.expiresAt { Text("Caduca: \(expires.formatted(date: .omitted, time: .standard))").font(.caption).foregroundStyle(.secondary) }
-            Button("Cancelar enlace…", role: .destructive) { Task { await store.telegram.cancelPairing() } }.disabled(!editable)
+            Button("Cancelar enlace…", role: .destructive) { Task { await store.telegram.cancelPairing() } }.disabled(!store.telegram.mayReduceAuthority)
         }
     }
 }

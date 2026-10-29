@@ -1,4 +1,5 @@
 @preconcurrency import AVFoundation
+import AppKit
 import Foundation
 import DesktopCore
 @preconcurrency import Speech
@@ -39,6 +40,7 @@ private final class AudioBufferGate: @unchecked Sendable {
     private var gate: AudioBufferGate?
     private var recognizer: SFSpeechRecognizer?
     private var recognitionTask: SFSpeechRecognitionTask?
+    private var retiredLegacyTask: SFSpeechRecognitionTask?
     private var recognitionTicket: UUID?
     private var preparationTicket: UUID?
     private var preparation: RecognitionPreparation?
@@ -47,8 +49,30 @@ private final class AudioBufferGate: @unchecked Sendable {
     private var synthesizer: AVSpeechSynthesizer?
     private var utterance: AVSpeechUtterance?
     private var playbackReceiver: (@MainActor (LocalPlaybackEvent) -> Void)?
+    private var captureMonitor: LocalCaptureMonitor?
+    private var recognitionCleanup: Task<Void, Never>?
+    private var cleanupTicket: UUID?
 
     public override init() { super.init() }
+
+    public static func installedRecognitionLocales() async -> [String] {
+        if #available(macOS 26.0, *) {
+            guard SpeechTranscriber.isAvailable else { return [] }
+            let supported = await SpeechTranscriber.supportedLocales
+            guard !Task.isCancelled else { return [] }
+            let installed = await SpeechTranscriber.installedLocales
+            guard !Task.isCancelled else { return [] }
+            return Array(Set(installed.map { $0.identifier(.bcp47) }.filter { requested in
+                LocalSpeechPolicy.hasExactInstalledLocale(requested, supported: supported.map { $0.identifier(.bcp47) }, installed: [requested])
+            })).sorted()
+        }
+        return SFSpeechRecognizer.supportedLocales().compactMap { locale in
+            let id = locale.identifier
+            guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable,
+                  recognizer.supportsOnDeviceRecognition else { return nil }
+            return id
+        }.sorted()
+    }
 
     public func requestPermissions(_ completion: @escaping @MainActor (LocalVoicePermissions) -> Void) -> any LocalVoiceCancellation {
         let request = PermissionRequest()
@@ -95,6 +119,17 @@ private final class AudioBufferGate: @unchecked Sendable {
                 self?.preparationTicket == ticket && request?.active == true && !Task.isCancelled
             }
             do {
+                if let retired = self.recognitionCleanup { await retired.value }
+                guard current() else { return }
+                if let retired = self.retiredLegacyTask {
+                    for _ in 0..<40 where retired.state != .completed {
+                        guard current() else { return }
+                        try await Task.sleep(for: .milliseconds(50))
+                    }
+                    guard current() else { return }
+                    guard retired.state == .completed else { throw LocalVoiceIssue.cleanupUnconfirmed }
+                    self.retiredLegacyTask = nil
+                }
                 guard validLocale(localeIdentifier), LocalSpeechPolicy.canonicalLocale(localeIdentifier) != nil else { throw LocalVoiceIssue.onDeviceUnavailable }
                 if #available(macOS 26.0, *) {
                     let ready = try await ModernLocalRecognition.prepare(localeIdentifier: localeIdentifier, isCurrent: current)
@@ -123,6 +158,7 @@ private final class AudioBufferGate: @unchecked Sendable {
     }
 
     public func beginRecognition(localeIdentifier: String, receive: @escaping @MainActor (LocalRecognitionEvent) -> Void) throws {
+        guard NSApp?.isActive == true else { throw LocalVoiceIssue.interrupted }
         guard SFSpeechRecognizer.authorizationStatus() == .authorized else { throw LocalVoiceIssue.speechDenied }
         guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else { throw LocalVoiceIssue.microphoneDenied }
         guard validLocale(localeIdentifier),
@@ -171,6 +207,13 @@ private final class AudioBufferGate: @unchecked Sendable {
             cancelRecognition()
             throw LocalVoiceIssue.captureFailed
         }
+        let monitor = LocalCaptureMonitor(engine: audio, permissionIssue: {
+            LocalCaptureMonitor.permissionFailure() ?? (audio.isRunning ? nil : .inputChanged)
+        }, failed: { [weak self] issue in
+            guard self?.recognitionTicket == ticket else { return }
+            receive(.issue(issue))
+        })
+        captureMonitor = monitor; monitor.start()
     }
 
     public func finishRecognition() {
@@ -182,14 +225,26 @@ private final class AudioBufferGate: @unchecked Sendable {
     public func cancelRecognition() {
         preparationTicket = nil
         preparation?.cancel(); preparation = nil; preparedLocale = nil
-        modernRecognition?.cancel(); modernRecognition = nil
+        if let retired = modernRecognition {
+            retired.cancel(); modernRecognition = nil
+            let previous = recognitionCleanup, ticket = UUID()
+            cleanupTicket = ticket
+            recognitionCleanup = Task { @MainActor [weak self] in
+                await previous?.value
+                await retired.waitForCleanup()
+                guard let self, self.cleanupTicket == ticket else { return }
+                self.recognitionCleanup = nil; self.cleanupTicket = nil
+            }
+        }
         recognitionTicket = nil
         stopInput()
-        recognitionTask?.cancel(); recognitionTask = nil
+        if let retired = recognitionTask { retired.cancel(); retiredLegacyTask = retired }
+        recognitionTask = nil
         recognizer = nil
     }
 
     private func stopInput() {
+        captureMonitor?.stop(); captureMonitor = nil
         gate?.close(); gate = nil
         if let engine {
             engine.stop()
@@ -222,7 +277,8 @@ private final class AudioBufferGate: @unchecked Sendable {
               text.utf8.count <= 16000 else { throw LocalVoiceIssue.textLimit }
         guard MacLocalVoicePolicy.isAllowed(identifier: voice.id, isPersonalVoice: false),
               let installed = AVSpeechSynthesisVoice(identifier: voice.id),
-              !installed.voiceTraits.contains(.isPersonalVoice) else { throw LocalVoiceIssue.noLocalVoice }
+              !installed.voiceTraits.contains(.isPersonalVoice),
+              LocalSpeechPolicy.canonicalLocale(installed.language) == LocalSpeechPolicy.canonicalLocale(voice.language) else { throw LocalVoiceIssue.noLocalVoice }
         stopPlayback()
         let player = AVSpeechSynthesizer()
         player.delegate = self

@@ -542,4 +542,123 @@ final class LocalVoiceControllerTests: XCTestCase {
         }
         XCTAssertFalse(MacLocalVoicePolicy.isAllowed(identifier: "com.apple.voice.fixture", isPersonalVoice: true))
     }
+
+    @MainActor func testChangingPreferencesDoesNotCaptureAndExtendedDictationHasFiniteBudget() {
+        let f = Fixture()
+        f.controller.preferences.mode = .extendedDictation
+        f.controller.preferences.localeIdentifier = "es-MX"
+        XCTAssertTrue(f.driver.permissionRequests.isEmpty)
+        XCTAssertTrue(f.driver.voiceQueries.isEmpty)
+        f.controller.startSelectedDictation(contextID: "one"); f.driver.authorize()
+        XCTAssertEqual(f.driver.recognitionLocales, ["es-MX"])
+        XCTAssertEqual(f.clock.entries.last?.seconds, 120)
+        XCTAssertEqual(f.controller.activeCaptureMode, .extendedDictation)
+        f.controller.cancel()
+    }
+
+    @MainActor func testWakePhraseNeverPublishesPreTriggerAudioAndOnlyOffersSuffixForReview() {
+        let f = Fixture()
+        f.controller.startDictation(contextID: "one", mode: .wakePhrase, wakePhrase: "Hola Jarvis")
+        f.driver.authorize()
+        XCTAssertEqual(f.clock.entries.last?.seconds, 300)
+        f.driver.recognitionReceivers[0](.partial("audio anterior que no debe llegar al borrador"))
+        XCTAssertTrue(f.controller.partialText.isEmpty); XCTAssertFalse(f.controller.wakePhraseDetected)
+        f.driver.recognitionReceivers[0](.partial("audio anterior. Hola Jarvis, prepara un borrador"))
+        XCTAssertTrue(f.controller.wakePhraseDetected)
+        XCTAssertEqual(f.controller.partialText, "prepara un borrador")
+        f.driver.recognitionReceivers[0](.final("audio anterior. Hola Jarvis, prepara un borrador revisado."))
+        XCTAssertEqual(f.sink.values.map(\.text), ["prepara un borrador revisado."])
+        XCTAssertTrue(f.sink.values[0].requiresReview)
+        XCTAssertNotNil(f.sink.values[0].captureID)
+        XCTAssertEqual(f.controller.phase, .idle)
+    }
+
+    @MainActor func testWakePhraseWholeWordAndWithdrawnHypothesisCannotPublishAnUntriggeredDraft() {
+        let f = Fixture()
+        f.controller.startDictation(contextID: "one", mode: .wakePhrase, wakePhrase: "Jarvis"); f.driver.authorize()
+        f.driver.recognitionReceivers[0](.partial("Jarvisito no es la frase"))
+        XCTAssertFalse(f.controller.wakePhraseDetected)
+        f.driver.recognitionReceivers[0](.partial("Jarvis, texto provisional"))
+        f.driver.recognitionReceivers[0](.final("La hipótesis corregida ya no tiene activación"))
+        XCTAssertEqual(f.controller.issue, .recognitionFailed)
+        XCTAssertTrue(f.sink.values.isEmpty)
+        f.controller.startDictation(contextID: "two", mode: .wakePhrase, wakePhrase: "Jarvis"); f.driver.authorize()
+        f.driver.recognitionReceivers[1](.partial("sin activación"))
+        f.clock.entries.last?.fire(); f.clock.entries.last?.fire()
+        XCTAssertEqual(f.controller.issue, .wakePhraseNotHeard)
+        XCTAssertTrue(f.sink.values.isEmpty)
+    }
+
+    @MainActor func testInvalidWakePhraseOrLocaleNeverRequestsPermission() {
+        let f = Fixture()
+        for phrase in ["", "uno dos tres cuatro cinco", "Jarvis\n", String(repeating: "x", count: 65)] {
+            f.controller.startDictation(contextID: "one", mode: .wakePhrase, wakePhrase: phrase)
+            XCTAssertEqual(f.controller.issue, .invalidSettings)
+        }
+        f.controller.startDictation(contextID: "one", localeIdentifier: "es/ES")
+        XCTAssertTrue(f.driver.permissionRequests.isEmpty)
+    }
+
+    @MainActor func testInputChangeRevocationAndInterruptionDiscardUnconfirmedPartial() {
+        for issue in [LocalVoiceIssue.microphoneDenied, .speechDenied, .interrupted, .inputChanged] {
+            let f = Fixture(); var receipts: [LocalVoiceCaptureReceipt] = []
+            f.controller.onCaptureCompletion = { receipts.append($0) }
+            f.start("origin"); let captureID = f.controller.captureIdentifier
+            f.driver.recognitionReceivers[0](.partial("no conservar sin confirmar"))
+            f.driver.recognitionReceivers[0](.issue(issue))
+            XCTAssertEqual(f.controller.phase, .idle); XCTAssertEqual(f.controller.issue, issue)
+            XCTAssertTrue(f.sink.values.isEmpty); XCTAssertEqual(f.clock.activeCount, 0)
+            XCTAssertEqual(receipts, [.init(contextID: "origin", captureID: captureID, outcome: .failed, issue: issue)])
+            f.driver.recognitionReceivers[0](.final("tardío")); XCTAssertTrue(f.sink.values.isEmpty)
+        }
+    }
+
+    @MainActor func testPlaybackReceiptsSeparateFinishedCancelledAndDeadlineWithExactIdentity() {
+        let f = Fixture(); var receipts: [LocalVoicePlaybackReceipt] = []
+        f.controller.onPlaybackCompletion = { receipts.append($0) }
+        let first = UUID(), second = UUID()
+        f.controller.play(text: "Primero", contextID: "one", playbackID: first)
+        f.driver.playbackReceivers[0](.finished)
+        XCTAssertEqual(receipts, [.init(contextID: "one", playbackID: first, event: .finished)])
+        f.controller.play(text: "Segundo", contextID: "one", playbackID: second)
+        f.clock.entries.last?.fire()
+        XCTAssertEqual(receipts.last, .init(contextID: "one", playbackID: second, event: .failed, issue: .playbackTimeout))
+        f.driver.playbackReceivers[0](.cancelled); XCTAssertEqual(receipts.count, 2)
+    }
+
+    @MainActor func testAdapterCannotReturnCloudVoiceWrongLanguageOrDuplicateChoices() {
+        let f = Fixture()
+        f.driver.voices = [.init(id: "com.external.cloud", name: "Cloud", language: "es-ES"),
+                           .init(id: "com.apple.voice.wrong", name: "Otro idioma", language: "en-US")]
+        f.controller.playSelected(text: "No usar voces no elegibles", contextID: "one")
+        XCTAssertEqual(f.controller.issue, .noLocalVoice); XCTAssertTrue(f.driver.playbackTexts.isEmpty)
+        let allowed = LocalVoiceChoice(id: "com.apple.voice.local", name: "Local", language: "es-ES")
+        f.driver.voices = [allowed, allowed]
+        XCTAssertEqual(f.controller.availableVoices(localeIdentifier: "es-ES"), [allowed])
+    }
+
+    @MainActor func testTalkSilenceEndpointFinishesInputButWaitsForFinalAndOldSilenceCannotInterruptNewWords() {
+        let f = Fixture()
+        f.controller.startDictation(contextID: "one", endpointAfterSilence: 1.5); f.driver.authorize()
+        f.driver.recognitionReceivers[0](.partial("Primera palabra"))
+        let previousSilence = f.clock.entries.last!
+        f.driver.recognitionReceivers[0](.partial("Primera palabra y continuación"))
+        previousSilence.fire(evenIfCancelled: true)
+        XCTAssertEqual(f.controller.phase, .listening); XCTAssertEqual(f.driver.finishCalls, 0)
+        XCTAssertEqual(f.clock.entries.last?.seconds, 1.5)
+        f.clock.entries.last?.fire()
+        XCTAssertEqual(f.controller.phase, .finishing); XCTAssertEqual(f.driver.finishCalls, 1)
+        XCTAssertTrue(f.sink.values.isEmpty, "Silence alone never authorizes a partial transcript")
+        f.driver.recognitionReceivers[0](.final("Primera palabra y continuación."))
+        XCTAssertEqual(f.sink.values.first?.completion, .recognizedFinal)
+    }
+
+    @MainActor func testOrdinaryDictationHasNoSilenceEndpointOrImplicitSend() {
+        let f = Fixture(); f.start("one")
+        f.driver.recognitionReceivers[0](.partial("Borrador que sigo editando"))
+        XCTAssertEqual(f.controller.phase, .listening)
+        XCTAssertFalse(f.clock.entries.contains { $0.seconds == 1.5 })
+        XCTAssertTrue(f.sink.values.isEmpty)
+        f.controller.cancel()
+    }
 }

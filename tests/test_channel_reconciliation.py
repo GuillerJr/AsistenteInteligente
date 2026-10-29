@@ -3,6 +3,7 @@
 import asyncio
 import copy
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -21,9 +22,10 @@ from test_telegram import bot as bot
 
 import jarvis_core.private_json as json_module
 from jarvis_core.activation import activate_prepared_profile, review_prepared_profile
+from jarvis_core.client_identity import key_id
 from jarvis_core.maintenance_journal import MaintenanceJournal, _valid
 from jarvis_core.private_json import PrivateJsonError
-from jarvis_core.protocol import LocalRpcClient, RpcError
+from jarvis_core.protocol import LocalRpcClient, RpcError, authenticated_client
 from jarvis_core.service import JarvisService
 from jarvis_core.state import SessionRef
 from jarvis_core.telegram import BotIdentity, TelegramClient, TelegramError, TelegramHTTPTransport
@@ -51,9 +53,13 @@ async def host(prepared):
     service._telegram_journal.bind_bot(BotIdentity(BOT))
     # Open only the session metadata store before the physical review oracles.
     service.store.get_session(SessionRef("a" * 32))
+    owner = key_id(os.environ["JARVIS_RPC_BOOTSTRAP_PUBLIC_KEY"])
+    service.client_authority.lookup(owner, scope="owner")
+    context = authenticated_client.set(owner)
     try:
         yield service, service.maintenance_coordinator, provider
     finally:
+        authenticated_client.reset(context)
         await service.aclose()
         shutil.rmtree(root)
 
@@ -406,3 +412,35 @@ async def test_explicit_pairing_cancel_withdraws_ram_proof_without_route_change(
     with pytest.raises(TelegramError, match="telegram_restore_fresh_pairing_required"):
         await service.telegram_start({"configuration_hash": snapshot["configuration_hash"]})
     assert not provider.calls and not bot.sent()
+
+
+async def test_restored_group_reconciliation_preserves_typed_policy_without_fresh_claim(host):
+    service, coordinator, provider = host
+    service._telegram_journal.remove_route(CHAT, expected_revision=1)
+    group = -100424242
+    service._telegram_journal.set_route(group, "jarvis", "a" * 32, enabled=False,
+        chat_type="supergroup", allowed_sender_ids=[CHAT], message_thread_id=9,
+        allow_attachments=True)
+    value = await coordinator.channel_restore_review({
+        "chat_id": group, "expected_revision": 1, "enabled": True})
+    policy = {key: value["metadata"][key] for key in (
+        "chat_type", "allowed_sender_ids", "message_thread_id", "allow_attachments")}
+    assert policy == {"chat_type": "supergroup", "allowed_sender_ids": [CHAT],
+                      "message_thread_id": 9, "allow_attachments": True}
+    operation = await submit(coordinator, value)
+    await decide(coordinator)
+    result = await finish(coordinator, operation)
+    assert result["phase"] == "complete" and result["receipt_durable"]
+    assert all(result["receipt"][key] == item for key, item in policy.items())
+    observed = await coordinator.channel_restore_inspect({"chat_id": group})
+    assert observed["route"]["chat_id"] == group and observed["route"]["enabled"]
+    assert observed["permits_replay"] is False and service._telegram_channel is None
+    assert not provider.calls and not service._telegram_restored_pairings
+    assert (await service.telegram_status({}))["restored_pairing_required_chat_ids"] == [group]
+    forged = copy.deepcopy(result["receipt"])
+    forged.pop("chat_type")
+    with pytest.raises(PrivateJsonError, match="maintenance_journal_invalid"):
+        _valid({"version": 1, "operations": [{
+            "operation_id": result["operation_id"], "purpose": result["kind"],
+            "review_digest": result["review_digest"], "phase": result["phase"],
+            "receipt": forged}]})

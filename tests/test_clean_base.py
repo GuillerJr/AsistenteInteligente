@@ -268,7 +268,7 @@ def test_gate_setup_reports_static_checks_and_remote_full_qualification(tmp_path
 def test_clean_base_cli_does_not_claim_native_app():
     completed = subprocess.run([sys.executable, str(ROOT / "script/check_clean_base.py")],
                                capture_output=True, text=True, check=True)
-    assert "runtime_dependencies=6" in completed.stdout
+    assert "runtime_dependencies=7" in completed.stdout
     assert "native_app=development" in completed.stdout
 
 

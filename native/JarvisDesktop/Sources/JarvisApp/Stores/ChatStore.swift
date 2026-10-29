@@ -46,6 +46,17 @@ final class ChatStore {
     @ObservationIgnored private let suppliedOptions: LaunchOptions?
     @ObservationIgnored private let openTarget: ProfileOpenTarget?
     let voice: LocalVoiceController
+    let attachments: MediaAttachmentsStore
+    @ObservationIgnored private let fileTranscriber = MacLocalFileTranscriber()
+    @ObservationIgnored private var talkLifecycle: MacLocalVoiceConversationLifecycle?
+    @ObservationIgnored private var talkRunID: String?
+    @ObservationIgnored private var talkSession: ChatSession?
+    @ObservationIgnored lazy var talk = LocalVoiceConversationController(voice: voice,
+        currentContext: { [weak self] in self?.voiceConversationContext },
+        submit: { [weak self] text, context in
+            guard let self else { throw RPCFailure.disconnected }
+            return try await self.submitSpokenTurn(text, context: context)
+        }, cancelRun: { [weak self] context in await self?.settleSpokenRun(context) ?? false })
     var dictationNotice: String?
     var newAgentID = "jarvis"
     var lostTemporaryRun = false
@@ -76,7 +87,7 @@ final class ChatStore {
 
     var isShuttingDown: Bool { stopping }
     private var lifecycleBlocksInteraction: Bool {
-        starting || stopping || recoveringCrash || nativeCleanupPending || automation.lifecycleBusy
+        starting || stopping || recoveringCrash || nativeCleanupPending || automation.lifecycleBusy || attachments.busy
     }
     var coreBlocksHost: Bool { sessionCore.blocksInteraction || clientIdentities.blocksInteraction || delegation.blocksInteraction || hasUnconfirmedQueue }
     var hasUnconfirmedQueue: Bool { pendingQueue != nil }
@@ -88,7 +99,7 @@ final class ChatStore {
     var isRecoveryOnly: Bool { (options ?? suppliedOptions)?.recoveryOnly == true }
     var serviceOwner: ServiceOwnerIdentity? { service.ownedIdentity }
     var durableDraftSnapshot: SessionDrafts { drafts.durableOnly }
-    var mayHandoff: Bool { !lifecycleBlocksInteraction && !isRecoveryOnly && ready && !handoffPreparing && !busy && activeRunID == nil && !voice.canStopDictation && !access.isChangingWorkspace && !mcp.blocksContextChanges && !plugins.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.isRequesting && !restored.responseUnconfirmed && restored.operation?.workerPending != true && restored.operation?.cleanupOwnerPending != true }
+    var mayHandoff: Bool { !talk.isActive && !lifecycleBlocksInteraction && !isRecoveryOnly && ready && !handoffPreparing && !busy && activeRunID == nil && !voice.canStopDictation && !access.isChangingWorkspace && !mcp.blocksContextChanges && !plugins.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.isRequesting && !restored.responseUnconfirmed && restored.operation?.workerPending != true && restored.operation?.cleanupOwnerPending != true }
     var shutdownWarning: String? { service.lastStopReport?.warning }
     var latestConversationRunID: String? { observedConversationRunID }
     var mcpSelectionKey: String {
@@ -99,11 +110,12 @@ final class ChatStore {
     }
 
     var selected: ChatSession? { sessions.first { $0.id == selectedID } }
-    var canSend: Bool { !lifecycleBlocksInteraction && !isRecoveryOnly && ready && connected && !busy && !access.isChangingWorkspace && !mcp.blocksContextChanges && !plugins.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil && selected != nil
+    var canSend: Bool { !talk.isActive && submissionEligible }
+    private var submissionEligible: Bool { !lifecycleBlocksInteraction && !isRecoveryOnly && ready && connected && !busy && !access.isChangingWorkspace && !mcp.blocksContextChanges && !plugins.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil && selected != nil
                        && selected?.archived == false
-                       && !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                       && (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.selectedIDs.isEmpty) }
     private var sessionChangeEligible: Bool { !isRecoveryOnly && ready && !busy && !access.isChangingWorkspace && !mcp.blocksContextChanges && !plugins.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil }
-    var canChangeSession: Bool { !lifecycleBlocksInteraction && sessionChangeEligible }
+    var canChangeSession: Bool { !talk.isActive && !lifecycleBlocksInteraction && sessionChangeEligible }
     private var canInitializeSession: Bool {
         starting && !stopping && !recoveringCrash && !nativeCleanupPending && !automation.lifecycleBusy && sessionChangeEligible
     }
@@ -118,7 +130,13 @@ final class ChatStore {
     init(voice: LocalVoiceController? = nil, options: LaunchOptions? = nil, target: ProfileOpenTarget? = nil, runtime: ProfileRuntimeGuard = ProfileRuntimeGuard()) {
         self.runtime = runtime; memoryRestoration = RestoredMemoryStore(runtime: runtime); memoryIntelligence = MemoryIntelligenceStore(runtime: runtime); recovery = RecoveryExtensionStore(runtime: runtime); suppliedOptions = options; openTarget = target
         self.voice = voice ?? LocalVoiceController(driver: MacLocalVoiceDriver())
-        self.voice.onTranscript = { [weak self] transcript in self?.acceptDictation(transcript) }
+        attachments = MediaAttachmentsStore(isActive: { runtime.isActive }, confirmReview: { title, action, detail, current in
+            OwnerManagementReview.confirm(title: title, action: action, detail: detail, isCurrent: current)
+        })
+        self.voice.onTranscript = { [weak self] transcript in guard let self else { return }
+            if !self.talk.acceptTranscript(transcript) { self.acceptDictation(transcript) } }
+        self.voice.onCaptureCompletion = { [weak self] in self?.talk.captureCompleted($0) }
+        self.voice.onPlaybackCompletion = { [weak self] in self?.talk.playbackCompleted($0) }
         mcp.onRunStarted = { [weak self] run, scope in self?.observeMCPRun(run, scope: scope) }
         plugins.onRunStarted = { [weak self] run, scope in self?.observeMCPRun(run, scope: scope) }
         maintenance.waitForSupervisionIdle = { [weak self] in
@@ -153,16 +171,17 @@ final class ChatStore {
 
     func startDictation() {
         guard canUseVoice, let selected else { return }
-        dictationNotice = nil
-        voice.startDictation(contextID: LocalVoiceDraftBridge.contextID(selected.scope, runtimeID: runtime.id))
+        talk.stop(); dictationNotice = nil
+        voice.startSelectedDictation(contextID: LocalVoiceDraftBridge.contextID(selected.scope, runtimeID: runtime.id))
     }
 
     func readMessage(_ message: ChatMessage) {
         guard canUseVoice, message.role == "assistant", messages.contains(where: { $0.id == message.id }), let selected else { return }
-        voice.play(text: message.text, contextID: LocalVoiceDraftBridge.contextID(selected.scope, runtimeID: runtime.id))
+        talk.stop()
+        voice.playSelected(text: message.text, contextID: LocalVoiceDraftBridge.contextID(selected.scope, runtimeID: runtime.id))
     }
 
-    func stopVoice() { voice.cancel() }
+    func stopVoice() { talk.stop(); talkLifecycle?.close(); talkLifecycle = nil; voice.cancel() }
 
     private func acceptDictation(_ transcript: LocalVoiceTranscript) {
         let mayAcceptDraft = !lifecycleBlocksInteraction && ready && connected && !handoffPreparing && selected?.archived == false && selected != nil
@@ -174,6 +193,90 @@ final class ChatStore {
         dictationNotice = transcript.completion == .partialAtStop
             ? "Se añadió un dictado parcial al borrador. Revísalo antes de enviarlo."
             : "Dictado local añadido al borrador. Revísalo antes de enviarlo."
+    }
+
+    private var voiceConversationContext: LocalVoiceConversationContext? {
+        guard runtime.isActive, ready, connected, !stopping, !recoveringCrash,
+              !handoffPreparing, !access.isChangingWorkspace, let session = selected,
+              !session.archived else { return nil }
+        return LocalVoiceConversationContext(
+            contextID: LocalVoiceDraftBridge.contextID(session.scope, runtimeID: runtime.id),
+            revision: mcpSelectionKey)
+    }
+
+    func startVoiceConversation() {
+        guard canUseVoice, draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              attachments.selectedIDs.isEmpty, let context = voiceConversationContext else { return }
+        guard OwnerManagementReview.confirm(title: "Conversar por voz", action: "Iniciar hasta tres turnos",
+            detail: "El micrófono se abrirá de forma visible, hasta tres turnos o cinco minutos. El reconocimiento y la lectura usan el Mac. Sólo el TEXTO final reconocido se enviará a Codex con ChatGPT. El micrófono se cierra mientras Codex responde y durante la lectura. El modo se detiene ante una aprobación, cambio de conversación o pérdida de foco. Las herramientas conservan sus permisos habituales.",
+            isCurrent: { self.voiceConversationContext == context && self.canUseVoice
+                && self.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && self.attachments.selectedIDs.isEmpty }) else { return }
+        talkRunID = nil; talkSession = nil
+        if talk.start(context: context) {
+            talkLifecycle?.close()
+            talkLifecycle = MacLocalVoiceConversationLifecycle(talk: talk, voice: voice)
+        }
+    }
+
+    func preserveSpokenPartial() {
+        guard let context = voiceConversationContext,
+              let transcript = talk.takePartialForReview(context: context) else { return }
+        acceptDictation(transcript)
+    }
+
+    private func submitSpokenTurn(_ text: String, context: LocalVoiceConversationContext) async throws -> LocalVoiceConversationReply {
+        guard voiceConversationContext == context, draft.isEmpty, attachments.selectedIDs.isEmpty else { throw RPCFailure.disconnected }
+        draft = text
+        await performSend(spokenContext: context)
+        guard let id = talkRunID, let session = talkSession else { throw RPCFailure.invalidResponse }
+        var params = scope(session); params["run_id"] = .string(id)
+        let deadline = ContinuousClock.now.advanced(by: .seconds(180))
+        while ContinuousClock.now < deadline {
+            try Task.checkCancellation()
+            guard voiceConversationContext == context else { throw RPCFailure.disconnected }
+            let result = try await rpc("runs.get", params)["run"]
+            guard result["run_id"] == .string(id), let status = result["status"].string else { throw RPCFailure.invalidResponse }
+            if status == "waiting_approval" {
+                talk.approvalBecamePending(); throw CancellationError()
+            }
+            if ["completed", "failed", "cancelled", "interrupted"].contains(status) {
+                guard let outcome = result["outcome"].string, let receipts = result["action_receipts"].array else { throw RPCFailure.invalidResponse }
+                let parsed = try receipts.map(ActionReceipt.init)
+                return LocalVoiceConversationReply(runID: id, status: status, outcome: outcome,
+                    answer: result["answer"].string ?? "", unconfirmedEffects: parsed.contains(where: \.unknown))
+            }
+            try await Task.sleep(for: .milliseconds(250))
+        }
+        throw RPCFailure.unavailable
+    }
+
+    private func settleSpokenRun(_ context: LocalVoiceConversationContext) async -> Bool {
+        guard let id = talkRunID, let session = talkSession else { return true }
+        guard LocalVoiceDraftBridge.contextID(session.scope, runtimeID: runtime.id) == context.contextID,
+              let client, runtime.isActive else { return false }
+        var params = scope(session); params["run_id"] = .string(id)
+        do {
+            // The cancellation ACK is not settlement. Poll the same durable run;
+            // never cancel a later manual or Telegram run in this conversation.
+            let before = try await client.call("runs.get", params: params)["run"]
+            if !["completed", "failed", "cancelled", "interrupted"].contains(before["status"].string ?? "") {
+                _ = try await client.call("runs.cancel", params: params)
+            }
+            let deadline = ContinuousClock.now.advanced(by: .seconds(20))
+            while ContinuousClock.now < deadline {
+                let value = try await client.call("runs.get", params: params)["run"]
+                guard value["run_id"] == .string(id), let phase = value["status"].string,
+                      let receipts = value["action_receipts"].array else { return false }
+                _ = try receipts.map(ActionReceipt.init)
+                if ["completed", "failed", "cancelled", "interrupted"].contains(phase) {
+                    if talkRunID == id { talkRunID = nil; talkSession = nil }
+                    return true
+                }
+                try await Task.sleep(for: .milliseconds(250))
+            }
+        } catch { return false }
+        return false
     }
 
     func start() async {
@@ -226,6 +329,11 @@ final class ChatStore {
         automation.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime),
             testOrigins: Set(options.automationTestOrigin.map { [$0] } ?? []))
         conversationRefresh = ConversationRefresh(reader: ConversationReader(transport: connection))
+        attachments.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+        automation.mediaTranscriber = { [weak self] data, name, mime, sha, locale in
+            guard let self else { throw RPCFailure.disconnected }
+            return try await self.fileTranscriber.transcribe(data: data, name: name, mimeType: mime, localeIdentifier: locale, expectedSHA256: sha)
+        }
         access.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
         mcp.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
         plugins.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
@@ -298,7 +406,7 @@ final class ChatStore {
                     if Task.isCancelled || self.stopping { return }
                     if MaintenanceMonitorPolicy.isTemporaryBusy(error) { continue }
                     self.ready = false; self.connected = false
-                    self.voice.cancel()
+                    self.stopVoice()
                     if !self.service.isRunning, !self.crashRecoveryBlocked {
                         if await self.recoverCrashedService() { continue }
                         if self.recoveringCrash || ContinuousClock.now < self.nextCrashAttempt { continue }
@@ -386,7 +494,7 @@ final class ChatStore {
         recoveringCrash = true
         defer { recoveringCrash = false }
         ready = false; connected = false
-        voice.cancel(); dictationNotice = nil
+        stopVoice(); dictationNotice = nil
         nextCrashAttempt = ContinuousClock.now.advanced(by: .seconds(3))
         do {
             access.setContext(nil); management.setContext(nil)
@@ -471,7 +579,8 @@ final class ChatStore {
         guard local.providerQueryAllowed || !accountConnected else { throw RPCFailure.invalidResponse }
         ready = serverReady
         connected = local.providerQueryAllowed && accountConnected
-        if !serverReady || !accountConnected { voice.cancel() }
+        if !serverReady || !accountConnected { stopVoice() }
+        talk.validateContext()
         capabilities = result["capabilities"]
         access.refreshCapabilities(capabilities)
         statusText = !local.providerQueryAllowed ? "Perfil local abierto · elige conectar tu cuenta de ChatGPT" : accountConnected ? "Codex con ChatGPT conectado" : "Inicia sesión con ChatGPT"
@@ -506,7 +615,7 @@ final class ChatStore {
 
     private func createSession(temporary: Bool, duringStartup: Bool) async {
         guard duringStartup ? canInitializeSession : canChangeSession else { return }
-        voice.cancel(); dictationNotice = nil
+        stopVoice(); dictationNotice = nil
         guard management.agents.contains(where: { $0.id == newAgentID }) else {
             errorMessage = "Selecciona un agente disponible para la conversación nueva."; return
         }
@@ -540,7 +649,7 @@ final class ChatStore {
         guard duringStartup ? canInitializeSession : canChangeSession,
               let session = sessions.first(where: { $0.id == id }) else { return }
         conversationRefresh?.setScope(nil)
-        voice.cancel(); dictationNotice = nil
+        stopVoice(); dictationNotice = nil
         busy = true
         defer { busy = false; conversationRefresh?.setScope(selected?.scope) }
         do {
@@ -548,6 +657,7 @@ final class ChatStore {
             await mcp.setContext(session.scope)
             guard mcp.context == session.scope, !mcp.appCleanupUnconfirmed else { throw RPCFailure.unavailable }
             selectedID = id
+            await attachments.setScope(session.scope)
             access.setContext(session.scope)
             management.setContext(session.scope)
             sessionCore.setScope(session.scope)
@@ -637,16 +747,25 @@ final class ChatStore {
     }
 
     func send() async {
-        guard canSend, let session = selected else { return }
+        guard canSend else { return }
+        await performSend()
+    }
+
+    private func performSend(spokenContext: LocalVoiceConversationContext? = nil) async {
+        guard submissionEligible, let session = selected else { return }
         voice.cancel(); dictationNotice = nil
         busy = true
         defer { busy = false }
         var params = scope(session)
-        params["message"] = .string(draft)
+        let submittedText = draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Revisa estos adjuntos." : draft
+        params["message"] = .string(submittedText)
+        let attachmentIDs = attachments.selectedIDs
+        if !attachmentIDs.isEmpty { params["attachment_ids"] = .array(attachmentIDs.map(RPCValue.string)) }
         let requestID = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
         params["request_id"] = .string(requestID)
-        let submission = PendingSubmission(id: requestID, session: session, text: draft)
+        let submission = PendingSubmission(id: requestID, session: session, text: submittedText, attachmentIDs: attachmentIDs)
         pendingSubmission = submission
+        if spokenContext != nil { talkRunID = requestID; talkSession = session }
         activeSession = session
         errorMessage = nil
         streamingText = ""
@@ -654,9 +773,11 @@ final class ChatStore {
             let result = try await rpc("runs.start", params)
             guard let runID = result["run_id"].string else { throw RPCFailure.invalidResponse }
             activeRunID = runID
+            if spokenContext != nil { talkRunID = runID }
+            attachments.didSubmit(attachmentIDs, scope: session.scope)
             observedConversationRunID = runID
             runPhase = result["status"].string ?? "queued"
-            if draft == submission.text { draft = "" }
+            if draft == submission.text || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { draft = "" }
             activities = []
             receipts = []
             // A confirmed run identity starts polling even if refreshing history fails.
@@ -705,6 +826,7 @@ final class ChatStore {
                         throw RPCFailure.invalidResponse
                     }
                     self.runPhase = phase
+                    if phase == "waiting_approval" || !self.access.approvals.isEmpty { self.talk.approvalBecamePending() }
                     try self.applyReceipts(result["run"])
                     if ["completed", "failed", "cancelled", "interrupted"].contains(phase) {
                         try await self.refreshMessages(session)
@@ -803,7 +925,7 @@ final class ChatStore {
         statusText = "Reconectando y esperando la limpieza de las herramientas…"
         defer { starting = false; startMonitor() }
         conversationRefresh?.setScope(nil)
-        voice.cancel(); dictationNotice = nil
+        stopVoice(); dictationNotice = nil
         guard await automation.stop(handshake: service.isRunning) else {
             statusText = "Reconexión pendiente: cierre nativo sin confirmar"
             errorMessage = "El cierre de las herramientas nativas no está confirmado. Reintenta la conexión para comprobarlo."
@@ -813,6 +935,7 @@ final class ChatStore {
         guard !stopping, runtime.isActive else { return }
         polling?.cancel(); memoryRecallRefresh?.cancel()
         await client?.close()
+        await attachments.close()
         await access.close()
         await mcp.close()
         await plugins.close()
@@ -911,7 +1034,7 @@ final class ChatStore {
 
     func forkSession(_ session: ChatSession) async {
         guard canChangeSession else { return }
-        voice.cancel(); dictationNotice = nil
+        stopVoice(); dictationNotice = nil
         if selectedID != session.id { await selectSession(session.id) }
         guard selected?.scope == session.scope else { return }
         await refreshSessionContext()
@@ -937,7 +1060,7 @@ final class ChatStore {
 
     func setArchived(_ session: ChatSession, archived: Bool) async {
         guard canChangeSession else { return }
-        if selectedID == session.id { voice.cancel(); dictationNotice = nil }
+        if selectedID == session.id { stopVoice(); dictationNotice = nil }
         var parameters = scope(session); parameters["archived"] = .bool(archived)
         _ = await updateSession(parameters)
     }
@@ -959,7 +1082,7 @@ final class ChatStore {
     func deleteSession(_ session: ChatSession) async {
         guard canChangeSession else { return }
         if selectedID == session.id { conversationRefresh?.setScope(nil) }
-        if selectedID == session.id { voice.cancel(); dictationNotice = nil }
+        if selectedID == session.id { stopVoice(); dictationNotice = nil }
         busy = true
         do {
             let result = try await rpc("sessions.delete", scope(session))
@@ -998,7 +1121,7 @@ final class ChatStore {
 
     func logout() async {
         guard !isRecoveryOnly, activeRunID == nil, !coreBlocksHost, !maintenance.blocksInteraction, !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction else { return }
-        voice.cancel(); dictationNotice = nil
+        stopVoice(); dictationNotice = nil
         do { _ = try await rpc("provider.logout"); try await refreshStatus() }
         catch { report(error) }
     }
@@ -1014,7 +1137,7 @@ final class ChatStore {
         nativeCleanupPending = true
         statusText = "Cerrando las herramientas y esperando su limpieza…"
         conversationRefresh?.setScope(nil)
-        voice.cancel(); dictationNotice = nil
+        stopVoice(); dictationNotice = nil
         guard await automation.stop(handshake: service.isRunning) else {
             statusText = "Cierre nativo sin confirmar"
             errorMessage = "El cierre de las herramientas nativas no está confirmado."

@@ -20,7 +20,7 @@ from jarvis_core.maintenance_journal import wire
 from jarvis_core.protocol import RpcError
 from jarvis_core.recovery import canonical
 from jarvis_core.state import SessionRef
-from jarvis_core.telegram import TelegramError
+from jarvis_core.telegram import TelegramError, _chat_id, _route
 from jarvis_core.tools import (
     HostApprovalRequest,
     HostPurpose,
@@ -29,6 +29,7 @@ from jarvis_core.tools import (
 )
 
 _PURPOSE = "telegram.restore.reconcile"
+_ROUTE_POLICY = {"chat_type", "allowed_sender_ids", "message_thread_id", "allow_attachments"}
 _NO_EFFECTS = {
     "network_started": False,
     "provider_started": False,
@@ -91,6 +92,7 @@ class ChannelReconciliation:
             raise TelegramError("telegram_restore_bot_required")
         if row is None or row["revision"] != expected_revision:
             raise TelegramError("telegram_reconciliation_changed")
+        _route(row)
         if row["enabled"] is enabled:
             raise TelegramError("telegram_reconciliation_no_change")
         agent = self.service.agent_profiles.get(row["agent_id"])
@@ -117,6 +119,7 @@ class ChannelReconciliation:
             "admission_sha256": admission.admission_sha256,
             **_NO_EFFECTS,
             "external_bot_verified": False,
+            **{key: row[key] for key in _ROUTE_POLICY if key in row},
         }, internal_hash
 
     async def channel_restore_review(self, params):
@@ -124,8 +127,11 @@ class ChannelReconciliation:
 
         _params(params, {"chat_id", "expected_revision", "enabled"},
                 {"chat_id", "expected_revision", "enabled"})
-        if (type(params["chat_id"]) is not int or not 1 <= params["chat_id"] < 1 << 52
-                or type(params["expected_revision"]) is not int
+        try:
+            _chat_id(params["chat_id"])
+        except TelegramError:
+            raise RpcError(-32602, "Selecciona una ruta válida.") from None
+        if (type(params["expected_revision"]) is not int
                 or not 1 <= params["expected_revision"] < 1 << 52
                 or type(params["enabled"]) is not bool):
             raise RpcError(-32602, "Selecciona una ruta y un cambio válidos.")
@@ -197,6 +203,7 @@ class ChannelReconciliation:
             "configuration_hash_after": after_hash,
             "error_code": error, "cleanup_pending": cleanup_pending, **_NO_EFFECTS,
             "permits_replay": False,
+            **{key: metadata[key] for key in _ROUTE_POLICY if key in metadata},
         }
 
     async def _channel_effect(self, operation, review):
@@ -311,8 +318,10 @@ class ChannelReconciliation:
         from jarvis_core.maintenance import _params
 
         _params(params, {"chat_id"}, {"chat_id"})
-        if type(params["chat_id"]) is not int or not 1 <= params["chat_id"] < 1 << 52:
-            raise RpcError(-32602, "Selecciona una ruta válida.")
+        try:
+            _chat_id(params["chat_id"])
+        except TelegramError:
+            raise RpcError(-32602, "Selecciona una ruta válida.") from None
         self._channel_current()
         # Observation does not reconstruct a permit, complete an earlier receipt,
         # or claim whether a previous fsync/ACK succeeded.
@@ -320,6 +329,7 @@ class ChannelReconciliation:
         route = next((row for row in routes if row["chat_id"] == params["chat_id"]), None)
         if route is None:
             raise HostProfileError("telegram_reconciliation_route_absent")
+        _route(route)
         return {"observation_only": True, "permits_replay": False,
                 "prior_acknowledgement": "not_established",
                 "bot_id": self.service._telegram_journal.bot_id, "route": route,
