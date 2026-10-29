@@ -34,6 +34,12 @@ public enum TelegramPresentation {
             return "La ruta o su configuración cambiaron. Actualiza y revisa la operación exacta."
         case "telegram_restore_profile_required":
             return "Esta función requiere un perfil restaurado que hayas activado y abierto explícitamente."
+        case "telegram_discovery_fresh_private_pairing_required":
+            return "Enlaza de nuevo tu chat privado con este bot antes de añadir otro grupo. La prueba debe corresponder a la configuración y al dueño actuales."
+        case "telegram_discovery_review_invalid":
+            return "Revisa el chat privado del dueño, el agente y el uso exclusivo del bot antes de iniciar el descubrimiento."
+        case "telegram_discovery_publication_unconfirmed":
+            return "No se confirmó la creación de la ruta. Consulta las rutas existentes; el código no se volverá a usar ni se sobrescribirá una conversación."
         case "telegram_stop_required", "telegram_runner_in_use":
             return "Detén el canal antes de modificar sus rutas o su conexión."
         case "telegram_disconnect_required":

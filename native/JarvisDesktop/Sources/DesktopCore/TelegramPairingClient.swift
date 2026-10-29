@@ -37,8 +37,7 @@ import Foundation
     public func confirmRestored(_ claim: TelegramPairingStatus, route: TelegramRouteSnapshot, snapshot: TelegramSnapshot) async throws -> TelegramSnapshot {
         guard claim.state == "claimed", let claimID = claim.claimID, let agent = claim.agentID, let revision = claim.agentRevision,
               claim.chatID == route.chatID, agent == route.agentID, route.enabled, snapshot.botID == claim.botID,
-              !snapshot.running, snapshot.routes.contains(route),
-              snapshot.restoredPairingRequiredChatIDs.contains(route.chatID),
+              !snapshot.running, snapshot.routes.contains(route), route.chatType == .privateChat,
               let expires = claim.expiresAt, expires > Date() else { throw RPCFailure.configuration }
         let result = try await TelegramSnapshot(request("telegram.restore.pairing.confirm", [
             "claim_id": .string(claimID), "agent_id": .string(agent), "expected_profile_revision": .number(Double(revision)),

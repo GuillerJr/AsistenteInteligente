@@ -17,6 +17,7 @@ struct TelegramView: View {
                     status(snapshot)
                     if !snapshot.connected { connection }
                     TelegramPairingView(store: store)
+                    TelegramGroupDiscoveryView(store: store)
                     TelegramGroupPairingView(store: store)
                     TelegramRoutesView(store: store, snapshot: snapshot)
                     controls(snapshot)

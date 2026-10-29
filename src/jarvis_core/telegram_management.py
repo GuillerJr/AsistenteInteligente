@@ -29,11 +29,12 @@ from jarvis_core.telegram import (
     _chat_id,
     _route,
 )
+from jarvis_core.telegram_group_discovery import TelegramGroupDiscoveryAPI
 from jarvis_core.telegram_group_management import TelegramGroupManagementAPI
 from jarvis_core.telegram_pairing import TelegramPairing
 
 
-class TelegramManagementAPI(TelegramGroupManagementAPI):
+class TelegramManagementAPI(TelegramGroupManagementAPI, TelegramGroupDiscoveryAPI):
     def initialize_telegram(
         self, *, client_factory=TelegramClient, pairing_factory=TelegramPairing
     ):
@@ -61,6 +62,8 @@ class TelegramManagementAPI(TelegramGroupManagementAPI):
         self._telegram_group_pairing = None
         self._telegram_group_owner = None
         self._telegram_group_proof_chat = None
+        self._telegram_discovery = None
+        self._telegram_discovery_owner = None
         self._telegram_run_context = {}
         # A restored route is historical configuration. A new local review
         # cannot prove a live chat: each process/connection needs a fresh claim.
@@ -77,7 +80,8 @@ class TelegramManagementAPI(TelegramGroupManagementAPI):
                 if channel._worker is not None and not channel._worker.done():
                     channel._worker.cancel()
         for attribute, owner in (("_telegram_pairing", self._telegram_pairing_owner),
-                                 ("_telegram_group_pairing", self._telegram_group_owner)):
+                                 ("_telegram_group_pairing", self._telegram_group_owner),
+                                 ("_telegram_discovery", self._telegram_discovery_owner)):
             pairing = getattr(self, attribute)
             if owner == client_id and pairing is not None:
                 pairing._invalidate("cancelled")
@@ -89,6 +93,7 @@ class TelegramManagementAPI(TelegramGroupManagementAPI):
     def telegram_handlers(self):
         return {
             **self.telegram_group_handlers(),
+            **self.telegram_discovery_handlers(),
             "telegram.status": self.telegram_status,
             "telegram.connect": self.telegram_connect,
             "telegram.disconnect": self.telegram_disconnect,
@@ -115,7 +120,9 @@ class TelegramManagementAPI(TelegramGroupManagementAPI):
             and self._telegram_pairing.busy
             and self._telegram_pairing.agent_id == agent_id
         ) or (self._telegram_group_pairing is not None and self._telegram_group_pairing.busy
-              and self._telegram_group_pairing.agent_id == agent_id)
+              and self._telegram_group_pairing.agent_id == agent_id) or (
+            self._telegram_discovery is not None and self._telegram_discovery.busy
+            and self._telegram_discovery.agent_id == agent_id)
 
     def telegram_uses_session(self, ref):
         return not ref.temporary and any(
@@ -129,6 +136,7 @@ class TelegramManagementAPI(TelegramGroupManagementAPI):
             or (channel is not None and channel._lease is not None)
             or (self._telegram_pairing is not None and self._telegram_pairing.busy)
             or (self._telegram_group_pairing is not None and self._telegram_group_pairing.busy)
+            or (self._telegram_discovery is not None and self._telegram_discovery.busy)
         )
 
     def _telegram_configuration(self):
@@ -339,6 +347,9 @@ class TelegramManagementAPI(TelegramGroupManagementAPI):
             if self._telegram_group_pairing is not None:
                 await self._telegram_group_pairing.stop()
                 self._telegram_group_owner = None
+            if self._telegram_discovery is not None:
+                await self._telegram_discovery.stop()
+                self._telegram_discovery_owner = None
             if self._telegram_channel is not None:
                 await self._telegram_channel.stop()
             self._telegram_workspace_id = None
@@ -399,6 +410,8 @@ class TelegramManagementAPI(TelegramGroupManagementAPI):
             await self._telegram_pairing.stop()
         if self._telegram_group_pairing is not None:
             await self._telegram_group_pairing.stop()
+        if self._telegram_discovery is not None:
+            await self._telegram_discovery.stop()
         channel = self._telegram_channel
         if channel is not None:
             await channel.aclose()
@@ -406,6 +419,7 @@ class TelegramManagementAPI(TelegramGroupManagementAPI):
         self._telegram_workspace_id = None
         self._telegram_owner = None
         self._telegram_group_owner = None
+        self._telegram_discovery_owner = None
         self._telegram_pairing_owner = None
         self._telegram_pairing_proof_chat = None
         self._telegram_group_proof_chat = None
@@ -585,13 +599,12 @@ class TelegramManagementAPI(TelegramGroupManagementAPI):
             self._telegram_journal.set_route(
                 claim.chat_id, profile.agent_id, session.ref.session_id
             )
-            if self.profile_lease.admission is not None:
-                routes = self._telegram_configuration()[0]
-                route = next(row for row in routes if row["chat_id"] == claim.chat_id)
-                self._telegram_restored_pairings[claim.chat_id] = (
-                    self._telegram_restored_pairing_key(route))
-                self._telegram_pairing_proof_owners[claim.chat_id] = self._telegram_pairing_owner
-                self._telegram_pairing_proof_chat = claim.chat_id
+            routes = self._telegram_configuration()[0]
+            route = next(row for row in routes if row["chat_id"] == claim.chat_id)
+            self._telegram_restored_pairings[claim.chat_id] = (
+                self._telegram_restored_pairing_key(route))
+            self._telegram_pairing_proof_owners[claim.chat_id] = self._telegram_pairing_owner
+            self._telegram_pairing_proof_chat = claim.chat_id
         return self._telegram_snapshot()
 
     async def telegram_restore_pairing_confirm(self, value):
@@ -606,8 +619,6 @@ class TelegramManagementAPI(TelegramGroupManagementAPI):
         params(value, fields, fields)
         self._management_idle()
         self.profile_lease.check_bootstrap_ready()
-        if self.profile_lease.admission is None:
-            raise TelegramError("telegram_restore_profile_required")
         pairing = self._telegram_pairing
         claim = pairing.claim() if pairing is not None else None
         channel = self._telegram_channel
@@ -621,6 +632,7 @@ class TelegramManagementAPI(TelegramGroupManagementAPI):
                 or type(value["expected_profile_revision"]) is not int
                 or value["configuration_hash"] != configuration_hash
                 or route is None or not route["enabled"]
+                or route.get("chat_type", "private") != "private"
                 or route["revision"] != value["expected_route_revision"]
                 or route["chat_id"] != claim.chat_id or claim.bot_id != identity.bot_id
                 or route["agent_id"] != profile.agent_id or claim.agent_id != profile.agent_id

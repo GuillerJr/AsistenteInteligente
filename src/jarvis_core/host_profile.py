@@ -984,7 +984,8 @@ def service_blockers(service):
                                 or channel._send_tickets):
         codes.add("telegram_active_or_cleanup")
     for pairing in (service._telegram_pairing,
-                    getattr(service, "_telegram_group_pairing", None)):
+                    getattr(service, "_telegram_group_pairing", None),
+                    getattr(service, "_telegram_discovery", None)):
         if pairing is not None and (pairing._lease is not None
                                 or (pairing._worker is not None and not pairing._worker.done())
                                 or (pairing._expiry is not None and not pairing._expiry.done())):
@@ -1003,6 +1004,7 @@ def service_blockers(service):
 # Reads may initialize SQLite or provider/pairing state, so ALL handlers are
 # admitted. This set only avoids false generation bumps for unchanged polling.
 READ_RPCS = frozenset({
+    "telegram.group.discover.review", "telegram.group.discover.status",
     "media.list", "media.read", "media.playback.read", "media.upload.status", "media.worker.read",
     "telegram.group.pairing.review", "telegram.group.pairing.status", "telegram.destination",
     "automation.list", "automation.webhook.status",

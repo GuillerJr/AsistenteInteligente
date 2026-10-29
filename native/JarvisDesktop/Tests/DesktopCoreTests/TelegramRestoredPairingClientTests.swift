@@ -55,19 +55,26 @@ final class TelegramRestoredPairingClientTests: XCTestCase {
             "configuration_hash": .string(source.configurationHash)])
     }
     @MainActor
-    func testExpiredOrAlreadySatisfiedProofNeverDispatchesAConfirmation() async throws {
-        for expired in [false, true] {
-            let source = try TelegramSnapshot(RestoredPairingFixture.snapshot(expired ? [:] : [
-                "restored_pairing_required_chat_ids": .array([.number(84)])]))
-            let claim = try RestoredPairingFixture.claim(expired ? ["expires_at": .number(1)] : [:])
-            let wire = RestoredPairingWire(RestoredPairingFixture.snapshot())
-            let client = TelegramPairingClient(request: { await wire.request($0, $1) })
-            do {
-                _ = try await client.confirmRestored(claim, route: source.routes[0], snapshot: source)
-                XCTFail("An expired or already satisfied claim was sent")
-            } catch { XCTAssertEqual(error as? RPCFailure, .configuration) }
-            let calls = await wire.recorded(); XCTAssertTrue(calls.isEmpty)
-        }
+    func testExpiredProofNeverDispatchesAConfirmation() async throws {
+        let source = try TelegramSnapshot(RestoredPairingFixture.snapshot())
+        let claim = try RestoredPairingFixture.claim(["expires_at": .number(1)])
+        let wire = RestoredPairingWire(RestoredPairingFixture.snapshot())
+        let client = TelegramPairingClient(request: { await wire.request($0, $1) })
+        do {
+            _ = try await client.confirmRestored(claim, route: source.routes[0], snapshot: source)
+            XCTFail("An expired claim was sent")
+        } catch { XCTAssertEqual(error as? RPCFailure, .configuration) }
+        let calls = await wire.recorded(); XCTAssertTrue(calls.isEmpty)
+    }
+    @MainActor
+    func testNewProfileExistingPrivateRouteCanRefreshFreshProofWithoutChangingItsSession() async throws {
+        let raw = RestoredPairingFixture.snapshot(["restored_pairing_required_chat_ids": .array([])])
+        let source = try TelegramSnapshot(raw)
+        let wire = RestoredPairingWire(raw)
+        let client = TelegramPairingClient(request: { await wire.request($0, $1) })
+        let result = try await client.confirmRestored(RestoredPairingFixture.claim(), route: source.routes[0], snapshot: source)
+        XCTAssertEqual(result.routes, source.routes)
+        let calls = await wire.recorded(); XCTAssertEqual(calls.count, 1)
     }
     @MainActor
     func testResponseCannotConsumeAnotherRoutesProofOrChangeItsIdentity() async throws {
