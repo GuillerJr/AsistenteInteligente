@@ -4,11 +4,12 @@ import asyncio
 import json
 
 import pytest
-from test_telegram import CHAT, NOW, SESSION, final_event, update
+from test_telegram import NOW, final_event, update
 from test_telegram import bot as bot
 from test_telegram import channel_factory as channel_factory
 
 from jarvis_core.telegram import (
+    TelegramChannel,
     TelegramError,
     TelegramHTTPResponse,
     TelegramHTTPTransport,
@@ -167,25 +168,50 @@ async def test_stop_interrupts_real_backoff_without_another_poll(channel_factory
 
 @pytest.mark.parametrize("change", ["configuration", "lease"])
 async def test_context_revoked_during_wait_cannot_start_a_retry(channel_factory, bot, change):
-    channel, journal, received = await channel_factory()
+    connected, journal, received = await channel_factory()
+    authorized = [True]
+
+    def configuration_guard():
+        if not authorized[0]:
+            raise TelegramError("telegram_configuration_changed")
+
+    # The public journal setter correctly excludes configuration changes while
+    # a reader owns its lease. Model a revoked host/workspace context through
+    # the channel's supported guard instead of bypassing that protection.
+    channel = TelegramChannel(
+        connected.client,
+        journal,
+        connected.dispatch,
+        clock=lambda: NOW,
+        close_timeout=1,
+        configuration_guard=configuration_guard,
+    )
     scripted = PollScript(channel, [failed_read()])
     channel.client._transport = scripted
     waiting = ControlledWait()
     channel._wait_poll_recovery = waiting
-    channel.start(expected_configuration_hash=journal.configuration_hash())
-    await asyncio.wait_for(waiting.entered.get(), 2)
-    if change == "configuration":
-        journal.set_route(CHAT, "jarvis", SESSION, enabled=False)
-    else:
-        path = journal.document.directory / "telegram.runner.lock"
-        path.unlink()
-        path.touch(mode=0o600)
-    waiting.release.put_nowait(None)
-    await asyncio.wait_for(channel._worker, 2)
-    assert len(scripted.polls) == 1 and not received and not bot.sent()
-    assert channel.error_code == (
-        "telegram_configuration_changed" if change == "configuration" else "telegram_runner_changed"
-    )
+    try:
+        channel.start(expected_configuration_hash=journal.configuration_hash())
+        await asyncio.wait_for(waiting.entered.get(), 2)
+        connections_before_revocation = len(bot.connections)
+        if change == "configuration":
+            authorized[0] = False
+        else:
+            path = journal.document.directory / "telegram.runner.lock"
+            path.unlink()
+            path.touch(mode=0o600)
+        waiting.release.put_nowait(None)
+        await asyncio.wait_for(channel._worker, 2)
+        assert len(scripted.polls) == 1 and not received and not bot.sent()
+        assert len(bot.connections) == connections_before_revocation
+        assert channel._lease is None
+        assert channel.error_code == (
+            "telegram_configuration_changed"
+            if change == "configuration"
+            else "telegram_runner_changed"
+        )
+    finally:
+        await channel.aclose()
 
 
 @pytest.mark.parametrize("result", ["transport_error", "configuration_error", "successful_poll"])
