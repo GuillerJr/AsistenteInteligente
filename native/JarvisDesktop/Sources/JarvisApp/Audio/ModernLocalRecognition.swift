@@ -87,6 +87,7 @@ import Foundation
         let audio = AVAudioEngine()
         let inputNode = audio.inputNode
         let sourceFormat = inputNode.outputFormat(forBus: 0)
+        guard let inputConfiguration = LocalCaptureInputConfiguration.read(engine: audio, format: sourceFormat) else { throw LocalVoiceIssue.captureFailed }
         let gate = try ModernPCMInput(source: sourceFormat, destination: format, continuation: continuation) { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self, self.active else { return }
@@ -118,8 +119,9 @@ import Foundation
         tapInstalled = true
         do { audio.prepare(); try audio.start() }
         catch { cancel(); throw LocalVoiceIssue.captureFailed }
-        let monitor = LocalCaptureMonitor(engine: audio, permissionIssue: {
-            LocalCaptureMonitor.permissionFailure() ?? (audio.isRunning ? nil : .inputChanged)
+        let monitor = LocalCaptureMonitor(engine: audio, configuration: inputConfiguration,
+            inputState: { LocalCaptureInputState.read(engine: audio) }, permissionIssue: {
+            LocalCaptureMonitor.activeCaptureFailure()
         }, failed: { [weak self] issue in
             guard let self, self.active else { return }
             self.receiver?(.issue(issue))

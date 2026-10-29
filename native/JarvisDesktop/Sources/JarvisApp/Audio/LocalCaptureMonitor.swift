@@ -4,14 +4,17 @@ import DesktopCore
 import Foundation
 @preconcurrency import Speech
 
-/// Capture stops on revocation, device/configuration changes, loss of focus or
-/// system sleep. No event can restart a microphone; a new explicit action is
-/// required. Injected centers/clock keep the negative contract testable without
-/// opening hardware or requesting system permissions.
+/// No notification can restart a microphone. The owner must explicitly start a
+/// new capture after a real input change, revocation, focus loss or system sleep.
 @MainActor final class LocalCaptureMonitor {
+    typealias Delivery = @Sendable (@escaping @MainActor @Sendable () -> Void) -> Void
+    private let engine: AnyObject
+    private let configuration: LocalCaptureInputConfiguration
+    private let inputState: @MainActor () -> LocalCaptureInputState?
     private let center: NotificationCenter
     private let workspaceCenter: NotificationCenter
     private let clock: any LocalVoiceClock
+    private let deliver: Delivery
     private let permissionIssue: @MainActor () -> LocalVoiceIssue?
     private let failed: @MainActor (LocalVoiceIssue) -> Void
     private var tokens: [(NotificationCenter, NSObjectProtocol)] = []
@@ -19,26 +22,31 @@ import Foundation
     private var active = false
     private var generation: UInt64 = 0
 
-    init(engine: AnyObject, center: NotificationCenter = .default,
-         workspaceCenter: NotificationCenter? = nil,
+    init(engine: AnyObject, configuration: LocalCaptureInputConfiguration,
+         inputState: @escaping @MainActor () -> LocalCaptureInputState?,
+         center: NotificationCenter = .default, workspaceCenter: NotificationCenter? = nil,
          clock: (any LocalVoiceClock)? = nil,
+         deliver: @escaping Delivery = { action in Task { @MainActor in action() } },
          permissionIssue: @escaping @MainActor () -> LocalVoiceIssue?,
          failed: @escaping @MainActor (LocalVoiceIssue) -> Void) {
-        let workspaceCenter = workspaceCenter ?? NSWorkspace.shared.notificationCenter
-        self.center = center; self.workspaceCenter = workspaceCenter
-        self.clock = clock ?? SystemLocalVoiceClock()
+        self.engine = engine; self.configuration = configuration; self.inputState = inputState
+        self.center = center; self.workspaceCenter = workspaceCenter ?? NSWorkspace.shared.notificationCenter
+        self.clock = clock ?? SystemLocalVoiceClock(); self.deliver = deliver
         self.permissionIssue = permissionIssue; self.failed = failed
-        observe(center, name: .AVAudioEngineConfigurationChange, object: engine, issue: .inputChanged)
-        observe(center, name: AVCaptureDevice.wasDisconnectedNotification, object: nil, issue: .inputChanged, audioOnly: true)
-        observe(center, name: NSApplication.didResignActiveNotification, object: nil, issue: .interrupted)
-        observe(workspaceCenter, name: NSWorkspace.willSleepNotification, object: nil, issue: .interrupted)
-        observe(workspaceCenter, name: NSWorkspace.sessionDidResignActiveNotification, object: nil, issue: .interrupted)
     }
 
     func start() {
         guard !active else { return }
         active = true; generation &+= 1
-        inspect(generation)
+        let ticket = generation
+        // Register only for this active epoch. A queued callback captures its
+        // original ticket and cannot retire a later explicit capture.
+        observe(center, name: .AVAudioEngineConfigurationChange, object: engine, ticket: ticket)
+        observe(center, name: AVCaptureDevice.wasDisconnectedNotification, object: nil, ticket: ticket, audioOnly: true)
+        observe(center, name: NSApplication.didResignActiveNotification, object: nil, ticket: ticket, issue: .interrupted)
+        observe(workspaceCenter, name: NSWorkspace.willSleepNotification, object: nil, ticket: ticket, issue: .interrupted)
+        observe(workspaceCenter, name: NSWorkspace.sessionDidResignActiveNotification, object: nil, ticket: ticket, issue: .interrupted)
+        inspect(ticket)
     }
 
     func stop() {
@@ -55,23 +63,42 @@ import Foundation
     }
 
     private func observe(_ center: NotificationCenter, name: Notification.Name, object: AnyObject?,
-                         issue: LocalVoiceIssue, audioOnly: Bool = false) {
+                         ticket: UInt64, issue: LocalVoiceIssue? = nil, audioOnly: Bool = false) {
+        let delivery = deliver
         let token = center.addObserver(forName: name, object: object, queue: nil) { [weak self] notification in
             if audioOnly, let device = notification.object as? AVCaptureDevice, !device.hasMediaType(.audio) { return }
-            Task { @MainActor [weak self] in self?.terminate(issue) }
+            delivery { [weak self] in
+                guard let self, self.active, self.generation == ticket else { return }
+                if let issue { self.terminate(issue) }
+                else { self.inspectInput() }
+            }
         }
         tokens.append((center, token))
     }
 
     private func inspect(_ ticket: UInt64) {
         guard active, generation == ticket else { return }
-        if let issue = permissionIssue() { terminate(issue); return }
+        inspectInput()
+        guard active, generation == ticket else { return }
         timer = clock.schedule(after: 0.5) { [weak self] in self?.inspect(ticket) }
+    }
+
+    private func inspectInput() {
+        guard active else { return }
+        if let issue = permissionIssue() { terminate(issue); return }
+        guard let current = inputState(), current.isRunning,
+              current.configuration == configuration else { terminate(.inputChanged); return }
+        // A same-input notification while the engine still runs is not a route
+        // change. No sleep, debounce window, second start or retry is needed.
     }
 
     private func terminate(_ issue: LocalVoiceIssue) {
         guard active else { return }
         stop(); failed(issue)
+    }
+
+    static func activeCaptureFailure() -> LocalVoiceIssue? {
+        permissionFailure() ?? (NSApp?.isActive == true ? nil : .interrupted)
     }
 
     static func permissionFailure() -> LocalVoiceIssue? {

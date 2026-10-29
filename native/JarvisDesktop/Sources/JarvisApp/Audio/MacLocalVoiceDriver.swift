@@ -192,6 +192,7 @@ private final class AudioBufferGate: @unchecked Sendable {
               format.channelCount > 0, format.channelCount <= 2 else {
             throw LocalVoiceIssue.captureFailed
         }
+        guard let inputConfiguration = LocalCaptureInputConfiguration.read(engine: audio, format: format) else { throw LocalVoiceIssue.captureFailed }
         let bufferGate = AudioBufferGate(request)
         let ticket = UUID()
         recognitionTicket = ticket; recognizer = service; engine = audio; gate = bufferGate
@@ -217,8 +218,9 @@ private final class AudioBufferGate: @unchecked Sendable {
             cancelRecognition()
             throw LocalVoiceIssue.captureFailed
         }
-        let monitor = LocalCaptureMonitor(engine: audio, permissionIssue: {
-            LocalCaptureMonitor.permissionFailure() ?? (audio.isRunning ? nil : .inputChanged)
+        let monitor = LocalCaptureMonitor(engine: audio, configuration: inputConfiguration,
+            inputState: { LocalCaptureInputState.read(engine: audio) }, permissionIssue: {
+            LocalCaptureMonitor.activeCaptureFailure()
         }, failed: { [weak self] issue in
             guard self?.recognitionTicket == ticket else { return }
             receive(.issue(issue))
