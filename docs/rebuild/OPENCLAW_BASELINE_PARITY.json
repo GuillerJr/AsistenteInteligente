@@ -45,7 +45,7 @@
       "Contratos declarados y rutas UI no acreditan disponibilidad ni funcionamiento real.",
       "No se ejecutó OpenClaw ni se leyó configuración/cuenta del dueño."
     ],
-    "current_jarvis_state": "Desarrollo propio con Codex oficial y bloques previos de archivos, memoria léxica, MCP, procesos, agentes, skills, programador, Telegram, voz y lectura HTTPS. El bloque finito de núcleo/sesiones añade identidad Ed25519 local y revocación, supervisión de caída sin replay, compactación extractiva, fork/rewind conversacionales, objetivos con hijos, límites, cola y steering. Recorridos nativos de este incremento usan perfiles y peer de inferencia propios sintéticos; se conserva separada la evidencia autenticada anterior. Recuperación/activación/copia de memoria/reconciliación previamente cualificadas no se reabren. macOS inicial, iPhone aplazado; ninguna familia amplia ni fase A completas y fase B no iniciada. El incremento Mac/navegador añade patches/PTY, decisiones recordadas, broker firmado y herramientas nativas AX/WebKit/CDP con pruebas de componentes. La cualificación GUI/TCC y los controles globales están registrados por separado en PHASE_A_MAC_BROWSER_CLOSEOUT; no se presume éxito real por fixtures. El incremento elegido de memoria local CPU, semántica/híbrida, indexación de notas aprobadas, recuperación y mantenimiento está cualificado en P-MEMORY-LOCAL. Mantiene pendientes los extras no elegidos y la paridad amplia de referencia. El incremento P-MCP-EXTENSIONS implementa HTTP/SSE, OAuth, recursos/prompts/Apps, relay loopback y extensiones/skills versionadas; su incremento elegido está cualificado por CI remota y recorridos nativos en PHASE_A_MCP_EXTENSIONS_QUALIFICATION.json. Los catálogos individuales de conectores, el cierre amplio y la distribución permanecen separados."
+    "current_jarvis_state": "Desarrollo propio con bloques previos cualificados en sus alcances y automatización nativa finita observada; CI final del incremento pendiente. 52 familias parciales y 28 sin implementación; ninguna familia amplia completa."
   },
   "status_vocabulary": {
     "no_implementado": "Sin evidencia productiva propia de cierre.",
@@ -1558,7 +1558,7 @@
         },
         {
           "progress_id": "P-AUTOMATION-EVENTS",
-          "scope": "Implementación conectada; validación y recorrido nativo pendientes de registrar."
+          "scope": "Recorridos nativos finitos con Codex real, recibos, archivos y cliente HTTP independiente verificados; CI final pendiente. Ver PHASE_A_AUTOMATION_QUALIFICATION.json."
         }
       ],
       "acceptance": {
@@ -1584,7 +1584,7 @@
       "implementation_evidence": [
         {
           "progress_id": "P-AUTOMATION-EVENTS",
-          "scope": "Implementación conectada; validación y recorrido nativo pendientes de registrar."
+          "scope": "Recorridos nativos finitos con Codex real, recibos, archivos y cliente HTTP independiente verificados; CI final pendiente. Ver PHASE_A_AUTOMATION_QUALIFICATION.json."
         }
       ],
       "acceptance": {
@@ -14128,7 +14128,7 @@
   },
   "progress_snapshot": {
     "date": "2026-10-28",
-    "revision_scope": "El incremento elegido MCP/extensiones está cualificado con CI remota y recorridos nativos trazables; Se conservan los cierres finitos anteriores, los fallos históricos y sus límites. 51 familias con implementación parcial, 29 sin implementar; cero familias amplias completas, fase A abierta y B no iniciada.",
+    "revision_scope": "Ocho recorridos nativos finitos de automatización y cierre presupuestado verificados en 09df; faltan CI y recorrido mínimo del bundle final tras correcciones. Los cierres previos conservan sus límites. 52 familias parciales, 28 sin implementar; ninguna familia amplia completa. Fase A abierta y B no iniciada.",
     "complete_capability_count": 0,
     "complete_reference_parity": false,
     "authenticated_inference_verified": true,
@@ -14393,14 +14393,18 @@
       {
         "id": "P-SCHEDULER",
         "component": "Programador durable explícito",
-        "status": "contract_tested_partial",
+        "status": "selected_native_scope_verified_awaiting_final_ci",
         "code": [
           "src/jarvis_core/scheduler.py",
           "src/jarvis_core/management.py"
         ],
         "tests": [
           "tests/test_scheduler.py",
-          "tests/test_service_management.py"
+          "tests/test_service_management.py",
+          "tests/test_automation_schedule.py",
+          "tests/test_service_scheduler_events.py",
+          "tests/test_scheduler_recovery.py",
+          "native/JarvisDesktop/Tests/AppLayoutTests/AutomationControlAvailabilityTests.swift"
         ],
         "capability_ids": [
           "A-05",
@@ -14412,8 +14416,13 @@
           "A-60",
           "A-70"
         ],
-        "verified_scope": "SQLite real, claims de dos stores, runner único, once/interval/daily IANA/DST, coalesce, CAS, recuperación incierta sin replay, start revisado por hash32jobs. Despacho por Runtime común; herramientas programadas esperan aprobación.",
-        "remaining": "Cualificación integral y recorrido nativo del nuevo incremento en PHASE_A_AUTOMATION.md; no daemon OS, puerto Internet, notificación push ni paridad universal de sintaxis cron."
+        "verified_scope": "Calendario once/interval/daily/cron IANA, heartbeat y wake durable; autoridad común, CAS, custodia y no replay. Recorridos nativos con Codex real: dos cron y un heartbeat; tarea por evento suspendida/reanudada y otra cancelada durante aprobación pendiente, con efectos ausentes y recibos desconocidos conservados. Reapertura desarmada acreditada.",
+        "remaining": "CI completa y recorrido mínimo del bundle final tras corregir DTO de recuperación y ACK/retry de cierre de flujos. Los oráculos nativos 09df conservan su identidad. No daemon OS, despertar físico, endpoint Internet, push ni paridad universal.",
+        "evidence": [
+          "PHASE_A_AUTOMATION.md",
+          "PHASE_A_AUTOMATION_QUALIFICATION.json",
+          "PHASE_A_AUTOMATION_CLOSEOUT.md"
+        ]
       },
       {
         "id": "P-TELEGRAM",
@@ -15009,23 +15018,26 @@
       },
       {
         "id": "P-AUTOMATION-EVENTS",
-        "status": "implemented_awaiting_remote_and_native_qualification",
+        "status": "awaiting_final_ci",
         "implementation": "src/jarvis_core/automation_events.py, automation_flows.py, automation_schedule.py y controles SwiftUI propios",
         "scope": "Cron IANA/DST, heartbeat, wake durable, hooks declarativos, entrada HMAC loopback y flujos pausables con autoridad normal.",
         "evidence": [
           "PHASE_A_AUTOMATION.md",
           "REA_PART25A_SUMMARY.json",
           "REA_PART25B_SUMMARY.json",
-          "REA_PART25C_SUMMARY.json"
+          "REA_PART25C_SUMMARY.json",
+          "PHASE_A_AUTOMATION_QUALIFICATION.json",
+          "PHASE_A_AUTOMATION_CLOSEOUT.md"
         ],
-        "remaining": "CI remota del commit exacto y cualificación nativa; no se declara cierre por estas fuentes o pruebas todavía no ejecutadas."
+        "remaining": "CI completa y recorrido mínimo del bundle final tras corregir DTO de recuperación y ACK/retry de cierre de flujos. Los oráculos nativos 09df conservan su identidad. No daemon OS, despertar físico, endpoint Internet, push ni paridad universal.",
+        "verified_scope": "Hooks declarativos y dos pasos con workspace_write aprobados por separado, checkpoint y reanudación; HMAC loopback con cliente independiente, idempotencia/conflictos; revocación, suspensión, cancelación, reinicio sin activación y cierre presupuestado con oráculos propios."
       }
     ],
     "detail_file": "PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md",
     "rea": {
       "source_file": "REA_COVERAGE.json",
-      "static_batches": 38,
-      "unique_typescript_paths_in_completed_batches": 142,
+      "static_batches": 41,
+      "unique_typescript_paths_in_completed_batches": 153,
       "global_status": "partial",
       "runtime_executed": false,
       "semantic_unknowns_remain": true,
@@ -15067,10 +15079,13 @@
         "OC24D-relay",
         "OC24E-install",
         "OC24F-lifecycle",
-        "OC24G-skills"
+        "OC24G-skills",
+        "OC-25A",
+        "OC-25B",
+        "OC-25C"
       ],
       "limits": "Contar rutas examinadas no significa comprensión semántica ni revisión global. IDs y evidencias completos en REA_COVERAGE.json/provenance.",
-      "unique_ts_js_paths_in_completed_batches": 144,
+      "unique_ts_js_paths_in_completed_batches": 155,
       "source_count_note": "El contador TypeScript conserva su sentido estricto; el total TS/JS incluye también MJS/CJS."
     },
     "previous_detail_file": "PHASE_A_CORE_CLOSEOUT.md",
@@ -15121,7 +15136,9 @@
     "mcp_extensions_selected_scope_status": "qualified_selected_increment",
     "mcp_extensions_qualification_file": "PHASE_A_MCP_EXTENSIONS_QUALIFICATION.json",
     "automation_increment_file": "PHASE_A_AUTOMATION.md",
-    "automation_selected_scope_status": "implemented_awaiting_remote_and_native_qualification"
+    "automation_selected_scope_status": "awaiting_final_ci",
+    "automation_qualification_file": "PHASE_A_AUTOMATION_QUALIFICATION.json",
+    "automation_closeout_file": "PHASE_A_AUTOMATION_CLOSEOUT.md"
   },
   "target_decisions": {
     "date": "2026-10-24",

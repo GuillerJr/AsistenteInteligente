@@ -25,8 +25,9 @@ public struct RecoveryReleaseDetails: Sendable {
         try MaintenanceValidation.keys(row["entrypoints"], ["python", "native"])
         guard row["entrypoints"]["python"] == .string("python/jarvis_core/service.py"), row["entrypoints"]["native"] == .string("app/Jarvis.app/Contents/MacOS/Jarvis") else { throw RPCFailure.invalidResponse }
         _ = try Self.profilePin(row["profile_pin"], scope: MaintenanceScope(row))
-        let sources = try ManagementValidation.rows(row["source"], limit: 7, parse: MaintenanceSource.init)
-        guard Set(sources.map(\.role)).count == sources.count else { throw RPCFailure.invalidResponse }
+        let sources = try ManagementValidation.rows(row["source"], limit: MaintenanceValidation.roles.count - 1, parse: MaintenanceSource.init)
+        guard Set(sources.map(\.role)).count == sources.count,
+              MaintenanceValidation.acceptsRoles(Set(sources.map(\.role)), includesConfiguration: false) else { throw RPCFailure.invalidResponse }
         let copy = row["recovery_copy"]
         try MaintenanceValidation.keys(copy, ["path", "manifest_sha256", "artifact_id", "root_identity"])
         backupPath = try RecoveryExtensionValidation.path(copy["path"]); backupSHA = try RecoveryExtensionValidation.hash(copy["manifest_sha256"])

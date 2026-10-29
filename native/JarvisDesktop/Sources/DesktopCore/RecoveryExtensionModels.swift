@@ -100,8 +100,9 @@ public struct RecoveryRepairDetails: Sendable {
         destinationParent = try RecoveryExtensionValidation.path(value["destination_parent"]); destinationName = try RecoveryExtensionValidation.text(value["destination_name"], max: 96); destinationIdentity = try MaintenanceFileIdentity(value["destination_identity"])
         guard MaintenanceValidation.name(destinationName) else { throw RPCFailure.invalidResponse }
         _ = try MaintenanceValidation.strings(value["excluded"], exact: MaintenanceValidation.exclusions)
-        sources = try ManagementValidation.rows(value["source"], limit: 7, parse: MaintenanceSource.init)
-        guard Set(sources.map(\.role)).count == sources.count else { throw RPCFailure.invalidResponse }
+        sources = try ManagementValidation.rows(value["source"], limit: MaintenanceValidation.roles.count - 1, parse: MaintenanceSource.init)
+        guard Set(sources.map(\.role)).count == sources.count,
+              MaintenanceValidation.acceptsRoles(Set(sources.map(\.role)), includesConfiguration: false) else { throw RPCFailure.invalidResponse }
         let row = value["candidate"]
         let base: Set<String> = ["kind", "role", "image_sha256", "image_bytes", "source_mode", "source_modified", "semantics", "source_fingerprint", "source_member_sha256"]
         let wal: Set<String> = ["pages", "page_size", "frames", "valid_frames", "committed_frames", "retained_bytes", "discarded_bytes", "discarded_frame_slots", "failure", "main_only"]

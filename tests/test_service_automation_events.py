@@ -26,6 +26,7 @@ from test_service_management import (
 
 from jarvis_core.automation_flows import AutomationFlowError
 from jarvis_core.client_identity import ClientIdentity
+from jarvis_core.host_profile import HostProfileError
 from jarvis_core.protocol import LocalRpcClient, RpcError
 from jarvis_core.service import JarvisService
 
@@ -380,3 +381,77 @@ async def test_revoking_webhook_owner_closes_admission_and_does_not_borrow_anoth
                             pass
         finally:
             await service.aclose()
+
+
+async def test_workflow_partial_start_failure_settles_owned_runtime_without_replay(
+    management, monkeypatch,
+):
+    service, client, peer, _root = management
+    original_start, original_chat = service.start_run, peer.chat
+    async def blocked_peer(message, **options):
+        # This synthetic provider enters and remains cancellable inside the real
+        # runtime. No tools are proposed and no external account is contacted.
+        return await original_chat("esperar", **options)
+    async def partial_start(request):
+        await original_start(request)
+        await peer.entered.wait()
+        raise RpcError(-32020, "synthetic_partial_workflow_start_ack_lost")
+    monkeypatch.setattr(peer, "chat", blocked_peer)
+    monkeypatch.setattr(service, "start_run", partial_start)
+    hook = await create_hook(client, steps=[
+        {"prompt": "ACK PARCIAL", "pause_after": False},
+        {"prompt": "NO EJECUTAR DESPUÉS", "pause_after": False}])
+    queued = await emit(client, hook, identity="workflow_lost_ack")
+    await activate(client)
+    final = await flow_until(client, queued["flow_id"], {"interrupted", "failed"})
+    assert final["status"] == "interrupted" and final["outcome"] == "unknown"
+    assert final["error_code"] == "automation_dispatch_unconfirmed"
+    assert final["run_ids"] == [final["claim_id"]]
+    assert final["receipts"][0]["run_id"] == final["claim_id"]
+    async with asyncio.timeout(5):
+        while service._handles:
+            await asyncio.sleep(0.005)
+    assert final["claim_id"] not in service._automation_origins
+    assert final["claim_id"] not in service._automation_run_guards
+    assert not service.authority.list_pending() and len(peer.calls) == 1
+    await client.call("automation.stop")
+    duplicate = await emit(client, hook, identity="workflow_lost_ack")
+    assert duplicate["flow_id"] == final["flow_id"] and duplicate["outcome"] == "unknown"
+    await activate(client)
+    await asyncio.sleep(0.03)
+    assert len(peer.calls) == 1
+    await client.call("automation.stop")
+
+
+async def test_service_close_can_retry_uncertain_webhook_without_releasing_profile_early(
+    management,
+):
+    service, client, _peer, _root = management
+    hook = await create_hook(client, event="webhook")
+    snapshot = await client.call("automation.list")
+    await client.call("automation.webhook.start", {
+        "hook_id": hook["hook_id"], "expected_revision": hook["revision"],
+        "configuration_hash": snapshot["configuration_hash"], "secret": "S" * 32})
+    listener = service.automation_webhook
+    class UnconfirmedWriter:
+        fails = True
+        def close(self):
+            pass
+        async def wait_closed(self):
+            if self.fails:
+                raise OSError("synthetic_transport_close_unconfirmed")
+    writer = UnconfirmedWriter()
+    listener._writers.add(writer)
+    with pytest.raises(AutomationFlowError, match="automation_cleanup_pending"):
+        await service.aclose()
+    first = service._close_task
+    assert first.done() and listener.pending_cleanup and listener._key == b"S" * 32
+    service.profile_lease.assert_current()
+    assert writer in listener._writers
+    writer.fails = False
+    await service.aclose()
+    assert service._close_task is not first
+    assert not listener.pending_cleanup and listener._key is None
+    assert writer not in listener._writers
+    with pytest.raises(HostProfileError, match="lease_closed"):
+        service.profile_lease.assert_current()

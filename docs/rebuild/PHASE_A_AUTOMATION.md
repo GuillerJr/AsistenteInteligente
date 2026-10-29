@@ -1,5 +1,13 @@
 # Automatización propia de Jarvis
 
+Estado del incremento: **awaiting_final_ci**. Los ocho recorridos nativos elegidos
+están verificados, incluidos reinicio y cierre; falta la CI final después de
+corregir los DTO de recuperación y los casos de ACK/cierre de flujos; también
+falta el recorrido mínimo con ese bundle final. El [registro](PHASE_A_AUTOMATION_QUALIFICATION.json)
+y el [cierre en curso](PHASE_A_AUTOMATION_CLOSEOUT.md) conservan positivos,
+negativos, intentos fallidos y límites. No se declara completo el incremento ni
+la fase A mientras esa CI esté pendiente.
+
 Alcance elegido: app macOS Apple Silicon, servicio local y Codex con ChatGPT.
 La implementación es propia. OpenClaw se estudió sin ejecutarlo mediante los
 lotes REA OC-25A/B/C, conservando commit, hashes e incógnitas. Las dependencias

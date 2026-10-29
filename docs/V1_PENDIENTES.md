@@ -11,16 +11,20 @@ El dueño aplazó expresamente la app de iPhone; ver [decisiones](rebuild/PHASE_
 El incremento de [MCP, plugins y skills](rebuild/PHASE_A_MCP_EXTENSIONS.md) está
 cualificado en el alcance elegido; sus [oráculos y CI](rebuild/PHASE_A_MCP_EXTENSIONS_QUALIFICATION.json)
 se conservan junto al [cierre narrativo](rebuild/PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md).
-La matriz reconoce ese código con 51 familias parciales y 29 sin implementación;
-ninguna familia amplia se declara completa. La investigación REA
-acumula 38 lotes y 144 rutas TS/JS seleccionadas; no es cobertura exhaustiva.
+La matriz actual incluye también automatización: 52 familias parciales y 28 sin
+implementación, ninguna familia amplia completa. REA conserva 41 lotes y 155
+rutas TS/JS seleccionadas; no es cobertura exhaustiva.
 
 ## Fase A — base completa primero
 
 El [incremento de automatización](rebuild/PHASE_A_AUTOMATION.md) conecta cron,
 heartbeat, wake, hooks, webhook local y flujos con checkpoints. Está implementado
-y pendiente de cualificación remota/nativa del nuevo commit; no se presenta como
-cerrado por los controles estáticos. La matriz pasa a 52 familias parciales y 28
+y sus ocho recorridos nativos elegidos están verificados, incluidos suspensión,
+revocación, cancelación, reinicio desarmado y cierre. Sigue **awaiting_final_ci**:
+falta corregir los DTO de recuperación y aprobar la CI completa de la revisión
+final y comprobar el bundle final tras los ajustes de ACK/cierre de flujos;
+ver [registro](rebuild/PHASE_A_AUTOMATION_QUALIFICATION.json) y
+[cierre en curso](rebuild/PHASE_A_AUTOMATION_CLOSEOUT.md). La matriz pasa a 52 familias parciales y 28
 sin implementar, sin declarar completa ninguna familia amplia. REA conserva 41
 lotes y 155 rutas TS/JS únicas, con cobertura global todavía parcial.
 
@@ -423,11 +427,29 @@ conserva el estado `qualified_selected_increment`; la fase A global sigue abiert
 - [x] Aprobar Python, Swift, bundle, wheel/sdist y smoke del último árbol en
   CI remota, sin repetir suites ni compilaciones en el Mac.
 
-REA mantiene **38 lotes y 144 rutas TS/JS seleccionadas**; los catálogos restantes
+El checkpoint histórico MCP conserva **38 lotes y 144 rutas TS/JS seleccionadas**;
+el registro actual, ampliado por automatización, conserva 41 lotes y 155 rutas.
+Los catálogos restantes
 siguen abiertos. Los paquetes propios no son plugins OpenClaw compatibles ni
 acreditan sus 177 conectores. El relay no es un servicio OAuth de Internet; las
 capacidades de Apps no anunciadas, los servicios no elegidos y la distribución
 autocontenida se mantienen separados. La fase A sigue abierta y B no ha comenzado.
+
+## Automatización — recorridos elegidos verificados, CI final pendiente
+
+- [x] Implementar cron IANA, heartbeat con franja y wake durable sin replay.
+- [x] Conectar hooks declarativos, HMAC loopback y flujos con checkpoints.
+- [x] Verificar dos escrituras con aprobaciones separadas, pausa y reanudación.
+- [x] Verificar dos cron y un heartbeat con Codex real; detener sin más ocurrencias.
+- [x] Verificar firma/fecha/replay/conflicto HTTP con cliente independiente y cierre del puerto.
+- [x] Revocar, suspender/reanudar y cancelar desde la app durante aprobación pendiente; archivos ausentes y resultados desconocidos conservados.
+- [x] Reabrir con reglas/recibos persistentes, motores y webhook detenidos, sin nueva inferencia.
+- [x] Confirmar cierre propio y picos de 58.634.240 y 58.650.624 bytes bajo 256 MiB; originales conservados.
+- [ ] Aprobar Python, Swift, bundle, paquetes y smoke del commit final exacto y comprobar su recorrido nativo mínimo tras los ajustes de ACK/cierre de flujos. Ubuntu de 0796921 pasó; Swift macOS falló por DTO de recuperación y requiere corrección/CI posterior.
+
+Este incremento local no instala un daemon OS, despierta físicamente el Mac o
+publica un webhook de Internet. No acredita push, iPhone ni distribución; esos
+bloques siguen separados. La fase A global continúa abierta.
 
 ## Fase B — después de acreditar A
 

@@ -2,9 +2,25 @@ import Foundation
 
 public enum MaintenanceValidation {
     static let legacyRoles = Set(["state", "memory", "schedules", "agents", "skills", "telegram", "configuration_portable"])
-    static let roles = legacyRoles.union(["plugins"])
+    static let pluginRoles = legacyRoles.union(["plugins"])
+    static let roles = pluginRoles.union(["automations"])
     static let exclusions = Set(["provider_credentials_and_state", "transport_tokens_sockets_and_locks", "mcp_programs_arguments_and_runtime_homes", "external_and_internal_workspace_files", "external_skill_resources", "temporary_sessions_and_memory", "live_approvals_and_grants", "running_processes_audio_and_network_clients", "host_maintenance_journal"])
-    static let disarms = Set(["provider_threads_and_bindings_cleared", "workspace_unselected", "mcp_programs_absent", "schedules_disabled", "telegram_routes_disabled", "skills_disabled", "unfinished_records_interrupted_unknown_no_replay", "fresh_transport_required", "fresh_channel_pairing_and_delivery_cutoff_required", "memory_workspace_association_requires_separate_review"])
+    static let legacyDisarms = Set(["provider_threads_and_bindings_cleared", "workspace_unselected", "mcp_programs_absent", "schedules_disabled", "telegram_routes_disabled", "skills_disabled", "unfinished_records_interrupted_unknown_no_replay", "fresh_transport_required", "fresh_channel_pairing_and_delivery_cutoff_required", "memory_workspace_association_requires_separate_review"])
+    static let disarms = legacyDisarms.union(["automation_hooks_disabled_and_checkpoints_disarmed"])
+    static func acceptsRoles(_ actual: Set<String>, includesConfiguration: Bool) -> Bool {
+        [legacyRoles, pluginRoles, roles].contains { expected in
+            actual == (includesConfiguration ? expected : expected.subtracting(["configuration_portable"]))
+        }
+    }
+    static func validateDisarms(_ value: RPCValue, restoring: Bool, hasAutomations: Bool) throws {
+        if !restoring { _ = try strings(value, exact: []); return }
+        if (try? strings(value, exact: disarms)) != nil { return }
+        // A historical snapshot can retain its exact earlier policy. An
+        // automation inventory must explicitly attest to disarming its hooks
+        // and checkpoints; an arbitrary subset is never a compatible policy.
+        guard !hasAutomations else { throw RPCFailure.invalidResponse }
+        _ = try strings(value, exact: legacyDisarms)
+    }
     public static func canonical(_ value: RPCValue) throws -> String {
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         let data = try encoder.encode(value)
@@ -124,17 +140,15 @@ public struct MaintenanceReview: Identifiable, Sendable {
               metadata["content_warning"] == .string("user_content_may_contain_secrets"),
               ManagementValidation.digest(try MaintenanceValidation.canonical(metadata)) == digest else { throw RPCFailure.invalidResponse }
         _ = try MaintenanceValidation.strings(metadata["excluded"], exact: MaintenanceValidation.exclusions)
-        _ = try MaintenanceValidation.strings(metadata["disarms"], exact: kind == "restore.stage" ? MaintenanceValidation.disarms : [])
         if kind == "restore.stage" {
             guard let hash = metadata["manifest_sha256"].string, ManagementValidation.hash(hash),
                   let artifact = metadata["artifact_id"].string, ManagementValidation.identifier(artifact) else { throw RPCFailure.invalidResponse }
             _ = try MaintenanceFileIdentity(metadata["source_artifact_identity"])
         }
-        let sources = try ManagementValidation.rows(metadata["source"], limit: 7, parse: MaintenanceSource.init)
+        let sources = try ManagementValidation.rows(metadata["source"], limit: MaintenanceValidation.roles.count - 1, parse: MaintenanceSource.init)
         let actualRoles = Set(sources.map(\.role))
-        let legacySources = MaintenanceValidation.legacyRoles.subtracting(["configuration_portable"])
-        let currentSources = MaintenanceValidation.roles.subtracting(["configuration_portable"])
-        guard sources.count == actualRoles.count, actualRoles == legacySources || actualRoles == currentSources else { throw RPCFailure.invalidResponse }
+        guard sources.count == actualRoles.count, MaintenanceValidation.acceptsRoles(actualRoles, includesConfiguration: false) else { throw RPCFailure.invalidResponse }
+        try MaintenanceValidation.validateDisarms(metadata["disarms"], restoring: kind == "restore.stage", hasAutomations: actualRoles.contains("automations"))
         let recovery = try metadata.object?["sqlite_recovery"].map { try ManagementValidation.rows($0, limit: 3, parse: MaintenanceSqliteRecovery.init) } ?? []
         guard Set(recovery.map(\.role)).count == recovery.count,
               recovery.allSatisfy({ row in sources.contains { $0.role == row.role && $0.disposition == "present" } }) else { throw RPCFailure.invalidResponse }
@@ -428,7 +442,7 @@ public enum MaintenancePresentation {
         ["awaiting_owner":"Esperando tu aprobación", "quiescing":"Comprobando disponibilidad", "working":"En curso", "complete":"Completada", "staged_disarmed":"Perfil preparado y desarmado", "activated_not_opened":"Perfil activado; aún sin abrir", "cancelled":"Cancelada", "denied":"No autorizada", "failed":"Fallida", "publication_unknown":"Resultado sin confirmar", "cleanup_pending":"Limpieza pendiente"][phase] ?? "Sin confirmar"
     }
     public static func role(_ role: String) -> String {
-        ["state":"Conversaciones y recibos", "memory":"Memoria", "schedules":"Tareas", "agents":"Agentes", "skills":"Skills", "plugins":"Plugins", "telegram":"Registro de Telegram", "configuration_portable":"Configuración del respaldo", "cross_references":"Relaciones entre recursos"][role] ?? "Recurso propio"
+        ["state":"Conversaciones y recibos", "memory":"Memoria", "schedules":"Tareas", "agents":"Agentes", "skills":"Skills", "plugins":"Plugins", "automations":"Automatizaciones y flujos", "telegram":"Registro de Telegram", "configuration_portable":"Configuración del respaldo", "cross_references":"Relaciones entre recursos"][role] ?? "Recurso propio"
     }
 }
 
@@ -473,7 +487,7 @@ public struct DoctorSummary: Sendable {
             for value in values { guard try MaintenanceValidation.code(value) != nil else { throw RPCFailure.invalidResponse } }
         }
         self.status = status; scope = try MaintenanceScope(row)
-        checks = try ManagementValidation.rows(row["checks"], limit: 10, parse: DoctorCheckSummary.init)
+        checks = try ManagementValidation.rows(row["checks"], limit: MaintenanceValidation.roles.count + 2, parse: DoctorCheckSummary.init)
         guard Set(checks.map(\.role)).count == checks.count else { throw RPCFailure.invalidResponse }
     }
 }

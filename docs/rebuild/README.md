@@ -1,9 +1,13 @@
 # Variante propia inspirada en OpenClaw — base limpia
 
 La [continuación de automatización](PHASE_A_AUTOMATION.md) implementa cron,
-heartbeat, wake y eventos con flujos reanudables propios. Su cualificación remota
-y nativa debe registrarse por separado; no se declara completa por implementar
-el código. El registro REA vigente tiene 41 lotes y 155 rutas TS/JS seleccionadas.
+heartbeat, wake y eventos con flujos reanudables propios. Sus ocho recorridos
+nativos elegidos, reinicio desarmado y cierre presupuestado están verificados.
+El estado sigue **awaiting_final_ci**: falta corregir los DTO de recuperación y
+aprobar la CI completa del commit final y su recorrido nativo mínimo tras las
+correcciones de ACK/cierre de flujos. Ver [registro](PHASE_A_AUTOMATION_QUALIFICATION.json)
+y [cierre en curso](PHASE_A_AUTOMATION_CLOSEOUT.md). REA conserva 41 lotes y 155
+rutas TS/JS seleccionadas; no es revisión exhaustiva.
 
 Decisión del dueño, 24-10-2026: construir la nueva variante de Jarvis **en este
 repositorio**, con implementación propia y arquitectura informada por el estudio
@@ -36,8 +40,8 @@ skills. Conserva separados implementación, pruebas focales y cualificación nat
 El incremento elegido está cualificado (`qualified_selected_increment`): OAuth, SSE, servidor público, App/puente/retiro, relay independiente y versiones
 de plugins/skills tienen oráculos separados. El [registro saneado](PHASE_A_MCP_EXTENSIONS_QUALIFICATION.json)
 y el [cierre narrativo](PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md) conservan CI, hashes,
-fallos históricos y límites. La matriz mantiene 51 familias parciales, 29 sin
-implementar y ninguna completa; la fase A sigue abierta y B no ha comenzado.
+fallos históricos y límites. La matriz actual, incluido el código de automatización, mantiene 52 familias
+parciales, 28 sin implementar y ninguna familia amplia completa; la fase A sigue abierta y B no ha comenzado.
 
 Se conservan el nombre de producto Jarvis, los identificadores técnicos `jarvis`,
 la interfaz en español y las reglas de privacidad/aprobación. La primera conexión
@@ -201,9 +205,9 @@ y [OC-22C](REA_PART22C_SUMMARY.json): **27 lotes y 105 rutas TS/JS únicas**,
 con incógnitas estáticas y dependencias sin revisar. No es revisión exhaustiva
 ni ejecución de OpenClaw. Ese checkpoint conservaba 47 avances parciales y 33
 sin implementación. Tras reconciliar MCP, plugins y Apps, la matriz registra
-**51 avances parciales y 29 sin implementación**, ninguna familia completa;
+**52 avances parciales y 28 sin implementación**, ninguna familia completa;
 esas cifras no son porcentajes de producto terminado. El registro REA vigente
-incluye también memoria y MCP: **38 lotes, 144 rutas TS/JS únicas** (142 TS).
+incluye memoria, MCP y automatización: **41 lotes, 155 rutas TS/JS únicas** (153 TS).
 A-71 y la fase A siguen abiertas y la fase B continúa aplazada.
 
 Este incremento implementa parches multiarchivo con CAS, PTY confinada de un

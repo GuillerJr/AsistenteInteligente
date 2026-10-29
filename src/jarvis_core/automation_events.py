@@ -271,9 +271,38 @@ class AutomationEventsAPI:
         try:
             await self.start_run({"session_id": session.ref.session_id, "message": prompt,
                                   "request_id": run_id})
-        except BaseException:
-            self._automation_origins.discard(run_id)
-            self._automation_run_guards.pop(run_id, None)
+        except BaseException as error:
+            partial = self._handles.get(run_id)
+            # start_run currently publishes its handle without yielding, but a
+            # partial async acquisition must not lose custody if that contract
+            # evolves or a caller loses its post-start acknowledgement.
+            started = partial is not None or self.store.session_for_run(run_id) is not None
+            if started:
+                try:
+                    self.automation_flows.attach_run(claim.flow_id, claim.claim_id, run_id)
+                except Exception:
+                    # An uncertain registry commit cannot bypass cancellation.
+                    # Its existing store owner/claim remains retained for recovery.
+                    pass
+            if partial is None:
+                self._automation_origins.discard(run_id)
+                self._automation_run_guards.pop(run_id, None)
+            else:
+                partial.cancel()
+                cleanup = asyncio.create_task(partial.await_settled())
+                while not cleanup.done():
+                    try:
+                        await asyncio.shield(cleanup)
+                    except asyncio.CancelledError:
+                        continue
+                cleanup.result()
+            if isinstance(error, RpcError):
+                return DispatchResult(
+                    run_id if started else None,
+                    "interrupted" if started else "failed",
+                    "unknown" if started else "known",
+                    "automation_dispatch_unconfirmed" if started
+                    else "automation_dispatch_unavailable")
             raise
         finally:
             authenticated_client.reset(owner_token)
@@ -314,5 +343,11 @@ class AutomationEventsAPI:
             except Exception as error:
                 errors.append(error)
         if errors:
-            raise errors[0]
-        self.automation_flows.close()
+            # The service's close retry recognizes this one public code. Keep
+            # each original owner in place rather than hiding a listener/store
+            # error behind a completed, permanently unretryable close task.
+            raise AutomationFlowError("automation_cleanup_pending") from errors[0]
+        try:
+            self.automation_flows.close()
+        except Exception as error:
+            raise AutomationFlowError("automation_cleanup_pending") from error

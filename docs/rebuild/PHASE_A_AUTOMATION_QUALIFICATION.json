@@ -1,6 +1,6 @@
 {
   "format": "jarvis-phase-a-automation-qualification/1",
-  "status": "validation_in_progress",
+  "status": "awaiting_final_ci",
   "selected_increment_complete": false,
   "phase_a_complete": false,
   "phase_b_started": false,
@@ -36,7 +36,8 @@
       },
       "macos": {
         "bundle_build": "success",
-        "swift_tests": "in_progress_before_superseding_revision"
+        "swift_tests": "cancelled",
+        "qualified": false
       },
       "fixes": [
         "Mantener comprobación de puerto cerrado y cero flujos, aceptando EOF/RST del peer.",
@@ -46,18 +47,598 @@
         "Permitir revocación y suspensión durante una ejecución, conservando gates al admitir trabajo.",
         "Presupuestar texto escapado del IPC antes de publicar tareas."
       ]
+    },
+    {
+      "commit": "29c83574fc515c29c810e66b2150eaed5d5fb0b4",
+      "run_id": 40768356264,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40768356264",
+      "status": "cancelled_superseded",
+      "jobs": [
+        123098816855,
+        123098817292
+      ],
+      "qualified": false,
+      "note": "Intento sustituido por la revisión posterior; no se declara suite verde."
+    },
+    {
+      "commit": "09df67826ff522bcbfa9dfaeeadafc5f399d504a",
+      "run_id": 40769051425,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40769051425",
+      "macos": {
+        "bundle_build": "success",
+        "swift_tests": "cancelled",
+        "qualified": false
+      },
+      "note": "Artefacto usado en la cualificación nativa. Un job cancelado no es suite verde.",
+      "ubuntu": {
+        "status": "failure",
+        "passed": 3244,
+        "failed": 1,
+        "skipped": 46,
+        "elapsed_seconds": 282.11,
+        "failure_summary": "Fixture de pérdida de ACK con regla once: expectativa incorrecta corregida usando evento explícito en 0796921."
+      }
+    },
+    {
+      "commit": "07969218cff872e78f02df819e906ba08cc4ce17",
+      "run_id": 40770485931,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40770485931",
+      "ubuntu": {
+        "status": "success",
+        "passed": 3245,
+        "skipped": 46,
+        "elapsed_seconds": 191.73,
+        "cleanup": "confirmed",
+        "peak_allocated_bytes": 538660864
+      },
+      "macos": {
+        "status": "failure",
+        "bundle_build": "success",
+        "swift_tests": "failure",
+        "failed": 15,
+        "failure_summary": "invalidResponse en integraciones de recuperación/mantenimiento; corrección de DTO en curso."
+      },
+      "qualified": false,
+      "remaining": "Publicar la corrección y verificar todas las etapas de CI para el commit final exacto."
     }
   ],
   "native_qualification": {
-    "status": "pending",
+    "status": "checkpoint_native_cases_verified_final_bundle_recheck_pending",
     "budget_mib": 256,
     "profile": "synthetic_only",
     "owner_approvals_delegated": true,
-    "owner_installed_app_modified": false
+    "owner_installed_app_modified": false,
+    "complete": false,
+    "launch": {
+      "architecture": "arm64",
+      "archive_sha256": "c8b09a6ab7dcdd8a66440455fdb0f00ede2e06e94d9de5f88f844ff69e9f6216",
+      "binary_sha256": "009aee1d305f8fb3359c9961f85668e83daf3ee3e5a2bd858f9c8a660edfbc75",
+      "commit": "09df67826ff522bcbfa9dfaeeadafc5f399d504a",
+      "development_bundle": true,
+      "external_python_required": true,
+      "format": "jarvis-automation-native-launch/1",
+      "run_id": "40769051425",
+      "artifact_zip_sha256": "11a3054566a0bf3b15c63af444f302f4f255ecb3b4c2aebaeb0f0447e89ae4be",
+      "test_binary_sha256": "ee6f8c8b4c51b200e7a2037c200a8a3b6a65b8c8217142525709db54b5630389",
+      "wrapper_sha256": "1453dc0725c31bd085a5276f66e67bb6b9f41d7a1ebafd8478e264c7cbab8a06",
+      "profile": "/private/tmp/jarvis-automation-live-20261028/state",
+      "source_tree": "fe7e5553f87d2f099551faa093ca21dc97855e95",
+      "manual_budget_mib": 256,
+      "deadline_seconds": 3600,
+      "prepared_unix": 1793221960.068512,
+      "account_credentials_copied_or_read_by_agent": false,
+      "previous_authorized_synthetic_provider_home_reused": true
+    },
+    "cases": [
+      {
+        "id": "AUT-N01",
+        "result": "pass",
+        "scope": "Primer workspace_write aprobado, checkpoint conocido y segundo archivo ausente.",
+        "oracle": {
+          "format": "jarvis-automation-native-step-a/1",
+          "file_sha256": "58434085415c7859f9acf00fd46e2815ec68d46d604db118311c4628b01095df",
+          "file_bytes": 28,
+          "flow_id": "db2affc51b404cac8271a9fc7b507fce",
+          "flow_revision": 4,
+          "status": "paused",
+          "outcome": "known",
+          "cursor": 1,
+          "receipts": [
+            {
+              "claim_id": "233c252a1d854e45a81fed718e5df1cd",
+              "error_code": null,
+              "outcome": "known",
+              "run_id": "233c252a1d854e45a81fed718e5df1cd",
+              "status": "completed",
+              "step_index": 0
+            }
+          ],
+          "second_file_absent": true
+        }
+      },
+      {
+        "id": "AUT-N02",
+        "result": "pass",
+        "scope": "Reanudación nativa, segunda aprobación y dos archivos con hashes distintos.",
+        "oracle": {
+          "format": "jarvis-automation-native-flow/1",
+          "flow_id": "db2affc51b404cac8271a9fc7b507fce",
+          "revision": 8,
+          "status": "completed",
+          "outcome": "known",
+          "cursor": 2,
+          "receipts": [
+            {
+              "claim_id": "233c252a1d854e45a81fed718e5df1cd",
+              "error_code": null,
+              "outcome": "known",
+              "run_id": "233c252a1d854e45a81fed718e5df1cd",
+              "status": "completed",
+              "step_index": 0
+            },
+            {
+              "claim_id": "cbab1af041be4a988ebafddd6f09a9da",
+              "error_code": null,
+              "outcome": "known",
+              "run_id": "cbab1af041be4a988ebafddd6f09a9da",
+              "status": "completed",
+              "step_index": 1
+            }
+          ],
+          "files": [
+            {
+              "name": "automatizacion-a.txt",
+              "bytes": 28,
+              "sha256": "58434085415c7859f9acf00fd46e2815ec68d46d604db118311c4628b01095df"
+            },
+            {
+              "name": "automatizacion-b.txt",
+              "bytes": 28,
+              "sha256": "b6d2ece50bb9fe89071a0ee10908513770dd193098a497fdea6829a4b34ec9ab"
+            }
+          ],
+          "owner_delegated_approvals": true,
+          "provider": "official_codex_chatgpt"
+        }
+      },
+      {
+        "id": "AUT-N03",
+        "result": "pass",
+        "scope": "Dos cron, un heartbeat y conteo detenido; un único flujo del webhook.",
+        "oracle": {
+          "format": "jarvis-automation-timers-and-webhook/1",
+          "observed_unix": 1793222462.3856971,
+          "scheduled_occurrences": [
+            {
+              "title": "Cron de calificación 2856",
+              "occurrence_id": "f77463f22a114a71899e9a704f986366",
+              "scheduled_at": 1793222220.0,
+              "status": "completed",
+              "outcome": "known",
+              "run_id": "f77463f22a114a71899e9a704f986366",
+              "error_code": null,
+              "receipt": {
+                "action_receipts": [],
+                "answer": "CRON JARVIS 2856",
+                "answer_source": "model",
+                "error": null,
+                "error_type": null
+              }
+            },
+            {
+              "title": "Cron de calificación 2856",
+              "occurrence_id": "aed8a615ba3c41998cc18a3ab4b3e2cb",
+              "scheduled_at": 1793222280.0,
+              "status": "completed",
+              "outcome": "known",
+              "run_id": "aed8a615ba3c41998cc18a3ab4b3e2cb",
+              "error_code": null,
+              "receipt": {
+                "action_receipts": [],
+                "answer": "CRON JARVIS 2856",
+                "answer_source": "model",
+                "error": null,
+                "error_type": null
+              }
+            },
+            {
+              "title": "Heartbeat de calificación 4186",
+              "occurrence_id": "8f1aed3c2fd242a1a95c2499a4dc40ea",
+              "scheduled_at": 1793222304.6228569,
+              "status": "completed",
+              "outcome": "known",
+              "run_id": "8f1aed3c2fd242a1a95c2499a4dc40ea",
+              "error_code": null,
+              "receipt": {
+                "action_receipts": [],
+                "answer": "SIN ALERTAS 4186",
+                "answer_source": "model",
+                "error": null,
+                "error_type": null
+              }
+            }
+          ],
+          "webhook_flow_id": "8801f1fb6ac8450f8b3347606faed6b6",
+          "webhook_receipt": [
+            {
+              "claim_id": "75ab2814ba364aa8bafecd98df492dd6",
+              "error_code": null,
+              "outcome": "known",
+              "run_id": "75ab2814ba364aa8bafecd98df492dd6",
+              "status": "completed",
+              "step_index": 0
+            }
+          ],
+          "webhook_model_answer": "WEBHOOK JARVIS 8124",
+          "webhook_port_closed": true,
+          "secret_not_in_automation_document": true,
+          "schedule_count_after_stop": 3
+        }
+      },
+      {
+        "id": "AUT-N04",
+        "result": "pass",
+        "scope": "Cliente HTTP independiente: firma/fecha rechazadas, repetición idempotente y conflicto.",
+        "oracle": {
+          "format": "jarvis-automation-independent-webhook/1",
+          "listener_port": 53414,
+          "hook_id": "5267a95792d94e2aa01be982488a3ae9",
+          "invalid_signature": {
+            "status": 401,
+            "body": {
+              "error": "automation_webhook_unauthorized"
+            }
+          },
+          "valid": {
+            "status": 202,
+            "body": {
+              "flow_ids": [
+                "8801f1fb6ac8450f8b3347606faed6b6"
+              ]
+            }
+          },
+          "duplicate": {
+            "status": 202,
+            "body": {
+              "flow_ids": [
+                "8801f1fb6ac8450f8b3347606faed6b6"
+              ]
+            }
+          },
+          "conflict": {
+            "status": 409,
+            "body": {
+              "error": "automation_event_conflict"
+            }
+          },
+          "expired": {
+            "status": 401,
+            "body": {
+              "error": "automation_webhook_unauthorized"
+            }
+          },
+          "payload_bytes": 36,
+          "payload_sha256": "2d47021d7cc9d737498297b927627f0afc2cb9cc1762550f2db31a7230a386b1",
+          "secret_persisted": false,
+          "nonce": "ebe01a2b5673457ba295ef1d91f2253e"
+        }
+      },
+      {
+        "id": "AUT-N05",
+        "result": "pass",
+        "scope": "Revocación durante aprobación pendiente; efecto desconocido retenido, sin archivo o paso siguiente.",
+        "oracle": {
+          "format": "jarvis-automation-negative-oracle/1",
+          "revoked_flow": {
+            "flow_id": "ece6d240b1534e758ea4aeb6ad61610e",
+            "status": "interrupted",
+            "outcome": "unknown",
+            "cursor": 0,
+            "run_ids": [
+              "5c95a85de72c45818572c5cdc08d45a6"
+            ],
+            "receipts": [
+              {
+                "claim_id": "5c95a85de72c45818572c5cdc08d45a6",
+                "error_code": "automation_hook_changed",
+                "outcome": "unknown",
+                "run_id": "5c95a85de72c45818572c5cdc08d45a6",
+                "status": "interrupted",
+                "step_index": 0
+              }
+            ],
+            "error_code": "automation_hook_changed"
+          },
+          "suspended_occurrence": {
+            "occurrence_id": "d3daf50932f1462db0dff706c30ae451",
+            "schedule_id": "bac3911f8bd14d7292ffecb936a18b3c",
+            "schedule_revision": 2,
+            "title": "Evento de suspensión 5732",
+            "prompt": "Usa únicamente workspace_write para crear no-suspension.txt con el texto exacto SUSPENSION JARVIS 5732, sin salto final. Espera aprobación de Jarvis y no hagas otra operación.",
+            "agent_id": "jarvis",
+            "workspace_id": "7444a7e47177f192389c4e7a9e01ee7f757a74f1b81229d9e5b7336b3fc22ccf",
+            "scheduled_at": 1793222694.7508461,
+            "created_at": 1793222694.750846,
+            "status": "cancelled",
+            "outcome": "unknown",
+            "run_id": "d3daf50932f1462db0dff706c30ae451",
+            "error_code": "scheduler_dispatch_cancelled"
+          },
+          "absent_files": [
+            "no-debe-existir.txt",
+            "no-segundo.txt",
+            "no-suspension.txt"
+          ],
+          "occurrence_count_while_suspended": 4,
+          "native_pending_card_removed": true,
+          "native_revocation_control_available_while_waiting": true
+        }
+      },
+      {
+        "id": "AUT-N06",
+        "result": "pass",
+        "scope": "Wake explícito, suspensión desde la app y reanudación sin replay.",
+        "oracle": {
+          "format": "jarvis-automation-resume-no-replay/1",
+          "occurrences_after_resume": 4,
+          "file_absent": true,
+          "observed_unix": 1793222747.693911
+        }
+      },
+      {
+        "id": "AUT-N07",
+        "result": "pass",
+        "scope": "Cancelar desde historial actualiza cancelled/unknown automáticamente y conserva archivo ausente.",
+        "oracle": {
+          "format": "jarvis-automation-cancel-oracle/1",
+          "occurrence": {
+            "occurrence_id": "77b51623b25a4a41a7e7e5d99a4f7f45",
+            "schedule_id": "bac3911f8bd14d7292ffecb936a18b3c",
+            "schedule_revision": 2,
+            "title": "Evento de suspensión 5732",
+            "prompt": "Usa únicamente workspace_write para crear no-suspension.txt con el texto exacto SUSPENSION JARVIS 5732, sin salto final. Espera aprobación de Jarvis y no hagas otra operación.",
+            "agent_id": "jarvis",
+            "workspace_id": "7444a7e47177f192389c4e7a9e01ee7f757a74f1b81229d9e5b7336b3fc22ccf",
+            "scheduled_at": 1793222877.6428041,
+            "created_at": 1793222877.642804,
+            "status": "cancelled",
+            "outcome": "unknown",
+            "run_id": "77b51623b25a4a41a7e7e5d99a4f7f45",
+            "error_code": "scheduler_dispatch_cancelled"
+          },
+          "occurrence_count": 5,
+          "file_absent": true,
+          "native_pending_card_removed": true,
+          "native_history_refreshed_automatically": true,
+          "observed_unix": 1793222909.599627
+        }
+      },
+      {
+        "id": "AUT-N08",
+        "result": "pass",
+        "scope": "Reabrir conserva reglas/recibos y no activa motores, puerto o inferencia.",
+        "before": {
+          "format": "jarvis-automation-before-restart/1",
+          "database_counts": {
+            "jarvis.sqlite3": {
+              "sessions": 10,
+              "runs": 9,
+              "messages": 15,
+              "events": 254
+            },
+            "schedules.sqlite3": {
+              "schedules": 3,
+              "occurrences": 5,
+              "wake_events": 2
+            }
+          },
+          "automation_sha256": "fa80efcbbad9cea525c8bd543a9343ae6a8468d52da52317d22d2dfe0700a81f",
+          "observed_unix": 1793222915.015682
+        },
+        "after": {
+          "format": "jarvis-automation-restart-oracle/1",
+          "database_counts": {
+            "jarvis.sqlite3": {
+              "sessions": 10,
+              "runs": 9,
+              "messages": 15,
+              "events": 254
+            },
+            "schedules.sqlite3": {
+              "schedules": 3,
+              "occurrences": 5,
+              "wake_events": 2
+            }
+          },
+          "automation_sha256": "fa80efcbbad9cea525c8bd543a9343ae6a8468d52da52317d22d2dfe0700a81f",
+          "persisted_schedule_count": 3,
+          "persisted_occurrence_count": 5,
+          "persisted_hook_count": 2,
+          "persisted_flow_count": 3,
+          "native_scheduler_stopped": true,
+          "native_flow_engine_stopped": true,
+          "native_webhook_closed_and_secret_empty": true,
+          "unknown_receipts_preserved_without_resume": true,
+          "no_new_model_run": true,
+          "negative_files_absent": true,
+          "observed_unix": 1793222964.60802
+        }
+      }
+    ],
+    "closure": {
+      "first": {
+        "format": "jarvis-automation-first-close/1",
+        "owned_app_pids": [],
+        "owned_service_pattern_pids": [],
+        "webhook_port_closed": true,
+        "observed_unix": 1793222926.514982
+      },
+      "final": {
+        "format": "jarvis-automation-final-close/1",
+        "owned_app_exited": true,
+        "webhook_port_closed": true,
+        "watch": {
+          "format": "jarvis-automation-manual-watch/1",
+          "peak_allocated_bytes": 58650624,
+          "budget_mib": 256,
+          "deadline_seconds": 3600,
+          "elapsed_seconds": 38.704,
+          "stop_reason": "owned_app_exited",
+          "observer_sent_termination": false,
+          "app_pid": 22341,
+          "app_start_identity_sha256": "206af4919a15d9da287e0f1c3855b4b66dc8b95a2c0413f96dd98839256ad207",
+          "only_owned_root_measured": true,
+          "owner_credential_contents_read": false
+        },
+        "synthetic_originals_preserved": true,
+        "owner_installed_app_untouched": true,
+        "observed_unix": 1793223058.842992,
+        "service_process_check": "anchored_python_and_exact_source_state_paths",
+        "owned_service_pids": [],
+        "profile_lease_released": true,
+        "unix_socket_removed": true
+      },
+      "first_service_pattern_limitation": "El patrón inicial -m no prueba por sí solo ausencia del servicio lanzado con Python -c. El cierre final comprueba patrón anclado de Python y rutas exactas, lease de perfil libre y socket retirado."
+    },
+    "resource_observation": {
+      "first": {
+        "format": "jarvis-automation-manual-watch/1",
+        "peak_allocated_bytes": 58634240,
+        "budget_mib": 256,
+        "deadline_seconds": 3600,
+        "elapsed_seconds": 870.092,
+        "stop_reason": "owned_app_exited",
+        "observer_sent_termination": false,
+        "app_pid": 20355,
+        "app_start_identity_sha256": "730874bf2b565aed78ea3bdaa36c5c604923c659388cd6aa7e7c3b93bdad5f12",
+        "only_owned_root_measured": true,
+        "owner_credential_contents_read": false
+      },
+      "final": {
+        "format": "jarvis-automation-manual-watch/1",
+        "peak_allocated_bytes": 58650624,
+        "budget_mib": 256,
+        "deadline_seconds": 3600,
+        "elapsed_seconds": 38.704,
+        "stop_reason": "owned_app_exited",
+        "observer_sent_termination": false,
+        "app_pid": 22341,
+        "app_start_identity_sha256": "206af4919a15d9da287e0f1c3855b4b66dc8b95a2c0413f96dd98839256ad207",
+        "only_owned_root_measured": true,
+        "owner_credential_contents_read": false
+      }
+    },
+    "evidence_manifest": [
+      {
+        "file": "/private/tmp/jarvis-automation-live-20261028/launch-09df678.json",
+        "bytes": 1016,
+        "sha256": "32aeca67e05b98d0878ab834849bbee7d4b7ec81d02be43f4b9620609acf9634"
+      },
+      {
+        "file": "/private/tmp/jarvis-automation-live-20261028/step-a-oracle.json",
+        "bytes": 559,
+        "sha256": "08fa74058de5ab9578a45e973c6d7b69fcebf98412d9faded5adf90c99ebb1b0"
+      },
+      {
+        "file": "/private/tmp/jarvis-automation-live-20261028/flow-oracle.json",
+        "bytes": 1042,
+        "sha256": "0f3fb1669ffb5372488e6a816427844e387509f44b101145ebd42cab9f763599"
+      },
+      {
+        "file": "/private/tmp/jarvis-automation-live-20261028/webhook-oracle.json",
+        "bytes": 909,
+        "sha256": "de4f6e002e873ff25bfaccc17755bfaffe1bf470475253f8dc33adc5ba7ee56f"
+      },
+      {
+        "file": "/private/tmp/jarvis-automation-live-20261028/timers-and-webhook-oracle.json",
+        "bytes": 2015,
+        "sha256": "b1d438e7dbe394dd44f9b12c6dd0d4000c5249f9cc0e9185b7eabfab68e18c5f"
+      },
+      {
+        "file": "/private/tmp/jarvis-automation-live-20261028/negative-oracle.json",
+        "bytes": 1608,
+        "sha256": "9a8944fb2c13367e923d4ae906fadb9eb600bec76bb400bc3d2972c291a0fe18"
+      },
+      {
+        "file": "/private/tmp/jarvis-automation-live-20261028/resume-no-replay-oracle.json",
+        "bytes": 149,
+        "sha256": "84cb03e4d09b5fe5247276c46afa0766a3ca7febdb5a3600603ad49611fc57ee"
+      },
+      {
+        "file": "/private/tmp/jarvis-automation-live-20261028/cancel-oracle.json",
+        "bytes": 988,
+        "sha256": "5652a1fe11887b09bb0499724b89070f09f3322e8b239fb23a88d0902adb6f64"
+      },
+      {
+        "file": "/private/tmp/jarvis-automation-live-20261028/before-restart-oracle.json",
+        "bytes": 424,
+        "sha256": "e320df1168a9ab32fb992f6f59ca00e369309519663863e3290bf059a2a46eab"
+      },
+      {
+        "file": "/private/tmp/jarvis-automation-live-20261028/restart-oracle.json",
+        "bytes": 787,
+        "sha256": "84d8614af55600bd2e9e33abbb567eb751378f8102bec428ad80f40a60f48024"
+      },
+      {
+        "file": "/private/tmp/jarvis-automation-live-20261028/first-close-oracle.json",
+        "bytes": 179,
+        "sha256": "10ac51cab91817e188e00915350711baf4d138f8aadce812aec415ca98e76662"
+      },
+      {
+        "file": "/private/tmp/jarvis-automation-live-20261028/final-close-oracle.json",
+        "bytes": 871,
+        "sha256": "55a36fca819438cf2d989272dfbe6a63fcc6fa79571b9862065085193818db88"
+      },
+      {
+        "file": "/private/tmp/jarvis-automation-live-20261028/watch-first-close.json",
+        "bytes": 439,
+        "sha256": "3799566be379f8bbfde6a9a951aca456fed78c2de54975c730d4c623ca454ee1"
+      },
+      {
+        "file": "/private/tmp/jarvis-automation-live-20261028/watch-final-close.json",
+        "bytes": 438,
+        "sha256": "67abe105f15686eaea7b522677964c0750eda0aa09ca6bc56ee16fa43c4e2aa9"
+      }
+    ],
+    "scope_limits": [
+      "Bundle de desarrollo y Python externo.",
+      "Los recorridos GUI usan datos sintéticos y Codex oficial; los calendarios DST, cuotas, custodia excepcional y recuperación combinan pruebas automatizadas separadas.",
+      "No daemon OS, login item, despertar físico, endpoint de Internet ni compatibilidad ejecutable OpenClaw."
+    ],
+    "observed_checkpoint_cases_complete": true,
+    "final_bundle_recheck": {
+      "status": "pending",
+      "reason": "El bundle 09df observado precede a correcciones productivas posteriores de ACK parcial y retry de cierre de flujos; falta un recorrido mínimo sobre el bundle final de CI."
+    }
   },
   "limits": [
     "No se declara equivalencia exhaustiva por análisis estático ni por fixtures.",
     "Webhook local loopback, sin publicación Internet o daemon OS.",
     "Firma/distribución autocontenida y notificaciones push pertenecen a otros bloques."
-  ]
+  ],
+  "source_identity": {
+    "native_bundle_commit": "09df67826ff522bcbfa9dfaeeadafc5f399d504a",
+    "reviewed_commit": "07969218cff872e78f02df819e906ba08cc4ce17",
+    "reviewed_commit_diff_from_bundle": [
+      "tests/test_service_scheduler_events.py"
+    ],
+    "final_revision_pending": true,
+    "note": "La correspondencia productiva 09df→079 no se extrapola a la corrección posterior de DTO de recuperación. La automatización nativa observada conserva su identidad; el paquete final requiere otra CI exacta."
+  },
+  "remaining": [
+    "CI completa del commit final exacto después de corregir DTO de recuperación, ACK parcial y retry de cierre de flujos.",
+    "Recorrido nativo mínimo del bundle final compilado en CI para verificar que las correcciones conservan el alcance observado.",
+    "Conservar identidad 09df de los oráculos previos y registrar identidad/oráculos nuevos del bundle final; no extrapolar igualdad de código posterior."
+  ],
+  "next_attempt": {
+    "status": "pending",
+    "commit": null,
+    "run_id": null,
+    "requirements": [
+      "Corrección de DTO nativo de recuperación.",
+      "Regresiones de ACK parcial y retry de cierre de flujos.",
+      "Ubuntu y macOS completos, Swift/bundle, wheel/sdist y smoke.",
+      "Recorrido mínimo con la identidad del bundle final."
+    ]
+  }
 }
