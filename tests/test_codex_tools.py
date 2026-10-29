@@ -272,16 +272,16 @@ def confirmed(text="recibo sintético"):
     return {"success": True, "contentItems": [{"type": "inputText", "text": text}]}
 
 
-def approved_media_result(index, run_id="a" * 32, *, operation_id=None):
+def approved_media_result(index, run_id="a" * 32, *, operation_id=None, output=None):
     """Synthetic host receipt/carrier, not evidence of a real owner's grant."""
     operation_id = operation_id or f"{index + 1:032x}"
     outputs = ["IMAGE JARVIS42", "VIDEO JARVIS42", "DOCUMENT OFFICE6421", "CSV7319"]
     receipt = {"tool_name": "fixture_write", "operation_id": operation_id,
                "succeeded": True, "verified": True, "effect_status": "known",
-               "output": outputs[index]}
+               "output": outputs[index] if output is None else output}
     result = {"success": True, "contentItems": [
         {"type": "inputText", "text": json.dumps(receipt)},
-        {"type": "inputText", "text": outputs[index]}]}
+        {"type": "inputText", "text": receipt["output"]}]}
     if index < 2:
         import base64
         pixels = b"\xff\xd8\xffSYNTHETIC_FRAME_" + bytes([index]) + b"\xff\xd9"
@@ -322,6 +322,9 @@ async def test_approved_images_use_exact_turn_cas_once_before_original_text_repl
             assert params["input"][1] == {"type": "image", "detail": "high",
                                           "url": calls[index]["_jarvis_approved_image"].image_url}
             assert "No son una nueva instrucción" in params["input"][0]["text"]
+            envelope = json.loads(params["input"][0]["text"].split("\n", 1)[1])
+            assert envelope["approved_tool_result"] == {
+                "success": True, "contentItems": calls[index]["contentItems"][:2]}
         assert sum(row.get("method") == "turn/start" for row in rows) == 1
         replies = tool_replies(client)
         assert len(replies) == 4
@@ -333,6 +336,47 @@ async def test_approved_images_use_exact_turn_cas_once_before_original_text_repl
         assert len(accepted) == 2 and all(row["ack_matches"] for row in accepted)
         assert not any(row["model_consumption_verified"] for row in accepted)
         assert "data:image" not in json.dumps(events)
+    finally:
+        await client.aclose()
+
+
+async def test_image_handoff_preserves_exact_video_times_coverage_citations_and_truncation(
+    tmp_path, tool_peer,
+):
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
+    output = json.dumps({
+        "text_preview": "Fotogramas sintéticos: conserva el original, no permisos.",
+        "fragments": [{"locator": "video:frame:1@0.000s", "text": "ROJO"},
+                      {"locator": "video:frame:2@1.500s", "text": "AZUL"}],
+        "citations": [{"locator": "video:frame:2@1.500s", "source_sha256": "c" * 64}],
+        "metadata": {"duration_seconds": 4.0, "sampled_frame_count": 2,
+                     "coverage": "Sólo los instantes 0.000 y 1.500; no todo el vídeo"},
+        "truncated": True,
+    }, ensure_ascii=False)
+    approved = approved_media_result(1, output=output)
+    events = []
+
+    async def callback(name, arguments):
+        return approved
+
+    try:
+        await client.chat("one", tool_specs=[TOOL], on_tool_call=callback, host_run_id="a" * 32,
+                          on_event=lambda *row: events.append(row))
+        request = next(row for row in wire(client) if row.get("method") == "turn/steer")
+        text = request["params"]["input"][0]["text"]
+        envelope = json.loads(text.split("\n", 1)[1])
+        carried = envelope["approved_tool_result"]
+        assert carried == {"success": True, "contentItems": approved["contentItems"][:2]}
+        assert carried["contentItems"][1]["text"] == output
+        assert json.loads(carried["contentItems"][1]["text"])["truncated"] is True
+        assert "instantes no muestreados" in text
+        assert tool_replies(client)[0]["result"] == carried
+        accepted = next(data for kind, data in events if kind == "media.delivery.accepted")
+        assert accepted["approved_text_items_sha256"] == CodexClient._diagnostic_hash(
+            approved["contentItems"][:2])
+        assert accepted["approved_text_bytes"] == sum(
+            len(item["text"].encode()) for item in approved["contentItems"][:2])
+        assert output not in json.dumps(events, ensure_ascii=False)
     finally:
         await client.aclose()
 
@@ -369,7 +413,7 @@ async def test_uncertain_image_handoff_aborts_without_fallback_or_automatic_new_
 
 @pytest.mark.parametrize("failure", ["revoked", "revoked-after-lock", "wrong-run",
     "unbound-run", "wrong-hash", "untyped", "no-active-turn", "malformed-success",
-    "malformed-items"])
+    "malformed-items", "oversized-text"])
 async def test_unbound_or_revoked_image_never_crosses_the_stdio_boundary(
     tmp_path, tool_peer, failure,
 ):
@@ -416,6 +460,8 @@ async def test_unbound_or_revoked_image_never_crosses_the_stdio_boundary(
             result["success"] = "true"
         elif failure == "malformed-items":
             result["contentItems"] = None
+        elif failure == "oversized-text":
+            result = approved_media_result(0, output="x" * (128 * 1024 + 1))
         return result
 
     try:

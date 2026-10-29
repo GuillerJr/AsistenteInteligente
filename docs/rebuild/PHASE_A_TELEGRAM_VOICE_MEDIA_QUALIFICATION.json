@@ -94,6 +94,50 @@
         "elapsed_seconds": 229.25
       },
       "bundle_packages_smoke": "passed"
+    },
+    {
+      "commit": "639b3ec46d130315c8da06067eb5f587c495815c",
+      "short_commit": "639b3ec",
+      "run_id": 40904295737,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40904295737",
+      "status": "cancelled_after_partial_success",
+      "ubuntu_job": 123554709613,
+      "ubuntu_python": {
+        "passed": 3431,
+        "skipped": 46,
+        "elapsed_seconds": 281.52,
+        "step_conclusion": "success"
+      },
+      "ubuntu_package_build_smoke": "passed",
+      "macos_job": 123554710182,
+      "macos_bundle": "passed",
+      "macos_swift": {
+        "executed": 576,
+        "skipped": 1,
+        "failures": 0,
+        "elapsed_seconds": 230.921,
+        "step_conclusion": "success"
+      },
+      "macos_python": {
+        "passed_summary_observed": 3477,
+        "elapsed_seconds_summary": 393.23,
+        "step_conclusion": "cancelled",
+        "complete_job_qualification": false
+      },
+      "macos_package_build_smoke": "not_executed_after_cancellation",
+      "full_ci_qualification": false,
+      "limitation": "The passing macOS pytest summary preceded cancellation of its step; the macOS package and installation smoke were skipped. This is not a fully passed workflow."
+    },
+    {
+      "commit": "95009a114bdbead44cdc03d40ef753abc9c017b1",
+      "short_commit": "95009a1",
+      "run_id": 40906647805,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40906647805",
+      "status": "pending_at_this_checkpoint",
+      "implemented_increment": "Owner-reviewed unknown-ID group discovery, exact fresh-private-owner proof, new-route confirmation and renewal of an existing private route without moving its session.",
+      "local_verification": "Ruff, Python AST and diff whitespace only; no local suites or builds.",
+      "live_unknown_id_group_qualification": "pending",
+      "full_ci_qualification": false
     }
   ],
   "native_cases": [
@@ -174,12 +218,15 @@
       "run_id": "933b1a70063346c3937d364574991082",
       "verified_actions": 4,
       "matching_sdk_acknowledgements": 4,
+      "acknowledgement_scope": "Legacy tool-reply transport acknowledgements, not proof that image pixels or receipt text were consumed by the model.",
       "raw_media_absent_from_SQL": true,
-      "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-corpus-oracle-initial-v2.json"
+      "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-corpus-oracle-initial-v2.json",
+      "oracle_sha256": "173af44b8336da2a8f6be9ece22604c909e380da71fa8d30a346cb3e9eb663c3"
     },
     {
       "case": "isolated_image_new_session",
       "status": "failed_model_grounding",
+      "run_id": "45e570627c0f4008be6dde52ef688f9b",
       "technical_OCR_frame_receipt_verified": true
     },
     {
@@ -198,6 +245,122 @@
       "actual_draft": "BORRADOR ACTIVACIÓN\nEsto se descarta Jarvis de marcadores42",
       "effective_capture_mode_not_recorded_in_previous_bundle": true,
       "followup": "metadata-only effective-mode receipt plus controlled repetition required"
+    },
+    {
+      "case": "cas_bound_isolated_image_real_codex_639",
+      "product_commit": "639b3ec46d130315c8da06067eb5f587c495815c",
+      "status": "partial_visual_grounding_pass_citations_missing",
+      "run_id": "37fbf3f6e0b5485fba9cb026bdf50824",
+      "session_id": "579f4061d1bb487eb410319aaf416f05",
+      "source_sha256": "0260362b9dd2d39edb4e26b865d19f236c611e9b163518cdc13c5f1ef972fd56",
+      "media_inspect_count": 1,
+      "technical_receipt": {
+        "operation_id": "ae19ef4146ba473db5b3fd51eed511e1",
+        "succeeded": true,
+        "verified": true,
+        "effect_status": "known",
+        "output_bytes": 897,
+        "output_sha256": "9378d71df0985a3d20384a5e380663b358739048339b3e52cf41e4e100fa5760",
+        "output_truncated_preview": true,
+        "output_source_binding_matches_reference": true
+      },
+      "cas_visual_delivery": {
+        "accepted_events": 1,
+        "operation_and_run_binding_match": true,
+        "write_attempted": true,
+        "ack_matches": true,
+        "physical_verified": false,
+        "model_consumption_verified": false
+      },
+      "model_observations": {
+        "JARVIS_42_recovered": true,
+        "red_recovered": true,
+        "blue_recovered": true,
+        "explicit_source_or_frame_citations": false,
+        "complete_grounding_pass": false
+      },
+      "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-corpus-oracle-v3-639.json",
+      "oracle_sha256": "4a55287ed5af1b65f31b048f352d4afbfbb31f893e9d8305a0cb27d61f743b25"
+    },
+    {
+      "case": "cas_bound_isolated_video_real_codex_639",
+      "product_commit": "639b3ec46d130315c8da06067eb5f587c495815c",
+      "status": "partial_visual_grounding_pass_receipt_metadata_and_citations_missing",
+      "run_id": "64155c8d622b404b9220178476a2484c",
+      "session_id": "579f4061d1bb487eb410319aaf416f05",
+      "source_sha256": "9a3bb67728d9bbdc4486dd8352931bf67f9b3bfe193c30126628af21b14b8c26",
+      "media_inspect_count": 1,
+      "technical_receipt": {
+        "operation_id": "b63171bd3dbc4d6194114c61e847f419",
+        "succeeded": true,
+        "verified": true,
+        "effect_status": "known",
+        "output_bytes": 1152,
+        "output_sha256": "7e1c541c1fe7ad5d5649c9fdd018d2de14433ee28428ab3a79ae0b560eab1b23",
+        "output_truncated_preview": true,
+        "output_source_binding_matches_reference": true,
+        "actual_frame_locators": [
+          "frame:1@0.000",
+          "frame:2@1.000",
+          "frame:3@1.500"
+        ]
+      },
+      "cas_visual_delivery": {
+        "accepted_events": 1,
+        "operation_and_run_binding_match": true,
+        "write_attempted": true,
+        "ack_matches": true,
+        "physical_verified": false,
+        "model_consumption_verified": false
+      },
+      "model_observations": {
+        "JARVIS_42_recovered": true,
+        "red_recovered": true,
+        "blue_recovered": true,
+        "explicit_source_or_frame_citations": false,
+        "receipt_metadata_reported_unavailable": true,
+        "complete_grounding_pass": false
+      },
+      "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-corpus-oracle-v3-639.json",
+      "oracle_sha256": "4a55287ed5af1b65f31b048f352d4afbfbb31f893e9d8305a0cb27d61f743b25"
+    }
+  ],
+  "oracle_checkpoints": [
+    {
+      "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-corpus-oracle-initial-v2.json",
+      "sha256": "173af44b8336da2a8f6be9ece22604c909e380da71fa8d30a346cb3e9eb663c3",
+      "scope": "Five initial runs; eight media inspections. Decode receipts passed; the combined image/video/Office/CSV model grounding failed.",
+      "sql_mode": "ro",
+      "scanned_sql_text_bytes": 48655,
+      "raw_media_payloads_found": false
+    },
+    {
+      "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-corpus-oracle-v3-639.json",
+      "sha256": "4a55287ed5af1b65f31b048f352d4afbfbb31f893e9d8305a0cb27d61f743b25",
+      "script": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualify-corpus-oracle-v3.py",
+      "script_sha256": "e76c08986316f1df5b08af300a82fa8224a5da0e2a1a5653610683d6b87b8a3f",
+      "scope": "Multiple synthetic sessions, preserving earlier failures. The latest isolated image/video show accepted CAS-bound pixels and matching colors/OCR, but still fail complete citation/metadata grounding. No new mixed run is qualified by this checkpoint.",
+      "sql_mode": "ro",
+      "query_only": true,
+      "scanned_sql_text_bytes": 85653,
+      "raw_media_payloads_found": false,
+      "temporary_artifact_paths_are_not_durable_storage_claims": true
+    }
+  ],
+  "pending_corrections": [
+    {
+      "case": "approved_CAS_visual_receipt_text_delivery",
+      "status": "working_fix_pending_publication_CI_and_live_qualification",
+      "change_under_review": "Include the complete approved technical receipt and extracted output before the approved image in the CAS-bound SDK visual delivery.",
+      "reason": "Image/video pixels now recover colors and OCR, but the model still lacks explicit source/frame citations or reports unavailable receipt metadata.",
+      "must_preserve": [
+        "Exact run/operation/receipt/image binding",
+        "Fresh authority checks before delivery",
+        "No persistent pixels or audio",
+        "No automatic replay of uncertain delivery",
+        "Historical failed grounding remains recorded"
+      ],
+      "closed": false
     }
   ],
   "manual_budget": {
@@ -208,9 +371,9 @@
     "only_synthetic_content": true
   },
   "remaining_in_selected_increment": [
-    "CI and real image grounding after approved CAS-bound visual handoff",
+    "Complete CI and real image/video/mixed citation grounding after the pending approved CAS receipt-text delivery correction",
     "wake effective-mode controlled repetition and Talk live",
-    "bounded group discovery before configuring group without prior ID",
+    "Qualify implemented unknown-ID group discovery from 95009a1 in CI and with the owner-only test group, including existing-DM fresh-proof renewal",
     "live Telegram private/group account and attachments",
     "final context/cleanup/resource receipts"
   ]
