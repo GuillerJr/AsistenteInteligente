@@ -22,7 +22,8 @@ public final class MemoryMediaAsset: NSObject, AVAssetResourceLoaderDelegate, @u
               let url = URL(string: "jarvis-media://local/" + identifier) else { throw RPCFailure.invalidResponse }
         self.data = data; self.url = url
         contentType = UTType(mimeType: mimeType)?.identifier ?? "public.data"
-        asset = AVURLAsset(url: url, options: [AVURLAssetOutOfBandMIMETypeKey: mimeType])
+        asset = AVURLAsset(url: url, options: [AVURLAssetOverrideMIMETypeKey: mimeType,
+            AVURLAssetReferenceRestrictionsKey: AVAssetReferenceRestrictions.forbidAll.rawValue])
         super.init()
         asset.resourceLoader.setDelegate(self, queue: queue)
     }

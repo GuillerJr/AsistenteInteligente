@@ -7,6 +7,18 @@ enum ChannelReconciliationValidation {
         guard let number = TelegramValidation.integer(value, minimum: 1) else { throw RPCFailure.invalidResponse }; return number
     }
     static func hash(_ value: RPCValue) throws -> String { try RestoredMemoryValidation.hash(value) }
+    static let policyKeys: Set<String> = ["chat_type", "allowed_sender_ids", "message_thread_id", "allow_attachments"]
+    static func keys(_ value: RPCValue, base: Set<String>) throws {
+        guard let row = value.object, Set(row.keys) == base || Set(row.keys) == base.union(policyKeys) else { throw RPCFailure.invalidResponse }
+    }
+    static func route(_ value: RPCValue) throws -> TelegramRouteSnapshot {
+        var row: [String: RPCValue] = ["chat_id": value["chat_id"], "agent_id": .string("jarvis"),
+            "session_id": .string(String(repeating: "a", count: 32)), "revision": .number(1), "enabled": .bool(false)]
+        if value.object?["chat_type"] != nil {
+            for key in policyKeys { row[key] = value[key] }
+        }
+        return try TelegramRouteSnapshot(.object(row))
+    }
 }
 
 /// A local route admission. It never represents pairing with Telegram or permission to start polling.
@@ -16,6 +28,7 @@ public struct ChannelReconciliationReview: Identifiable, Sendable {
     public let scope: MaintenanceScope
     public let botID: Int
     public let chatID: Int
+    public let policy: TelegramRoutePolicy
     public let agentID: String
     public let sessionID: String
     public let revision: Int
@@ -30,11 +43,12 @@ public struct ChannelReconciliationReview: Identifiable, Sendable {
         try MaintenanceValidation.keys(value, ["review_id", "review_digest", "expires_in_seconds", "metadata"])
         id = try RestoredMemoryValidation.id(value["review_id"]); digest = try ChannelReconciliationValidation.hash(value["review_digest"])
         let row = value["metadata"]
-        try MaintenanceValidation.keys(row, ["profile_id", "generation", "bot_id", "chat_id", "agent_id", "agent_revision", "session_id", "route_revision", "enabled_before", "enabled_after", "workspace_id", "workspace_path", "configuration_hash", "marker_sha256", "admission_sha256", "network_started", "provider_started", "grants_restored", "historical_events_replayed", "external_bot_verified"])
+        try ChannelReconciliationValidation.keys(row, base: ["profile_id", "generation", "bot_id", "chat_id", "agent_id", "agent_revision", "session_id", "route_revision", "enabled_before", "enabled_after", "workspace_id", "workspace_path", "configuration_hash", "marker_sha256", "admission_sha256", "network_started", "provider_started", "grants_restored", "historical_events_replayed", "external_bot_verified"])
         guard ManagementValidation.digest(try MaintenanceValidation.canonical(row)) == digest,
               ChannelReconciliationValidation.noEffects.union(["external_bot_verified"]).allSatisfy({ row[$0] == .bool(false) }) else { throw RPCFailure.invalidResponse }
         scope = try MaintenanceScope(row); botID = try ChannelReconciliationValidation.identity(row["bot_id"])
-        chatID = try ChannelReconciliationValidation.identity(row["chat_id"])
+        let route = try ChannelReconciliationValidation.route(row)
+        chatID = route.chatID; policy = route.policy
         agentID = try RestoredMemoryValidation.id(row["agent_id"], agent: true); sessionID = try RestoredMemoryValidation.id(row["session_id"])
         guard try MaintenanceValidation.integer(row["agent_revision"], max: Int.max) > 0 else { throw RPCFailure.invalidResponse }
         revision = try MaintenanceValidation.integer(row["route_revision"], max: Int.max)
@@ -49,7 +63,7 @@ public struct ChannelReconciliationReview: Identifiable, Sendable {
     public func matches(_ operation: MaintenanceOperation) -> Bool {
         guard operation.kind == ChannelReconciliationValidation.effect, operation.scope == scope, operation.reviewID == id, operation.reviewDigest == digest else { return false }
         guard let receipt = operation.channelReceipt else { return true }
-        return receipt.requestDigest == digest && receipt.botID == botID && receipt.chatID == chatID && receipt.revisionBefore == revision && receipt.enabledBefore == enabledBefore && receipt.enabledAfter == enabledAfter
+        return receipt.requestDigest == digest && receipt.botID == botID && receipt.chatID == chatID && receipt.policy == policy && receipt.revisionBefore == revision && receipt.enabledBefore == enabledBefore && receipt.enabledAfter == enabledAfter
     }
     public func matches(_ ticket: MaintenanceApproval, operation: MaintenanceOperation, now: Date = Date()) -> Bool {
         matches(operation) && operation.phase == "awaiting_owner" && ticket.operationID == operation.id && ticket.purpose == ChannelReconciliationValidation.effect && ticket.scope == scope && ticket.reviewID == id && ticket.reviewDigest == digest && ticket.reviewMetadata == metadata && expiresAt > now && ticket.expiresAt > now
@@ -61,19 +75,22 @@ public struct ChannelReconciliationReceipt: Sendable {
     public let status: String
     public let botID: Int
     public let chatID: Int
+    public let policy: TelegramRoutePolicy
     public let revisionBefore: Int
     public let revisionAfter: Int?
     public let enabledBefore: Bool
     public let enabledAfter: Bool
     public init(_ value: RPCValue, operationID: String) throws {
-        try MaintenanceValidation.keys(value, ["operation_id", "purpose", "request_digest", "status", "effect_status", "bot_id", "chat_id", "route_revision_before", "route_revision_after", "enabled_before", "enabled_after", "configuration_hash_before", "configuration_hash_after", "error_code", "cleanup_pending", "network_started", "provider_started", "grants_restored", "historical_events_replayed", "permits_replay"])
+        try ChannelReconciliationValidation.keys(value, base: ["operation_id", "purpose", "request_digest", "status", "effect_status", "bot_id", "chat_id", "route_revision_before", "route_revision_after", "enabled_before", "enabled_after", "configuration_hash_before", "configuration_hash_after", "error_code", "cleanup_pending", "network_started", "provider_started", "grants_restored", "historical_events_replayed", "permits_replay"])
         guard value["operation_id"] == .string(operationID), value["purpose"] == .string(ChannelReconciliationValidation.effect),
               let status = value["status"].string, ["completed", "failed", "cancelled", "unknown"].contains(status),
               value["cleanup_pending"].bool != nil,
               status == "unknown" || value["cleanup_pending"] == .bool(false),
               ChannelReconciliationValidation.noEffects.union(["permits_replay"]).allSatisfy({ value[$0] == .bool(false) }) else { throw RPCFailure.invalidResponse }
         self.status = status; requestDigest = try ChannelReconciliationValidation.hash(value["request_digest"])
-        botID = try ChannelReconciliationValidation.identity(value["bot_id"]); chatID = try ChannelReconciliationValidation.identity(value["chat_id"])
+        botID = try ChannelReconciliationValidation.identity(value["bot_id"])
+        let route = try ChannelReconciliationValidation.route(value)
+        chatID = route.chatID; policy = route.policy
         revisionBefore = try MaintenanceValidation.integer(value["route_revision_before"], max: Int.max)
         revisionAfter = value["route_revision_after"] == .null ? nil : try MaintenanceValidation.integer(value["route_revision_after"], max: Int.max)
         enabledBefore = try RestoredMemoryValidation.bool(value["enabled_before"]); enabledAfter = try RestoredMemoryValidation.bool(value["enabled_after"])

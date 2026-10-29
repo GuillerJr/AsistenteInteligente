@@ -53,6 +53,24 @@ class TelegramGroupPairing(TelegramPairing):
         )
         return status
 
+    def validate_claim(self):
+        # A matched reader has already closed its exclusive polling lease.
+        # A claimed proof is still RAM-only and must revalidate all bindings,
+        # but cannot assert ownership of the now-retired runner descriptor.
+        self._check_expiry()
+        if self.state != "claimed" or self._claim is None or self._nonce is None:
+            raise TelegramError("telegram_pairing_claim_invalid")
+        if self._configuration != self.journal.configuration_hash():
+            raise TelegramError("telegram_configuration_changed")
+        if (self.client.identity is None or self.client.closed
+                or self.client.identity.bot_id != self.journal.bot_id):
+            raise TelegramError("telegram_bot_changed")
+        self.host_guard()
+        current = next((row for row in self.journal.routes()
+                        if row.chat_id == self.target_route.chat_id), None)
+        if current != self.target_route:
+            raise TelegramError("telegram_configuration_changed")
+
     def native_uri(self, challenge_id):
         raise TelegramError("telegram_group_command_required")
 

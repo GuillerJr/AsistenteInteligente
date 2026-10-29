@@ -192,11 +192,16 @@ async def test_route_guard_withdrawn_after_proposal_never_dispatches_old_approva
 
 
 async def test_fresh_group_claim_pins_sender_topic_and_never_sends_or_calls_model(telegram_service):
+    from jarvis_core.host_profile import HostProfileError
+
     service, client, peer, bot, _root = telegram_service
     await group_route(client)
     review, started, command = await group_begin(client)
     assert review["chat_id"] == GROUP and review["allowed_sender_ids"] == [CHAT]
     assert started["state"] == "listening"
+    with pytest.raises(HostProfileError, match="profile_not_quiescent"):
+        with service.profile_gate.exclusive():
+            pytest.fail("group pairing still owns its expiry and reader cleanup")
     with pytest.raises(RpcError, match="telegram_pairing_link_unavailable"):
         await client.call(
             "telegram.group.pairing.command", {"challenge_id": started["challenge_id"]}
@@ -230,6 +235,7 @@ async def test_fresh_group_claim_pins_sender_topic_and_never_sends_or_calls_mode
         ]
     )
     claim = await group_state(client, "claimed")
+    assert service._telegram_group_pairing._lease is None
     assert claim["chat_id"] == GROUP and claim["sender_id"] == CHAT
     assert claim["message_thread_id"] == 9
     assert service._telegram_journal.is_control_message(GROUP, 13)
@@ -411,6 +417,43 @@ async def test_denied_attachment_reply_never_uploads(telegram_service):
     final = await event(client)
     assert final["status"] == "failed" and not bot.uploads and not bot.sent()
     assert not service._handles and not service.authority.list_pending()
+
+
+async def test_old_remembered_attachment_rule_cannot_authorize_new_destination_run(
+    telegram_service,
+):
+    from jarvis_core.client_identity import key_id
+
+    service, client, peer, bot, _root = telegram_service
+    route = await ready(client)
+    manifest = output_fixture(service, route)
+    args = {"attachment_id": manifest.attachment_id, "sha256": manifest.sha256}
+    # Represent an old persisted rule. The productive approval endpoint refuses
+    # creating this rule now, and the pending gate must ignore old copies too.
+    service.automation_permissions.remember(
+        tool="telegram_send_attachment",
+        arguments=args,
+        client_id=key_id(os.environ["JARVIS_RPC_BOOTSTRAP_PUBLIC_KEY"]),
+        agent_id="jarvis",
+        workspace_id=service._workspace_id,
+        session_id=route["session_id"],
+        temporary=False,
+        mode="always",
+    )
+    peer.plans["no heredar permiso"] = [("telegram_send_attachment", args)]
+    await bot.updates.put([fresh_update(text="no heredar permiso")])
+    card = await approval(client, route)
+    assert card["tool_name"] == "telegram_send_attachment" and not bot.uploads
+    await client.call(
+        "approvals.decide",
+        {
+            "approval_id": card["approval_id"],
+            "digest": card["digest"],
+            "allow": False,
+            "session_id": route["session_id"],
+        },
+    )
+    assert (await event(client))["status"] == "failed" and not bot.uploads
 
 
 async def test_incoming_document_imports_locally_and_requires_separate_inspection_approval(

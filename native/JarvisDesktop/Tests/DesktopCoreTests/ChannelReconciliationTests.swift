@@ -57,6 +57,81 @@ private actor ChannelWire {
 }
 
 final class ChannelReconciliationTests: XCTestCase {
+    private var groupPolicy: [String: RPCValue] {
+        ["chat_id": .number(-100424242), "chat_type": .string("supergroup"),
+         "allowed_sender_ids": .array([.number(42)]), "message_thread_id": .number(9),
+         "allow_attachments": .bool(true)]
+    }
+    func testTypedGroupReviewReceiptBindsPolicyAndKeepsLegacyPrivateRoute() throws {
+        let review = try ChannelReconciliationReview(ChannelReconciliationFixture.review(groupPolicy))
+        XCTAssertEqual(review.chatID, -100424242)
+        XCTAssertEqual(review.policy.chatType, .supergroup)
+        XCTAssertEqual(review.policy.allowedSenderIDs, [42]); XCTAssertEqual(review.policy.messageThreadID, 9)
+        XCTAssertTrue(review.policy.allowAttachments)
+        var changes = groupPolicy; changes["request_digest"] = .string(review.digest)
+        let raw = try ChannelReconciliationFixture.receipt(changes: changes)
+        let receipt = try ChannelReconciliationReceipt(raw, operationID: ChannelReconciliationFixture.operationID)
+        XCTAssertEqual(receipt.policy, review.policy); XCTAssertEqual(receipt.chatID, review.chatID)
+        var operation = try XCTUnwrap(ChannelReconciliationFixture.operation("complete", receipt: raw).object)
+        operation["review_digest"] = .string(review.digest)
+        XCTAssertTrue(review.matches(try MaintenanceOperation(.object(operation))))
+        var altered = changes; altered["allowed_sender_ids"] = .array([.number(84)])
+        operation["receipt"] = try ChannelReconciliationFixture.receipt(changes: altered)
+        XCTAssertFalse(review.matches(try MaintenanceOperation(.object(operation))))
+        let legacy = try ChannelReconciliationReview(ChannelReconciliationFixture.review())
+        XCTAssertEqual(legacy.chatID, 42); XCTAssertEqual(legacy.policy.chatType, .privateChat)
+        XCTAssertEqual(legacy.metadata.object?.count, 20)
+    }
+    func testGroupPolicyRejectsIncompleteFieldsWrongSignsAndUnreviewedMembers() throws {
+        for delta: [String: RPCValue] in [
+            ["chat_id": .number(42)], ["allowed_sender_ids": .array([])],
+            ["allowed_sender_ids": .array([.bool(true)])],
+            ["allowed_sender_ids": .array([.number(42), .number(42)])],
+            ["message_thread_id": .bool(true)], ["chat_type": .string("private")],
+            ["chat_type": .string("group")], ["allow_attachments": .number(1)]
+        ] {
+            var change = groupPolicy; change.merge(delta) { _, new in new }
+            XCTAssertThrowsError(try ChannelReconciliationReview(ChannelReconciliationFixture.review(change)))
+            XCTAssertThrowsError(try ChannelReconciliationReceipt(ChannelReconciliationFixture.receipt(changes: change), operationID: ChannelReconciliationFixture.operationID))
+        }
+        XCTAssertThrowsError(try ChannelReconciliationReview(ChannelReconciliationFixture.review(["chat_id": .number(-42)])))
+        var incomplete = try XCTUnwrap(ChannelReconciliationFixture.review(groupPolicy).object)
+        var metadata = try XCTUnwrap(incomplete["metadata"]?.object)
+        metadata.removeValue(forKey: "allowed_sender_ids"); incomplete["metadata"] = .object(metadata)
+        XCTAssertThrowsError(try ChannelReconciliationReview(.object(incomplete)))
+        var raw = try XCTUnwrap(ChannelReconciliationFixture.receipt(changes: groupPolicy).object)
+        raw.removeValue(forKey: "message_thread_id")
+        XCTAssertThrowsError(try ChannelReconciliationReceipt(.object(raw), operationID: ChannelReconciliationFixture.operationID))
+    }
+    func testGroupClientAcceptsSignedIdentityOnlyWithTypedMatchingResponse() async throws {
+        let response = try ChannelReconciliationFixture.review(groupPolicy)
+        let policy = try TelegramRoutePolicy(chatType: .supergroup, allowedSenderIDs: [42], messageThreadID: 9, allowAttachments: true)
+        var route: [String: RPCValue] = ["chat_id": .number(-100424242), "agent_id": .string("jarvis"),
+            "session_id": .string(String(repeating: "a", count: 32)), "revision": .number(3), "enabled": .bool(false)]
+        route.merge(policy.params) { _, new in new }
+        let observation: RPCValue = .object(["observation_only": .bool(true), "permits_replay": .bool(false),
+            "prior_acknowledgement": .string("not_established"), "bot_id": .number(424242), "route": .object(route),
+            "configuration_hash": .string(String(repeating: "e", count: 64)),
+            "workspace_id": .string(String(repeating: "e", count: 64)), "network_started": .bool(false)])
+        let client = ChannelReconciliationClient(request: { method, params in
+            XCTAssertEqual(params["chat_id"], .number(-100424242))
+            if method == "telegram.restore.review" { return response }
+            if method == "telegram.restore.inspect" { return observation }
+            throw RPCFailure.invalidResponse
+        })
+        let reviewed = try await client.review(chatID: -100424242, revision: 3, enabled: true)
+        XCTAssertEqual(reviewed.policy, policy)
+        let inspected = try await client.inspect(chatID: -100424242)
+        XCTAssertEqual(inspected.route.policy, policy)
+        let invalid = ChannelReconciliationClient(request: { _, _ in XCTFail("invalid ID reached transport"); throw RPCFailure.invalidResponse })
+        for identity in [0, Int.min, Int.max, TelegramValidation.maximumIdentity + 1, -TelegramValidation.maximumIdentity - 1] {
+            do { _ = try await invalid.inspect(chatID: identity); XCTFail("invalid identity accepted") } catch {}
+        }
+        let untyped = ChannelReconciliationClient(request: { _, _ in
+            try ChannelReconciliationFixture.review(["chat_id": .number(-100424242)])
+        })
+        do { _ = try await untyped.review(chatID: -100424242, revision: 3, enabled: true); XCTFail("untyped negative accepted") } catch {}
+    }
     func testReviewBindsExactArgumentsAndDoesNotGrantNetworkOrReplay() throws {
         let review = try ChannelReconciliationReview(ChannelReconciliationFixture.review())
         let operation = try MaintenanceOperation(ChannelReconciliationFixture.operation())

@@ -130,6 +130,11 @@ class TelegramGroupManagementAPI:
         pairing = self._telegram_group_pairing
         if pairing is None:
             raise TelegramError("telegram_pairing_link_unavailable")
+        pairing._check_expiry()
+        if pairing.state == "expired":
+            raise TelegramError("telegram_pairing_expired")
+        if pairing.state != "listening":
+            raise TelegramError("telegram_pairing_link_unavailable")
         pairing._guard()
         return {
             "challenge_id": pairing.challenge_id,
@@ -175,7 +180,7 @@ class TelegramGroupManagementAPI:
         claim = pairing.claim() if pairing is not None else None
         if claim is None:
             raise TelegramError("telegram_pairing_claim_invalid")
-        pairing._guard()
+        pairing.validate_claim()
         review, _internal, route = self._group_review(value["chat_id"])
         routes, _internal, configuration_hash = self._telegram_configuration()
         raw_route = next(row for row in routes if row["chat_id"] == route.chat_id)

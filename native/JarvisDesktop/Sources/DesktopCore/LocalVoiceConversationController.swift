@@ -85,6 +85,7 @@ public enum LocalVoiceConversationStop: String, Equatable, Sendable {
     @ObservationIgnored private var completedRunIDs = Set<String>()
     @ObservationIgnored private var lastSpokenText: String?
     @ObservationIgnored private var rearmDeadline: (any LocalVoiceCancellation)?
+    @ObservationIgnored private var retainedContext: LocalVoiceConversationContext?
 
     public init(voice: LocalVoiceController, clock: (any LocalVoiceClock)? = nil,
                 currentContext: @escaping @MainActor () -> LocalVoiceConversationContext?,
@@ -119,7 +120,7 @@ public enum LocalVoiceConversationStop: String, Equatable, Sendable {
         }
         voice.cancel()
         generation &+= 1; let ticket = generation
-        settings = voice.preferences; activeContext = context; completedTurns = 0
+        settings = voice.preferences; activeContext = context; retainedContext = context; completedTurns = 0
         lastRunID = nil; stopReason = nil; partialForReview = nil
         completedRunIDs = []
         lastSpokenText = nil
@@ -246,7 +247,7 @@ public enum LocalVoiceConversationStop: String, Equatable, Sendable {
             await retiring?.value
             guard self.generation == ticket, self.phase == .stopping else { return }
             self.cleanup = nil
-            self.retiringWork = nil; self.activeContext = nil; self.phase = .idle
+            self.retiringWork = nil; self.activeContext = nil; self.retainedContext = nil; self.phase = .idle
         }
     }
 
@@ -280,7 +281,7 @@ public enum LocalVoiceConversationStop: String, Equatable, Sendable {
 
     deinit {
         let voice = voice, work = work, cleanup = cleanup, retiring = retiringWork
-        let context = activeContext, cancelRun = cancelRun, deadline = deadline, rearmDeadline = rearmDeadline
+        let context = retainedContext, cancelRun = cancelRun, deadline = deadline, rearmDeadline = rearmDeadline
         Task { @MainActor in
             deadline?.cancel(); rearmDeadline?.cancel(); work?.cancel(); voice.cancel()
             if let cleanup { await cleanup.value }

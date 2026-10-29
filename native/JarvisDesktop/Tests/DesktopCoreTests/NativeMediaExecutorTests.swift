@@ -1,9 +1,17 @@
+@preconcurrency import AVFoundation
 import CryptoKit
 import Foundation
 import XCTest
 @testable import DesktopCore
 
 final class NativeMediaExecutorTests: XCTestCase {
+    func testMemoryAssetForbidsEveryExternalReferenceBeforeLoading() throws {
+        let source = try MemoryMediaAsset(data: NativeMediaFixtures.wav(), mimeType: "audio/wav")
+        defer { source.close() }
+        XCTAssertEqual(source.asset.referenceRestrictions, .forbidAll)
+        XCTAssertEqual(source.asset.url.scheme, "jarvis-media")
+        XCTAssertFalse(source.asset.url.isFileURL)
+    }
     @MainActor private func executor(_ payload: Data) -> NativeMediaExecutor {
         let result = NativeMediaExecutor()
         result.beforeEffect = { _ in }; result.loadPayload = { _ in payload }

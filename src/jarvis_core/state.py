@@ -646,7 +646,8 @@ class StateStore(SessionContextMixin):
             return tuple(MessageRecord(**dict(row)) for row in reversed(rows))
 
     def create_run(self, ref: SessionRef, *, run_id: str | None = None,
-                   user_text: str | None = None) -> RunRecord:
+                   user_text: str | None = None,
+                   attachment_context: Mapping[str, Any] | None = None) -> RunRecord:
         """Commit queued run, initial event and optional request together.
 
         A caller-supplied run_id is rejected on duplication, rather than silently
@@ -656,6 +657,7 @@ class StateStore(SessionContextMixin):
         run_id = uuid4().hex if run_id is None else _identity(run_id)
         if user_text is not None:
             user_text = self._text(user_text)
+        context_json = self._json(attachment_context) if attachment_context is not None else None
         with self._transaction(ref.temporary) as connection:
             if self._session(connection, ref)["archived"]:
                 raise StateError("session_archived")
@@ -669,6 +671,8 @@ class StateStore(SessionContextMixin):
             if user_text is not None:
                 self._insert_message(connection, ref, "user", user_text, run_id)
             self._insert_event(connection, run_id, "run_queued", "{}")
+            if context_json is not None:
+                self._insert_event(connection, run_id, "media.references", context_json)
             return RunRecord(**dict(self._run(connection, ref, run_id)))
 
     def get_run(self, ref: SessionRef, run_id: str) -> RunRecord:

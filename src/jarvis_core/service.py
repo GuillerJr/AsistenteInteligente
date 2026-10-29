@@ -1396,10 +1396,10 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         provider_epoch = self.provider_choice.epoch()
         writer = self.profile_gate.hold("run.owner", mutating=True, closing=True)
         try:
-            record = self.store.create_run(ref, run_id=request_id, user_text=message)
-            if media_selection:
-                self.store.append_event(ref, record.run_id, "media.references",
-                                        {"attachments": media_selection})
+            record = self.store.create_run(
+                ref, run_id=request_id, user_text=message,
+                attachment_context={"attachments": media_selection} if media_selection else None,
+            )
         except BaseException:
             writer.close()
             raise

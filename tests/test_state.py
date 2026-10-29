@@ -626,3 +626,27 @@ def test_explicit_absolute_path_is_required_and_helper_does_not_change_permissio
     with error_code("unsafe_state_permissions"):
         ensure_private_directory(state_path.parent)
     assert stat.S_IMODE(state_path.parent.stat().st_mode) == 0o750
+
+
+def test_attachment_context_failure_rolls_back_run_and_message(state_path, monkeypatch):
+    from jarvis_core.state import StateError, StateStore
+
+    store = StateStore(state_path)
+    try:
+        ref = store.create_session().ref
+        original = store._insert_event
+
+        def insert(connection, run_id, kind, payload, **kwargs):
+            if kind == "media.references":
+                raise StateError("synthetic_attachment_context_failure")
+            return original(connection, run_id, kind, payload, **kwargs)
+
+        monkeypatch.setattr(store, "_insert_event", insert)
+        with pytest.raises(StateError, match="synthetic_attachment_context_failure"):
+            store.create_run(ref, user_text="Solicitud con adjunto", attachment_context={
+                "attachments": [{"attachment_id": "a" * 32, "sha256": "b" * 64}]
+            })
+        assert store.list_runs(ref) == ()
+        assert store.list_recent_messages(ref) == ()
+    finally:
+        store.close()

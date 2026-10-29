@@ -10,13 +10,14 @@ struct RestoredChannelsView: View {
         Form {
             Section("Rutas conservadas de Telegram") {
                 Text("Revisa cada ruta del perfil restaurado y decide si habilitarla o deshabilitarla localmente. Se conservan el chat, agente, conversación e historial; esta decisión no conecta el bot ni inicia la recepción.")
-                Text("Después conecta explícitamente el mismo bot, completa un enlace privado nuevo para cada chat habilitado y activa el canal desde Telegram. La revisión local no verifica una cuenta externa ni concede permisos de herramientas.").font(.caption).foregroundStyle(.secondary)
+                Text("Después conecta explícitamente el mismo bot, completa la prueba fresca de cada ruta habilitada y activa el canal desde Telegram. Los grupos requieren su comando de enlace, remitentes y tema exactos. La revisión local no verifica una cuenta externa ni concede permisos de herramientas.").font(.caption).foregroundStyle(.secondary)
                 Button("Actualizar rutas y estado") { Task { await telegram.refreshFromUI(); await channels.refresh() } }.disabled(channels.isRequesting)
                 if let snapshot = telegram.snapshot {
                     ForEach(snapshot.routes) { route in
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Chat \(route.chatID) · \(route.agentID)")
                             Text("Revisión \(route.revision) · \(route.enabled ? "habilitada" : "deshabilitada")").font(.caption)
+                            policyDetails(route.policy)
                             HStack {
                                 Button(route.enabled ? "Revisar deshabilitación" : "Revisar reconciliación") {
                                     Task { await channels.prepare(chatID: route.chatID, revision: route.revision, enabled: !route.enabled) }
@@ -33,6 +34,7 @@ struct RestoredChannelsView: View {
                 Section("Revisión exacta de la ruta") {
                     Text("Bot histórico: \(review.botID) · Chat: \(review.chatID)")
                     Text("Agente: \(review.agentID) · Conversación: \(review.sessionID)").font(.caption).textSelection(.enabled)
+                    policyDetails(review.policy)
                     Text("Carpeta: \(review.workspacePath)").textSelection(.enabled)
                     Text(review.enabledAfter ? "La ruta quedará habilitada localmente; el canal seguirá detenido." : "La ruta quedará deshabilitada. Se conservarán su conversación y los recibos anteriores.")
                     if channels.operation == nil {
@@ -70,6 +72,7 @@ struct RestoredChannelsView: View {
             if let observation = channels.observation {
                 Section("Observación local actual") {
                     Text("Chat \(observation.route.chatID) · Revisión \(observation.route.revision) · \(observation.route.enabled ? "habilitada" : "deshabilitada")")
+                    policyDetails(observation.route.policy)
                     Text("Esta lectura no acredita el ACK anterior, no cambia ningún recibo ni permite repetir la operación.").font(.caption)
                 }
             }
@@ -80,5 +83,19 @@ struct RestoredChannelsView: View {
                     Task { await telegram.refreshFromUI() }
                 }
             }
+    }
+
+    @ViewBuilder private func policyDetails(_ policy: TelegramRoutePolicy) -> some View {
+        Text("\(policy.chatType.label) · Adjuntos: \(policy.allowAttachments ? "permitidos" : "desactivados")")
+            .font(.caption).foregroundStyle(.secondary)
+        if policy.chatType != .privateChat {
+            Text("Remitentes permitidos: \(policy.allowedSenderIDs.map { String($0) }.joined(separator: ", "))")
+                .font(.caption).textSelection(.enabled)
+            if let topic = policy.messageThreadID {
+                Text("Tema exacto: \(topic)").font(.caption)
+            } else {
+                Text("Sólo mensajes sin tema; con mención o respuesta al bot.").font(.caption)
+            }
+        }
     }
 }

@@ -23,6 +23,7 @@ from jarvis_core.service import JarvisService
 BASE_TOOL_NAMES = {
     "mcp_catalog", "mcp_resource_read", "mcp_prompt_get", "mcp_resource_template_read",
     "memory_recall", "memory_store", "memory_forget", "web_fetch",
+    "media_list", "media_inspect",
     "agents_available", "agents_delegate", "workspace_list", "workspace_read",
     "workspace_write", "workspace_edit", "workspace_mkdir", "process_run",
     "process_poll", "process_send", "process_stop",

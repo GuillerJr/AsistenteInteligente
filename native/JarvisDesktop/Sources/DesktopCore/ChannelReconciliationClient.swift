@@ -10,7 +10,8 @@ public final class ChannelReconciliationClient: Sendable {
     public func status() async throws -> MaintenanceStatus { try await maintenance.status() }
     public func pending() async throws -> MaintenancePending { try await maintenance.pending() }
     public func review(chatID: Int, revision: Int, enabled: Bool) async throws -> ChannelReconciliationReview {
-        guard chatID > 0, chatID <= TelegramValidation.maximumIdentity, revision > 0 else { throw RPCFailure.configuration }
+        guard chatID != 0, chatID >= -TelegramValidation.maximumIdentity, chatID <= TelegramValidation.maximumIdentity,
+              revision > 0, revision <= TelegramValidation.maximumIdentity else { throw RPCFailure.configuration }
         let review = try await ChannelReconciliationReview(request("telegram.restore.review", ["chat_id": .number(Double(chatID)), "expected_revision": .number(Double(revision)), "enabled": .bool(enabled)]))
         guard review.chatID == chatID, review.revision == revision, review.enabledAfter == enabled else { throw RPCFailure.invalidResponse }; return review
     }
@@ -20,7 +21,7 @@ public final class ChannelReconciliationClient: Sendable {
         guard review.matches(row) else { throw RPCFailure.invalidResponse }; return row
     }
     public func inspect(chatID: Int) async throws -> ChannelReconciliationObservation {
-        guard chatID > 0, chatID <= TelegramValidation.maximumIdentity else { throw RPCFailure.configuration }
+        guard chatID != 0, chatID >= -TelegramValidation.maximumIdentity, chatID <= TelegramValidation.maximumIdentity else { throw RPCFailure.configuration }
         let value = try await ChannelReconciliationObservation(request("telegram.restore.inspect", ["chat_id": .number(Double(chatID))]))
         guard value.route.chatID == chatID else { throw RPCFailure.invalidResponse }; return value
     }

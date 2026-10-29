@@ -111,9 +111,8 @@ final class ChatStore {
 
     var selected: ChatSession? { sessions.first { $0.id == selectedID } }
     var canSend: Bool { !talk.isActive && submissionEligible }
-    private var submissionEligible: Bool { !lifecycleBlocksInteraction && !isRecoveryOnly && ready && connected && !busy && !access.isChangingWorkspace && !mcp.blocksContextChanges && !plugins.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil && selected != nil
-                       && selected?.archived == false
-                       && (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.selectedIDs.isEmpty) }
+    private var submissionContextEligible: Bool { !lifecycleBlocksInteraction && !isRecoveryOnly && ready && connected && !busy && !access.isChangingWorkspace && !mcp.blocksContextChanges && !plugins.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil && selected != nil && selected?.archived == false }
+    private var submissionEligible: Bool { submissionContextEligible && (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.selectedIDs.isEmpty) }
     private var sessionChangeEligible: Bool { !isRecoveryOnly && ready && !busy && !access.isChangingWorkspace && !mcp.blocksContextChanges && !plugins.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil }
     var canChangeSession: Bool { !talk.isActive && !lifecycleBlocksInteraction && sessionChangeEligible }
     private var canInitializeSession: Bool {
@@ -205,12 +204,12 @@ final class ChatStore {
     }
 
     func startVoiceConversation() {
-        guard canUseVoice, draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+        guard canUseVoice, draft.isEmpty,
               attachments.selectedIDs.isEmpty, let context = voiceConversationContext else { return }
         guard OwnerManagementReview.confirm(title: "Conversar por voz", action: "Iniciar hasta tres turnos",
             detail: "El micrófono se abrirá de forma visible, hasta tres turnos o cinco minutos. El reconocimiento y la lectura usan el Mac. Sólo el TEXTO final reconocido se enviará a Codex con ChatGPT. El micrófono se cierra mientras Codex responde y durante la lectura. El modo se detiene ante una aprobación, cambio de conversación o pérdida de foco. Las herramientas conservan sus permisos habituales.",
             isCurrent: { self.voiceConversationContext == context && self.canUseVoice
-                && self.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && self.draft.isEmpty
                 && self.attachments.selectedIDs.isEmpty }) else { return }
         talkRunID = nil; talkSession = nil
         if talk.start(context: context) {
@@ -226,7 +225,10 @@ final class ChatStore {
     }
 
     private func submitSpokenTurn(_ text: String, context: LocalVoiceConversationContext) async throws -> LocalVoiceConversationReply {
-        guard voiceConversationContext == context, draft.isEmpty, attachments.selectedIDs.isEmpty else { throw RPCFailure.disconnected }
+        guard voiceConversationContext == context, submissionContextEligible, draft.isEmpty, attachments.selectedIDs.isEmpty else { throw RPCFailure.disconnected }
+        // Clear the previous settled turn before latching a new request. A
+        // blocked submission must never read or speak an earlier run's receipt.
+        talkRunID = nil; talkSession = nil
         draft = text
         await performSend(spokenContext: context)
         guard let id = talkRunID, let session = talkSession else { throw RPCFailure.invalidResponse }
@@ -235,16 +237,16 @@ final class ChatStore {
         while ContinuousClock.now < deadline {
             try Task.checkCancellation()
             guard voiceConversationContext == context else { throw RPCFailure.disconnected }
-            let result = try await rpc("runs.get", params)["run"]
-            guard result["run_id"] == .string(id), let status = result["status"].string else { throw RPCFailure.invalidResponse }
-            if status == "waiting_approval" {
+            let receipt = try LocalVoiceRunReceipt(await rpc("runs.get", params)["run"], expectedRunID: id)
+            if receipt.requiresApproval {
                 talk.approvalBecamePending(); throw CancellationError()
             }
-            if ["completed", "failed", "cancelled", "interrupted"].contains(status) {
-                guard let outcome = result["outcome"].string, let receipts = result["action_receipts"].array else { throw RPCFailure.invalidResponse }
-                let parsed = try receipts.map(ActionReceipt.init)
-                return LocalVoiceConversationReply(runID: id, status: status, outcome: outcome,
-                    answer: result["answer"].string ?? "", unconfirmedEffects: parsed.contains(where: \.unknown))
+            if let reply = receipt.conversationReply {
+                // The regular watcher must finish applying this same receipt
+                // before another microphone turn can become a new submission.
+                if let activeRunID {
+                    guard activeRunID == id, runPhase != "disconnected" else { throw RPCFailure.disconnected }
+                } else { return reply }
             }
             try await Task.sleep(for: .milliseconds(250))
         }
@@ -259,17 +261,15 @@ final class ChatStore {
         do {
             // The cancellation ACK is not settlement. Poll the same durable run;
             // never cancel a later manual or Telegram run in this conversation.
-            let before = try await client.call("runs.get", params: params)["run"]
-            if !["completed", "failed", "cancelled", "interrupted"].contains(before["status"].string ?? "") {
-                _ = try await client.call("runs.cancel", params: params)
+            let before = try LocalVoiceRunReceipt(await client.call("runs.get", params: params)["run"], expectedRunID: id)
+            if !before.isSettled {
+                let cancellation = try await client.call("runs.cancel", params: params)
+                guard cancellation["run_id"] == .string(id), cancellation["accepted"].bool != nil else { return false }
             }
             let deadline = ContinuousClock.now.advanced(by: .seconds(20))
             while ContinuousClock.now < deadline {
-                let value = try await client.call("runs.get", params: params)["run"]
-                guard value["run_id"] == .string(id), let phase = value["status"].string,
-                      let receipts = value["action_receipts"].array else { return false }
-                _ = try receipts.map(ActionReceipt.init)
-                if ["completed", "failed", "cancelled", "interrupted"].contains(phase) {
+                let receipt = try LocalVoiceRunReceipt(await client.call("runs.get", params: params)["run"], expectedRunID: id)
+                if receipt.isSettled {
                     if talkRunID == id { talkRunID = nil; talkSession = nil }
                     return true
                 }
@@ -771,7 +771,8 @@ final class ChatStore {
         streamingText = ""
         do {
             let result = try await rpc("runs.start", params)
-            guard let runID = result["run_id"].string else { throw RPCFailure.invalidResponse }
+            guard let runID = result["run_id"].string, ManagementValidation.identifier(runID),
+                  spokenContext == nil || runID == requestID else { throw RPCFailure.invalidResponse }
             activeRunID = runID
             if spokenContext != nil { talkRunID = runID }
             attachments.didSubmit(attachmentIDs, scope: session.scope)
@@ -785,7 +786,11 @@ final class ChatStore {
             try await refreshMessages(session)
         } catch {
             report(error)
-            if RunPresentation.startWasRejected(error) { pendingSubmission = nil; activeSession = nil; return }
+            if RunPresentation.startWasRejected(error) {
+                pendingSubmission = nil; activeSession = nil
+                if spokenContext != nil, talkRunID == requestID { talkRunID = nil; talkSession = nil }
+                return
+            }
             // A missing acknowledgement is not proof that the server did not start.
             activeRunID = requestID
             runPhase = "disconnected"

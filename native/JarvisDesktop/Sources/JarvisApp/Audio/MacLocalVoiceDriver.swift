@@ -35,6 +35,8 @@ private final class AudioBufferGate: @unchecked Sendable {
 /// No initializer, property getter or cancellation path requests TCC or starts
 /// audio. The owner's explicit dictation action is the only authorization entry.
 @MainActor public final class MacLocalVoiceDriver: NSObject, LocalVoiceDriver, AVSpeechSynthesizerDelegate {
+    typealias ModernPreparation = @MainActor (String, @escaping @MainActor () -> Bool) async throws -> any PreparedLocalRecognition
+    private let prepareModern: ModernPreparation?
     private var engine: AVAudioEngine?
     private var tapInstalled = false
     private var gate: AudioBufferGate?
@@ -53,7 +55,9 @@ private final class AudioBufferGate: @unchecked Sendable {
     private var recognitionCleanup: Task<Void, Never>?
     private var cleanupTicket: UUID?
 
-    public override init() { super.init() }
+    public override init() { prepareModern = nil; super.init() }
+    /// Synthetic preparation tests never query assets, permissions or hardware.
+    init(prepareModern: @escaping ModernPreparation) { self.prepareModern = prepareModern; super.init() }
 
     public static func installedRecognitionLocales() async -> [String] {
         if #available(macOS 26.0, *) {
@@ -119,6 +123,10 @@ private final class AudioBufferGate: @unchecked Sendable {
                 self?.preparationTicket == ticket && request?.active == true && !Task.isCancelled
             }
             do {
+                // A cancelled preparation may itself be retained by the cleanup
+                // fence. It must exit before observing that newer fence, rather
+                // than awaiting a task which is waiting for its own retirement.
+                guard current() else { return }
                 if let retired = self.recognitionCleanup { await retired.value }
                 guard current() else { return }
                 if let retired = self.retiredLegacyTask {
@@ -132,8 +140,10 @@ private final class AudioBufferGate: @unchecked Sendable {
                 }
                 guard validLocale(localeIdentifier), LocalSpeechPolicy.canonicalLocale(localeIdentifier) != nil else { throw LocalVoiceIssue.onDeviceUnavailable }
                 if #available(macOS 26.0, *) {
-                    let ready = try await ModernLocalRecognition.prepare(localeIdentifier: localeIdentifier, isCurrent: current)
-                    guard current() else { ready.cancel(); return }
+                    let ready: any PreparedLocalRecognition
+                    if let prepareModern { ready = try await prepareModern(localeIdentifier, current) }
+                    else { ready = try await ModernLocalRecognition.prepare(localeIdentifier: localeIdentifier, isCurrent: current) }
+                    guard current() else { ready.cancel(); await ready.waitForCleanup(); return }
                     self.modernRecognition = ready
                 } else {
                     guard let service = SFSpeechRecognizer(locale: Locale(identifier: localeIdentifier)),
@@ -224,23 +234,31 @@ private final class AudioBufferGate: @unchecked Sendable {
 
     public func cancelRecognition() {
         preparationTicket = nil
+        let retiringPreparation = preparation?.task
         preparation?.cancel(); preparation = nil; preparedLocale = nil
+        if let retiringPreparation {
+            retainRecognitionCleanup { await retiringPreparation.value }
+        }
         if let retired = modernRecognition {
             retired.cancel(); modernRecognition = nil
-            let previous = recognitionCleanup, ticket = UUID()
-            cleanupTicket = ticket
-            recognitionCleanup = Task { @MainActor [weak self] in
-                await previous?.value
-                await retired.waitForCleanup()
-                guard let self, self.cleanupTicket == ticket else { return }
-                self.recognitionCleanup = nil; self.cleanupTicket = nil
-            }
+            retainRecognitionCleanup { await retired.waitForCleanup() }
         }
         recognitionTicket = nil
         stopInput()
         if let retired = recognitionTask { retired.cancel(); retiredLegacyTask = retired }
         recognitionTask = nil
         recognizer = nil
+    }
+
+    private func retainRecognitionCleanup(_ close: @escaping @MainActor () async -> Void) {
+        let previous = recognitionCleanup, ticket = UUID()
+        cleanupTicket = ticket
+        recognitionCleanup = Task { @MainActor [weak self] in
+            await previous?.value
+            await close()
+            guard let self, self.cleanupTicket == ticket else { return }
+            self.recognitionCleanup = nil; self.cleanupTicket = nil
+        }
     }
 
     private func stopInput() {

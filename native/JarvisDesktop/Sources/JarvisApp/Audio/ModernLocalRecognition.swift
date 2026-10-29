@@ -77,6 +77,7 @@ import Foundation
             return prepared
         } catch {
             prepared.cancel()
+            await prepared.waitForCleanup()
             throw error
         }
     }
