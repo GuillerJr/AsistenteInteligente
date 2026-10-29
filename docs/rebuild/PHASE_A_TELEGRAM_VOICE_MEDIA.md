@@ -1,17 +1,26 @@
 # Telegram, voz, documentos y multimedia — integración propia
 
-Estado: `remote_qualified_native_closeout_in_progress` (29-10-2026).
+Estado: `in_progress` (29-10-2026).
 Este registro distingue implementación, pruebas escritas, CI y recorridos reales.
 No declara cerrado el bloque antes de cualificar el producto integrado.
 La fase B no se inicia. La app del dueño y sus perfiles anteriores se conservan.
 
-La [CI completa de `201a5b7`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40923478066)
-aprobó Python (3447 Ubuntu, 3493 macOS), Swift (593 casos, uno omitido y cero
-fallos), paquetes, smoke y bundle. Las suites y compilaciones se ejecutaron en
-los runners remotos. El [registro](PHASE_A_TELEGRAM_VOICE_MEDIA_QUALIFICATION.json)
-conserva los intentos fallidos y las identidades de cada recorrido real.
+La [CI completa de `dbad498`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40936051756)
+aprobó Python (3448 Ubuntu y 3494 macOS), Swift (605 casos, uno omitido y cero
+fallos; 12 contratos del lanzador), paquetes, smoke, bundle y limpieza. Las
+suites y compilaciones se ejecutaron en los runners remotos. El
+[registro](PHASE_A_TELEGRAM_VOICE_MEDIA_QUALIFICATION.json) conserva también los
+intentos fallidos y las identidades de cada recorrido real.
 
-Telegram ya acredita privado y grupo separados, documento con marcador/fuente,
+La revisión funcional posterior `628ab0e` corrige el monitor de cambios de
+entrada. Su [CI](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40941195038)
+aprobó Ubuntu y compiló el bundle/helper, pero Swift tuvo un fallo entre 614
+casos (uno omitido). Los 13 casos del monitor pasaron; falló el oráculo asíncrono
+de cancelación del navegador. Se preparó una corrección sólo de esa prueba.
+MacPython, paquetes y smoke posteriores no se ejecutaron: todavía faltan la CI
+completa del nuevo commit y la repetición real de voz con su bundle.
+
+Telegram acredita privado y grupo separados, documento con marcador/fuente,
 envío recibido por el dueño, rechazo sin subida, retirada con original intacto
 y reactivación sin ejecutar los mensajes de la pausa. El corpus mixto con Codex
 real acredita contenido y fuentes de DOCX/CSV, imagen y vídeo parcial después de
@@ -19,21 +28,54 @@ corregir la entrega conjunta de texto e imágenes aprobados. WAV/Ogg se
 transcribieron localmente; el dueño confirmó una lectura audible y dictado sin
 envío automático.
 
-Siguen pendientes los recorridos finales de voz recibida desde Telegram,
-activación por frase y Talk, controles del reproductor actualizado y negativos
-de medios desde la app, incluida una lectura posterior a retirar el adjunto.
-La prueba realizada de retirada acredita bloqueo de autorización y cero subidas.
-Después de desbloquear el Mac se intentó probar la revisión 201a5b7, pero su
-lanzador de QA declaraba un script como ejecutable principal y la solicitud de
-Speech abortó por TCC. El informe del proceso propio acredita ausencia de bundle
-ID y atribución a otro proceso; no acredita un recorrido de voz satisfactorio.
-El paquete original de CI sí declara el Mach-O principal. Se está preparando un
-lanzador mediante LaunchServices y pruebas de admisión para impedir repetir ese
-harness inválido. Los procesos de ese intento se cerraron de forma explícita y
-los originales se conservaron. Ver el [contrato de arranque QA](NATIVE_QA_LAUNCH.md).
+Los ocho formatos adicionales acreditaron una inspección por archivo, recibos
+conocidos, originales y copias CAS con huellas coincidentes y marcadores/citas
+recuperados por Codex: XLSX, PPTX, RTF, HTML inerte, JSON, XML, TSV y PDF escaneado.
+En el PDF con tipografía segmentada, el OCR produjo `TARLIS Y2` y la lectura
+visual `JARVIS 42`; esa discrepancia sigue registrada. Otro PDF sin capa de
+texto, con letra regular, recuperó desde el recibo OCR literal
+`MARCADOROCRZAFIRO3582` y `VALOR 76`, con cita `page:1`. No se afirma exactitud
+universal del OCR ni se sustituye el fallo anterior por este resultado.
 
-Sólo hay una salida física conectada: los contratos de cambio/desconexión se
-prueban en CI, sin afirmar una comparación acústica entre dos dispositivos reales.
+La app rechazó una inspección aprobada de PDF cifrado con
+`media_native_pdf_encrypted`, sin repetirla ni probar contraseñas. El archivo de
+16 MiB más un byte se rechazó antes de presentar revisión/importación; su nombre
+y SHA no aparecen en el catálogo y el original conserva su huella. La solicitud
+exacta de `media_inspect` sobre el adjunto retirado también quedó bloqueada:
+Permitir/Recordar deshabilitados, rechazo nativo y cero recibos de ejecución,
+claims o CAS nuevos. Este caso acredita el gate previo al despacho; no inventa
+una respuesta «revoked» del ejecutor que nunca se llegó a llamar.
+
+El intento inicial de probar la revisión 201a5b7 falló porque su lanzador de QA
+declaraba un script como ejecutable principal y la solicitud de Speech abortó
+por TCC. El informe del proceso propio acredita ausencia de bundle ID y
+atribución a otro proceso; no acredita un recorrido de voz satisfactorio. El
+paquete original de CI sí declara el Mach-O principal. Con `dbad498`, el helper
+de CI inició la app mediante NSWorkspace/LaunchServices, sin wrapper ni Popen de
+la interfaz. El dueño concedió Speech desde la app y el aborto anterior no se
+repitió. Los dos intentos de micrófono posteriores se detuvieron antes del
+estímulo con el aviso de cambio de entrada; conservaron el borrador y no enviaron
+un run. La fuente trataba cualquier notificación de configuración como cambio
+de entrada, sin comprobar su identidad. La causa concreta de hardware de esos
+intentos no quedó establecida; faltan la validación completa de la corrección y
+su repetición real. Los procesos del harness fallido se cerraron
+de forma explícita y los originales se conservaron. Ver el
+[contrato de arranque QA](NATIVE_QA_LAUNCH.md).
+
+El reproductor real acreditó pausa, búsqueda mientras estaba pausado, selección
+de auriculares conservando posición, reanudación explícita y audio confirmado por
+el dueño. La primera retirada física reportada no era una desconexión de
+CoreAudio y se conserva como intento no cualificado. Tras desconectar realmente
+esa salida, la UI la retiró, detuvo el reproductor y no pasó al altavoz. Cerrar y
+abrir de nuevo volvió a posición cero, pausado y sin reutilizar la selección
+anterior. El preview Ogg distinguió original y WAV derivado en RAM y avanzó tras
+reproducirlo; ese clip no tiene confirmación acústica independiente. No se midió
+la salida global antes de las primeras selecciones ni se infiere el instante
+interno de liberación de memoria desde la UI.
+
+Quedan la voz real recibida por Telegram tras reconectar el bot, wake/Talk con
+el monitor corregido y CI completa, y los recibos finales de cierre/custodia.
+Los permisos concedidos y los WAV preparados no acreditan esos recorridos.
 
 ## Contratos incorporados
 

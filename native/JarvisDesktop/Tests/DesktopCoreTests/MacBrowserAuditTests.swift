@@ -55,14 +55,24 @@ final class MacBrowserAuditTests: XCTestCase {
                 try await Task.sleep(nanoseconds: 10_000_000)
             }
             XCTAssertTrue(fixture.hasRequest("/started"), "The approved own fixture handler must have started")
+            XCTAssertEqual(fixture.reportedDOMBeforeGate(), "JARVIS DOM ANTES",
+                "The page read its real DOM mutation before entering the held synchronous request")
             await executor.cancel(operationID: try XCTUnwrap(args["operation_id"]?.string))
             try await Task.sleep(nanoseconds: 100_000_000)
             XCTAssertFalse(settled, "Cancellation must retain custody until WebKit's actual callback")
+            let pending = try await executor.execute("browser_status", arguments: [:])
+            XCTAssertEqual(pending["active"].bool, true, "The JS evaluation is still owned while its fixture gate is closed")
+            try fixture.releaseGate()
             do { _ = try await task.value; XCTFail("A cancelled action must remain uncertain") }
-            catch { XCTAssertTrue(error is BrowserAutomationError) }
+            catch { XCTAssertEqual(error as? BrowserAutomationError, .uncertainEffect) }
             XCTAssertTrue(settled)
-            try await Task.sleep(nanoseconds: 200_000_000)
-            XCTAssertTrue(fixture.hasRequest("/effect"), "The already-dispatched site handler produced its uncertain effect")
+            let observation = try await executor.execute("browser_observe", arguments: operation([
+                "tab_id": opened["tab_id"], "expected_origin": .string(fixture.origin)]))
+            let text = try XCTUnwrap(observation["text"].string)
+            XCTAssertTrue(text.contains("JARVIS DOM ANTES"))
+            XCTAssertTrue(text.contains("JARVIS DOM DESPUES"), "The dispatched handler mutated the DOM after cancellation")
+            XCTAssertTrue(text.contains("JARVIS EFECTOS 1"), "The uncertain effect ran once, independently of any aborted fetch")
+            XCTAssertFalse(text.contains("JARVIS GATE NO LIBERADO"))
             do { _ = try await executor.execute("browser_action", arguments: args); XCTFail("The uncertain operation is consumed") }
             catch { XCTAssertEqual(error as? BrowserAutomationError, .alreadySubmitted) }
             await executor.reset()
@@ -88,6 +98,7 @@ final class MacBrowserAuditTests: XCTestCase {
             let reset = Task { await executor.reset(); resetSettled = true }
             try await Task.sleep(nanoseconds: 100_000_000)
             XCTAssertFalse(resetSettled, "Closing the native window cannot fabricate a JS completion")
+            try fixture.releaseGate()
             do { _ = try await task.value; XCTFail("Reset invalidates the running operation") }
             catch { XCTAssertEqual(error as? BrowserAutomationError, .uncertainEffect) }
             await reset.value
@@ -135,15 +146,61 @@ private final class MacBrowserAuditFixture {
             (try? JSONDecoder().decode(String.self, from: Data(line.utf8))) == path
         }
     }
-    func stop() async -> FixtureProcess.StopResult { await fixture.stop() }
+    func reportedDOMBeforeGate() -> String? {
+        guard let data = try? Data(contentsOf: directory.appendingPathComponent("gate-entered.json")),
+              let value = try? JSONDecoder().decode([String: String].self, from: data) else { return nil }
+        return value["before"]
+    }
+    func releaseGate() throws { try Data("release".utf8).write(to: directory.appendingPathComponent("gate.release")) }
+    func stop() async -> FixtureProcess.StopResult {
+        try? releaseGate()
+        let result = await fixture.stop()
+        if result == .stopped { try? FileManager.default.removeItem(at: directory) }
+        return result
+    }
 
     static let script = #"""
-import http.server,json,pathlib,sys
+import http.server,json,pathlib,sys,time,urllib.parse
 root=pathlib.Path(sys.argv[1])
+page=b'''<html><body>
+<button onclick="slowEffect(this)">Efecto lento</button>
+<p id="before">JARVIS DOM PENDIENTE</p><p id="after"></p><p id="count"></p>
+<script>
+function slowEffect(button) {
+ const before=document.getElementById('before');
+ before.textContent='JARVIS DOM ANTES';
+ const deadline=performance.now()+5000;
+ let released=false;
+ // stopLoading may abort the outstanding read. Re-enter only this inert,
+ // fixture-owned barrier; the click and DOM effect are never dispatched twice.
+ for(let attempt=0;attempt<8 && performance.now()<deadline;attempt++) {
+  try {
+   const gate=new XMLHttpRequest();
+   gate.open('GET','/gate?before='+encodeURIComponent(before.textContent),false);
+   gate.send();
+   if(gate.status===200 && gate.responseText==='RELEASE') {released=true;break;}
+  } catch (_) {}
+ }
+ document.getElementById('after').textContent=released?'JARVIS DOM DESPUES':'JARVIS GATE NO LIBERADO';
+ button.dataset.effects=String(Number(button.dataset.effects||'0')+1);
+ document.getElementById('count').textContent='JARVIS EFECTOS '+button.dataset.effects;
+}
+</script></body></html>'''
 class Handler(http.server.BaseHTTPRequestHandler):
  def do_GET(self):
   with (root/'requests.jsonl').open('a') as f:f.write(json.dumps(self.path)+'\n')
-  payload=b'''<html><body><button onclick="fetch('/started');const until=Date.now()+1500;while(Date.now()<until){}fetch('/effect')">Efecto lento</button></body></html>''' if self.path=='/' else b'OK'
+  if self.path.startswith('/gate?'):
+   before=urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query).get('before',[''])[0]
+   try:
+    with (root/'gate-entered.json').open('x') as f:json.dump({'before':before},f)
+   except FileExistsError:pass
+   with (root/'requests.jsonl').open('a') as f:f.write(json.dumps('/started')+'\n')
+   # This is a deadline, not an artificial wait: the native test opens the gate
+   # immediately after checking custody. No asynchronous effect fetch is needed.
+   deadline=time.monotonic()+5
+   while not (root/'gate.release').exists() and time.monotonic()<deadline:time.sleep(.005)
+   payload=b'RELEASE' if (root/'gate.release').exists() else b'CLOSED'
+  else:payload=page if self.path=='/' else b'OK'
   self.send_response(200);self.send_header('Content-Type','text/html;charset=utf-8');self.send_header('Content-Length',str(len(payload)));self.end_headers()
   try:self.wfile.write(payload)
   except (BrokenPipeError,ConnectionResetError):pass
