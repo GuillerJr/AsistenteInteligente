@@ -77,6 +77,9 @@ public struct MediaPreview: Identifiable {
     @ObservationIgnored private var request: MaintenanceClient.Request?
     @ObservationIgnored private var transport: LocalRPCClient?
     @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var contextTicket = 0
+    @ObservationIgnored private var contextRevision: String?
+    @ObservationIgnored private var contextReady = false
     @ObservationIgnored private var uploadID: String?
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private let isActive: () -> Bool
@@ -94,13 +97,31 @@ public struct MediaPreview: Identifiable {
         transport = client; request = { try await client.call($0, params: $1) }
     }
     public func setScope(_ value: SessionScope?) async {
+        contextTicket += 1; contextRevision = nil; contextReady = false
+        await replaceScope(value)
+    }
+    /// Session identity alone does not bind workspace or agent configuration.
+    /// Retire the old RAM preview and wait for its owner before admitting a new
+    /// revision, even when it selects the same conversation again.
+    public func setContext(scope value: SessionScope?, revision: String) async {
+        if contextReady, contextRevision == revision, scope == value { await refresh(); return }
+        contextTicket += 1
+        let ticket = contextTicket
+        contextRevision = revision; contextReady = false
+        await replaceScope(nil)
+        guard ticket == contextTicket else { return }
+        await replaceScope(value)
+        guard ticket == contextTicket else { return }
+        contextReady = true
+    }
+    private func replaceScope(_ value: SessionScope?) async {
         if scope != value {
             generation += 1; task?.cancel()
             let epoch = generation
+            preview = nil; selectedIDs = []; attachments = []
             if let id = uploadID, let request { _ = try? await request("media.upload.cancel", ["upload_id": .string(id)]) }
             await task?.value
             guard epoch == generation else { return }
-            preview = nil; selectedIDs = []; attachments = []
             scope = value
         }
         await refresh()
@@ -261,6 +282,7 @@ public struct MediaPreview: Identifiable {
         busy = false
     }
     public func close() async {
+        contextTicket += 1; contextRevision = nil; contextReady = false
         generation += 1; task?.cancel(); preview = nil; selectedIDs = []; attachments = []
         if let id = uploadID, let request { _ = try? await request("media.upload.cancel", ["upload_id": .string(id)]) }
         await task?.value

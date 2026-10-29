@@ -93,7 +93,9 @@ struct AttachmentComposerView: View {
             }
             if let issue = pickerError ?? store.attachments.errorMessage { Text(issue).font(.caption).foregroundStyle(.secondary) }
         }
-        .task(id: store.selected?.scope) { await store.attachments.setScope(store.selected?.scope) }
+        .task(id: store.mcpSelectionKey) {
+            await store.attachments.setContext(scope: store.selected?.scope, revision: store.mcpSelectionKey)
+        }
         .sheet(item: Binding(get: { store.attachments.preview }, set: { store.attachments.preview = $0 })) { MediaPreviewView(preview: $0) }
     }
     private func choose() {

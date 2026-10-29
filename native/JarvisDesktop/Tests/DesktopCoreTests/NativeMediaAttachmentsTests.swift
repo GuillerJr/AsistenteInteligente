@@ -151,6 +151,36 @@ final class NativeMediaAttachmentsTests: XCTestCase {
             XCTAssertNil(host.preview, field); XCTAssertTrue(host.selectedIDs.isEmpty, field)
         }
     }
+    @MainActor func testSameSessionContextRevisionRetiresPreviewAndSelectionButSameRevisionPreservesThem() async throws {
+        let fixture = NativeMediaRPCFixture(Data("CONTEXT FIXTURE".utf8))
+        let attachment = try MediaAttachment(await fixture.existing()), scope = await fixture.scope
+        let host = store(fixture); await host.setContext(scope: scope, revision: "workspace-a:agent-1")
+        host.toggle(attachment); await host.openPreview(attachment)
+        await host.setContext(scope: scope, revision: "workspace-a:agent-1")
+        XCTAssertNotNil(host.preview); XCTAssertEqual(host.selectedIDs, [attachment.id])
+        await host.setContext(scope: scope, revision: "workspace-b:agent-2")
+        XCTAssertEqual(host.scope, scope); XCTAssertNil(host.preview); XCTAssertTrue(host.selectedIDs.isEmpty)
+    }
+    @MainActor func testLateOldContextCannotRestoreScopeAfterNewerContextJoinsUploadCleanup() async throws {
+        let data = Data("HELD CONTEXT".utf8), fixture = NativeMediaRPCFixture(data), host = store(fixture)
+        let original = await fixture.scope
+        let latest = SessionScope(sessionID: String(repeating: "e", count: 32), temporary: true)
+        await host.setContext(scope: original, revision: "original")
+        await fixture.configure(hold: true)
+        let upload = Task { @MainActor in await host.importData(data, name: "fixture.txt") }
+        for _ in 0..<100 {
+            if await fixture.snapshot().1 { break }; await Task.yield()
+        }
+        let held = await fixture.snapshot().1; XCTAssertTrue(held)
+        let old = Task { @MainActor in await host.setContext(scope: original, revision: "older") }
+        for _ in 0..<100 {
+            if await fixture.snapshot().2 { break }; await Task.yield()
+        }
+        let replacement = Task { @MainActor in await host.setContext(scope: latest, revision: "newer") }
+        for _ in 0..<10 { await Task.yield() }
+        await fixture.release(); await upload.value; await old.value; await replacement.value
+        XCTAssertEqual(host.scope, latest); XCTAssertNil(host.preview); XCTAssertTrue(host.selectedIDs.isEmpty)
+    }
     @MainActor func testMalformedPreviewOffsetIsRejectedAndCloseJoinsHeldUpload() async throws {
         let data = Data("fixture".utf8), fixture = NativeMediaRPCFixture(data)
         let attachment = try MediaAttachment(await fixture.existing())

@@ -47,6 +47,30 @@
         "media_attachment_tests_passed": 6,
         "native_host_tests_passed": 3
       }
+    },
+    {
+      "commit": "057cb8724986bc631cc7b2934483c54fd9500369",
+      "run_id": 40895466507,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40895466507",
+      "status": "passed",
+      "ubuntu_python": {
+        "passed": 3411,
+        "skipped": 46,
+        "elapsed_seconds": 230.83
+      },
+      "ubuntu_package_build_smoke": "passed",
+      "macos_bundle": "passed",
+      "macos_swift": {
+        "executed": 569,
+        "skipped": 1,
+        "failures": 0,
+        "elapsed_seconds": 220.94
+      },
+      "macos_python": {
+        "passed": 3457,
+        "elapsed_seconds": 310.97
+      },
+      "macos_package_build_smoke": "passed"
     }
   ],
   "native_cases": [
@@ -66,8 +90,60 @@
     },
     {
       "case": "real_codex_connection",
-      "status": "needs_fresh_official_login",
-      "personal_history_or_credentials_read": false
+      "status": "passed_without_fresh_login",
+      "personal_history_or_credentials_read": false,
+      "earlier_login_speculation": "not confirmed; resolved by harness correction",
+      "harness_correction": "initial file32MiB cut public SDK catalog47.66MiB; file64MiB with aggregate384MiB unchanged; startup subsequently settled"
+    },
+    {
+      "case": "document_real_codex_marker_citation",
+      "status": "passed",
+      "run_id": "3dae13eca0c6480298b4b099363d32c7",
+      "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/document-live-oracle.json",
+      "product_commit": "8dbc6f2efb2d53bcbaa2cdfb9bc3a74f18a6cdc7"
+    },
+    {
+      "case": "pdf_native_real_codex_page1_preview",
+      "status": "passed",
+      "source_sha256": "a7970c3bc1649524d151f6d000744b1f781548cb8881c3a8d4221b6aa88e4b1a",
+      "marker": "JARVIS PDF 7319",
+      "page": 1
+    },
+    {
+      "case": "local_file_speech_real_installed_es_ES",
+      "status": "passed_with_ASR_variation",
+      "audio_sha256": "21bb6ba97d8aa15db28f97604e1f16589b0c012b06c898914d1df664b8ec1fdb",
+      "duration_seconds": 3.80425,
+      "marker42_recovered": true,
+      "exact_verbatim": false,
+      "variation": "voz es -> voces",
+      "raw_audio_sent_to_model": false,
+      "owner_granted_speech_TCC": true
+    },
+    {
+      "case": "local_RAM_audio_playback",
+      "status": "passed_owner_confirmed_audible_complete",
+      "microphone_used": false
+    },
+    {
+      "case": "microphone_draft_preservation",
+      "status": "passed_owner_confirmed_input",
+      "scope": "temporary chat",
+      "initial_draft": "BORRADOR BASE",
+      "recognized_text": "Hola hola hola hola.",
+      "owner_confirmed_actual_utterance": true,
+      "draft_preserved": true,
+      "no_auto_send": true,
+      "owner_granted_microphone_TCC": true
+    },
+    {
+      "case": "ogg_opus_real_local_transcription",
+      "status": "passed",
+      "sha256_original": "320c343b60781f80c5532e3b2614e12026fc1ac13e8b9757eff51e9545410bcc",
+      "duration_seconds": 3.80425,
+      "marker42_recovered": true,
+      "original_hash_shown_with_citation": true,
+      "audio_transmitted_to_model": false
     }
   ],
   "manual_budget": {
