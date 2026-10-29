@@ -12,7 +12,7 @@ final class MaintenancePluginCompatibilityTests: XCTestCase {
         return .object(value)
     }
     private var plugin: RPCValue { .object(["role": .string("plugins"), "disposition": .string("owned"), "bytes": .number(12)]) }
-    func testHistoricalSixAndCurrentSevenSourceReviewsRemainCompleteAndDigestBound() throws {
+    func testHistoricalSixAndPluginSevenSourceReviewsRemainCompleteAndDigestBound() throws {
         let legacy = try MaintenanceReview(MaintenanceFixtures.review)
         XCTAssertEqual(legacy.sources.count, 6)
         let current = try MaintenanceReview(review { $0 + [plugin] })
@@ -37,12 +37,12 @@ final class MaintenancePluginCompatibilityTests: XCTestCase {
         .object(["role": .string("plugins"), "present": .bool(false), "sha256": .null,
                  "byte_length": .number(0), "counts": .array([])])
     }
-    func testActivationAcceptsExactHistoricalSevenAndCurrentEightResourceProofs() throws {
+    func testActivationAcceptsExactHistoricalSevenAndPluginEightResourceProofs() throws {
         let historical = try RestoreProfileReview(RestoreFixture.reviewValue())
         XCTAssertEqual(historical.resources.count, 7)
         let current = try RestoreProfileReview(activation { $0 + [restoredPlugin] })
         XCTAssertEqual(current.resources.count, 8)
-        XCTAssertEqual(Set(current.resources.map(\.role)), MaintenanceValidation.roles)
+        XCTAssertEqual(Set(current.resources.map(\.role)), MaintenanceValidation.pluginRoles)
         XCTAssertFalse(current.resources.first(where: { $0.role == "plugins" })!.present)
     }
     func testActivationRejectsDuplicateIncompleteAndDigestChangedPluginInventories() throws {

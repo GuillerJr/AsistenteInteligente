@@ -104,6 +104,7 @@ def test_automation_doctor_reports_absence_without_creating_a_registry(tmp_path)
     result = report(root)
     check = next(row for row in result.checks if row.role == "automations")
     assert check.status == "absent"
+    assert result.status == "partial"
     assert not path.exists()
 
 
