@@ -42,6 +42,8 @@ jobs:
             --directory "$JARVIS_MODEL_TEST_ROOT/artifacts"
       - name: Compilar bundle nativo de desarrollo
         if: runner.os == 'macOS'
+        env:
+          JARVIS_BUILD_QA_LAUNCHER: "1"
         run: |
           ./script/build_desktop.sh --full --budget-mib 6144 --output /private/tmp/jarvis-ci-desktop
       - name: Preparar bundle trazable para comprobación nativa
@@ -55,11 +57,15 @@ jobs:
           root = Path(os.environ["RUNNER_TEMP"])
           package = root / "Jarvis-macos-arm64.tar.gz"
           binary = Path("/private/tmp/jarvis-ci-desktop/Jarvis.app/Contents/MacOS/Jarvis")
+          qa_launcher = Path("/private/tmp/jarvis-ci-desktop/Jarvis.app/Contents/Helpers/JarvisQALauncher")
           value = {"format": "jarvis-desktop-ci/1", "commit": os.environ["GITHUB_SHA"],
                    "run_id": os.environ["GITHUB_RUN_ID"], "development_bundle": True,
                    "external_python_required": True, "architecture": "arm64",
                    "archive_sha256": hashlib.sha256(package.read_bytes()).hexdigest(),
-                   "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest()}
+                   "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
+                   "qa_launcher_bundled": qa_launcher.is_file()}
+          if qa_launcher.is_file():
+              value["qa_launcher_sha256"] = hashlib.sha256(qa_launcher.read_bytes()).hexdigest()
           (root / "Jarvis-provenance.json").write_text(json.dumps(value, sort_keys=True) + "\n")
           PY
       - name: Conservar bundle de desarrollo sin perfiles ni credenciales

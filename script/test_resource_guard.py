@@ -354,6 +354,9 @@ def child_environment(root: Path, control: Path, admission, original, source: Pa
     for key in ("JARVIS_DESKTOP_DEPENDENCIES", "JARVIS_RPC_BOOTSTRAP_PUBLIC_KEY"):
         if key in original:
             environment[key] = original[key]
+    # Opt-in build product, not an arbitrary environment or account-state pass-through.
+    if original.get("JARVIS_BUILD_QA_LAUNCHER") == "1":
+        environment["JARVIS_BUILD_QA_LAUNCHER"] = "1"
     if qualification_data is not None:
         environment["JARVIS_MINILM_TEST_ASSETS"] = qualification_data["path"]
         environment["JARVIS_MINILM_REQUIRE_REAL"] = "1"

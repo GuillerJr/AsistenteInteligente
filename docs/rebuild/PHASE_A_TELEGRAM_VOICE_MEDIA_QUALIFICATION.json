@@ -205,6 +205,55 @@
       },
       "bundle_packages_smoke_cleanup": "passed",
       "full_ci_qualification": true
+    },
+    {
+      "commit": "201a5b72e930e9fe6083b6d89fcb76391888958e",
+      "short_commit": "201a5b7",
+      "run_id": 40923478066,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40923478066",
+      "status": "passed",
+      "implemented_increment": "Local physical output selection per AVPlayer with no global output change or network discovery; withdrawal and scope changes stop and release playback without silent fallback. Preview metadata separates immutable original Ogg identity/size from RAM-derived WAV playback identity/size.",
+      "ubuntu_python": {
+        "passed": 3447,
+        "skipped": 46,
+        "elapsed_seconds": 220.14
+      },
+      "macos_python": {
+        "passed": 3493,
+        "elapsed_seconds": 293.6
+      },
+      "macos_swift": {
+        "executed": 593,
+        "skipped": 1,
+        "failures": 0,
+        "elapsed_seconds": 171.983
+      },
+      "focused_native_test_suites": {
+        "local_media_audio_output": {
+          "executed": 4,
+          "failures": 0
+        },
+        "media_playback_output": {
+          "executed": 5,
+          "failures": 0
+        },
+        "native_media_attachments": {
+          "executed": 11,
+          "failures": 0
+        },
+        "native_media_executor": {
+          "executed": 14,
+          "failures": 0
+        }
+      },
+      "bundle_packages_smoke": "passed",
+      "build_swift_python_cleanup": "confirmed",
+      "source_unchanged": true,
+      "full_ci_qualification": true,
+      "native_player_UI_qualification": "pending_new_bundle_real_play_pause_seek_close_and_output_selection",
+      "second_physical_output_acoustic_qualification": "pending_owner_connected_second_physical_output; fixtures do not establish acoustic routing",
+      "A58_or_selected_block_closed": false,
+      "full_local_suites_or_builds": false
     }
   ],
   "native_cases": [
@@ -439,10 +488,42 @@
       },
       "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-corpus-oracle-v3-639.json",
       "oracle_sha256": "4a55287ed5af1b65f31b048f352d4afbfbb31f893e9d8305a0cb27d61f743b25"
+    },
+    {
+      "case": "native201_speech_authorization_QA_launcher_identity_failure",
+      "status": "failed_QA_harness_no_new_product_speech_qualification",
+      "source_commit": "201a5b72e930e9fe6083b6d89fcb76391888958e",
+      "cause_receipt": "/private/tmp/jarvis-telegram-voice-media-live-20261029/native201-speech-crash-cause.json",
+      "cause_receipt_sha256": "1828cf39223c96182188de80caaf6b96c7de6e064d22983b945cb3def2c7fde6",
+      "synthetic_binary_UUID_and_PID_verified": true,
+      "app_PID_at_crash": 69587,
+      "exception": "EXC_CRASH",
+      "signal": "SIGABRT",
+      "termination_namespace": "TCC",
+      "crash_header_bundle_id": null,
+      "responsible_process": "ChatGPT",
+      "TCC_missing_usage_description_key": "NSSpeechRecognitionUsageDescription",
+      "QA_plist_usage_keys_verified_present": true,
+      "QA_launch_path": {
+        "CFBundleExecutable": "JarvisQA",
+        "executable_kind": "bash_wrapper",
+        "launch_method": "subprocess.Popen"
+      },
+      "unmodified_CI_bundle": {
+        "CFBundleExecutable": "Jarvis",
+        "executable_kind": "Mach-O",
+        "remote_CI_passed": true
+      },
+      "cause_assessment": "The QA shell wrapper and Popen launch path failed to establish the intended application identity for TCC. Correct usage descriptions in the QA plist did not make this wrapped launch equivalent to the original app bundle.",
+      "speech_permission_click_observed": true,
+      "new_speech_permission_or_audio_qualification_credited": false,
+      "not_evidence_that_original_product_CI_bundle_lacks_speech_usage_description": true,
+      "earlier_passed_speech_media_and_Telegram_proofs_preserved": true,
+      "fix_work": "Replace the QA launch chain with a native NSWorkspace helper and the original Mach-O CFBundleExecutable; helper/test changes await remote CI and a fresh live attempt."
     }
   ],
   "telegram_live_checkpoint": {
-    "status": "setup_text_documents_single_upload_and_corrected_denial_passed_voice_revocation_pending",
+    "status": "setup_text_documents_upload_denial_revocation_stop_start_passed_voice_pending",
     "evidence_source": "Owner confirmations, delegated native UI observations and bounded read-only route/session/run oracles from the isolated synthetic profile. No Telegram identifiers, names or screenshots are included here.",
     "token_entered_only_by_owner": true,
     "token_or_credentials_read_by_agent": false,
@@ -525,7 +606,7 @@
       "typed_denial_correction_live_qualified": true,
       "denied_proposal_not_dispatched_or_replayed": true,
       "legacy_unknown_denial_record_preserved": true,
-      "bounded_final_oracle_execution": "pending_host_signal"
+      "bounded_oracle_execution": "passed_through_revocation_and_stop_start_voice_pending"
     },
     "voice_arrival_diagnostic": {
       "status": "addressing_issue_identified_real_voice_transcription_pending",
@@ -560,8 +641,85 @@
     },
     "pending": [
       "Real addressed Telegram voice attachment import and local transcription",
-      "Revocation and final bounded shutdown/resource checks"
-    ]
+      "Bounded voice oracle and final shutdown/resource checks"
+    ],
+    "attachment_revocation_and_exact_resend": {
+      "status": "passed_native_withdrawal_and_no_upload",
+      "attachment_id": "ab781cfab55b7ad807c0cf826a2f1ebc",
+      "original_bytes": 119,
+      "original_sha256": "b3f286831dfc6956c883c21337a9708bbc2b47b5a135d47be3b8f820a9e0d6a9",
+      "original_blob_reopened_only_for_bounded_hash_verification": true,
+      "original_bytes_and_hash_preserved": true,
+      "revocation_tombstone_present": true,
+      "tombstone_matches_attachment_session_and_original_hash": true,
+      "native_chip_no_longer_visible": true,
+      "fresh_exact_ID_and_SHA_resend_run_id": "a757407cb22b491ea81b240e8800c3f2",
+      "native_warning": "Archivo o destino sin confirmar; no se puede autorizar todavía",
+      "native_allow_disabled": true,
+      "native_reject_selected_by_delegated_agent": true,
+      "run_status": "failed",
+      "run_outcome": "known",
+      "error": "approval_denied",
+      "upload_proposals": 1,
+      "action_receipts": 0,
+      "upload_action_receipts": 0,
+      "total_upload_receipts_before": 1,
+      "total_upload_receipts_after": 1,
+      "new_uploads_observed": 0,
+      "scope_of_live_proof": "The revoked descriptor prevented native authorization; the pending request was rejected. No forced executor read or upload was performed.",
+      "historical_text_or_previously_delivered_content_not_erased": true,
+      "comparison": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-telegram-live-comparison-revocation-stop.json",
+      "comparison_sha256": "192e1ee78da5c6cccd878608285e64521a79a4340c7198283c7900820f9ba1db"
+    },
+    "native_stop_and_start_without_replay": {
+      "status": "passed_native_and_bounded_SQL_journal_correlation",
+      "same_routes_sessions_and_revisions_preserved": true,
+      "same_connection_and_RAM_pairing_proofs_retained": true,
+      "disconnect_or_re_pairing_not_required": true,
+      "first_pause_marker": {
+        "marker": 6843,
+        "sent_during": "shutdown_in_progress",
+        "stopped_UI_not_yet_confirmed": true,
+        "admitted_user_or_assistant_SQL_messages": 0,
+        "does_not_qualify_post_stop_delivery": true
+      },
+      "confirmed_pause_marker": {
+        "marker": 6854,
+        "text": "MARCADOR PAUSA CONFIRMADA 6854",
+        "sent_after_native_UI_channel_stopped": true,
+        "admitted_user_or_assistant_SQL_messages": 0,
+        "no_execution_or_reply_observed": true
+      },
+      "ignored_predates_start_event_count_increase": 2,
+      "ignored_rows_do_not_persist_message_bodies_so_exact_marker_binding_is_not_independently_reconstructed": true,
+      "fresh_resumed_marker": {
+        "marker": 9462,
+        "run_id": "c17f0531597343b3983996136e79ab64",
+        "status": "completed",
+        "outcome": "known",
+        "action_receipts": 0,
+        "user_and_assistant_SQL_messages_present": true,
+        "answer_bytes": 23,
+        "answer_sha256": "900eb680b6817adfda518c6d9c68fd4f61a25b859ab3df809ad6be8a96829e0f",
+        "Telegram_API_ACK_present": true,
+        "reply_SHA_matches_bounded_channel_answer": true,
+        "received_in_Jarvis_and_Telegram_observed": true,
+        "API_ACK_independent_physical_verification": false
+      },
+      "denied_or_paused_request_not_replayed": true,
+      "evidence_boundary": "The native operator establishes stop/start timing and physical reception. Disk records establish admission, immutable receipts and ACK metadata."
+    },
+    "latest_native201_attempt": {
+      "source_commit": "201a5b72e930e9fe6083b6d89fcb76391888958e",
+      "status": "stopped_after_QA_launch_identity_crash_and_explicit_backend_close",
+      "Mac_unlocked_by_owner_before_attempt": true,
+      "token_reentered_only_by_owner": true,
+      "group_revalidated_natively_and_channel_activated_before_crash": true,
+      "TCC_abort_during_speech_authorization": true,
+      "new_voice_qualification_credited": false,
+      "token_or_credentials_read_by_agent": false,
+      "earlier_qualified_routes_sessions_denials_and_stop_start_records_preserved": true
+    }
   },
   "oracle_checkpoints": [
     {
@@ -617,12 +775,48 @@
       "scanned_sql_text_bytes": 40837,
       "pattern_scan_issues": [],
       "scan_is_not_a_complete_byte_for_byte_media_payload_comparison": true
+    },
+    {
+      "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-telegram-live-oracle-pre-revocation-stop.json",
+      "sha256": "e11a7bb3e0516eca31ae1c9b0dfdbd7e8d4f6e28457f8f72f94b4f41f536668a",
+      "scope": "Snapshot completed after native attachment withdrawal and before channel stop; despite its historical filename, this is not evidence from before withdrawal.",
+      "timing": "post_revocation_pre_stop",
+      "sql_mode": "ro",
+      "query_only": true,
+      "scanned_sql_text_bytes": 49778,
+      "pattern_scan_issues": [],
+      "revocation_tombstone_already_present": true
+    },
+    {
+      "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-telegram-live-oracle-post-revocation-stop.json",
+      "sha256": "4dd4cc53d3cc9320958c4cbf8d0f8506c23bf2bb0d38e5bce640d27756a2adab",
+      "script": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualify-telegram-oracle-v2.py",
+      "script_sha256": "078d5c090e59d827b433c5af56f3a4c762809e0ac2fb4391fff184f2f91f2d16",
+      "scope": "Native withdrawal, blocked exact resend and stop/start followed by the fresh resumed marker. Voice arrival is not qualified by this snapshot.",
+      "timing": "post_stop_restart_and_fresh_reply",
+      "sql_mode": "ro",
+      "query_only": true,
+      "scanned_sql_text_bytes": 53802,
+      "pattern_scan_issues": [],
+      "scan_is_not_a_complete_byte_for_byte_media_payload_comparison": true
+    },
+    {
+      "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-telegram-live-comparison-revocation-stop.json",
+      "sha256": "192e1ee78da5c6cccd878608285e64521a79a4340c7198283c7900820f9ba1db",
+      "scope": "Before/after route-session bindings, immutable original 119-byte fixture and tombstone, zero new upload receipts, absent paused markers and admitted/acknowledged fresh9462. The first pause was during shutdown; only the second followed a confirmed stopped UI.",
+      "marker_query_sql_mode": "ro",
+      "query_only": true,
+      "original_fixture_blob_bytes_hashed": 119,
+      "original_fixture_hash_matches": true,
+      "route_session_bindings_preserved": true,
+      "new_upload_receipts": 0,
+      "Telegram_identifiers_names_nonces_and_raw_message_bodies_not_exposed": true
     }
   ],
   "pending_corrections": [
     {
       "case": "approved_CAS_visual_receipt_text_delivery",
-      "status": "live_mixed_grounding_and_descendant_CI_passed_final_increment_pending",
+      "status": "passed_live_mixed_grounding_and_full_descendant_CI",
       "correction_commit": "5fc755c74cade3668c630cf32ce805a2688af8c8",
       "change_under_review": "Include the complete approved technical receipt and extracted output before the approved image in the CAS-bound SDK visual delivery.",
       "reason": "The 5fc mixed run recovers colors, OCR, actual sampled frame times, partial-video scope and Office/CSV markers with citations. Descendants a638652 and 9cc72fc passed full CI; prior failed grounding remains preserved.",
@@ -634,7 +828,7 @@
         "No automatic replay of uncertain delivery",
         "Historical failed grounding remains recorded"
       ],
-      "closed": false
+      "closed": true
     },
     {
       "case": "typed_predispatch_denial_after_known_metadata_read",
@@ -669,13 +863,118 @@
       "provider_growth_allocated_bytes": 0,
       "only_synthetic_roots_measured": true,
       "credential_contents_read": false,
-      "final_backend9cc_watch_completion": "pending"
+      "final_backend9cc_watch_completion": "deadline_reached_followed_by_explicit_owned_backend_cleanup_recorded_separately"
+    },
+    {
+      "watch_receipt": "/private/tmp/jarvis-telegram-voice-media-live-20261029/watch-9cc72fc-deadline-completed.json",
+      "sha256": "100efb525300d40ac84b96be097b67a7063b49e434cee3e4706801ed9854643c",
+      "backend_commit": "9cc72fc72f5a9c3df9ab8e4bf8d78b9ff2c73e99",
+      "peak_allocated_bytes": 167825408,
+      "budget_mib": 384,
+      "elapsed_seconds": 3600.833,
+      "deadline_seconds": 3600,
+      "stop_reason": "deadline",
+      "observer_sent_termination": true,
+      "provider_growth_allocated_bytes": 1540096,
+      "normal_native_quit_qualified": false,
+      "guard_pass_claimed": false,
+      "backend_survived_native_app_termination": true,
+      "profile_and_originals_preserved": true,
+      "credential_contents_read": false,
+      "explicit_backend_close_receipt": "/private/tmp/jarvis-telegram-voice-media-live-20261029/backend-9cc72fc-explicit-close.json",
+      "explicit_backend_close_sha256": "57d559abaed42d9dab08bd6eeb3e490d32850e16e229488e8677a7363dc67870",
+      "backend_close": "SIGTERM sent only to the pinned synthetic Python service; its handler closes the service. Backend and its one observed direct child then exited.",
+      "cleanup_observation": "/private/tmp/jarvis-telegram-voice-media-live-20261029/cleanup-9cc72fc-after-explicit-close.json",
+      "cleanup_observation_sha256": "2736448509f937743f7845952da49d6aba9299f01986a5f7ef558cee228af623",
+      "remaining_known_owned_processes": 0,
+      "state_and_provider_scoped_process_counts": [
+        0,
+        0
+      ],
+      "profile_lease_available": true,
+      "native_shutdown_receipt_or_exit_code_inferred": false
+    },
+    {
+      "watch_receipt": "/private/tmp/jarvis-telegram-voice-media-live-20261029/watch-201a5b7-receipt.json",
+      "sha256": "3444168775029450f5cf7dc1562f86e1e88cfb400b12c81be41b4fd4502d2ef3",
+      "source_commit": "201a5b72e930e9fe6083b6d89fcb76391888958e",
+      "app_PID_at_checkpoint": 69587,
+      "peak_allocated_bytes": 165556224,
+      "budget_mib": 384,
+      "elapsed_seconds": 218.19,
+      "deadline_seconds": 3600,
+      "free_space_floor_gib": 25,
+      "provider_growth_allocated_bytes": 212992,
+      "stop_reason": "owned_app_exited",
+      "root_exit_code": -6,
+      "observer_sent_termination": false,
+      "forced_kill_used": false,
+      "normal_app_quit_claimed": false,
+      "guard_pass_claimed": false,
+      "watch_cleanup_status": "unknown",
+      "all_observed_owned_processes_exited_at_watch_return": false,
+      "direct_python_service_pids_detected_by_watch": [],
+      "known_synthetic_processes_remaining_at_watch_return": [
+        69607,
+        69615
+      ],
+      "service_exit_code": null,
+      "watch_limitation": "The Python service comm was a Framework executable, outside the direct-service name classifier. The watcher returned after the native SIGABRT with backend and Codex still alive; this is not confirmed cleanup.",
+      "service_exit_code_unavailable_reason": "not a direct child of this guard; disappearance is not waitpid status",
+      "global_or_provider_process_enumeration": false,
+      "process_arguments_read": false,
+      "credential_contents_read": false,
+      "explicit_close_receipt": "/private/tmp/jarvis-telegram-voice-media-live-20261029/backend-201a5b7-after-crash-close.json",
+      "explicit_close_receipt_sha256": "f7d325aba534c2d9a2c682c4c090b63a3988977bdc63c33294b06e321c548204",
+      "explicit_close_signal": "SIGTERM",
+      "explicit_close_backend_PID": 69607,
+      "identity_and_lineage_checked_before_signal": true,
+      "known_process_exit_confirmed_after_explicit_close": true,
+      "remaining_known_owned_pids_after_explicit_close": [],
+      "profile_or_originals_deleted": false,
+      "normal_native_quit_or_waitpid_service_exit_code_not_inferred": true
     }
   ],
   "remaining_in_selected_increment": [
+    "Qualify the native NSWorkspace QA launcher, original Mach-O bundle identity and bounded child custody in remote CI before another live speech attempt",
     "wake effective-mode controlled repetition and Talk live",
     "Qualify local Telegram voice with a correctly addressed group reply",
-    "Qualify revocation and execute the bounded final Telegram oracle; corrected denial failed/known and exact-commit 9cc CI have passed",
+    "Native player201 playback, pause, seek, close and per-player admitted output; only one physical output is currently connected",
+    "Native encrypted PDF and 16777217-byte import rejection; prepared fixtures are not live qualification",
+    "Native media_inspect request against the exact withdrawn attachment must yield no read; the completed resend case only proves authorization disabled and zero uploads",
+    "Run the bounded voice oracle; real revocation, exact resend blocking and native stop/start without replay have passed",
     "final context/cleanup/resource receipts"
-  ]
+  ],
+  "current_native_blocker": {
+    "kind": "launcher_fix_remote_CI_pending",
+    "status": "QA_identity_and_cleanup_harness_fix_required_before_live_voice_repetition",
+    "observed_failure_case": "native201_speech_authorization_QA_launcher_identity_failure",
+    "synthetic_failure_receipt": "/private/tmp/jarvis-telegram-voice-media-live-20261029/native201-speech-crash-cause.json",
+    "synthetic_failure_receipt_sha256": "1828cf39223c96182188de80caaf6b96c7de6e064d22983b945cb3def2c7fde6",
+    "credentials_requested_in_chat": false,
+    "Telegram_test_operation_delegated_by_owner": true,
+    "no_new_native201_product_qualification_claimed_from_failed_launch": true,
+    "native_NSWorkspace_helper_and_remote_tests": "implementation_prepared_remote_CI_pending",
+    "replacement_QA_plist": "must_restore_original_MachO_CFBundleExecutable_Jarvis",
+    "required_after_remote_CI": "Fresh native launch with correct TCC identity and bounded custody; then repeat speech authorization and Telegram voice without crediting the aborted run.",
+    "previous_blocker_checkpoint_preserved_as_history": {
+      "kind": "Telegram_token_reentry_after_new_qualified_bundle_start",
+      "observed_by": "CUA native application inventory",
+      "owner_unlock_requested": true,
+      "credentials_requested_in_chat": false,
+      "Telegram_test_operation_delegated_by_owner": true,
+      "additional_Telegram_recording_started": false,
+      "current_input_blocker_established": "Screen lock was observed by CUA. Individual earlier pointer failures are not independently diagnosed or credited as a product defect or an audio permission failure",
+      "preferred_next_voice_action": "Forward the existing synthetic test voice to the bot private chat, preserving its voice type and avoiding another capture",
+      "new_native_bundle": "launched_exact_201a5b7_after_confirmed_old_process_cleanup",
+      "previous_native_session": "closed_by_original_deadline_then_explicit_pinned_backend_cleanup; no automatic retry or extension",
+      "negative_corpus_manifest": "/private/tmp/jarvis-telegram-voice-media-live-20261029/corpus/negativos-media-manifest.json",
+      "negative_corpus_manifest_sha256": "e2dabb6195b6062ddab05dae70899a0f0fe82e25918c5d6abf40ca64bb236776",
+      "screen_lock_status": "owner_confirmed_unlocked; native inventory accessible again",
+      "new_native_launch_record": "/private/tmp/jarvis-telegram-voice-media-live-20261029/launch-201a5b7.json",
+      "native_and_backend_source_commit": "201a5b72e930e9fe6083b6d89fcb76391888958e",
+      "new_guard_script_sha256": "a2f7da40581c954dfff35012234dc28576e404b8b7c6729d6590c9afb38a9dfe",
+      "new_guard_has_pinned_direct_backend_cleanup": true
+    }
+  }
 }

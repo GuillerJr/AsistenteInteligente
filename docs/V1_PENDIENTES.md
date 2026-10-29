@@ -11,14 +11,16 @@ El dueño aplazó expresamente la app de iPhone; ver [decisiones](rebuild/PHASE_
 El incremento de [MCP, plugins y skills](rebuild/PHASE_A_MCP_EXTENSIONS.md) está
 cualificado en el alcance elegido; sus [oráculos y CI](rebuild/PHASE_A_MCP_EXTENSIONS_QUALIFICATION.json)
 se conservan junto al [cierre narrativo](rebuild/PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md).
-La matriz actual incluye también automatización: 53 familias parciales y 27 sin
+La matriz actual incluye también reproducción de medios: 54 familias parciales y 26 sin
 implementación, ninguna familia amplia completa. REA conserva 45 lotes y 171
 rutas TS/JS seleccionadas; no es cobertura exhaustiva.
 
 El bloque de **Telegram, voz, documentos y multimedia** incorpora rutas de grupo,
 adjuntos por sesión, codecs locales y conversación por voz explícita. Está en
 [cualificación integrada](rebuild/PHASE_A_TELEGRAM_VOICE_MEDIA.md);
-no se presenta como cerrado antes de CI y recorridos nativos del producto.
+la CI201a5b7 está aprobada. Telegram acredita rechazo, retirada y pausa/reactivación
+sin replay además de los recorridos privados y de grupo; quedan los controles
+nativos finales de voz, reproductor y negativos de medios. No se declara cerrado.
 
 ## Fase A — base completa primero
 
@@ -29,7 +31,7 @@ separados; el producto del bundle d474 es idéntico al de 1481983, cuya
 [CI exacta](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40877800263) pasó completa.
 Ver [registro](rebuild/PHASE_A_AUTOMATION_QUALIFICATION.json) y
 [cierre](rebuild/PHASE_A_AUTOMATION_CLOSEOUT.md). No quedan pendientes dentro de
-ese incremento. La matriz conserva 53 familias parciales y 27 sin implementar,
+ese incremento. La matriz actual conserva 54 familias parciales y 26 sin implementar,
 ninguna familia amplia completa; REA mantiene 45 lotes y 171 rutas TS/JS.
 
 - [x] Limpiar el árbol de trabajo y conservar puntos de recuperación.

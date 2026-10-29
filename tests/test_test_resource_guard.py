@@ -29,6 +29,17 @@ def test_invalid_export_is_rejected_before_volume_preparation(tmp_path):
         guard.validate_options(options(export_destination=tmp_path / "nested"), {}, {}, tmp_path)
 
 
+def test_qa_launcher_build_flag_is_opt_in_without_forwarding_other_values(tmp_path):
+    admission = {"profile": "ci", "selection": "Jarvis", "nonce": "synthetic"}
+    for flag in (None, "0", "unexpected", "1"):
+        original = {"OPENAI_API_KEY": "SYNTHETIC_NEVER_FORWARD"}
+        if flag is not None:
+            original["JARVIS_BUILD_QA_LAUNCHER"] = flag
+        value = guard.child_environment(tmp_path, tmp_path, admission, original, tmp_path)
+        assert (value.get("JARVIS_BUILD_QA_LAUNCHER") == "1") is (flag == "1")
+        assert "OPENAI_API_KEY" not in value
+
+
 @pytest.fixture
 def source(tmp_path):
     root = tmp_path / "repo"

@@ -1,9 +1,39 @@
 # Telegram, voz, documentos y multimedia — integración propia
 
-Estado: `implemented_awaiting_remote_and_native_qualification` (29-10-2026).
+Estado: `remote_qualified_native_closeout_in_progress` (29-10-2026).
 Este registro distingue implementación, pruebas escritas, CI y recorridos reales.
 No declara cerrado el bloque antes de cualificar el producto integrado.
 La fase B no se inicia. La app del dueño y sus perfiles anteriores se conservan.
+
+La [CI completa de `201a5b7`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40923478066)
+aprobó Python (3447 Ubuntu, 3493 macOS), Swift (593 casos, uno omitido y cero
+fallos), paquetes, smoke y bundle. Las suites y compilaciones se ejecutaron en
+los runners remotos. El [registro](PHASE_A_TELEGRAM_VOICE_MEDIA_QUALIFICATION.json)
+conserva los intentos fallidos y las identidades de cada recorrido real.
+
+Telegram ya acredita privado y grupo separados, documento con marcador/fuente,
+envío recibido por el dueño, rechazo sin subida, retirada con original intacto
+y reactivación sin ejecutar los mensajes de la pausa. El corpus mixto con Codex
+real acredita contenido y fuentes de DOCX/CSV, imagen y vídeo parcial después de
+corregir la entrega conjunta de texto e imágenes aprobados. WAV/Ogg se
+transcribieron localmente; el dueño confirmó una lectura audible y dictado sin
+envío automático.
+
+Siguen pendientes los recorridos finales de voz recibida desde Telegram,
+activación por frase y Talk, controles del reproductor actualizado y negativos
+de medios desde la app, incluida una lectura posterior a retirar el adjunto.
+La prueba realizada de retirada acredita bloqueo de autorización y cero subidas.
+Después de desbloquear el Mac se intentó probar la revisión 201a5b7, pero su
+lanzador de QA declaraba un script como ejecutable principal y la solicitud de
+Speech abortó por TCC. El informe del proceso propio acredita ausencia de bundle
+ID y atribución a otro proceso; no acredita un recorrido de voz satisfactorio.
+El paquete original de CI sí declara el Mach-O principal. Se está preparando un
+lanzador mediante LaunchServices y pruebas de admisión para impedir repetir ese
+harness inválido. Los procesos de ese intento se cerraron de forma explícita y
+los originales se conservaron. Ver el [contrato de arranque QA](NATIVE_QA_LAUNCH.md).
+
+Sólo hay una salida física conectada: los contratos de cambio/desconexión se
+prueban en CI, sin afirmar una comparación acústica entre dos dispositivos reales.
 
 ## Contratos incorporados
 
@@ -35,7 +65,11 @@ La fase B no se inicia. La app del dueño y sus perfiles anteriores se conservan
   local requiere el modelo exacto instalado; no descarga ni busca otra nube.
   Ogg/Opus se convierte localmente a WAV con relación de huellas comprobada.
 - Reproducción: bytes del ámbito elegido en una fuente AVFoundation en memoria,
-  sin URL de red ni archivo temporal. El usuario inicia la reproducción.
+  sin URL de red ni archivo temporal. El usuario inicia la reproducción. Cada
+  reproductor fija una salida física local admitida; no cambia la salida global
+  del Mac, busca dispositivos en la red ni usa una salida virtual como respaldo.
+  La retirada/cambio de contexto o salida cierra el reproductor sin reanudarlo.
+  Los bytes y la huella del original se distinguen de los del WAV derivado.
 
 Los límites y los contratos de formato están en
 [Documentos y medios](PHASE_A_DOCUMENTS_MEDIA.md). La observación técnica de bytes

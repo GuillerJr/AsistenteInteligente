@@ -45,7 +45,7 @@
       "Contratos declarados y rutas UI no acreditan disponibilidad ni funcionamiento real.",
       "No se ejecutó OpenClaw ni se leyó configuración/cuenta del dueño."
     ],
-    "current_jarvis_state": "Desarrollo propio con incrementos previos cualificados en sus alcances. Telegram/voz/documentos/multimedia integrados y en cualificación. 53 familias parciales y 27 sin implementación; ninguna familia amplia completa. Fase B pendiente."
+    "current_jarvis_state": "Desarrollo propio con incrementos previos cualificados en sus alcances. Telegram/voz/documentos/multimedia integrados y en cualificación. 54 familias parciales y 26 sin implementación; ninguna familia amplia completa. Fase B pendiente."
   },
   "status_vocabulary": {
     "no_implementado": "Sin evidencia productiva propia de cierre.",
@@ -1857,8 +1857,13 @@
       "family": "media",
       "name": "Reproducción y acceso a recursos de medios",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-DOCUMENTS-MEDIA",
+          "scope": "Reproductor local en memoria, identidad original/derivada y salida física fijada por reproductor; contratos y bundle aprobados en CI201a5b7. Recorrido GUI final de pausa, búsqueda y salida pendiente. No cierra la familia."
+        }
+      ],
       "acceptance": {
         "observable_success": "Reproducir audio/video local, pausar/buscar y cambiar salida admitida preservando identidad del recurso.",
         "observable_failure_or_revocation": "URL caducada, salida ausente y archivo borrado se informan sin filtrar recursos ajenos.",
@@ -14476,7 +14481,7 @@
           "A-72"
         ],
         "verified_scope": "Pruebas RPC/HTTP sintéticas y recorridos reales limitados: vinculación, suma, y workspace_write con aprobación nativa y archivo/hash verificado. Tarjeta y resultado observados en el chat seleccionado sin recarga del agente. Reconciliación local de rutas restauradas implementada con la autoridad central, revisión exacta, recibos durables, incertidumbre/custodia y limpieza sin replay. No inicia conexión ni restaura tokens o permisos. El arranque exige nonce/claim nuevo del chat, con prueba sólo en RAM ligada a conexión/ruta/agente/workspace; reiniciar o cambiar esos vínculos la invalida. Se descarta el primer segundo parcial del lector. Tests de RPC/Store y transportes propios separan esas garantías de una cuenta externa; la evidencia GUI final se registra en PHASE_A_RECONCILIATION_CLOSEOUT.md.",
-        "remaining": "La reconciliación local previa conserva su cierre. El nuevo incremento añade grupos tipados, prueba fresca, adjuntos de entrada/salida, cancelación y revocación; CI y recorridos externos integrados se registran en PHASE_A_TELEGRAM_VOICE_MEDIA_QUALIFICATION.json. Todavía no se declara cualificación externa del incremento.",
+        "remaining": "La reconciliación local previa conserva su cierre. El incremento acredita recorridos externos de privado/grupo, descubrimiento, documento con fuente, envío recibido, rechazo sin subida, retirada y stop/start sin replay. Falta voz recibida por Telegram y cierre final; supergrupos/foros sólo tienen contratos sintéticos. Ver PHASE_A_TELEGRAM_VOICE_MEDIA_QUALIFICATION.json.",
         "qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json",
         "live_scope": "Suma y salida confirmada; archivo sintético de20bytes/hash coincide con recibo tras aprobación del dueño. Token/nonce no documentados. Una detención posterior tuvo causa no establecida; nueva UI distingue errores futuros seguros.",
         "current_increment_file": "PHASE_A_TELEGRAM_VOICE_MEDIA.md"
@@ -15061,6 +15066,8 @@
           "native/JarvisDesktop/Sources/DesktopCore/NativeMediaExecutor.swift",
           "native/JarvisDesktop/Sources/DesktopCore/MemoryMediaAsset.swift",
           "native/JarvisDesktop/Sources/DesktopCore/MediaAttachments.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/LocalMediaAudioOutput.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Audio/MediaPlayback.swift",
           "native/JarvisDesktop/Sources/JarvisApp/Views/AttachmentComposerView.swift"
         ],
         "tests": [
@@ -15070,13 +15077,16 @@
           "tests/test_media_tools.py",
           "tests/test_service_media.py",
           "native/JarvisDesktop/Tests/DesktopCoreTests/NativeMediaExecutorTests.swift",
-          "native/JarvisDesktop/Tests/DesktopCoreTests/NativeMediaFixturesTests.swift"
+          "native/JarvisDesktop/Tests/DesktopCoreTests/NativeMediaFixturesTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/LocalMediaAudioOutputTests.swift",
+          "native/JarvisDesktop/Tests/AppLayoutTests/MediaPlaybackOutputTests.swift"
         ],
         "capability_ids": [
-          "A-56"
+          "A-56",
+          "A-58"
         ],
-        "verified_scope": "Primera CI Ubuntu32b25a8 acredita contratos de extracción, fuentes, store y codec local; seis fallos integrados y compilación nativa se corrigen en8dbc6f2. No acredita el recorrido nativo final.",
-        "remaining": "CI exacta y corpus nativo/Codex real, reproducción, revocación y cierre del incremento; no presentar fixtures como inspección exhaustiva.",
+        "verified_scope": "CI completa de 201a5b7: Python 3447 Ubuntu/3493 macOS y Swift 593 con una omisión y cero fallos, bundle y paquetes. Corpus propio observado desde app y Codex real: PDF, Markdown, DOCX/CSV, imagen OCR/colores y vídeo con muestreo temporal declarado; WAV/Ogg transcritos localmente y lectura audible confirmada por el dueño. Correcciones CAS incluyen texto/recibo aprobados junto a imágenes. El documento retirado conserva 119 bytes/SHA y no se vuelve a subir. Pruebas distinguen identidad/tamaño original y WAV derivado, salidas admitidas por reproductor y retirada sin fallback.",
+        "remaining": "Recorrido GUI final del reproductor201a5b7, negativos de importación/extracción y cierre del incremento. Sólo hay una salida física conectada; no afirmar cambio acústico entre dos dispositivos. No presentar los contratos de todos los formatos o familias como recorridos reales exhaustivos.",
         "evidence": [
           "PHASE_A_DOCUMENTS_MEDIA.md",
           "PHASE_A_TELEGRAM_VOICE_MEDIA.md"

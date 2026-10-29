@@ -7,13 +7,14 @@ con el producto idéntico de 1481983; su [CI exacta](https://github.com/GuillerJ
 El [registro](PHASE_A_AUTOMATION_QUALIFICATION.json) y el
 [cierre](PHASE_A_AUTOMATION_CLOSEOUT.md) conservan los fallos anteriores.
 REA mantiene 45 lotes y 171 rutas TS/JS seleccionadas; no es revisión exhaustiva.
-La matriz conserva 53 familias parciales y 27 sin implementar: este cierre no
+La matriz conserva 54 familias parciales y 26 sin implementar: este cierre no
 completa la fase A ni inicia B.
 
 El bloque de **Telegram, voz, documentos y multimedia** incorpora rutas de grupo,
 adjuntos por sesión, codecs locales y conversación por voz explícita. Está en
 [cualificación integrada](PHASE_A_TELEGRAM_VOICE_MEDIA.md);
-no se presenta como cerrado antes de CI y recorridos nativos del producto.
+la CI201a5b7 está aprobada y conserva pendientes nativos explícitos. A-58 registra
+ahora el reproductor propio y sus pruebas; el bloque no se declara cerrado.
 
 Decisión del dueño, 24-10-2026: construir la nueva variante de Jarvis **en este
 repositorio**, con implementación propia y arquitectura informada por el estudio
@@ -46,8 +47,8 @@ skills. Conserva separados implementación, pruebas focales y cualificación nat
 El incremento elegido está cualificado (`qualified_selected_increment`): OAuth, SSE, servidor público, App/puente/retiro, relay independiente y versiones
 de plugins/skills tienen oráculos separados. El [registro saneado](PHASE_A_MCP_EXTENSIONS_QUALIFICATION.json)
 y el [cierre narrativo](PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md) conservan CI, hashes,
-fallos históricos y límites. La matriz actual, incluido el código de automatización, mantiene 53 familias
-parciales, 27 sin implementar y ninguna familia amplia completa; la fase A sigue abierta y B no ha comenzado.
+fallos históricos y límites. La matriz actual, incluido el reproductor de medios, mantiene 54 familias
+parciales, 26 sin implementar y ninguna familia amplia completa; la fase A sigue abierta y B no ha comenzado.
 
 Se conservan el nombre de producto Jarvis, los identificadores técnicos `jarvis`,
 la interfaz en español y las reglas de privacidad/aprobación. La primera conexión

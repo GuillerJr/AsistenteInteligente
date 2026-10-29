@@ -166,7 +166,7 @@ reabre como trabajo nuevo. A-71 y la distribución completa siguen pendientes.
 | A-55 | STT, TTS, Talk y voz en tiempo real | Avance contractual parcial; cierre pendiente | Con proveedores elegidos transcribir, responder por voz, interrumpir salida y continuar sin mezclar turnos. |
 | A-56 | Imágenes, PDF, documentos, video y adjuntos | Pendiente | Analizar corpus artificial citando archivo y página/cuadro para comprobar contenido observado. |
 | A-57 | Generación de imagen, música y video | Pendiente; opcional o experimental de referencia | Servicio elegido genera medio de prueba con progreso y artefacto que se abre/reproduce realmente. |
-| A-58 | Reproducción y acceso a recursos de medios | Pendiente | Reproducir audio/video local, pausar/buscar y cambiar salida admitida preservando identidad del recurso. |
+| A-58 | Reproducción y acceso a recursos de medios | Implementación parcial y contratos remotos; recorrido GUI final pendiente | Reproducir audio/video local, pausar/buscar y cambiar salida admitida preservando identidad del recurso. |
 | A-59 | App macOS nativa bajo marca Jarvis | Avance contractual parcial; cierre pendiente | Abrir app SwiftUI propia con ventana/Dock/menú/atajo; conversar en español con streaming/cancelación/recibos reales. |
 | A-60 | Gestión de sesiones, paneles y ajustes | Avance contractual parcial; cierre pendiente | Desde app gestionar agentes/modelos/memoria/MCP/automatización/dispositivos; cada control cambia runtime y persiste cuando corresponde. |
 | A-61 | Widgets, canvas, dashboards y temas | Pendiente | Presentar widget/dashboard/tema propios y verificar interacción autorizada y datos de prueba actualizados. |

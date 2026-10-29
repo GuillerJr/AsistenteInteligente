@@ -59,12 +59,24 @@ swift build --build-system native --disable-sandbox ${JARVIS_SDK_ARGUMENTS[@]+"$
   --scratch-path "$JARVIS_BUILD_DIR/swift" --cache-path "$JARVIS_BUILD_DIR/cache" \
   --config-path "$JARVIS_BUILD_DIR/config" --security-path "$JARVIS_BUILD_DIR/security" \
   --arch arm64 --product Jarvis
+if [[ "${JARVIS_BUILD_QA_LAUNCHER:-0}" == 1 ]]; then
+  swift build --build-system native --disable-sandbox ${JARVIS_SDK_ARGUMENTS[@]+"${JARVIS_SDK_ARGUMENTS[@]}"} --package-path "$JARVIS_REPO_DIR/native/JarvisDesktop" \
+    --scratch-path "$JARVIS_BUILD_DIR/swift" --cache-path "$JARVIS_BUILD_DIR/cache" \
+    --config-path "$JARVIS_BUILD_DIR/config" --security-path "$JARVIS_BUILD_DIR/security" \
+    --arch arm64 --product JarvisQALauncher
+fi
 JARVIS_BIN_DIR="$(swift build --build-system native --disable-sandbox ${JARVIS_SDK_ARGUMENTS[@]+"${JARVIS_SDK_ARGUMENTS[@]}"} --package-path "$JARVIS_REPO_DIR/native/JarvisDesktop" \
   --scratch-path "$JARVIS_BUILD_DIR/swift" --cache-path "$JARVIS_BUILD_DIR/cache" \
   --config-path "$JARVIS_BUILD_DIR/config" --security-path "$JARVIS_BUILD_DIR/security" \
   --arch arm64 --show-bin-path)"
 mkdir -p "$JARVIS_APP_PATH/Contents/MacOS"
 cp "$JARVIS_BIN_DIR/Jarvis" "$JARVIS_APP_PATH/Contents/MacOS/Jarvis"
+if [[ "${JARVIS_BUILD_QA_LAUNCHER:-0}" == 1 ]]; then
+  mkdir -p "$JARVIS_APP_PATH/Contents/Helpers"
+  cp "$JARVIS_BIN_DIR/JarvisQALauncher" "$JARVIS_APP_PATH/Contents/Helpers/JarvisQALauncher"
+  /usr/bin/codesign --force --sign - --timestamp=none "$JARVIS_APP_PATH/Contents/Helpers/JarvisQALauncher"
+  /usr/bin/codesign --verify --strict "$JARVIS_APP_PATH/Contents/Helpers/JarvisQALauncher"
+fi
 "$JARVIS_PYTHON" -B -c '
 import plistlib, sys
 data = {
