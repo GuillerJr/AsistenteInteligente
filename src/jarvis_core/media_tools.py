@@ -231,7 +231,14 @@ class MediaTools:
                         name,
                         False,
                         False,
-                        error="media_native_unavailable"
+                        error=(
+                            result["error"]
+                            if isinstance(result.get("error"), str)
+                            and re.fullmatch(
+                                r"(?:media_native|local_audio)_[a-z_]{1,80}", result["error"]
+                            )
+                            else "media_native_unavailable"
+                        )
                         if result.get("effect_status") == "known"
                         else "media_native_unconfirmed",
                         effect_status=result.get("effect_status", "unknown"),

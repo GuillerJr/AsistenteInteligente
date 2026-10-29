@@ -12,7 +12,9 @@ import Darwin
 enum SelectedMediaFile {
     static func read(_ url: URL) throws -> Data {
         guard MediaFilePolicy.selectablePath(url), MediaFilePolicy.selectablePath(url.resolvingSymlinksInPath()) else { throw RPCFailure.configuration }
-        let fd = open(url.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+        // A FIFO/device must be rejected by fstat without blocking the app
+        // during open. O_NONBLOCK does not alter regular-file reads.
+        let fd = open(url.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK)
         guard fd >= 0 else { throw RPCFailure.unavailable }
         defer { Darwin.close(fd) }
         var before = stat()
@@ -24,8 +26,10 @@ enum SelectedMediaFile {
         let count = result.withUnsafeMutableBytes { buffer -> Int in
             guard let base = buffer.baseAddress else { return -1 }
             var offset = 0
+            var interruptions = 0
             while offset < expected {
                 let amount = Darwin.read(fd, base.advanced(by: offset), expected - offset)
+                if amount < 0, errno == EINTR, interruptions < 8 { interruptions += 1; continue }
                 if amount <= 0 { return -1 }; offset += amount
             }
             return offset
@@ -38,6 +42,17 @@ enum SelectedMediaFile {
               before.st_ctimespec.tv_sec == after.st_ctimespec.tv_sec,
               before.st_ctimespec.tv_nsec == after.st_ctimespec.tv_nsec else { throw RPCFailure.invalidResponse }
         return result
+    }
+}
+
+enum NativeMediaPreviewPolicy {
+    static func image(width: Int, height: Int, count: Int) -> Bool {
+        (1...10000).contains(count) && width > 0 && height > 0 && width <= 40000000 && height <= 40000000
+            && Int64(width) * Int64(height) <= 40000000
+    }
+    static func page(_ box: CGRect) -> Bool {
+        box.origin.x.isFinite && box.origin.y.isFinite && box.width.isFinite && box.height.isFinite
+            && box.width > 0 && box.height > 0 && box.width <= 20000 && box.height <= 20000
     }
 }
 
@@ -107,7 +122,7 @@ struct AttachmentComposerView: View {
             self.source = source; player = AVPlayer(playerItem: AVPlayerItem(asset: source.asset))
         } catch { issue = "El formato no admite reproducción local en este Mac." }
     }
-    func stop() { player?.pause(); player?.replaceCurrentItem(with: nil); player = nil; source?.close(); source = nil }
+    func stop() { player?.pause(); player?.replaceCurrentItem(with: nil); player = nil; source?.close(); source = nil; issue = nil }
 }
 
 struct MediaPreviewView: View {
@@ -137,10 +152,19 @@ struct MediaPreviewView: View {
         .onAppear { prepare() }.onDisappear { playback.stop(); picture = nil; text = nil }
     }
     private func prepare() {
-        if preview.attachment.kind == "image", let source = CGImageSourceCreateWithData(preview.data as CFData, nil),
-           let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: 1200] as CFDictionary) {
+        if preview.attachment.kind == "image" {
+            guard let source = CGImageSourceCreateWithData(preview.data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+                  let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
+                  let width = (properties[kCGImagePropertyPixelWidth as String] as? NSNumber)?.intValue,
+                  let height = (properties[kCGImagePropertyPixelHeight as String] as? NSNumber)?.intValue,
+                  NativeMediaPreviewPolicy.image(width: width, height: height, count: CGImageSourceGetCount(source)),
+                  let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceCreateThumbnailWithTransform: true, kCGImageSourceThumbnailMaxPixelSize: 1200] as CFDictionary) else {
+                text = "La imagen no admite una vista previa dentro de los límites locales."; return
+            }
             picture = NSImage(cgImage: image, size: .zero)
-        } else if preview.attachment.kind == "pdf", let document = PDFDocument(data: preview.data), !document.isLocked, let page = document.page(at: 0) {
+        } else if preview.attachment.kind == "pdf", let document = PDFDocument(data: preview.data), !document.isLocked,
+                  let page = document.page(at: 0), NativeMediaPreviewPolicy.page(page.bounds(for: .mediaBox)) {
             picture = page.thumbnail(of: NSSize(width: 900, height: 1000), for: .mediaBox)
             text = "Vista de la primera página; el análisis puede recorrer las páginas restantes con citas."
         } else if preview.attachment.mime.hasPrefix("text/") || preview.attachment.mime == "application/json" {

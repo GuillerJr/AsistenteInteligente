@@ -101,6 +101,8 @@ class TelegramGroupPairing(TelegramPairing):
             or sender["id"] not in route.allowed_sender_ids
             or sender.get("is_bot") is not False
             or message.get("sender_chat") is not None
+            or (message.get("message_thread_id") is not None
+                and type(message["message_thread_id"]) is not int)
             or message.get("message_thread_id") != route.message_thread_id
             or type(message.get("message_id")) is not int
             or not 1 <= message["message_id"] < (1 << 31)

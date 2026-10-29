@@ -207,12 +207,19 @@ private extension RPCValue {
                 result = .object(object)
             }
         } catch {
-            // Even a lost claim ACK can have committed in the service. The
-            // client did not repeat it and reports only an uncertain receipt.
-            result = .object(["succeeded": .bool(false), "verified": .bool(false),
-                "effect_status": .string("unknown"),
-                "error": .string("native_operation_unconfirmed")])
-            errorMessage = error.localizedDescription
+            if let failure = Self.settledMediaFailure(error, command: item.command,
+                    claimed: admitted[item.id]?.digest == item.digest) {
+                // execute() has joined its decoder/transcriber before throwing.
+                // A typed read-only failure is distinct from a lost claim ACK.
+                result = failure.result; errorMessage = failure.message
+            } else {
+                // Even a lost claim ACK can have committed in the service. The
+                // client did not repeat it and reports only an uncertain receipt.
+                result = .object(["succeeded": .bool(false), "verified": .bool(false),
+                    "effect_status": .string("unknown"),
+                    "error": .string("native_operation_unconfirmed")])
+                errorMessage = error.localizedDescription
+            }
         }
         guard epoch == generation else { return }
         do {
@@ -226,6 +233,18 @@ private extension RPCValue {
                   receipt["permits_replay"].bool == false else { throw RPCFailure.invalidResponse }
         } catch { errorMessage = "El recibo nativo quedó sin confirmar. No se repetirá la acción." }
         await refreshLocalStatus()
+    }
+
+    static func settledMediaFailure(_ error: Error, command: String, claimed: Bool) -> (result: RPCValue, message: String)? {
+        guard command == "media.inspect", claimed else { return nil }
+        let code: String, message: String
+        if let issue = error as? NativeMediaIssue {
+            code = issue.code; message = issue.errorDescription ?? "No se pudo observar el adjunto local."
+        } else if let issue = error as? LocalFileSpeechIssue {
+            code = issue.code; message = issue.message
+        } else { return nil }
+        return (.object(["succeeded": .bool(false), "verified": .bool(false),
+            "effect_status": .string("known"), "error": .string(code)]), message)
     }
 
     public func refreshLocalStatus() async {

@@ -45,7 +45,7 @@
       "Contratos declarados y rutas UI no acreditan disponibilidad ni funcionamiento real.",
       "No se ejecutó OpenClaw ni se leyó configuración/cuenta del dueño."
     ],
-    "current_jarvis_state": "Desarrollo propio con incrementos previos y automatización cualificados en sus alcances documentados. Automatización tiene recorridos nativos y CI exacta 1481983 aprobada. 52 familias parciales y 28 sin implementación; ninguna familia amplia completa."
+    "current_jarvis_state": "Desarrollo propio con incrementos previos cualificados en sus alcances. Telegram/voz/documentos/multimedia integrados y en cualificación. 53 familias parciales y 27 sin implementación; ninguna familia amplia completa. Fase B pendiente."
   },
   "status_vocabulary": {
     "no_implementado": "Sin evidencia productiva propia de cierre.",
@@ -1628,7 +1628,8 @@
         "E005",
         "E076",
         "ev_6a84149c50d958617c7b3dececdb7f0faeb36eea076b196af2f7f4b08f7ed449",
-        "ev_e7f610e97cf5bb4c92d1777503db2e2a26e0c6dd38107f7d1c23b39909ceaca4"
+        "ev_e7f610e97cf5bb4c92d1777503db2e2a26e0c6dd38107f7d1c23b39909ceaca4",
+        "ev_5d592a615e4abec233a945c85b817569c3986b4aa7e848d9edf9298dfffb7625"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -1655,7 +1656,8 @@
         "E005",
         "E076",
         "ev_6a84149c50d958617c7b3dececdb7f0faeb36eea076b196af2f7f4b08f7ed449",
-        "ev_e7f610e97cf5bb4c92d1777503db2e2a26e0c6dd38107f7d1c23b39909ceaca4"
+        "ev_e7f610e97cf5bb4c92d1777503db2e2a26e0c6dd38107f7d1c23b39909ceaca4",
+        "ev_5d592a615e4abec233a945c85b817569c3986b4aa7e848d9edf9298dfffb7625"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -1765,7 +1767,8 @@
         "E082",
         "E083",
         "E084",
-        "E085"
+        "E085",
+        "ev_e62eebded586b7fa891da03cb455cbe37f101b62cd6d8bb27feb0521e16f3220"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -1792,7 +1795,8 @@
         "E082",
         "E083",
         "E084",
-        "E085"
+        "E085",
+        "ev_e62eebded586b7fa891da03cb455cbe37f101b62cd6d8bb27feb0521e16f3220"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -1801,8 +1805,13 @@
       "family": "media",
       "name": "Imágenes, PDF, documentos, video y adjuntos",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-DOCUMENTS-MEDIA",
+          "scope": "Implementación propia conectada al host y pruebas remotas de contratos; cualificación nativa integrada en curso. Ver PHASE_A_TELEGRAM_VOICE_MEDIA.md."
+        }
+      ],
       "acceptance": {
         "observable_success": "Analizar corpus artificial citando archivo y página/cuadro para comprobar contenido observado.",
         "observable_failure_or_revocation": "Formato malicioso, tamaño excesivo, archivo ausente y modelo sin visión dan error acotado sin ejecutar contenido.",
@@ -1815,7 +1824,8 @@
         "E088",
         "E089",
         "E090",
-        "E091"
+        "E091",
+        "ev_4dccb9ad08b367a570843daffa09d4a5333b6b5c58fc38c38c90a4c8958983c7"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -14466,9 +14476,10 @@
           "A-72"
         ],
         "verified_scope": "Pruebas RPC/HTTP sintéticas y recorridos reales limitados: vinculación, suma, y workspace_write con aprobación nativa y archivo/hash verificado. Tarjeta y resultado observados en el chat seleccionado sin recarga del agente. Reconciliación local de rutas restauradas implementada con la autoridad central, revisión exacta, recibos durables, incertidumbre/custodia y limpieza sin replay. No inicia conexión ni restaura tokens o permisos. El arranque exige nonce/claim nuevo del chat, con prueba sólo en RAM ligada a conexión/ruta/agente/workspace; reiniciar o cambiar esos vínculos la invalida. Se descarta el primer segundo parcial del lector. Tests de RPC/Store y transportes propios separan esas garantías de una cuenta externa; la evidencia GUI final se registra en PHASE_A_RECONCILIATION_CLOSEOUT.md.",
-        "remaining": "Se conserva el cierre local del incremento de reconciliación, sin reabrirlo. Quedan cualificación externa prolongada de Telegram privado, grupos, adjuntos y otros canales elegidos. La causa histórica de una detención posterior no está establecida; una lease local o los fixtures de vinculación fresca no acreditan exclusividad externa.",
+        "remaining": "La reconciliación local previa conserva su cierre. El nuevo incremento añade grupos tipados, prueba fresca, adjuntos de entrada/salida, cancelación y revocación; CI y recorridos externos integrados se registran en PHASE_A_TELEGRAM_VOICE_MEDIA_QUALIFICATION.json. Todavía no se declara cualificación externa del incremento.",
         "qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json",
-        "live_scope": "Suma y salida confirmada; archivo sintético de20bytes/hash coincide con recibo tras aprobación del dueño. Token/nonce no documentados. Una detención posterior tuvo causa no establecida; nueva UI distingue errores futuros seguros."
+        "live_scope": "Suma y salida confirmada; archivo sintético de20bytes/hash coincide con recibo tras aprobación del dueño. Token/nonce no documentados. Una detención posterior tuvo causa no establecida; nueva UI distingue errores futuros seguros.",
+        "current_increment_file": "PHASE_A_TELEGRAM_VOICE_MEDIA.md"
       },
       {
         "id": "P-VOICE-LOCAL",
@@ -14491,8 +14502,9 @@
           "A-60"
         ],
         "verified_scope": "SpeechAnalyzer exactlocale ya instalado en macOS26+, legacy sólo con soporte local real, preparación/captura cancelables y borrador sin autoSend. Una frase es-ES real se añadió preservando BORRADOR BASE; reproducción sintética volvió a idle sin error visible.",
-        "remaining": "Resto de idiomas/dispositivos, denegación/revocación TCC real y matriz acústica. Sin wakeword, escucha permanente, llamadas ni voz continua. iPhone aplazado por el dueño.",
-        "qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json"
+        "remaining": "El nuevo incremento implementa captura extendida, activación explícita por frase, Talk acotado y STT de archivos sólo local. Cualificación integrada/TCC/acústica en curso, sin servicios de audio adicionales elegidos. iPhone continúa aplazado.",
+        "qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json",
+        "current_increment_file": "PHASE_A_TELEGRAM_VOICE_MEDIA.md"
       },
       {
         "id": "P-WEB-FETCH",
@@ -15035,13 +15047,47 @@
         "verified_scope": "Hooks declarativos y dos pasos con workspace_write aprobados por separado, checkpoint y reanudación; HMAC loopback con cliente independiente, idempotencia/conflictos; revocación, suspensión, cancelación, reinicio sin activación y cierre presupuestado con oráculos propios. Recorrido mínimo d474 con Codex real, Doctor nativo correcto para los registros presentes y cierre confirmado; producto idéntico en 1481983.",
         "remaining_in_selected_increment": [],
         "qualification_file": "PHASE_A_AUTOMATION_QUALIFICATION.json"
+      },
+      {
+        "id": "P-DOCUMENTS-MEDIA",
+        "component": "Adjuntos de sesión, documentos y multimedia locales",
+        "status": "contract_tested_partial",
+        "code": [
+          "src/jarvis_core/media_attachments.py",
+          "src/jarvis_core/media_documents.py",
+          "src/jarvis_core/media_audio.py",
+          "src/jarvis_core/media_management.py",
+          "src/jarvis_core/media_tools.py",
+          "native/JarvisDesktop/Sources/DesktopCore/NativeMediaExecutor.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/MemoryMediaAsset.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/MediaAttachments.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Views/AttachmentComposerView.swift"
+        ],
+        "tests": [
+          "tests/test_media_documents.py",
+          "tests/test_media_attachments.py",
+          "tests/test_media_audio.py",
+          "tests/test_media_tools.py",
+          "tests/test_service_media.py",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/NativeMediaExecutorTests.swift",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/NativeMediaFixturesTests.swift"
+        ],
+        "capability_ids": [
+          "A-56"
+        ],
+        "verified_scope": "Primera CI Ubuntu32b25a8 acredita contratos de extracción, fuentes, store y codec local; seis fallos integrados y compilación nativa se corrigen en8dbc6f2. No acredita el recorrido nativo final.",
+        "remaining": "CI exacta y corpus nativo/Codex real, reproducción, revocación y cierre del incremento; no presentar fixtures como inspección exhaustiva.",
+        "evidence": [
+          "PHASE_A_DOCUMENTS_MEDIA.md",
+          "PHASE_A_TELEGRAM_VOICE_MEDIA.md"
+        ]
       }
     ],
     "detail_file": "PHASE_A_AUTOMATION_CLOSEOUT.md",
     "rea": {
       "source_file": "REA_COVERAGE.json",
-      "static_batches": 41,
-      "unique_typescript_paths_in_completed_batches": 153,
+      "static_batches": 45,
+      "unique_typescript_paths_in_completed_batches": 169,
       "global_status": "partial",
       "runtime_executed": false,
       "semantic_unknowns_remain": true,
@@ -15086,10 +15132,14 @@
         "OC24G-skills",
         "OC-25A",
         "OC-25B",
-        "OC-25C"
+        "OC-25C",
+        "OC-26A",
+        "OC-26B",
+        "OC-26C",
+        "OC-26D"
       ],
       "limits": "Contar rutas examinadas no significa comprensión semántica ni revisión global. IDs y evidencias completos en REA_COVERAGE.json/provenance.",
-      "unique_ts_js_paths_in_completed_batches": 155,
+      "unique_ts_js_paths_in_completed_batches": 171,
       "source_count_note": "El contador TypeScript conserva su sentido estricto; el total TS/JS incluye también MJS/CJS."
     },
     "previous_detail_file": "PHASE_A_CORE_CLOSEOUT.md",

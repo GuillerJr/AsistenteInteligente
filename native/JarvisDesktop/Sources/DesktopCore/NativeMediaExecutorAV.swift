@@ -31,9 +31,8 @@ extension NativeMediaDecoder {
                            "transcription_requested": .bool(request.action == "transcribe")]
         guard request.kind == "video", let track = videoTracks.first else { return result }
         let size = try await track.load(.naturalSize), transform = try await track.load(.preferredTransform)
-        let transformed = size.applying(transform), width = abs(transformed.width), height = abs(transformed.height)
-        guard width.isFinite, height.isFinite, width > 0, height > 0,
-              width <= 40000000, height <= 40000000, width * height <= 40000000 else { throw NativeMediaIssue.limit }
+        let dimensions = try checkedVideoDimensions(size, transform: transform)
+        let width = dimensions.width, height = dimensions.height
         let generator = AVAssetImageGenerator(asset: source.asset)
         generator.appliesPreferredTrackTransform = true
         generator.maximumSize = CGSize(width: 1200, height: 1200)
@@ -61,5 +60,21 @@ extension NativeMediaDecoder {
         result.truncated = true // Three samples never assert observation of an entire video.
         result.frame = try frame(contactSheet(pictures, columns: 3), cancellation: cancellation)
         return result
+    }
+
+    static func checkedVideoDimensions(_ size: CGSize, transform: CGAffineTransform) throws -> CGSize {
+        // A presentation scale must not conceal a raster that exceeds the
+        // decoder budget. Bound encoded dimensions before any image request.
+        guard size.width.isFinite, size.height.isFinite, size.width >= 1, size.height >= 1,
+              size.width <= 40000000, size.height <= 40000000,
+              size.width * size.height <= 40000000,
+              [transform.a, transform.b, transform.c, transform.d, transform.tx, transform.ty].allSatisfy(\.isFinite)
+        else { throw NativeMediaIssue.limit }
+        let transformed = CGRect(origin: .zero, size: size).applying(transform)
+        let width = transformed.width, height = transformed.height
+        guard transformed.origin.x.isFinite, transformed.origin.y.isFinite,
+              width.isFinite, height.isFinite, width >= 1, height >= 1,
+              width <= 40000000, height <= 40000000, width * height <= 40000000 else { throw NativeMediaIssue.limit }
+        return CGSize(width: width, height: height)
     }
 }

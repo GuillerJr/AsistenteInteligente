@@ -7,7 +7,7 @@ con el producto idéntico de 1481983; su [CI exacta](https://github.com/GuillerJ
 El [registro](PHASE_A_AUTOMATION_QUALIFICATION.json) y el
 [cierre](PHASE_A_AUTOMATION_CLOSEOUT.md) conservan los fallos anteriores.
 REA mantiene 45 lotes y 171 rutas TS/JS seleccionadas; no es revisión exhaustiva.
-La matriz conserva 52 familias parciales y 28 sin implementar: este cierre no
+La matriz conserva 53 familias parciales y 27 sin implementar: este cierre no
 completa la fase A ni inicia B.
 
 El bloque de **Telegram, voz, documentos y multimedia** incorpora rutas de grupo,
@@ -46,8 +46,8 @@ skills. Conserva separados implementación, pruebas focales y cualificación nat
 El incremento elegido está cualificado (`qualified_selected_increment`): OAuth, SSE, servidor público, App/puente/retiro, relay independiente y versiones
 de plugins/skills tienen oráculos separados. El [registro saneado](PHASE_A_MCP_EXTENSIONS_QUALIFICATION.json)
 y el [cierre narrativo](PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md) conservan CI, hashes,
-fallos históricos y límites. La matriz actual, incluido el código de automatización, mantiene 52 familias
-parciales, 28 sin implementar y ninguna familia amplia completa; la fase A sigue abierta y B no ha comenzado.
+fallos históricos y límites. La matriz actual, incluido el código de automatización, mantiene 53 familias
+parciales, 27 sin implementar y ninguna familia amplia completa; la fase A sigue abierta y B no ha comenzado.
 
 Se conservan el nombre de producto Jarvis, los identificadores técnicos `jarvis`,
 la interfaz en español y las reglas de privacidad/aprobación. La primera conexión

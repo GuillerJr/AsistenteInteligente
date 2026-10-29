@@ -12,6 +12,19 @@ final class NativeMediaExecutorTests: XCTestCase {
         XCTAssertEqual(source.asset.url.scheme, "jarvis-media")
         XCTAssertFalse(source.asset.url.isFileURL)
     }
+    func testVideoPresentationTransformCannotConcealOversizedEncodedRaster() throws {
+        XCTAssertThrowsError(try NativeMediaDecoder.checkedVideoDimensions(CGSize(width: 10000, height: 10000),
+            transform: CGAffineTransform(scaleX: 0.1, y: 0.1))) {
+            XCTAssertEqual($0 as? NativeMediaIssue, .limit)
+        }
+        XCTAssertThrowsError(try NativeMediaDecoder.checkedVideoDimensions(CGSize(width: 640, height: 480),
+            transform: CGAffineTransform(scaleX: .infinity, y: 1)))
+        XCTAssertThrowsError(try NativeMediaDecoder.checkedVideoDimensions(CGSize(width: 1000, height: 1000),
+            transform: CGAffineTransform(a: 1000, b: 0, c: -999, d: 1, tx: 0, ty: 0)))
+        let rotation = CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: 480, ty: 0)
+        XCTAssertEqual(try NativeMediaDecoder.checkedVideoDimensions(CGSize(width: 640, height: 480), transform: rotation),
+                       CGSize(width: 480, height: 640))
+    }
     @MainActor private func executor(_ payload: Data) -> NativeMediaExecutor {
         let result = NativeMediaExecutor()
         result.beforeEffect = { _ in }; result.loadPayload = { _ in payload }

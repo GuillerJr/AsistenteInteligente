@@ -69,4 +69,22 @@ final class NativeAutomationHostTests: XCTestCase {
         }
         XCTAssertEqual(NativeAutomationWork.maximumSeconds("desktop.observe"), 24)
     }
+
+    @MainActor func testTypedMediaFailuresAreKnownOnlyAfterAdmissionAndKeepStablePublicCodes() throws {
+        for error in [NativeMediaIssue.limit as Error, NativeMediaIssue.encryptedPDF,
+                      LocalFileSpeechIssue.authorizationRequired, LocalFileSpeechIssue.localeUnavailable] {
+            let value = try XCTUnwrap(NativeAutomationHost.settledMediaFailure(error, command: "media.inspect", claimed: true))
+            XCTAssertEqual(value.result["succeeded"], .bool(false)); XCTAssertEqual(value.result["verified"], .bool(false))
+            XCTAssertEqual(value.result["effect_status"], .string("known"))
+            XCTAssertFalse(value.message.isEmpty)
+            let expected = (error as? NativeMediaIssue)?.code ?? (error as! LocalFileSpeechIssue).code
+            XCTAssertEqual(value.result["error"], .string(expected))
+            XCTAssertNil(NativeAutomationHost.settledMediaFailure(error, command: "media.inspect", claimed: false))
+            XCTAssertNil(NativeAutomationHost.settledMediaFailure(error, command: "desktop.action", claimed: true))
+        }
+        let transport = NSError(domain: "fixture", code: 1, userInfo: [NSLocalizedDescriptionKey: "PRIVATE DIAGNOSTIC"])
+        XCTAssertNil(NativeAutomationHost.settledMediaFailure(transport, command: "media.inspect", claimed: true))
+        XCTAssertNil(NativeAutomationHost.settledMediaFailure(RPCFailure.disconnected, command: "media.inspect", claimed: true))
+        XCTAssertNil(NativeAutomationHost.settledMediaFailure(CancellationError(), command: "media.inspect", claimed: true))
+    }
 }

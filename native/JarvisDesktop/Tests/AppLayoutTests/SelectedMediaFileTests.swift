@@ -1,5 +1,6 @@
 import DesktopCore
 import Foundation
+import Darwin
 import XCTest
 @testable import JarvisApp
 
@@ -50,6 +51,24 @@ final class SelectedMediaFileTests: XCTestCase {
             let handle = try FileHandle(forWritingTo: large)
             try handle.truncate(atOffset: 16 * 1024 * 1024 + 1); try handle.close()
             XCTAssertThrowsError(try SelectedMediaFile.read(large))
+        }
+    }
+    func testSelectedFIFOIsRejectedWithoutWaitingForAWriter() throws {
+        try fixture { root in
+            let fifo = root.appendingPathComponent("entrada.txt")
+            XCTAssertEqual(mkfifo(fifo.path, 0o600), 0)
+            XCTAssertThrowsError(try SelectedMediaFile.read(fifo))
+        }
+    }
+    func testPreviewDimensionsAreBoundedBeforeImageOrPageRendering() {
+        XCTAssertTrue(NativeMediaPreviewPolicy.image(width: 8000, height: 5000, count: 1))
+        for dimensions in [(8001, 5000, 1), (Int.max, Int.max, 1), (0, 1, 1), (1, 1, 0), (1, 1, 10001)] {
+            XCTAssertFalse(NativeMediaPreviewPolicy.image(width: dimensions.0, height: dimensions.1, count: dimensions.2))
+        }
+        XCTAssertTrue(NativeMediaPreviewPolicy.page(CGRect(x: 0, y: 0, width: 612, height: 792)))
+        for box in [CGRect(x: 0, y: 0, width: 20001, height: 1), CGRect(x: 0, y: 0, width: 1, height: 0),
+                    CGRect(x: CGFloat.infinity, y: 0, width: 1, height: 1), CGRect(x: 0, y: 0, width: CGFloat.nan, height: 1)] {
+            XCTAssertFalse(NativeMediaPreviewPolicy.page(box))
         }
     }
 }

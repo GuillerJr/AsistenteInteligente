@@ -515,8 +515,11 @@ class TelegramClient:
         if (
             not isinstance(result, dict)
             or not isinstance(result.get("chat"), dict)
+            or type(result["chat"].get("id")) is not int
             or result["chat"].get("id") != incoming.chat_id
             or result["chat"].get("type") != incoming.chat_type
+            or (result.get("message_thread_id") is not None
+                and type(result["message_thread_id"]) is not int)
             or result.get("message_thread_id") != incoming.message_thread_id
         ):
             raise TelegramError("telegram_delivery_ack_invalid", effect_status="unknown")
@@ -604,8 +607,11 @@ class TelegramClient:
             ) from None
         document = result.get("document") if isinstance(result, dict) else None
         if (not isinstance(result, dict) or not isinstance(result.get("chat"), dict)
+                or type(result["chat"].get("id")) is not int
                 or result["chat"].get("id") != incoming.chat_id
                 or result["chat"].get("type") != incoming.chat_type
+                or (result.get("message_thread_id") is not None
+                    and type(result["message_thread_id"]) is not int)
                 or result.get("message_thread_id") != incoming.message_thread_id
                 or not isinstance(document, dict) or document.get("file_name") != name
                 or type(document.get("file_size")) is not int

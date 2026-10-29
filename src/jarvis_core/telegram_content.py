@@ -179,7 +179,9 @@ def message_content(message, route, identity):
             raise TelegramError("telegram_sender_ignored")
     elif sender["id"] not in route.allowed_sender_ids:
         raise TelegramError("telegram_sender_ignored")
-    if message.get("message_thread_id") != route.message_thread_id:
+    thread = message.get("message_thread_id")
+    if (thread != route.message_thread_id
+            or (thread is not None and (type(thread) is not int or not 1 <= thread < (1 << 31)))):
         raise TelegramError("telegram_thread_ignored")
     text = message.get("text", message.get("caption", ""))
     _text(text, 8000, empty=True)

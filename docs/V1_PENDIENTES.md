@@ -11,7 +11,7 @@ El dueño aplazó expresamente la app de iPhone; ver [decisiones](rebuild/PHASE_
 El incremento de [MCP, plugins y skills](rebuild/PHASE_A_MCP_EXTENSIONS.md) está
 cualificado en el alcance elegido; sus [oráculos y CI](rebuild/PHASE_A_MCP_EXTENSIONS_QUALIFICATION.json)
 se conservan junto al [cierre narrativo](rebuild/PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md).
-La matriz actual incluye también automatización: 52 familias parciales y 28 sin
+La matriz actual incluye también automatización: 53 familias parciales y 27 sin
 implementación, ninguna familia amplia completa. REA conserva 45 lotes y 171
 rutas TS/JS seleccionadas; no es cobertura exhaustiva.
 
@@ -29,7 +29,7 @@ separados; el producto del bundle d474 es idéntico al de 1481983, cuya
 [CI exacta](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40877800263) pasó completa.
 Ver [registro](rebuild/PHASE_A_AUTOMATION_QUALIFICATION.json) y
 [cierre](rebuild/PHASE_A_AUTOMATION_CLOSEOUT.md). No quedan pendientes dentro de
-ese incremento. La matriz conserva 52 familias parciales y 28 sin implementar,
+ese incremento. La matriz conserva 53 familias parciales y 27 sin implementar,
 ninguna familia amplia completa; REA mantiene 45 lotes y 171 rutas TS/JS.
 
 - [x] Limpiar el árbol de trabajo y conservar puntos de recuperación.

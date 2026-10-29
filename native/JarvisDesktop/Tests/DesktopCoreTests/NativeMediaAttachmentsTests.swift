@@ -72,6 +72,7 @@ private actor NativeMediaRPCFixture {
         }
     }
     func snapshot() -> ([String], Bool, Bool) { (methods, held != nil, cancelled) }
+    func replaceManifest(_ value: RPCValue) { manifest = value }
     func release() { held?.resume(); held = nil }
 }
 
@@ -125,6 +126,30 @@ final class NativeMediaAttachmentsTests: XCTestCase {
         XCTAssertEqual(host.preview?.playbackSHA, MediaFilePolicy.digest(wave))
         let methods = await fixture.snapshot().0
         XCTAssertFalse(methods.contains("media.read"))
+    }
+    @MainActor func testRefreshRetiresPreviewAndSelectionRevokedByAnotherWindow() async throws {
+        let fixture = NativeMediaRPCFixture(Data("READ ONLY FIXTURE".utf8))
+        let attachment = try MediaAttachment(await fixture.existing())
+        let host = store(fixture); await host.setScope(await fixture.scope)
+        host.toggle(attachment); await host.openPreview(attachment)
+        XCTAssertNotNil(host.preview); XCTAssertEqual(host.selectedIDs, [attachment.id])
+        _ = try await fixture.call("media.revoke", [:])
+        await host.refresh()
+        XCTAssertNil(host.preview); XCTAssertTrue(host.selectedIDs.isEmpty)
+        XCTAssertEqual(host.attachments.first?.revoked, true)
+    }
+    @MainActor func testRefreshCannotKeepRAMPreviewWhenManifestDisappearsOrIdentityChanges() async throws {
+        for field in ["missing", "sha256", "workspace_id"] {
+            let fixture = NativeMediaRPCFixture(Data("SOURCE FIXTURE".utf8))
+            let original = await fixture.existing(), attachment = try MediaAttachment(original)
+            let host = store(fixture); await host.setScope(await fixture.scope)
+            host.toggle(attachment); await host.openPreview(attachment)
+            var changed = original.object!
+            changed[field] = .string(String(repeating: "d", count: 64))
+            await fixture.replaceManifest(field == "missing" ? .null : .object(changed))
+            await host.refresh()
+            XCTAssertNil(host.preview, field); XCTAssertTrue(host.selectedIDs.isEmpty, field)
+        }
     }
     @MainActor func testMalformedPreviewOffsetIsRejectedAndCloseJoinsHeldUpload() async throws {
         let data = Data("fixture".utf8), fixture = NativeMediaRPCFixture(data)

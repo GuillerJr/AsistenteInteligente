@@ -1,0 +1,86 @@
+{
+  "format": "jarvis-channel-voice-media-qualification/1",
+  "date": "2026-10-29",
+  "status": "in_progress",
+  "selected_scope": [
+    "Telegram private and explicitly typed groups",
+    "local dictation, wake phrase and bounded Talk",
+    "session attachments, documents and audiovisual analysis/playback"
+  ],
+  "reference_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "rea_evidence": "REA_OC26_SUMMARIES.json",
+  "owner_installed_app_replaced": false,
+  "full_local_suites_or_builds": false,
+  "ci_attempts": [
+    {
+      "commit": "32b25a8940bb5dc275ca0a1665d3f88fab0cd3df",
+      "run_id": 40892380824,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40892380824",
+      "status": "failed",
+      "ubuntu_python": {
+        "passed": 3391,
+        "failed": 6,
+        "skipped": 46,
+        "elapsed_seconds": 202.07
+      },
+      "macos": "compile failed: isolated deinit accessor and unavailable MIME key",
+      "corrections_commit": "8dbc6f2efb2d53bcbaa2cdfb9bc3a74f18a6cdc7"
+    },
+    {
+      "commit": "8dbc6f2efb2d53bcbaa2cdfb9bc3a74f18a6cdc7",
+      "run_id": 40893702325,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40893702325",
+      "status": "failed",
+      "ubuntu_python": {
+        "passed": 3400,
+        "failed": 1,
+        "skipped": 46,
+        "failure": "test inspected durable truncated preview as if it were full provider RAM output; now verifies hash and truncation without raising quota"
+      },
+      "macos": {
+        "bundle": "passed",
+        "swift_executed": 563,
+        "swift_skipped": 1,
+        "swift_failures": 2,
+        "failure": "wake phrase removed trailing punctuation; corrected",
+        "real_native_decoder_tests_passed": 12,
+        "media_attachment_tests_passed": 6,
+        "native_host_tests_passed": 3
+      }
+    }
+  ],
+  "native_cases": [
+    {
+      "case": "initial_private_dependency_harness",
+      "status": "failed_no_effect",
+      "cause": "-S launch lacked explicit locked dependencies; corrected by private dependency overlay",
+      "product_code_modified": false
+    },
+    {
+      "case": "synthetic_document_import",
+      "status": "passed",
+      "file": "nota-fase-a.md",
+      "bytes": 119,
+      "sha256": "b3f286831dfc6956c883c21337a9708bbc2b47b5a135d47be3b8f820a9e0d6a9",
+      "native_review_approved_by_delegated_agent": true
+    },
+    {
+      "case": "real_codex_connection",
+      "status": "needs_fresh_official_login",
+      "personal_history_or_credentials_read": false
+    }
+  ],
+  "manual_budget": {
+    "root": "/private/tmp/jarvis-telegram-voice-media-live-20261029",
+    "budget_mib": 384,
+    "deadline_seconds": 3600,
+    "free_space_floor_gib": 25,
+    "only_synthetic_content": true
+  },
+  "remaining_in_selected_increment": [
+    "exact commit CI",
+    "native integrated corpus with real Codex",
+    "live Telegram account verification",
+    "local Speech TCC/acoustic qualification"
+  ]
+}

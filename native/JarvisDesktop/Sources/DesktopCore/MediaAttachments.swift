@@ -115,7 +115,11 @@ public struct MediaPreview: Identifiable {
                   reply["workspace_files_included_in_profile_backup"].bool == false,
                   reply["temporary_storage"] == .string("memory_only") else { throw RPCFailure.invalidResponse }
             guard epoch == generation, self.scope == scope, isActive() else { return }
-            attachments = rows; selectedIDs = selectedIDs.filter { id in rows.contains { $0.id == id && !$0.revoked } }
+            selectedIDs = selectedIDs.filter { id in
+                rows.contains { row in row.id == id && !row.revoked && attachments.contains(row) }
+            }
+            if let preview, !rows.contains(where: { $0 == preview.attachment && !$0.revoked }) { self.preview = nil }
+            attachments = rows
             errorMessage = nil
         } catch { if epoch == generation { errorMessage = error.localizedDescription } }
     }

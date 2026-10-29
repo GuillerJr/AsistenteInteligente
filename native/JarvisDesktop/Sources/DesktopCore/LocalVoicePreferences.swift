@@ -53,7 +53,11 @@ public enum LocalWakePhrasePolicy {
             guard Array(heard[index..<(index + sought.count)].map(\.0)) == sought else { continue }
             let end = NSMaxRange(heard[index + sought.count - 1].1)
             let suffix = (transcription as NSString).substring(from: end)
-            return suffix.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: ",.;:!?¡¿—–-")))
+            let separator = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ",.;:!?¡¿—–-"))
+            // Only the delimiter immediately after the trigger is discarded.
+            // Punctuation belonging to the dictated payload must survive.
+            return String(suffix.drop(while: { $0.unicodeScalars.allSatisfy(separator.contains) }))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return nil
     }

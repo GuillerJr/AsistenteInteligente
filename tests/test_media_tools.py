@@ -226,7 +226,47 @@ async def test_real_ogg_derivation_is_bound_to_original_artifact_in_native_tool_
     action = receipt["action_receipts"][0]
     assert action["succeeded"] and action["verified"]
     assert row["sha256"] in action["output"] and "nota.ogg" in action["output"]
-    assert work["arguments"]["source_sha256"] in action["output"]
-    assert "VOZ 7254" in action["output"] and "original_bytes_modified" in action["output"]
+    # Durable action receipts retain a bounded preview plus full output hash.
+    # The model receives the complete approved result through this RAM reply.
+    delivered = json.loads(peer.replies[0]["contentItems"][0]["text"])["output"]
+    assert action["output_truncated"] is True
+    assert action["output_sha256"] == hashlib.sha256(delivered.encode()).hexdigest()
+    assert delivered.startswith(action["output"])
+    assert work["arguments"]["source_sha256"] in delivered
+    assert "VOZ 7254" in delivered and "original_bytes_modified" in delivered
     assert not service._media_native_payloads and not service.media_tools.frames
+    await client.call("automation.detach", {"host_id": host, "cleanup_confirmed": True})
+
+
+async def test_signed_audio_permission_failure_stays_known_without_frame_or_cloud_audio(
+    media_service,
+):
+    from test_media_audio import artificial_ogg
+
+    service, client, peer, _root = media_service
+    ref, original = await session(client), artificial_ogg()
+    row = await imported(client, ref, original, "permiso.ogg")
+    host, run, work = await inspected_work(client, peer, ref, row)
+    request = native_request(host, work)
+    await client.call("automation.claim", request)
+    await client.call(
+        "automation.complete",
+        {
+            **request,
+            "result": {
+                "succeeded": False,
+                "verified": False,
+                "effect_status": "known",
+                "error": "local_audio_speech_permission_required",
+            },
+        },
+    )
+    receipt = await settled(client, ref, run["run_id"])
+    action = receipt["action_receipts"][0]
+    assert not action["succeeded"] and not action["verified"]
+    assert action["effect_status"] == "known"
+    assert action["error"] == "local_audio_speech_permission_required"
+    assert not service._media_native_payloads and not service.media_tools.frames
+    assert all(item["type"] != "inputImage" for item in peer.replies[0]["contentItems"])
+    assert base64.b64encode(original).decode() not in json.dumps(peer.calls + peer.replies)
     await client.call("automation.detach", {"host_id": host, "cleanup_confirmed": True})

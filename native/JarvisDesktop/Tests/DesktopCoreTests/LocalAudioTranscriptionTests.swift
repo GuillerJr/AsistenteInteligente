@@ -48,6 +48,8 @@ final class LocalAudioTranscriptionTests: XCTestCase {
         XCTAssertNil(LocalWakePhrasePolicy.reviewedSuffix(in: "Jarvisito no activa", phrase: "Jarvis"))
         XCTAssertNil(LocalWakePhrasePolicy.reviewedSuffix(in: "texto", phrase: ""))
         XCTAssertEqual(LocalWakePhrasePolicy.reviewedSuffix(in: "Jarvis", phrase: "Jarvis"), "")
+        XCTAssertEqual(LocalWakePhrasePolicy.reviewedSuffix(in: "Jarvis: escribe «hola»!!!  ", phrase: "Jarvis"), "escribe «hola»!!!")
+        XCTAssertEqual(LocalWakePhrasePolicy.reviewedSuffix(in: "Jarvis, ...", phrase: "Jarvis"), "")
         XCTAssertFalse(LocalWakePhrasePolicy.isValid("uno dos tres cuatro cinco"))
     }
 }

@@ -25,8 +25,10 @@ from jarvis_core.telegram_content import (
     TelegramAttachment,
     addressed_to_bot,
     attachments_from_message,
+    message_content,
 )
 from jarvis_core.telegram_files import TelegramDocumentTransport, validate_file_path
+from jarvis_core.telegram_group_pairing import TelegramGroupPairing
 
 GROUP = -100777777
 TEXT = "🧪 @fixture_bot consulta"
@@ -239,6 +241,95 @@ def test_supported_media_metadata_selects_one_bounded_file():
     ):
         with pytest.raises(TelegramError):
             attachments_from_message(invalid)
+
+
+@pytest.mark.parametrize("thread", [True, 1.0, "1", 0, -1])
+def test_topic_identity_is_a_strict_integer_in_messages_and_fresh_group_proofs(tmp_path, thread):
+    journal = TelegramJournal(tmp_path.resolve() / "telegram")
+    route = journal.set_route(
+        GROUP,
+        "jarvis",
+        SESSION,
+        chat_type="supergroup",
+        allowed_sender_ids=[CHAT],
+        message_thread_id=1,
+    )
+    message = update(
+        chat=GROUP,
+        chat_type="supergroup",
+        sender=CHAT,
+        text=TEXT,
+        entities=[ENTITY],
+        message_thread_id=thread,
+    )
+    with pytest.raises(TelegramError, match="telegram_thread_ignored"):
+        message_content(message["message"], route, BotIdentity(BOT, "fixture_bot"))
+    client = TelegramClient(TOKEN)
+    client.identity = BotIdentity(BOT, "fixture_bot")
+    pairing = TelegramGroupPairing(
+        client, journal, target_route=route, host_guard=lambda: None, clock=lambda: 1_900_000_000
+    )
+    pairing._nonce, pairing._started_at = "synthetic_nonce", 1_900_000_000
+    message["message"]["text"] = "/jarvis_pair@fixture_bot synthetic_nonce"
+    assert pairing._match(message) is None
+    message["message"]["message_thread_id"] = 1
+    assert pairing._match(message) == (GROUP, 11)
+
+
+@pytest.mark.parametrize("method", ["reply", "document"])
+@pytest.mark.parametrize("kind", ["chat", "thread"])
+async def test_boolean_ack_identity_is_unknown_even_when_equal_to_reviewed_integer(
+    bot, method, kind
+):
+    incoming = IncomingMessage(
+        1,
+        1 if kind == "chat" else GROUP,
+        11,
+        "jarvis",
+        SESSION,
+        "texto",
+        1,
+        "private" if kind == "chat" else "supergroup",
+        1 if kind == "chat" else CHAT,
+        None if kind == "chat" else 1,
+    )
+    result = {
+        "message_id": 501,
+        "chat": {"id": incoming.chat_id, "type": incoming.chat_type},
+        "document": {"file_name": "prueba.txt", "file_size": 4},
+    }
+    if kind == "chat":
+        result["chat"]["id"] = True
+    else:
+        result["message_thread_id"] = True
+    ack = TelegramHTTPResponse(200, json.dumps({"ok": True, "result": result}).encode())
+    base, calls = TelegramHTTPTransport(connector=bot.connector), []
+
+    async def transport(verb, name, params, token, timeout, guard):
+        if name == "sendMessage":
+            guard()
+            calls.append(1)
+            return ack
+        return await base(verb, name, params, token, timeout, guard)
+
+    async def upload(*args):
+        args[-1]()
+        calls.append(1)
+        return ack
+
+    client = TelegramClient(TOKEN, transport=transport, document_transport=upload)
+    await client.connect()
+    try:
+        with pytest.raises(TelegramError, match="telegram_delivery_ack_invalid") as error:
+            if method == "reply":
+                await client.send_reply(incoming, "respuesta", before_dispatch=lambda: None)
+            else:
+                await client.send_document(
+                    incoming, b"dato", "prueba.txt", "text/plain", "", before_dispatch=lambda: None
+                )
+        assert error.value.effect_status == "unknown" and len(calls) == 1
+    finally:
+        await client.aclose()
 
 
 async def test_file_download_uses_only_fixed_verified_host_and_same_file_identity(bot):
