@@ -14,7 +14,8 @@ final class ProductCoordinationIntegrationTests: XCTestCase {
         let root = "/private/tmp/jarvis-product-wire-" + UUID().uuidString.prefix(8)
         try FileManager.default.createDirectory(atPath: root, withIntermediateDirectories: false,
                                                 attributes: [.posixPermissions: 0o700])
-        addTeardownBlock { try FileManager.default.removeItem(atPath: root) }
+        // startFixtureProcess owns this directory and removes it only after
+        // its child has a confirmed cleanup receipt. Do not delete it twice.
         let profile = root + "/profile"
         let child = Process()
         child.executableURL = URL(fileURLWithPath: python)
