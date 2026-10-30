@@ -8,6 +8,12 @@ producto anterior sigue en Git y sus inventarios están congelados.
 Alcance inicial elegido: macOS Apple Silicon y Telegram como primer canal externo.
 El dueño aplazó expresamente la app de iPhone; ver [decisiones](rebuild/PHASE_A_TARGETS.md).
 
+En curso: [distribución autocontenida y servicio residente](rebuild/PHASE_A_DISTRIBUTION_RESIDENT.md).
+La app incorpora Python, dependencias, Codex y MiniLM; el registro de inicio en
+macOS es optativo. La CI debe acreditar el paquete y su traslado para el commit
+exacto. La firma de distribución pública y notarización siguen sujetas a la
+membresía y credenciales del dueño, y no se confunden con la firma ad hoc de CI.
+
 El incremento de [MCP, plugins y skills](rebuild/PHASE_A_MCP_EXTENSIONS.md) está
 cualificado en el alcance elegido; sus [oráculos y CI](rebuild/PHASE_A_MCP_EXTENSIONS_QUALIFICATION.json)
 se conservan junto al [cierre narrativo](rebuild/PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md).

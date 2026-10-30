@@ -248,8 +248,136 @@ def _copy_response(response, output, row, cancellation, deadline):
     os.fsync(output.fileno())
 
 
-def prepare_model(directory, *, cancellation=None, deadline=None, assert_current=None):
-    """Acquire only pinned public assets into a new directory, then atomically publish."""
+_BUNDLED_PATHS = frozenset({
+    "onnx/model_qint8_arm64.onnx", "tokenizer.json", "README.md", "LICENSE.Apache-2.0.txt",
+})
+
+
+class _BundledModelSource:
+    """Fixed, read-only public bundle files; never weaken private cache checks."""
+
+    def __init__(self, directory, cancellation, deadline, assert_current):
+        self.root = Path(directory)
+        self.cancellation, self.deadline = cancellation, deadline
+        self.guard = assert_current
+        self.directories, self.files = [], {}
+        try:
+            _checkpoint(cancellation, deadline)
+            _current(assert_current)
+            if not self.root.is_absolute() or self.root.resolve(strict=True) != self.root:
+                raise ArtifactError("bundled_model_invalid")
+            root_fd = self._directory(self.root)
+            onnx_fd = self._directory(self.root / "onnx", parent=root_fd, name="onnx")
+            rows = list(MODEL_SPEC["files"])
+            if (len({row["path"] for row in rows}) != len(rows)
+                    or any(row["path"] not in _BUNDLED_PATHS for row in rows)):
+                raise ArtifactError("bundled_model_invalid")
+            rows.append({"path": "manifest.json", "bytes": len(_MANIFEST),
+                         "sha256": hashlib.sha256(_MANIFEST).hexdigest()})
+            for row in rows:
+                relative = row["path"]
+                if relative not in _BUNDLED_PATHS | {"manifest.json"}:
+                    raise ArtifactError("bundled_model_invalid")
+                parent = onnx_fd if relative.startswith("onnx/") else root_fd
+                name = relative.rsplit("/", 1)[-1]
+                before = os.stat(name, dir_fd=parent, follow_symlinks=False)
+                if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
+                        or before.st_uid not in {0, os.getuid()}
+                        or stat.S_IMODE(before.st_mode) & 0o022
+                        or before.st_size != row["bytes"]):
+                    raise ArtifactError("bundled_model_invalid")
+                fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
+                self.files[relative] = (fd, before, parent, name)
+                if not _same_file(before, os.fstat(fd)):
+                    raise ArtifactError("bundled_model_invalid")
+            self.assert_current()
+            manifest_fd = self.files["manifest.json"][0]
+            if os.pread(manifest_fd, len(_MANIFEST) + 1, 0) != _MANIFEST:
+                raise ArtifactError("bundled_model_invalid")
+            self.assert_current()
+        except OSError:
+            self.close()
+            raise ArtifactError("bundled_model_invalid") from None
+        except BaseException:
+            self.close()
+            raise
+
+    def _directory(self, path, *, parent=None, name=None):
+        before = path.lstat() if parent is None else os.stat(
+            name, dir_fd=parent, follow_symlinks=False)
+        if (not stat.S_ISDIR(before.st_mode) or before.st_uid not in {0, os.getuid()}
+                or stat.S_IMODE(before.st_mode) & 0o022):
+            raise ArtifactError("bundled_model_invalid")
+        fd = os.open(path if parent is None else name,
+                     os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+        self.directories.append((fd, before, path))
+        if not _same_file(before, os.fstat(fd)):
+            raise ArtifactError("bundled_model_invalid")
+        return fd
+
+    def assert_current(self):
+        _checkpoint(self.cancellation, self.deadline)
+        _current(self.guard)
+        try:
+            if self.root.resolve(strict=True) != self.root:
+                raise ArtifactError("bundled_model_invalid")
+            for fd, before, path in self.directories:
+                if (not _same_file(before, os.fstat(fd))
+                        or not _same_file(before, path.lstat())):
+                    raise ArtifactError("bundled_model_invalid")
+            for fd, before, parent, name in self.files.values():
+                if (not _same_file(before, os.fstat(fd))
+                        or not _same_file(before, os.stat(name, dir_fd=parent,
+                                                       follow_symlinks=False))):
+                    raise ArtifactError("bundled_model_invalid")
+        except OSError:
+            raise ArtifactError("bundled_model_invalid") from None
+
+    def copy(self, row, output):
+        source = self
+        descriptor = self.files[row["path"]][0]
+
+        class Response:
+            def __init__(self):
+                self.offset = 0
+                self.headers = {"Content-Length": str(row["bytes"])}
+
+            def read(self, count):
+                source.assert_current()
+                try:
+                    value = os.pread(descriptor, count, self.offset)
+                except OSError:
+                    raise ArtifactError("bundled_model_invalid") from None
+                self.offset += len(value)
+                return value
+
+        try:
+            _copy_response(Response(), output, row, self.cancellation, self.deadline)
+            self.assert_current()
+        except ArtifactError as error:
+            if error.code == "invalid_model":
+                raise ArtifactError("bundled_model_invalid") from None
+            raise
+
+    def close(self):
+        for fd, before, *_ in [*self.files.values(), *self.directories]:
+            try:
+                current = os.fstat(fd)
+                if (before.st_dev, before.st_ino) == (current.st_dev, current.st_ino):
+                    os.close(fd)
+            except OSError:
+                pass
+        self.files.clear()
+        self.directories.clear()
+
+
+def prepare_model(directory, *, cancellation=None, deadline=None, assert_current=None,
+                  bundled_source=None):
+    """Publish a private copy from fixed public assets or the explicit offline bundle.
+
+    Supplying ``bundled_source`` permanently selects that source for this call:
+    missing or changed bytes fail closed, without constructing a network opener.
+    """
     destination = Path(directory)
     if deadline is None:
         deadline = time.monotonic() + 300
@@ -268,27 +396,40 @@ def prepare_model(directory, *, cancellation=None, deadline=None, assert_current
     created = False
     published = False
     failure = None
+    bundled = None
     try:
+        if bundled_source is not None:
+            bundled = _BundledModelSource(bundled_source, cancellation, deadline, assert_current)
+            if (destination == bundled.root or destination.is_relative_to(bundled.root)
+                    or bundled.root.is_relative_to(destination)):
+                raise ArtifactError("bundled_model_invalid")
         staging.mkdir(mode=0o700)
         created = True
         info = staging.lstat()
         staging_identity = info.st_dev, info.st_ino
-        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _Redirects())
+        opener = (urllib.request.build_opener(urllib.request.ProxyHandler({}), _Redirects())
+                  if bundled is None else None)
         (staging / "onnx").mkdir(mode=0o700)
         for row in MODEL_SPEC["files"]:
             _checkpoint(cancellation, deadline)
             _current(assert_current)
-            request = urllib.request.Request(_public_url(row["url"]), headers={
-                "Accept-Encoding": "identity", "User-Agent": "Jarvis-Model-Acquisition/1"})
-            timeout = max(0.1, min(20, deadline - time.monotonic()))
-            with opener.open(request, timeout=timeout) as response:
-                if response.status != 200:
-                    raise ArtifactError("download_rejected")
-                _public_url(response.url)
+            if bundled is not None:
                 descriptor = os.open(staging / row["path"], os.O_WRONLY | os.O_CREAT
                                      | os.O_EXCL | os.O_NOFOLLOW, 0o600)
                 with os.fdopen(descriptor, "wb") as output:
-                    _copy_response(response, output, row, cancellation, deadline)
+                    bundled.copy(row, output)
+            else:
+                request = urllib.request.Request(_public_url(row["url"]), headers={
+                    "Accept-Encoding": "identity", "User-Agent": "Jarvis-Model-Acquisition/1"})
+                timeout = max(0.1, min(20, deadline - time.monotonic()))
+                with opener.open(request, timeout=timeout) as response:
+                    if response.status != 200:
+                        raise ArtifactError("download_rejected")
+                    _public_url(response.url)
+                    descriptor = os.open(staging / row["path"], os.O_WRONLY | os.O_CREAT
+                                         | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                    with os.fdopen(descriptor, "wb") as output:
+                        _copy_response(response, output, row, cancellation, deadline)
         descriptor = os.open(staging / "manifest.json", os.O_WRONLY | os.O_CREAT
                              | os.O_EXCL | os.O_NOFOLLOW, 0o600)
         with os.fdopen(descriptor, "wb") as output:
@@ -301,6 +442,8 @@ def prepare_model(directory, *, cancellation=None, deadline=None, assert_current
         if destination.exists() or destination.is_symlink():
             raise ArtifactError("invalid_model")
         _current(assert_current)
+        if bundled is not None:
+            bundled.assert_current()
         _publish_new(staging, destination)
         published = True
         final = destination.lstat()
@@ -331,10 +474,13 @@ def prepare_model(directory, *, cancellation=None, deadline=None, assert_current
         if isinstance(error, ArtifactError):
             raise
         if isinstance(error, (OSError, urllib.error.URLError)):
-            failure = ArtifactError("download_unavailable")
+            failure = ArtifactError("bundled_model_unavailable" if bundled_source is not None
+                                    else "download_unavailable")
             raise failure from None
         raise
     finally:
+        if bundled is not None:
+            bundled.close()
         if not published:
             try:
                 if created and (staging.exists() or staging.is_symlink()):
@@ -376,7 +522,7 @@ def _known_copy_bytes(directory):
 
 
 def repair_model(directory, replacement_directory, *, assert_current,
-                 cancellation=None, deadline=None):
+                 cancellation=None, deadline=None, bundled_source=None):
     """Host-approved fresh copy; activation/CAS and the two slots belong to the host.
 
     The original is never moved, repaired in place, traversed recursively or
@@ -402,7 +548,7 @@ def repair_model(directory, replacement_directory, *, assert_current,
         raise
     try:
         result = prepare_model(replacement, cancellation=cancellation, deadline=deadline,
-                               assert_current=assert_current)
+                               assert_current=assert_current, bundled_source=bundled_source)
     except BaseException as error:
         # Missing receipts here come only from prepare's read-only preflight;
         # acquisition/cleanup failures carry their own explicit outcome above.

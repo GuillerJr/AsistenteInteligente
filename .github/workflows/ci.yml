@@ -21,7 +21,7 @@ jobs:
       matrix:
         os: [ubuntu-24.04, macos-26]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v7
@@ -40,35 +40,47 @@ jobs:
           echo "JARVIS_MINILM_TEST_ASSETS=$JARVIS_MODEL_TEST_ROOT/artifacts" >> "$GITHUB_ENV"
           .venv/bin/python -B script/prepare_memory_model.py \
             --directory "$JARVIS_MODEL_TEST_ROOT/artifacts"
-      - name: Compilar bundle nativo de desarrollo
+      - name: Compilar y cualificar bundle nativo autocontenido
         if: runner.os == 'macOS'
         env:
           JARVIS_BUILD_QA_LAUNCHER: "1"
         run: |
-          ./script/build_desktop.sh --full --budget-mib 6144 --output /private/tmp/jarvis-ci-desktop
+          ./script/build_desktop.sh --full --self-contained --deadline 1200 \
+            --budget-mib 8192 --output /private/tmp/jarvis-ci-desktop
       - name: Preparar bundle trazable para comprobación nativa
         if: runner.os == 'macOS'
         shell: bash
         run: |
           tar -czf "$RUNNER_TEMP/Jarvis-macos-arm64.tar.gz" -C /private/tmp/jarvis-ci-desktop Jarvis.app
           .venv/bin/python -B - <<'PY'
-          import hashlib, json, os
+          import hashlib, json, os, plistlib
           from pathlib import Path
           root = Path(os.environ["RUNNER_TEMP"])
           package = root / "Jarvis-macos-arm64.tar.gz"
           binary = Path("/private/tmp/jarvis-ci-desktop/Jarvis.app/Contents/MacOS/Jarvis")
           qa_launcher = Path("/private/tmp/jarvis-ci-desktop/Jarvis.app/Contents/Helpers/JarvisQALauncher")
-          value = {"format": "jarvis-desktop-ci/1", "commit": os.environ["GITHUB_SHA"],
-                   "run_id": os.environ["GITHUB_RUN_ID"], "development_bundle": True,
-                   "external_python_required": True, "architecture": "arm64",
-                   "archive_sha256": hashlib.sha256(package.read_bytes()).hexdigest(),
+          resources = binary.parent.parent / "Resources"
+          info = plistlib.loads((binary.parent.parent / "Info.plist").read_bytes())
+          report = json.loads((resources / "JarvisRuntimeQualification.json").read_bytes())
+          assert info["JarvisDistributionChannel"] == "self-contained"
+          assert report["source_commit"] == os.environ["GITHUB_SHA"]
+          assert report["parent_eof_clean_shutdown"] and report["official_codex_empty_account"]
+          with package.open("rb") as stream:
+              archive_hash = hashlib.file_digest(stream, "sha256").hexdigest()
+          value = {"format": "jarvis-desktop-ci/2", "commit": os.environ["GITHUB_SHA"],
+                   "run_id": os.environ["GITHUB_RUN_ID"], "development_bundle": False,
+                   "external_python_required": False, "external_codex_required": False,
+                   "architecture": "arm64", "signing": "ad-hoc-ci", "notarized": False,
+                   "archive_bytes": package.stat().st_size,
+                   "runtime_manifest_sha256": info["JarvisRuntimeManifestSHA256"],
+                   "qualification": report, "archive_sha256": archive_hash,
                    "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
                    "qa_launcher_bundled": qa_launcher.is_file()}
           if qa_launcher.is_file():
               value["qa_launcher_sha256"] = hashlib.sha256(qa_launcher.read_bytes()).hexdigest()
           (root / "Jarvis-provenance.json").write_text(json.dumps(value, sort_keys=True) + "\n")
           PY
-      - name: Conservar bundle de desarrollo sin perfiles ni credenciales
+      - name: Conservar bundle autocontenido sin perfiles ni credenciales
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:

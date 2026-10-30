@@ -129,12 +129,19 @@ final class ServiceKernelOwner {
 final class FoundationServiceChild: OwnedServiceChild {
     private let child: Process
     private let kernel: ServiceKernelOwner
-    var isRunning: Bool { kernel.observedExit == nil }
+    private let parentWatch: ServiceParentWatch?
+    var isRunning: Bool { observedExit == nil }
     var processIdentifier: Int32 { kernel.pid }
-    var observedExit: ServiceChildExit? { kernel.observedExit }
+    var observedExit: ServiceChildExit? {
+        let result = kernel.observedExit
+        if result != nil { parentWatch?.close() }
+        return result
+    }
     func signal(_ value: Int32) -> Bool { kernel.signal(value) }
 
-    init(child: Process, kernel: ServiceKernelOwner) { self.child = child; self.kernel = kernel }
+    init(child: Process, kernel: ServiceKernelOwner, parentWatch: ServiceParentWatch? = nil) {
+        self.child = child; self.kernel = kernel; self.parentWatch = parentWatch
+    }
 
     private static func identity(_ pid: Int32) -> ServiceKernelIdentity? {
         var info = proc_bsdinfo()
@@ -158,11 +165,12 @@ final class FoundationServiceChild: OwnedServiceChild {
         return .unknown
     }
 
-    convenience init(_ options: LaunchOptions) throws {
-        let plan = try ServiceLaunchPlan(options)
+    convenience init(_ options: LaunchOptions, preparedPlan: ServiceLaunchPlan? = nil) throws {
+        let plan = try preparedPlan ?? ServiceLaunchPlan(options)
+        let parentWatch = try ServiceParentWatch()
         let child = Process()
         child.executableURL = plan.executable
-        child.arguments = plan.arguments
+        child.arguments = plan.arguments + ["--parent-watch-stdin"]
         child.currentDirectoryURL = plan.workingDirectory
         var environment = plan.environment
         // The launching desktop chooses its own public pin. The private key
@@ -170,15 +178,16 @@ final class FoundationServiceChild: OwnedServiceChild {
         let identity = try RPCClientIdentity.forProfile(options.state, create: true)
         environment["JARVIS_RPC_BOOTSTRAP_PUBLIC_KEY"] = identity.publicKey
         child.environment = environment
-        child.standardInput = FileHandle.nullDevice
+        child.standardInput = parentWatch.pipe
         child.standardOutput = FileHandle.nullDevice
         child.standardError = FileHandle.nullDevice
         try child.run()
+        parentWatch.didLaunch()
         let pid = child.processIdentifier
-        self.init(child: child, emit: { Darwin.kill(pid, $0) == 0 })
+        self.init(child: child, emit: { Darwin.kill(pid, $0) == 0 }, parentWatch: parentWatch)
     }
 
-    convenience init(child: Process, emit: @escaping (Int32) -> Bool) {
+    convenience init(child: Process, emit: @escaping (Int32) -> Bool, parentWatch: ServiceParentWatch? = nil) {
         let pid = child.processIdentifier
         let kernel = ServiceKernelOwner(pid: pid, expected: Self.identity(pid),
                                         identity: { Self.identity(pid) }, wait: { Self.wait(pid) },
@@ -187,7 +196,7 @@ final class FoundationServiceChild: OwnedServiceChild {
             return ServiceChildExit(status: child.terminationStatus,
                                     wasSignalled: child.terminationReason == .uncaughtSignal)
         }, emit: emit)
-        self.init(child: child, kernel: kernel)
+        self.init(child: child, kernel: kernel, parentWatch: parentWatch)
     }
 }
 
@@ -199,6 +208,10 @@ public final class ServiceProcess {
     private var stopID: UUID?
     private var killAccepted = false
     private let makeChild: @MainActor (LaunchOptions) throws -> any OwnedServiceChild
+    private var makePreparedChild: (@MainActor (LaunchOptions, ServiceLaunchPlan) throws -> any OwnedServiceChild)?
+    private var prepareLaunch: @Sendable (LaunchOptions) async throws -> ServiceLaunchPlan = { try ServiceLaunchPlan($0) }
+    private var preparation: (id: UUID, task: Task<ServiceLaunchPlan, Error>)?
+    private var preparationStop: Task<Bool, Never>?
     private let now: @MainActor () -> TimeInterval
     private let sleep: @MainActor (TimeInterval) async throws -> Void
     private let gracePeriod: TimeInterval
@@ -213,6 +226,7 @@ public final class ServiceProcess {
         self.init(makeChild: { try FoundationServiceChild($0) },
                   now: { ProcessInfo.processInfo.systemUptime },
                   sleep: { try await Task.sleep(for: .seconds($0)) }, gracePeriod: 35)
+        makePreparedChild = { try FoundationServiceChild($0, preparedPlan: $1) }
     }
 
     init(makeChild: @escaping @MainActor (LaunchOptions) throws -> any OwnedServiceChild,
@@ -224,19 +238,57 @@ public final class ServiceProcess {
         self.gracePeriod = gracePeriod
     }
 
+    convenience init(makeChild: @escaping @MainActor (LaunchOptions) throws -> any OwnedServiceChild,
+                     makePreparedChild: @escaping @MainActor (LaunchOptions, ServiceLaunchPlan) throws -> any OwnedServiceChild,
+                     prepareLaunch: @escaping @Sendable (LaunchOptions) async throws -> ServiceLaunchPlan,
+                     now: @escaping @MainActor () -> TimeInterval,
+                     sleep: @escaping @MainActor (TimeInterval) async throws -> Void, gracePeriod: TimeInterval) {
+        self.init(makeChild: makeChild, now: now, sleep: sleep, gracePeriod: gracePeriod)
+        self.makePreparedChild = makePreparedChild; self.prepareLaunch = prepareLaunch
+    }
+
     public var isRunning: Bool { process?.isRunning == true }
-    public var isStopping: Bool { stopTask != nil }
+    public var isStopping: Bool { stopTask != nil || preparationStop != nil }
     public var ownedIdentity: ServiceOwnerIdentity? {
         guard let process, let ownerID else { return nil }
         return ServiceOwnerIdentity(ownerID: ownerID, processIdentifier: process.processIdentifier)
     }
 
     public func start(_ options: LaunchOptions) throws {
-        guard stopTask == nil, !requiresCleanupConfirmation else {
+        guard preparation == nil, preparationStop == nil, stopTask == nil, !requiresCleanupConfirmation else {
+            throw ServiceProcessFailure.cleanupUnconfirmed
+        }
+        guard options.bundledRuntime == nil else { throw BundledRuntimeFailure.invalidManifest }
+        guard process == nil else { return }
+        let child = try makeChild(options)
+        own(child, options: options)
+    }
+
+    /// The production path validates and hashes bundled files away from the UI
+    /// actor, then creates exactly one child. Cancellation/Stop joins that
+    /// validation and invalidates its admission before any launch can occur.
+    public func startVerified(_ options: LaunchOptions) async throws {
+        guard preparation == nil, preparationStop == nil, stopTask == nil, !requiresCleanupConfirmation else {
             throw ServiceProcessFailure.cleanupUnconfirmed
         }
         guard process == nil else { return }
-        let child = try makeChild(options)
+        guard let makePreparedChild else {
+            // The injectable unit-test factory has no bundled-file authority.
+            try start(options); return
+        }
+        let id = UUID()
+        let prepare = prepareLaunch
+        let work = Task.detached(priority: .userInitiated) { try await prepare(options) }
+        preparation = (id, work)
+        defer { if preparation?.id == id { preparation = nil } }
+        let plan = try await withTaskCancellationHandler(operation: { try await work.value }, onCancel: { work.cancel() })
+        guard !Task.isCancelled, preparation?.id == id, preparationStop == nil, stopTask == nil,
+              !requiresCleanupConfirmation, process == nil else { throw CancellationError() }
+        let child = try makePreparedChild(options, plan)
+        own(child, options: options)
+    }
+
+    private func own(_ child: any OwnedServiceChild, options: LaunchOptions) {
         process = child; ownerID = UUID(); killAccepted = false; lastStopReport = nil
         launchOptions = options
         readyProfileBinding = nil
@@ -295,6 +347,20 @@ public final class ServiceProcess {
     /// True means the owned child's exit was observed, not that all descendants
     /// or external effects were independently verified. Inspect lastStopReport.
     public func stop() async -> Bool {
+        if let preparationStop { return await preparationStop.value }
+        if let pending = preparation {
+            // The task only owns reads and descriptors. It is still joined;
+            // declaring Stop while it can later launch would be incorrect.
+            let task = Task { @MainActor in
+                pending.task.cancel()
+                _ = try? await pending.task.value
+                if self.preparation?.id == pending.id { self.preparation = nil }
+                self.preparationStop = nil
+                return true
+            }
+            preparationStop = task
+            return await task.value
+        }
         if let stopTask { return await stopTask.value.exitConfirmed }
         guard let child = process, let ownerID else { return lastStopReport?.exitConfirmed ?? true }
         requiresCleanupConfirmation = true

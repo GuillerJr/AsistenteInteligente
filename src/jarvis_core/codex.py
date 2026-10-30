@@ -116,7 +116,8 @@ class _ToolTurn:
 class CodexClient:
     supports_approved_media_handoff = True
 
-    def __init__(self, executable: Path, directory: Path, *, timeout: float = 20) -> None:
+    def __init__(self, executable: Path, directory: Path, *, timeout: float = 20,
+                 certificate_bundle: Path | None = None) -> None:
         if not executable.is_absolute() or not executable.is_file():
             raise ValueError("codex_executable_invalid")
         if not 0 < timeout <= 30:
@@ -124,6 +125,7 @@ class CodexClient:
         self.executable = executable
         self.directory = directory
         self.timeout = timeout
+        self.certificate_bundle = certificate_bundle
         self._process: asyncio.subprocess.Process | None = None
         self._reader: asyncio.Task | None = None
         self._stderr: asyncio.Task | None = None
@@ -168,6 +170,10 @@ class CodexClient:
                 key: os.environ[key] for key in ("PATH", "TMPDIR", "LANG") if key in os.environ
             }
             environment.update(HOME=str(home), CODEX_HOME=str(codex_home))
+            if self.certificate_bundle is not None:
+                # Only the sealed product's explicit launch admission supplies
+                # this path. Do not forward ambient SSL_CERT_* or proxies.
+                environment["SSL_CERT_FILE"] = str(self.certificate_bundle)
             arguments = [str(self.executable), "app-server", "--listen", "stdio://"]
             # No inherited MCP servers, host skills, plugins, provider keys or proxies.
             for setting in (

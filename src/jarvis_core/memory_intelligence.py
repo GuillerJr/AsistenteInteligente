@@ -16,6 +16,7 @@ import threading
 import time
 from contextlib import suppress
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from uuid import uuid4
 
@@ -137,6 +138,7 @@ class MemoryIntelligence:
         model_directory=None,
         model_preparer=prepare_model,
         engine_factory=LocalEmbeddingClient,
+        bundled_model_source=None,
     ):
         self.service = service
         self.profile = Path(service.directory)
@@ -149,7 +151,16 @@ class MemoryIntelligence:
         self.cache_directory = self.profile.with_name(self.profile.name + ".memory-cache")
         self.jobs_directory = self.profile.with_name(self.profile.name + ".memory-jobs")
         self.index = MemoryIndex(self.cache_directory, self.binding)
-        self.model_preparer, self.engine_factory = model_preparer, engine_factory
+        self.model_preparer = (
+            partial(prepare_model, bundled_source=bundled_model_source)
+            if bundled_model_source is not None and model_preparer is prepare_model
+            else model_preparer
+        )
+        self.model_repairer = (
+            partial(repair_model, bundled_source=bundled_model_source)
+            if bundled_model_source is not None else repair_model
+        )
+        self.engine_factory = engine_factory
         self._engine = None
         self._model_metadata = None
         self._model_signature = None
@@ -1209,7 +1220,7 @@ class MemoryIntelligence:
             self._write_slots(slots, intent, guard)
             try:
                 result = await self._thread(
-                    repair_model,
+                    self.model_repairer,
                     self.model_directory,
                     replacement,
                     _mutating=True,

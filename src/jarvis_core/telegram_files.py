@@ -11,12 +11,12 @@ import asyncio
 import json
 import re
 import secrets
-import ssl
 import threading
 import time
 
 from jarvis_core.telegram import _TOKEN, TelegramCancelled, TelegramError, TelegramHTTPTransport
 from jarvis_core.telegram_content import MAX_ATTACHMENT_BYTES
+from jarvis_core.web import tls_context
 
 
 def validate_file_path(value):
@@ -52,7 +52,7 @@ class TelegramFileTransport:
                 reader, writer = await self._connector(
                     "api.telegram.org",
                     443,
-                    ssl=ssl.create_default_context(),
+                    ssl=tls_context(),
                     server_hostname="api.telegram.org",
                     ssl_shutdown_timeout=1,
                 )
@@ -212,7 +212,7 @@ class _TelegramMultipartTransport:
                 reader, writer = await self._connector(
                     "api.telegram.org",
                     443,
-                    ssl=ssl.create_default_context(),
+                    ssl=tls_context(),
                     server_hostname="api.telegram.org",
                     ssl_shutdown_timeout=1,
                 )

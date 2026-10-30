@@ -193,6 +193,27 @@ def parse_url(value: str) -> PublicURL:
         raise WebError("web_url_invalid") from None
 
 
+_bundled_ca_pem: bytes | None = None
+
+
+def configure_bundled_tls(pem: bytes) -> None:
+    """One explicit admitted distribution CA, never an environment override.
+
+    The product entry point verifies these bytes against its sealed manifest
+    before any store or network client exists. Keep bytes, not a mutable path.
+    """
+    global _bundled_ca_pem
+    if (type(pem) is not bytes or not 0 < len(pem) <= 512 * 1024
+            or (_bundled_ca_pem is not None and _bundled_ca_pem != pem)):
+        raise WebError("web_tls_trust_unavailable")
+    try:
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.load_verify_locations(cadata=pem.decode("ascii"))
+    except (ValueError, UnicodeError, ssl.SSLError):
+        raise WebError("web_tls_trust_unavailable") from None
+    _bundled_ca_pem = pem
+
+
 def tls_context() -> ssl.SSLContext:
     # create_default_context honors SSLKEYLOGFILE. Build the context explicitly
     # instead, with system OpenSSL CA paths rather than ambient SSL_CERT_* paths.
@@ -200,6 +221,9 @@ def tls_context() -> ssl.SSLContext:
     context.check_hostname = True
     context.verify_mode = ssl.CERT_REQUIRED
     context.minimum_version = ssl.TLSVersion.TLSv1_2
+    if _bundled_ca_pem is not None:
+        context.load_verify_locations(cadata=_bundled_ca_pem.decode("ascii"))
+        return context
     paths = ssl.get_default_verify_paths()
     cafile = (
         paths.openssl_cafile

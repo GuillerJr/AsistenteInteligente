@@ -1,5 +1,10 @@
 # Variante propia inspirada en OpenClaw — base limpia
 
+El incremento de [distribución autocontenida y servicio residente](PHASE_A_DISTRIBUTION_RESIDENT.md)
+incorpora el runtime completo, verificación por manifiesto firmado, preparación
+offline del modelo y arranque optativo de la app en la sesión del usuario.
+Su cualificación se registra por commit; no completa la fase A ni adelanta B.
+
 El [incremento de automatización](PHASE_A_AUTOMATION.md) está cualificado en
 su alcance elegido: cron/heartbeat/wake, eventos, webhook HMAC loopback y flujos
 con checkpoints. Los recorridos nativos y cierre del bundle d474 se relacionan

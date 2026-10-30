@@ -1,6 +1,7 @@
 include LICENSE README.md pyproject.toml uv.lock
 include .githooks/pre-commit .githooks/pre-push
 recursive-include script *.py *.sh
+include script/runtime_artifacts.json
 recursive-include tests *.py
 recursive-include native/JarvisDesktop *.swift *.plist *.md
 prune native/JarvisDesktop/.build

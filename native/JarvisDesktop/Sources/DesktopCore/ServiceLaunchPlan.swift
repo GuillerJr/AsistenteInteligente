@@ -18,15 +18,32 @@ public struct ServiceLaunchPlan: Sendable {
     """
 
     public init(_ options: LaunchOptions, inheritedEnvironment: [String: String] = ProcessInfo.processInfo.environment) throws {
+        if let runtime = options.bundledRuntime {
+            guard options.distributionMode != .development, options.python == runtime.python,
+                  options.source == runtime.source, options.dependencies == runtime.dependencies,
+                  options.codex == runtime.codex, options.automationTestOrigin == nil else {
+                throw BundledRuntimeFailure.externalArguments
+            }
+            try runtime.revalidate()
+        } else if options.distributionMode != .development { throw BundledRuntimeFailure.missing }
         // Resolve the chosen interpreter itself, without discovering another one.
         // CPython otherwise probes a venv's pyvenv.cfg before the first Python frame.
         let selected = URL(fileURLWithPath: options.python).resolvingSymlinksInPath()
         guard selected.path.hasPrefix("/"), FileManager.default.isExecutableFile(atPath: selected.path) else { throw RPCFailure.configuration }
         executable = selected
-        arguments = ["-I", "-S", "-B", "-u", "-c", Self.bootstrap, options.source, options.dependencies ?? ""]
-            + options.serviceArguments.dropFirst(2)
+        let serviceArguments = Array(options.serviceArguments.dropFirst(2))
+        arguments = ["-I", "-S", "-B", "-u", "-c", Self.bootstrap, options.source, options.dependencies ?? ""] + serviceArguments
         let allowed: Set<String> = ["PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "__CF_USER_TEXT_ENCODING"]
-        environment = inheritedEnvironment.filter { allowed.contains($0.key) }
+        var admittedEnvironment = inheritedEnvironment.filter { allowed.contains($0.key) }
+        if let runtime = options.bundledRuntime {
+            let directories = try LaunchOptions.runtimeDirectories(state: options.state)
+            admittedEnvironment["HOME"] = directories.home
+            admittedEnvironment["TMPDIR"] = directories.temporary + "/"
+            admittedEnvironment["PATH"] = URL(fileURLWithPath: runtime.python).deletingLastPathComponent().path + ":"
+                + URL(fileURLWithPath: runtime.codex).deletingLastPathComponent().path + ":/usr/bin:/bin:/usr/sbin:/sbin"
+            admittedEnvironment["SSL_CERT_FILE"] = runtime.certificateBundle
+        }
+        environment = admittedEnvironment
         // -I ignores Python environment tuning, -S skips global/user site hooks,
         // and -B/-u are explicit because isolated mode also ignores their env vars.
     }

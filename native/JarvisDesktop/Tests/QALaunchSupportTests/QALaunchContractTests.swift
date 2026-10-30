@@ -4,6 +4,44 @@ import XCTest
 @testable import QALaunchSupport
 
 final class QALaunchContractTests: XCTestCase {
+    func testArgumentFreeQualificationRequiresPinnedPrivateConfigurationAndRechecksIt() throws {
+        let fixture = try QALaunchFixture(); defer { fixture.remove() }
+        let config = try fixture.writeQualification()
+        try fixture.writeRequest(arguments: [])
+        let admitted = try fixture.admit()
+        XCTAssertEqual(admitted.request.arguments, [])
+        try admitted.revalidate()
+        var data = try Data(contentsOf: config); data.append(10)
+        try data.write(to: config)
+        XCTAssertThrowsError(try admitted.revalidate())
+    }
+
+    func testProductAndQualificationNeverBorrowDevelopmentOverrides() throws {
+        let fixture = try QALaunchFixture(); defer { fixture.remove() }
+        try fixture.writeInfo(additional: ["JarvisDistributionChannel": "self-contained"])
+        try fixture.writeRequest(arguments: [])
+        XCTAssertThrowsError(try fixture.admit())
+        try fixture.writeRequest()
+        XCTAssertThrowsError(try fixture.admit())
+        _ = try fixture.writeQualification()
+        try fixture.writeRequest()
+        XCTAssertThrowsError(try fixture.admit(), "Qualification uses its pinned profile, never runtime flags")
+    }
+
+    func testQualificationProfileRejectsOutsideScopeUnsafePermissionsAndChangedRuntimePin() throws {
+        let fixture = try QALaunchFixture(); defer { fixture.remove() }
+        _ = try fixture.writeQualification(state: "/Users/not-opened/private-profile")
+        try fixture.writeRequest(arguments: [])
+        XCTAssertThrowsError(try fixture.admit())
+        _ = try fixture.writeQualification()
+        XCTAssertEqual(chmod(fixture.root.appendingPathComponent("state").path, 0o755), 0)
+        XCTAssertThrowsError(try fixture.admit())
+        XCTAssertEqual(chmod(fixture.root.appendingPathComponent("state").path, 0o700), 0)
+        _ = try fixture.writeQualification()
+        try Data("changed".utf8).write(to: fixture.app.appendingPathComponent("Contents/Resources/JarvisRuntime/runtime-manifest.json"))
+        XCTAssertThrowsError(try fixture.admit())
+    }
+
     func testLexicalPrivateTmpAdmissionDoesNotCollapseItsPrefixOrAcceptAliasesAndDotComponents() throws {
         let fixture = try QALaunchFixture(); defer { fixture.remove() }
         let request = try QALaunchAdmission.fileURL(from: fixture.requestURL.path, isDirectory: false)
@@ -242,12 +280,30 @@ private struct QALaunchFixture {
         try data.write(to: executable)
         guard chmod(executable.path, 0o700) == 0 else { throw QALaunchIssue.file }
     }
-    func writeInfo(executable: String = "Jarvis", bundleID: String? = nil, speech: Bool = true) throws {
+    func writeInfo(executable: String = "Jarvis", bundleID: String? = nil, speech: Bool = true, additional: [String: Any] = [:]) throws {
         var value: [String: Any] = ["CFBundleIdentifier": bundleID ?? self.bundleID, "CFBundlePackageType": "APPL",
             "CFBundleExecutable": executable, "NSMicrophoneUsageDescription": "Micrófono sintético revisado."]
         if speech { value["NSSpeechRecognitionUsageDescription"] = "Reconocimiento local sintético revisado." }
+        value.merge(additional) { _, new in new }
         try PropertyListSerialization.data(fromPropertyList: value, format: .xml, options: 0)
             .write(to: app.appendingPathComponent("Contents/Info.plist"))
+    }
+    func writeQualification(state: String? = nil) throws -> URL {
+        let resources = app.appendingPathComponent("Contents/Resources", isDirectory: true)
+        let runtime = resources.appendingPathComponent("JarvisRuntime", isDirectory: true)
+        try FileManager.default.createDirectory(at: runtime, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        let config = resources.appendingPathComponent("JarvisQualification.json")
+        let raw: [String: String] = ["format": "jarvis.qualification-profile.v1", "state": state ?? root.appendingPathComponent("state").path,
+                                     "provider_state": root.appendingPathComponent("provider").path]
+        let data = try JSONSerialization.data(withJSONObject: raw, options: [.sortedKeys, .withoutEscapingSlashes])
+        try data.write(to: config)
+        // Contract fixture only, not a complete product manifest or executable.
+        let manifest = Data("{}".utf8)
+        try manifest.write(to: runtime.appendingPathComponent("runtime-manifest.json"))
+        try writeInfo(additional: ["JarvisDistributionChannel": "self-contained-qualification",
+                                   "JarvisQualificationConfigurationSHA256": QALaunchAdmission.digest(data),
+                                   "JarvisRuntimeManifestSHA256": QALaunchAdmission.digest(manifest)])
+        return config
     }
     func writeRequest(appPath: String? = nil, arguments: [String]? = nil, environment: [String: String]? = nil) throws {
         let value = QALaunchRequest(appPath: appPath ?? app.path, expectedBundleID: bundleID,

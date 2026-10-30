@@ -1,0 +1,44 @@
+{
+  "schema": "jarvis.distribution-resident-qualification.v1",
+  "date": "2026-10-30",
+  "status": "implemented_pending_exact_ci_and_native_qualification",
+  "scope": "macOS arm64: runtime incluido, traslado, cierre por EOF y residencia de app con inicio optativo",
+  "complete_phase_a": false,
+  "phase_b_started": false,
+  "reference_commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "new_rea_batch_claimed": false,
+  "owner_installed_app_modified": false,
+  "owner_legacy_profiles_opened": false,
+  "local_full_suite_or_build_run": false,
+  "remote_build_budget_mib": 8192,
+  "remote_build_deadline_seconds": 1200,
+  "implemented": [
+    "Pinned standalone CPython, full official Codex package and locked production wheels",
+    "Public MiniLM assets included; explicit private offline preparation and repair",
+    "Nested signing before exact manifest; signed Info pin and native/core read-only revalidation",
+    "No product argv overrides, PATH discovery, external runtime or hidden fallback",
+    "Explicit pinned CA bytes for web and explicit CA path for official Codex",
+    "App delegate owns service independently of WindowGroup visibility",
+    "Main-app SMAppService status and explicit register/unregister confirmations",
+    "Parent-held noninheritable pipe; synchronous EOF admission and normal service cleanup"
+  ],
+  "remote_oracles": [
+    "Exact full Python Ubuntu/macOS and Swift suites",
+    "Archive admission, unsafe links, manifest tamper/missing/extra/path/identity negatives",
+    "Relocated app with spaces, no Homebrew/source/venv dependency",
+    "Actual included native dependencies, local CPU embedding and Opus",
+    "Actual official Codex protocol with fresh empty account",
+    "Signed IPC, SQLite and parent EOF close with lease free",
+    "Wheel/sdist source equivalence and isolated installation smoke"
+  ],
+  "ci": [],
+  "native_qualification": [],
+  "known_limits": [
+    "Ad hoc CI signature is not Developer ID or public notarization",
+    "Apple Developer membership not owned; no credentials requested or inferred",
+    "Login Item registration changes the real OS; disabled in synthetic qualification mode",
+    "No claim of automatic restart after explicit Quit or native host crash",
+    "No claim of macOS14 runtime qualification from a newer runner",
+    "No owner installed app replacement, account migration, automatic update or phase A global closure"
+  ]
+}

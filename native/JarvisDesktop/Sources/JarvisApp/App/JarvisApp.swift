@@ -4,7 +4,7 @@ import SwiftUI
 @main @MainActor
 struct JarvisApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    @State private var profiles = AppProfileCoordinator()
+    private var profiles: AppProfileCoordinator { delegate.profiles }
     private var store: ChatStore { profiles.active.store }
     @Environment(\.openWindow) private var openWindow
 
@@ -17,11 +17,9 @@ struct JarvisApp: App {
                 .background(SettingsSceneActionBridge(registration: delegate.settingsWindowAction))
                 .onAppear {
                     delegate.store = store
-                    delegate.profiles = profiles
                     delegate.openMainWindow = { openWindow(id: "main") }
                 }
                 .onChange(of: profiles.active.runtimeID) { _, _ in delegate.store = store }
-                .task { await profiles.start() }
         }
         .defaultSize(width: 1040, height: 720)
         .commands {

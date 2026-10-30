@@ -17,6 +17,7 @@ import SwiftUI
         VStack(spacing: 0) {
             if let notice = navigation.attention(in: notices) { OwnerDecisionBanner(notice: notice, navigation: navigation) }
         TabView(selection: Binding(get: { navigation.selectedTab }, set: { navigation.select($0) })) {
+        Group {
         Form {
             Section("Escritorio") {
                 Picker("Abrir Jarvis", selection: $shortcut) {
@@ -42,7 +43,7 @@ import SwiftUI
                 Text("La elección del perfil es local a esta sesión de la app; no cambia el perfil de un próximo inicio.").font(.caption).foregroundStyle(.secondary)
             }
             Section("Estado de esta base") {
-                Text("Cliente nativo de desarrollo. Requiere el servicio Python del repositorio y el cliente oficial de Codex.")
+                Text(distributionDescription)
                 Text("Las capacidades disponibles se consultan en «Herramientas» y «Memoria». La paridad completa de la base permanece en construcción.")
                     .font(.caption).foregroundStyle(.secondary)
             }
@@ -54,8 +55,11 @@ import SwiftUI
             RestoredMemoryView(restoration: store.memoryRestoration, navigation: navigation, agents: store.management.agents, mayBegin: !store.coreBlocksHost && store.ready && !store.starting && !store.handoffPreparing && !store.busy && store.activeRunID == nil && !store.voice.canStopDictation && !profiles.isOpening && !store.maintenance.blocksInteraction && !store.channelRestoration.blocksInteraction && !store.restored.blocksInteraction && !store.recovery.blocksInteraction).tabItem { Label("Memoria conservada", systemImage: "brain") }.tag("memory-restored")
             }
             RecoveryCenterView(recovery: store.recovery, navigation: navigation, workspacePath: store.access.workspacePath, profilePath: store.launchOptions?.state, verificationID: store.maintenance.verification?.id, mayBegin: !store.coreBlocksHost && store.ready && !store.starting && !store.handoffPreparing && !store.busy && store.activeRunID == nil && !store.voice.canStopDictation && !profiles.isOpening && !store.maintenance.blocksInteraction && !store.channelRestoration.blocksInteraction && !store.memoryRestoration.blocksInteraction && !store.restored.blocksInteraction).tabItem { Label("Recuperación", systemImage: "externaldrive.badge.checkmark") }.tag("recovery")
+        }.disabled(!store.ready || store.starting || store.isShuttingDown)
+            ResidentServiceView(store: store, login: delegate.loginItems)
+                .tabItem { Label("Servicio", systemImage: "server.rack") }.tag("service")
         }
-        }.frame(width: 760, height: 680).disabled(!store.ready || store.starting || store.isShuttingDown)
+        }.frame(width: 760, height: 680)
             .onAppear { navigation.configure(runtimeID: store.runtime.id); navigation.detect(notices, visible: windowVisible) }
             .onChange(of: notices) { _, rows in navigation.detect(rows, visible: windowVisible) }
             .background(SettingsWindowVisibilityBridge(delivery: visibilityDelivery) { visible in
@@ -79,6 +83,14 @@ import SwiftUI
                 store.memoryRestoration.setVisible(maintenanceViewID, visible: false)
                 store.recovery.setVisible(maintenanceViewID, visible: false)
             }
+    }
+    private var distributionDescription: String {
+        switch store.launchOptions?.distributionMode {
+        case .selfContained: "Runtime Python, dependencias y cliente oficial de Codex incluidos en el paquete. La cuenta se conecta por elección del dueño."
+        case .qualification: "Paquete autocontenido de cualificación con perfil sintético fijado. No modifica Ítems de inicio."
+        case .development: "Cliente nativo de desarrollo. Requiere las rutas explícitas del runtime Python y del cliente oficial de Codex."
+        case nil: "El paquete o su configuración de arranque todavía no están admitidos. Consulta el estado del servicio."
+        }
     }
     private func updateMaintenanceVisibility() {
         store.maintenance.setVisible(maintenanceViewID, visible: windowVisible && selectedTab == "maintenance")

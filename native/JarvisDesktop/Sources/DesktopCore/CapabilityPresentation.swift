@@ -2,6 +2,7 @@ import Foundation
 
 public enum CapabilityPresentation {
     public static func errorMessage(_ error: Error) -> String {
+        if let failure = error as? BundledRuntimeFailure { return failure.localizedDescription }
         guard let failure = error as? RPCFailure else { return "No se pudo completar la operación." }
         guard case .remote(_, let message) = failure else { return failure.localizedDescription }
         switch message {

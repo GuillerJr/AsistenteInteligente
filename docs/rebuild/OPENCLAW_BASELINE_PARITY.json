@@ -97,6 +97,10 @@
         {
           "progress_id": "P-CORE-SERVICE",
           "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        },
+        {
+          "progress_id": "P-DISTRIBUTION-RESIDENT",
+          "scope": "Runtime autocontenido y residencia de app implementados; CI exacta y recorrido nativo pendientes en PHASE_A_DISTRIBUTION_RESIDENT.md. No cierra la familia."
         }
       ],
       "acceptance": {
@@ -252,6 +256,10 @@
         {
           "progress_id": "P-CORE-SERVICE",
           "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        },
+        {
+          "progress_id": "P-DISTRIBUTION-RESIDENT",
+          "scope": "Runtime autocontenido y residencia de app implementados; CI exacta y recorrido nativo pendientes en PHASE_A_DISTRIBUTION_RESIDENT.md. No cierra la familia."
         }
       ],
       "acceptance": {
@@ -2198,6 +2206,10 @@
         {
           "progress_id": "P-RECOVERY",
           "scope": "Avance contractual parcial; límites y cualificación en PHASE_A_RECOVERY.md."
+        },
+        {
+          "progress_id": "P-DISTRIBUTION-RESIDENT",
+          "scope": "Runtime autocontenido y residencia de app implementados; CI exacta y recorrido nativo pendientes en PHASE_A_DISTRIBUTION_RESIDENT.md. No cierra la familia."
         }
       ],
       "acceptance": {
@@ -2322,6 +2334,10 @@
         {
           "progress_id": "P-TELEGRAM",
           "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
+        },
+        {
+          "progress_id": "P-DISTRIBUTION-RESIDENT",
+          "scope": "Runtime autocontenido y residencia de app implementados; CI exacta y recorrido nativo pendientes en PHASE_A_DISTRIBUTION_RESIDENT.md. No cierra la familia."
         }
       ],
       "acceptance": {
@@ -15138,6 +15154,34 @@
         },
         "remaining_in_selected_increment": [],
         "qualification_file": "PHASE_A_TELEGRAM_VOICE_MEDIA_QUALIFICATION.json"
+      },
+      {
+        "id": "P-DISTRIBUTION-RESIDENT",
+        "component": "Distribución autocontenida y servicio residente de sesión",
+        "status": "implemented_pending_qualification",
+        "code": [
+          "src/jarvis_core/bundled_runtime.py",
+          "src/jarvis_core/parent_lifetime.py",
+          "script/package_desktop_runtime.py",
+          "native/JarvisDesktop/Sources/DesktopCore/BundledRuntime.swift",
+          "native/JarvisDesktop/Sources/DesktopCore/LoginItemController.swift"
+        ],
+        "tests": [
+          "tests/test_bundled_runtime.py",
+          "tests/test_package_desktop_runtime.py",
+          "tests/test_bundled_model_artifacts.py",
+          "tests/test_parent_lifetime.py",
+          "tests/test_service_parent_lifetime.py",
+          "tests/test_bundled_tls.py"
+        ],
+        "capability_ids": [
+          "A-01",
+          "A-06",
+          "A-69",
+          "A-72"
+        ],
+        "verified_scope": "Implementación y contratos pendientes de CI exacta y cualificación nativa; ver PHASE_A_DISTRIBUTION_RESIDENT_QUALIFICATION.json.",
+        "remaining": "Developer ID/notarización pública requieren decisión y credenciales del dueño. Inicio optativo de sesión no relanza tras Salir o caída del host; no cierra la fase A global."
       }
     ],
     "detail_file": "PHASE_A_AUTOMATION_CLOSEOUT.md",

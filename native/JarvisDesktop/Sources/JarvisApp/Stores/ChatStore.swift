@@ -96,6 +96,24 @@ final class ChatStore {
         && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction
         && !recovery.blocksInteraction && !restored.blocksInteraction }
     var launchOptions: LaunchOptions? { options }
+    var mayConfigureLoginItem: Bool {
+        guard runtime.isActive, !stopping, !starting, !handoffPreparing,
+              let options, options.distributionMode == .selfContained,
+              options.expectedRestore == nil, !options.recoveryOnly,
+              options.bundledRuntime != nil else { return false }
+        return true
+    }
+    func verifyLoginItemBundle() async -> Bool {
+        guard mayConfigureLoginItem, let reviewed = options, let bundled = reviewed.bundledRuntime else { return false }
+        let expectedRuntime = runtime.id
+        let check = Task.detached(priority: .userInitiated) { try bundled.revalidate() }
+        do { try await withTaskCancellationHandler(operation: { try await check.value }, onCancel: { check.cancel() }) }
+        catch { return false }
+        return mayConfigureLoginItem && runtime.id == expectedRuntime && options == reviewed
+    }
+    var residentServiceRunning: Bool { service.isRunning }
+    var residentCleanupUnconfirmed: Bool { service.requiresCleanupConfirmation && !service.isStopping }
+    var residentRecoveryBlocked: Bool { crashRecoveryBlocked }
     var isRecoveryOnly: Bool { (options ?? suppliedOptions)?.recoveryOnly == true }
     var serviceOwner: ServiceOwnerIdentity? { service.ownedIdentity }
     var durableDraftSnapshot: SessionDrafts { drafts.durableOnly }
@@ -300,10 +318,13 @@ final class ChatStore {
         defer { starting = false }
         var startupRead = "la identidad y el estado local"
         do {
-            let options = try suppliedOptions ?? LaunchOptions.parse(Array(CommandLine.arguments.dropFirst()))
+            let options: LaunchOptions
+            if let suppliedOptions { options = suppliedOptions }
+            else { options = try await LaunchOptions.resolveCurrentApplication(Array(CommandLine.arguments.dropFirst())) }
+            guard runtime.isActive, !stopping, !Task.isCancelled else { throw CancellationError() }
             self.options = options
             configureConnections(options)
-            try service.start(options)
+            try await service.startVerified(options)
             try await ServiceBootstrap.waitForHealth(stateDirectory: options.state) { service.isRunning }
             try service.confirmReadyProfile(options)
             if !isRecoveryOnly { await automation.start() }
@@ -326,6 +347,7 @@ final class ChatStore {
             try await mcp.refresh()
             startMonitor()
         } catch {
+            guard runtime.isActive, !stopping else { return }
             if openTarget != nil, error as? RPCFailure == .invalidResponse {
                 _ = await shutdown()
                 statusText = "No se pudo validar \(startupRead) del perfil restaurado"
@@ -523,7 +545,7 @@ final class ChatStore {
             await memoryRestoration.close(); await memoryIntelligence.close(); await recovery.close()
             guard !stopping, runtime.isActive else { return false }
             configureConnections(options)
-            try service.start(options)
+            try await service.startVerified(options)
             try await ServiceBootstrap.waitForHealth(stateDirectory: options.state) { service.isRunning }
             try service.confirmReadyProfile(options)
             if !isRecoveryOnly { await automation.start() }
@@ -984,7 +1006,7 @@ final class ChatStore {
                     guard let report = service.lastStopReport, predecessor.matches(report), report.graceful else { throw ServiceProcessFailure.cleanupUnconfirmed }
                 } else if let report = service.lastStopReport, !report.graceful { throw ServiceProcessFailure.cleanupUnconfirmed }
                 guard runtime.isActive, !stopping else { return }
-                try service.start(options)
+                try await service.startVerified(options)
                 drafts.clearTemporary()
                 sessions.removeAll(where: \.temporary)
                 access.setContext(nil)

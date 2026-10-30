@@ -317,9 +317,10 @@ def test_orphaned_admission_blocks_another_run_without_dispatch(tmp_path, monkey
     ("test_desktop.sh", ["--full"], True),
     ("build_desktop.sh", ["--budget-mib", "32"], False),
     ("build_desktop.sh", ["--full"], True),
+    ("build_desktop.sh", ["--full", "--self-contained"], True),
 ])
 def test_wrappers_forward_empty_optional_arrays_on_system_bash(
-        tmp_path, wrapper, arguments, full):
+        tmp_path, monkeypatch, wrapper, arguments, full):
     """macOS /bin/bash 3.2 rejects an empty array expansion under nounset."""
     repository = tmp_path / "own-wrapper-repo"
     scripts, binaries = repository / "script", repository / ".venv/bin"
@@ -332,6 +333,8 @@ def test_wrappers_forward_empty_optional_arrays_on_system_bash(
     python.write_text("#!" + sys.executable + "\nimport json,sys\n"
                       "print(json.dumps(sys.argv[1:]))\n")
     python.chmod(0o700)
+    if "--self-contained" in arguments:
+        monkeypatch.setenv("JARVIS_MINILM_TEST_ASSETS", str(tmp_path / "public-pinned-model"))
     result = subprocess.run(["/bin/bash", str(selected), *arguments],
         capture_output=True, text=True, timeout=10, check=False)
     assert result.returncode == 0, result.stderr
@@ -340,6 +343,10 @@ def test_wrappers_forward_empty_optional_arrays_on_system_bash(
     assert ("--full" in forwarded) is full
     assert forwarded[forwarded.index("--profile") + 1] == ("ci" if full else "local")
     assert "admitted-exec" in forwarded and "--guard-child" in forwarded
+    if "--self-contained" in arguments:
+        assert forwarded[-1] == "--self-contained"
+        assert forwarded[forwarded.index("--minilm-test-assets") + 1] == str(
+            tmp_path / "public-pinned-model")
 
 
 @pytest.mark.parametrize("mode", ["apfs_volume_used", "ci_available_delta"])

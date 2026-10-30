@@ -70,7 +70,7 @@ public struct OwnerDecisionNotice: Identifiable, Sendable, Equatable {
         self.runtimeID = runtimeID; selectedTab = "general"; focusID = nil; dismissed = []; seen = []; firstObserved = [:]; observationSequence = 0; revealSequence += 1
     }
     public func select(_ tab: String) {
-        guard ["general", "maintenance", "recovery", "restored", "memory-restored", "channels-restored"].contains(tab) else { return }; selectedTab = tab
+        guard ["general", "service", "maintenance", "recovery", "restored", "memory-restored", "channels-restored"].contains(tab) else { return }; selectedTab = tab
     }
     public func attention(in notices: [OwnerDecisionNotice]) -> OwnerDecisionNotice? {
         let rows = notices.filter { $0.requiresAttention && !dismissed.contains($0.id) }

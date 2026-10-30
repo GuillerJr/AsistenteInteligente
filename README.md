@@ -57,6 +57,12 @@ Este comando no lee credenciales ni historial de otra instalación. El inicio de
 sesión se solicita desde la app; el dueño lo completa en la página oficial.
 El paquete Python no incluye el ejecutable oficial Codex ni un intérprete embebido.
 
+La [distribución autocontenida y residencia](docs/rebuild/PHASE_A_DISTRIBUTION_RESIDENT.md)
+se cualifican por separado. CI ensambla una app con Python, dependencias, Codex y
+MiniLM incluidos, prueba su traslado y cierra el servicio por pérdida del host.
+El modo de desarrollo anterior conserva sus rutas explícitas. La firma local de
+CI no equivale a Developer ID ni notarización pública.
+
 ## Registros
 
 - [Fases y arquitectura](docs/rebuild/README.md).

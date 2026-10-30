@@ -109,7 +109,7 @@ public struct QALaunchAdmission: Sendable {
               access(executable.path, X_OK) == 0,
               digest(binary) == request.expectedExecutableSHA256
         else { throw QALaunchIssue.executable }
-        try validateArguments(request.arguments)
+        try validateArguments(request.arguments, plist: plist, app: app)
         guard Set(request.environment.keys) == ["HOME", "TMPDIR", "PATH"],
               request.environment["PATH"] == "/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
         else { throw QALaunchIssue.arguments }
@@ -120,7 +120,46 @@ public struct QALaunchAdmission: Sendable {
         return plistData
     }
 
-    private static func validateArguments(_ arguments: [String]) throws {
+    private static func validateArguments(_ arguments: [String], plist: [String: Any], app: URL) throws {
+        let channel = plist["JarvisDistributionChannel"] as? String
+        if arguments.isEmpty {
+            guard channel == "self-contained-qualification",
+                  (plist["CFBundleIdentifier"] as? String)?.hasPrefix("local.jarvis.qa.") == true,
+                  let configPin = plist["JarvisQualificationConfigurationSHA256"] as? String,
+                  configPin.range(of: #"^[0-9a-f]{64}$"#, options: .regularExpression) != nil,
+                  let runtimePin = plist["JarvisRuntimeManifestSHA256"] as? String,
+                  runtimePin.range(of: #"^[0-9a-f]{64}$"#, options: .regularExpression) != nil else { throw QALaunchIssue.arguments }
+            let config = app.appendingPathComponent("Contents/Resources/JarvisQualification.json")
+            try syntheticPath(config, directory: false)
+            let data = try read(config, limit: 16_384)
+            guard digest(data) == configPin,
+                  let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  Set(raw.keys) == Set(["format", "state"]) || Set(raw.keys) == Set(["format", "state", "provider_state"]),
+                  raw["format"] as? String == "jarvis.qualification-profile.v1",
+                  (try? JSONSerialization.data(withJSONObject: raw, options: [.sortedKeys, .withoutEscapingSlashes])) == data else { throw QALaunchIssue.arguments }
+            for key in ["state", "provider_state"] where raw[key] != nil {
+                guard let path = raw[key] as? String else { throw QALaunchIssue.arguments }
+                let url = try fileURL(from: path, isDirectory: true)
+                guard url.path == path else { throw QALaunchIssue.path }
+                try syntheticPath(url, directory: true)
+                var current = path
+                while current != "/private/tmp" {
+                    var info = stat()
+                    guard lstat(current, &info) == 0, (info.st_mode & S_IFMT) == S_IFDIR,
+                          info.st_mode & 0o077 == 0 else { throw QALaunchIssue.ownership }
+                    current = URL(fileURLWithPath: current).deletingLastPathComponent().path
+                }
+            }
+            let manifest = app.appendingPathComponent("Contents/Resources/JarvisRuntime/runtime-manifest.json")
+            try syntheticPath(manifest, directory: false)
+            guard digest(try read(manifest, limit: 8 * 1024 * 1024)) == runtimePin else { throw QALaunchIssue.changed }
+            return
+        }
+        guard channel == nil || channel == "development",
+              plist["JarvisRuntimeManifestSHA256"] == nil,
+              !FileManager.default.fileExists(atPath: app.appendingPathComponent("Contents/Resources/JarvisRuntime").path) else {
+            throw QALaunchIssue.arguments
+        }
         let allowed: Set<String> = ["--python", "--source", "--dependencies", "--state", "--codex", "--provider-state"]
         guard arguments.count == allowed.count * 2, arguments.reduce(0, { $0 + $1.utf8.count }) <= 16_384 else { throw QALaunchIssue.arguments }
         var seen = Set<String>()
@@ -167,7 +206,7 @@ public struct QALaunchAdmission: Sendable {
     }
 
     static func read(_ url: URL, limit: Int) throws -> Data {
-        let descriptor = open(url.path, O_RDONLY | O_NOFOLLOW)
+        let descriptor = open(url.path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
         guard descriptor >= 0 else { throw QALaunchIssue.file }
         defer { close(descriptor) }
         var info = stat()

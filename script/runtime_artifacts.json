@@ -1,0 +1,33 @@
+{
+  "schema": "jarvis.runtime-artifact-pins.v1",
+  "target": "aarch64-apple-darwin",
+  "minimum_macos": "14.0",
+  "python": {
+    "version": "3.11.18",
+    "publisher": "astral-sh/python-build-standalone",
+    "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.11.18%2B20261026-aarch64-apple-darwin-install_only_stripped.tar.gz",
+    "bytes": 26776684,
+    "sha256": "f3e1cd83a7f1d70e58b0d69102c18bd6867d2f973068dc5cbfd5822e445c66df"
+  },
+  "codex": {
+    "version": "0.163.0",
+    "publisher": "openai/codex",
+    "url": "https://github.com/openai/codex/releases/download/rust-v0.163.0/codex-package-aarch64-apple-darwin.tar.gz",
+    "bytes": 133412281,
+    "sha256": "b0344fc2e41f15e0071147e5869008047b8ff4bf2c4a8897975d3bae3f103b34"
+  },
+  "codex_legal": [
+    {
+      "name": "LICENSE",
+      "url": "https://raw.githubusercontent.com/openai/codex/rust-v0.163.0/LICENSE",
+      "bytes": 10926,
+      "sha256": "d17f227e4df5da1600391338865ce0f3055211760a36688f816941d58232d8dc"
+    },
+    {
+      "name": "NOTICE",
+      "url": "https://raw.githubusercontent.com/openai/codex/rust-v0.163.0/NOTICE",
+      "bytes": 242,
+      "sha256": "9d71575ecfd9a843fc1677b0efb08053c6ba9fd686a0de1a6f5382fd3c220915"
+    }
+  ]
+}

@@ -30,15 +30,19 @@ public struct LaunchOptions: Sendable, Equatable {
     public let expectedRestore: ExpectedRestoreBootstrap?
     public let recoveryOnly: Bool
     public let automationTestOrigin: String?
+    public let bundledRuntime: BundledRuntime?
+    public let distributionMode: LaunchDistributionMode
 
     public init(python: String, source: String, dependencies: String? = nil, state: String,
                 codex: String, providerState: String? = nil,
                 expectedRestore: ExpectedRestoreBootstrap? = nil, recoveryOnly: Bool = false,
-                automationTestOrigin: String? = nil) {
+                automationTestOrigin: String? = nil, bundledRuntime: BundledRuntime? = nil,
+                distributionMode: LaunchDistributionMode = .development) {
         self.python = python; self.source = source; self.dependencies = dependencies
         self.state = state; self.codex = codex; self.providerState = providerState
         self.expectedRestore = expectedRestore; self.recoveryOnly = recoveryOnly
         self.automationTestOrigin = automationTestOrigin
+        self.bundledRuntime = bundledRuntime; self.distributionMode = distributionMode
     }
 
     public static func parse(_ arguments: [String]) throws -> Self {
@@ -72,12 +76,15 @@ public struct LaunchOptions: Sendable, Equatable {
         return Self(python: python, source: source, dependencies: flags["--dependencies"], state: state, codex: codex, providerState: flags["--provider-state"], expectedRestore: expectedCount == 0 ? nil : try ExpectedRestoreBootstrap(flags: flags), recoveryOnly: recoveryOnly, automationTestOrigin: flags["--automation-test-origin"])
     }
     public func openingRestored(_ target: ProfileOpenTarget) -> Self {
-        Self(python: python, source: source, dependencies: dependencies, state: target.path, codex: codex, providerState: nil, expectedRestore: ExpectedRestoreBootstrap(target: target), recoveryOnly: false)
+        Self(python: python, source: source, dependencies: dependencies, state: target.path, codex: codex, providerState: nil, expectedRestore: ExpectedRestoreBootstrap(target: target), recoveryOnly: false,
+             bundledRuntime: bundledRuntime, distributionMode: distributionMode)
     }
     public var serviceArguments: [String] {
         var args = ["-m", "jarvis_core.service", "--state", state, "--codex", codex]
         if let providerState { args += ["--provider-state", providerState] }
         if let expectedRestore { args += expectedRestore.arguments }
+        if let bundledRuntime { args += ["--bundled-runtime-root", bundledRuntime.root.path,
+                                         "--bundled-runtime-sha256", bundledRuntime.manifestSHA256] }
         return args
     }
 }

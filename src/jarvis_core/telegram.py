@@ -16,7 +16,6 @@ import json
 import math
 import os
 import re
-import ssl
 import stat
 import time
 from collections.abc import Awaitable, Callable
@@ -26,6 +25,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 
 from jarvis_core.private_json import PrivateJsonDocument, PrivateJsonError
+from jarvis_core.web import tls_context
 
 if TYPE_CHECKING:
     from jarvis_core.telegram_content import TelegramAttachment
@@ -214,7 +214,7 @@ class TelegramHTTPTransport:
         writer, dispatched = None, False
         try:
             async with asyncio.timeout(timeout):
-                context = ssl.create_default_context()
+                context = tls_context()
                 reader, writer = await self._connector(
                     "api.telegram.org",
                     443,

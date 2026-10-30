@@ -20,7 +20,7 @@ final class AppProfileCoordinator {
     @ObservationIgnored private var terminating = false
     @ObservationIgnored private let gate = ProfileHandoffGate()
     @ObservationIgnored private let drafts = ProfileDraftArchive()
-    func start() async { await active.store.start() }
+    func start() async { guard !terminating else { return }; await active.store.start() }
     func open(_ target: ProfileOpenTarget, from runtimeID: UUID) async {
         guard (try? active.store.runtime.check(expectedID: runtimeID)) != nil else { return }
         guard !terminating, !isOpening, active.store.mayHandoff else { notice = "Termina el trabajo o la decisión pendiente antes de cambiar de perfil."; return }

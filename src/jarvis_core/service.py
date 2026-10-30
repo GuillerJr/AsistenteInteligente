@@ -25,6 +25,7 @@ from jarvis_core.automation_flows import AutomationFlowError
 from jarvis_core.automation_management import AutomationAPI
 from jarvis_core.automation_permissions import AutomationPermissions
 from jarvis_core.bridge import CodexBridge
+from jarvis_core.bundled_runtime import BundledRuntimeError, verify_runtime_tree
 from jarvis_core.client_identity import ClientAuthority, ClientIdentityError
 from jarvis_core.codex import CodexClient, CodexError
 from jarvis_core.config import ConfigError, ProfileConfig
@@ -60,6 +61,7 @@ from jarvis_core.memory_tools import MemoryTools
 from jarvis_core.model_artifacts import ArtifactError
 from jarvis_core.native_automation import NativeAutomationBroker
 from jarvis_core.native_tools import NativeAutomationTools
+from jarvis_core.parent_lifetime import ParentLifetime, ParentLifetimeError
 from jarvis_core.plugin_packages import PluginError
 from jarvis_core.plugins import PluginsStore
 from jarvis_core.private_json import PrivateJsonError
@@ -88,7 +90,7 @@ from jarvis_core.telegram import TelegramError
 from jarvis_core.telegram_management import TelegramManagementAPI
 from jarvis_core.telegram_tools import TelegramReplyTools
 from jarvis_core.tools import ApprovalAuthority, ToolCatalog, ToolError, current_tool_operation
-from jarvis_core.web import WebFetchTools
+from jarvis_core.web import WebError, WebFetchTools, configure_bundled_tls
 from jarvis_core.workspace import WorkspaceError, WorkspaceTools
 
 _BASE = {"session_id", "temporary"}
@@ -199,7 +201,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                     ExtensionManagementAPI, MCPNetworkManagementAPI):
     def __init__(self, directory: Path, provider: CodexClient, *,
                  profile_lease: ProfileLease | None = None,
-                 bootstrap_public_key: str | None = None) -> None:
+                 bootstrap_public_key: str | None = None,
+                 bundled_model_source: Path | None = None) -> None:
         self.profile_lease = profile_lease or ProfileLease.acquire(directory)
         self.profile_lease.assert_current()
         if self.profile_lease.root != directory:
@@ -208,6 +211,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             self.profile_lease.check_bootstrap_ready()
             self.client_authority = ClientAuthority(directory, bootstrap_public_key=(
                 bootstrap_public_key or os.environ.get("JARVIS_RPC_BOOTSTRAP_PUBLIC_KEY")))
+            self._bundled_model_source = bundled_model_source
             self._initialize(directory, provider)
         except BaseException:
             for name in ("schedule_store", "memory", "store"):
@@ -305,7 +309,9 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         self.mcp.before_effect = self._mcp_effect_guard
         self._configure_tools()
         self.initialize_telegram()
-        self.memory_intelligence = MemoryIntelligence(self)
+        self.memory_intelligence = MemoryIntelligence(
+            self, bundled_model_source=self._bundled_model_source
+        )
         self.maintenance_coordinator = MaintenanceCoordinator(self, self.profile_gate)
         self.server = LocalRpcServer(
             directory, self.handlers(), max_frame_bytes=1024 * 1024,
@@ -1690,6 +1696,48 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
 
 
 async def _serve(args: argparse.Namespace) -> None:
+    # Admission precedes the lease and any store. EOF is custody loss, never a
+    # reason to kill a PID, adopt another process, reconnect, or replay a run.
+    watch = ParentLifetime() if getattr(args, "parent_watch_stdin", False) else None
+    stopped = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    try:
+        if watch is not None:
+            if watch.ended:
+                return
+            watch.attach(loop, stopped.set)
+        await _serve_owned(args, stopped, loop, watch)
+    finally:
+        if watch is not None:
+            watch.close()
+
+
+async def _serve_owned(args: argparse.Namespace, stopped: asyncio.Event, loop,
+                       watch: ParentLifetime | None = None) -> None:
+    bundled_root = getattr(args, "bundled_runtime_root", None)
+    bundled_pin = getattr(args, "bundled_runtime_sha256", None)
+    if (bundled_root is None) != (bundled_pin is None):
+        raise BundledRuntimeError("runtime_manifest_hash")
+    model_source = None
+    certificate_bundle = None
+    if bundled_root is not None:
+        runtime = await asyncio.to_thread(
+            verify_runtime_tree, bundled_root, expected_manifest_sha256=bundled_pin
+        )
+        import sys
+        if (Path(sys.executable).resolve(strict=True) != runtime.path("python")
+                or Path(__file__).resolve(strict=True).parent
+                != runtime.path("source") / "jarvis_core"
+                or args.codex != runtime.path("codex")):
+            raise BundledRuntimeError("runtime_entrypoint_mismatch")
+        # No network preparation fallback in a product bundle. The included
+        # model is copied privately only by the existing approved operation.
+        model_source = runtime.path("model")
+        configure_bundled_tls(runtime.read_file("certs/cacert.pem", limit=512 * 1024))
+        certificate_bundle = runtime.root / "certs/cacert.pem"
+    await asyncio.sleep(0)
+    if stopped.is_set() or (watch is not None and not watch.check()):
+        return
     values = [getattr(args, "expected_restore_" + key, None) for key in
               ("device", "inode", "marker_sha256", "admission_sha256", "operation_id")]
     if any(value is not None for value in values) and any(value is None for value in values):
@@ -1702,28 +1750,42 @@ async def _serve(args: argparse.Namespace) -> None:
         expected = ExpectedRestore(FileIdentity(int(values[0]), int(values[1])), *values[2:])
     lease = ProfileLease.acquire(args.state, expected_restore=expected)
     try:
+        if watch is not None and not watch.check():
+            lease.close()
+            return
         if lease.admission is not None and args.provider_state is not None:
             raise HostProfileError("profile_provider_override_forbidden")
-        provider = CodexClient(args.codex, args.provider_state or args.state / "provider")
-        service = JarvisService(args.state, provider, profile_lease=lease)
+        provider = CodexClient(args.codex, args.provider_state or args.state / "provider",
+                               certificate_bundle=certificate_bundle)
+        service = JarvisService(args.state, provider, profile_lease=lease,
+                                bundled_model_source=model_source)
     except BaseException:
         lease.close()
         raise
-    stopped = asyncio.Event()
-    loop = asyncio.get_running_loop()
-    for signum in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(signum, stopped.set)
+    installed_signals = []
     try:
-        await service.start()
-        await stopped.wait()
+        for signum in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(signum, stopped.set)
+            installed_signals.append(signum)
+        await asyncio.sleep(0)
+        if not stopped.is_set() and (watch is None or watch.check()):
+            await service.start()
+            await stopped.wait()
     finally:
-        await service.aclose()
+        try:
+            await service.aclose()
+        finally:
+            for signum in installed_signals:
+                loop.remove_signal_handler(signum)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Servicio local de la base Jarvis")
     parser.add_argument("--state", type=Path, required=True)
     parser.add_argument("--codex", type=Path, required=True)
+    parser.add_argument("--parent-watch-stdin", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--bundled-runtime-root", type=Path, help=argparse.SUPPRESS)
+    parser.add_argument("--bundled-runtime-sha256", help=argparse.SUPPRESS)
     parser.add_argument(
         "--provider-state",
         type=Path,
@@ -1749,6 +1811,9 @@ def main() -> None:
         SchedulerError,
         McpRegistryError,
         TelegramError,
+        BundledRuntimeError,
+        ParentLifetimeError,
+        WebError,
     ):
         parser.exit(1, "No se pudo iniciar o cerrar el servicio local de Jarvis.\n")
 

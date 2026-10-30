@@ -74,7 +74,9 @@ struct MemoryIntelligenceView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
-            Text("La preparación puede descargar hasta 256 MB de archivos públicos fijados. Nunca se descarga durante una consulta.")
+            Text(isBundledDistribution
+                ? "La preparación copia los archivos públicos fijados incluidos en esta app a un espacio privado. No usa red ni activa la recuperación automática."
+                : "La preparación puede descargar hasta 256 MB de archivos públicos fijados. Nunca se descarga durante una consulta.")
                 .font(.caption).foregroundStyle(.secondary)
             if status.scope.temporary {
                 Text("Administra las copias del modelo desde una conversación conservada. Esta conversación temporal puede usar un modelo ya preparado, con sus notas e índice solo en RAM.")
@@ -222,7 +224,9 @@ struct MemoryIntelligenceView: View {
         return ["invalid", "corrupt", "invalid_model"].contains(model.state)
     }
     private var preparationDetail: String {
-        let base = "MiniLM para CPU puede descargar hasta256MB de archivos públicos fijados y verificados. No activa la recuperación automática ni envía notas."
+        let base = isBundledDistribution
+            ? "La preparación copia los archivos públicos fijados incluidos en esta app a un espacio privado. No usa red ni activa la recuperación automática ni envía notas."
+            : "MiniLM para CPU puede descargar hasta 256 MB de archivos públicos fijados y verificados. No activa la recuperación automática ni envía notas."
         if modelNeedsRepair(store.status?.model) {
             return "Se preparará una copia nueva y se conservará la anterior. Retirarla requiere una autorización independiente.\n\n" + base
         }
@@ -230,6 +234,9 @@ struct MemoryIntelligenceView: View {
             return "Primero se verificarán los archivos locales. Si no son válidos, se preparará una copia nueva y se conservará la anterior.\n\n" + base
         }
         return base
+    }
+    private var isBundledDistribution: Bool {
+        ["self-contained", "self-contained-qualification"].contains(Bundle.main.object(forInfoDictionaryKey: "JarvisDistributionChannel") as? String ?? "")
     }
     private func stateTitle(_ code: String) -> String {
         switch code {

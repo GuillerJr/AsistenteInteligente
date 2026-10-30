@@ -5,7 +5,7 @@ import DesktopCore
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var store: ChatStore?
-    var profiles: AppProfileCoordinator?
+    let profiles = AppProfileCoordinator()
     var openMainWindow: (() -> Void)?
     let settingsWindowAction = SettingsSceneActionRegistration()
     let settingsNavigation = SettingsOwnerNavigation()
@@ -13,7 +13,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotKey: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
     private var terminating = false
-    private var currentStore: ChatStore? { profiles?.active.store ?? store }
+    private var currentStore: ChatStore? { profiles.active.store }
+    lazy var loginItems = LoginItemController(service: MacLoginItemService(), eligibility: { [weak self] in
+        self?.profiles.active.store.mayConfigureLoginItem ?? false
+    }, validateBundle: { [weak self] in
+        guard let self else { return false }
+        return await self.profiles.active.store.verifyLoginItemBundle()
+    })
     var ownerDecisionNotices: [OwnerDecisionNotice] {
         guard let store = currentStore else { return [] }
         return ownerDecisionNotices(for: store)
@@ -32,6 +38,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         installShortcut(UserDefaults.standard.string(forKey: "jarvis.openShortcut") ?? "commandShiftJ")
+        // App ownership does not depend on a WindowGroup being visible. This
+        // also starts the single runtime on a main-app login-item launch.
+        Task { [weak self] in
+            guard let self else { return }
+            await self.profiles.start()
+            self.loginItems.refresh()
+        }
     }
 
     func showMainWindow() {
@@ -69,8 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         terminating = true
         Task {
             let confirmed: Bool
-            if let profiles { confirmed = await profiles.shutdown() }
-            else { confirmed = await store?.shutdown() ?? true }
+            confirmed = await profiles.shutdown()
             if !confirmed {
                 let alert = NSAlert()
                 alert.messageText = "No se confirmó el cierre del servicio"
@@ -81,7 +93,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NSApp.reply(toApplicationShouldTerminate: false)
                 return
             }
-            if let warning = profiles?.shutdownWarning ?? store?.shutdownWarning {
+            if let warning = profiles.shutdownWarning {
                 let alert = NSAlert()
                 alert.messageText = "El servicio terminó de forma no habitual"
                 alert.informativeText = warning
