@@ -5,7 +5,9 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -226,6 +228,53 @@ def test_runner_has_no_executable_path_fallback(tmp_path):
         BoundedGitRunner(tmp_path.resolve() / "missing-git")
 
 
+def test_macos_default_resolves_real_git_without_ambient_environment(tmp_path, monkeypatch):
+    from jarvis_core import product_projects as module
+
+    selected = tmp_path.resolve() / "developer-git"
+    selected.write_bytes(b"selected executable")
+    selected.chmod(0o700)
+    calls = []
+
+    def lookup(argv, **options):
+        calls.append((argv, options))
+        return SimpleNamespace(returncode=0, stdout=str(selected).encode() + b"\n")
+
+    monkeypatch.setattr(module.sys, "platform", "darwin")
+    monkeypatch.setattr(module.subprocess, "run", lookup)
+    monkeypatch.setenv("DEVELOPER_DIR", "/untrusted-selection")
+    runner = BoundedGitRunner()
+    assert runner.executable == selected and len(calls) == 1
+    argv, options = calls[0]
+    assert argv == ["/usr/bin/xcrun", "--find", "git"]
+    assert options["env"] == {"PATH": "/usr/bin:/bin", "LC_ALL": "C"}
+    assert options["timeout"] == 5 and options["stdin"] == subprocess.DEVNULL
+    assert BoundedGitRunner(selected).executable == selected and len(calls) == 1
+
+
+@pytest.mark.parametrize("raw,code", [(b"/usr/bin/git\n", 0), (b"relative/git\n", 0),
+    (b"/missing/git\n\n", 0), (b"x" * 4097, 0), (b"", 0), (b"", 1)])
+def test_macos_unusable_developer_tool_never_falls_back(raw, code, monkeypatch):
+    from jarvis_core import product_projects as module
+
+    monkeypatch.setattr(module.sys, "platform", "darwin")
+    monkeypatch.setattr(module.subprocess, "run", lambda *_args, **_options:
+                        SimpleNamespace(returncode=code, stdout=raw))
+    with pytest.raises(ProjectError, match="git_unavailable"):
+        BoundedGitRunner()
+
+
+def test_macos_developer_tool_lookup_timeout_has_no_fallback(monkeypatch):
+    from jarvis_core import product_projects as module
+
+    monkeypatch.setattr(module.sys, "platform", "darwin")
+    def timeout(*_args, **_options):
+        raise subprocess.TimeoutExpired(["/usr/bin/xcrun"], 5)
+    monkeypatch.setattr(module.subprocess, "run", timeout)
+    with pytest.raises(ProjectError, match="git_unavailable"):
+        BoundedGitRunner()
+
+
 def test_git_metadata_includes_and_object_symlinks_are_rejected_before_git(tmp_path):
     root = repository(tmp_path)
     pin = RepositoryPin.capture(root)
@@ -293,6 +342,20 @@ def real_git(tmp_path):
     git("add", "nota.txt")
     git("commit", "-m", "Fixture pequeño de Jarvis")
     return root, git
+
+
+@pytest.mark.asyncio
+async def test_real_default_git_keeps_pinned_directory_descriptors(real_git):
+    root, git = real_git
+    runner = BoundedGitRunner()
+    if sys.platform == "darwin":
+        assert runner.executable != Path("/usr/bin/git")
+    try:
+        output = await runner.run(RepositoryPin.capture(root), ("rev-parse", "--verify", "HEAD"))
+        assert output.returncode == 0 and output.stdout.decode().strip() == git("rev-parse", "HEAD")
+        assert not runner.pending_cleanup and runner.active_children == 0
+    finally:
+        await runner.aclose()
 
 
 @pytest.mark.asyncio

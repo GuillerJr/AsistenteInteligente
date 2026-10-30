@@ -18,6 +18,8 @@ import os
 import re
 import signal
 import stat
+import subprocess
+import sys
 import time
 from collections.abc import Callable
 from contextlib import contextmanager
@@ -448,6 +450,33 @@ class GitOutput:
     stderr: bytes
 
 
+def _system_git(executable):
+    selected = Path(executable)
+    if sys.platform != "darwin" or selected != Path("/usr/bin/git"):
+        return selected
+    # Apple's /usr/bin launcher can close inherited descriptors before it
+    # reaches Git. Resolve the selected developer tool before passing our
+    # pinned directory/lease descriptors; never search PATH or invoke a shell.
+    try:
+        result = subprocess.run(
+            ["/usr/bin/xcrun", "--find", "git"],
+            env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
+            stdin=subprocess.DEVNULL, capture_output=True, timeout=5, check=False,
+        )
+        raw = result.stdout
+        if result.returncode or not 0 < len(raw) <= 4096:
+            raise ValueError
+        text = raw.decode("utf-8").removesuffix("\n")
+        if not text.startswith("/") or any(ord(char) < 32 for char in text):
+            raise ValueError
+        selected = Path(text).resolve(strict=True)
+        if selected == Path("/usr/bin/git"):
+            raise ValueError
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        raise ProjectError("project_git_unavailable") from None
+    return selected
+
+
 class BoundedGitRunner:
     """Explicit system Git, descriptor pins, fixed environment, no PATH search.
 
@@ -457,7 +486,7 @@ class BoundedGitRunner:
 
     def __init__(self, executable=Path("/usr/bin/git"), *, timeout=10, max_output=4259840,
                  child_custody=None):
-        self.executable = Path(executable)
+        self.executable = _system_git(executable)
         if (not self.executable.is_absolute() or type(timeout) not in {float, int}
                 or not 0 < timeout <= 30 or type(max_output) is not int
                 or not 1024 <= max_output <= 16777216):

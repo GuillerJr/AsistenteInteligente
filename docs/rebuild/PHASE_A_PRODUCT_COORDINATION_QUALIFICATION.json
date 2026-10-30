@@ -1,6 +1,6 @@
 {
   "schema": "jarvis.product-coordination-qualification/1",
-  "status": "implementation_in_validation",
+  "status": "ci_passed_native_qualification_pending",
   "phase_a_complete": false,
   "phase_b_started": false,
   "reference": "REA_OC28_PRODUCT_COORDINATION.md",
@@ -56,6 +56,38 @@
         "Remaining test confused late cancellation of the run with cancellation of its completed finalizer. Regression now independently observes finalizer completion and includes a genuinely self-cancelled finalizer.",
         "Two native maintenance fixtures asserted a fully initialized diagnostic while omitting the new product module. The shared fixture now initializes it through signed RPC; absence remains partial and regressions prohibit opening the cold conversation database."
       ]
+    },
+    {
+      "commit": "d8b59fc9264dc72756c1b8e8fae77500891b7c0d",
+      "ci_run_id": 41093115923,
+      "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41093115923",
+      "conclusion": "success",
+      "ubuntu": {
+        "passed": 3886,
+        "skipped": 51,
+        "failed": 0,
+        "seconds": 312.26,
+        "saved_log_sha256": "9f3bfde766624e7ec74079addbe0c7955ab212846e864af425178d20bb065691"
+      },
+      "macos": {
+        "python_passed": 3933,
+        "python_skipped": 4,
+        "python_failed": 0,
+        "python_seconds": 397.29,
+        "swift_executed": 696,
+        "swift_skipped": 1,
+        "swift_failed": 0,
+        "swift_seconds": 212.035,
+        "saved_log_sha256": "fa215a4a85ec68fe4f4283b8858baea9ceb40dbca6f617b0815dfced629328ae"
+      },
+      "wheel_sdist_isolated_installation": "success_both_platforms",
+      "self_contained_bundle_and_parent_eof": "success",
+      "artifact": {
+        "id": 12994683757,
+        "bytes": 299407354,
+        "zip_sha256": "de906446efe1e8833af6d273a3cc733836714842373bbe02d5f8815f929873d4"
+      },
+      "qualified": false
     }
   ],
   "native_qualification": {
@@ -64,6 +96,27 @@
     "local_builds_run": false,
     "owner_installed_app_modified": false,
     "github_selected_repository": "GuillerJr/ecommerce",
-    "github_credential_entered": false
+    "github_credential_entered": true,
+    "github_read_observed": {
+      "account": "GuillerJr",
+      "repository_id": 1038178262,
+      "default_branch": "main",
+      "head_sha": "ca6aca0382eee07c9e4b444e0af4cf4e72082719",
+      "read_only": true,
+      "independently_verified": false
+    },
+    "failures_preserved": [
+      {
+        "scope": "project_register",
+        "run_id": "b2f6e57a6a9249d29e38ac3e64994b17",
+        "status": "completed",
+        "action_succeeded": false,
+        "effect_status": "known",
+        "cleanup_confirmed": true,
+        "error": "project_git_failed",
+        "readonly_diagnostic": "Apple /usr/bin/git launcher loses inherited descriptors: cannot change to /dev/fd/9: Not a directory.",
+        "correction": "Resolve the selected real developer Git with bounded /usr/bin/xcrun --find git before passing pinned descriptors; no PATH or launcher fallback."
+      }
+    ]
   }
 }
