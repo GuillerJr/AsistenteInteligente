@@ -270,6 +270,13 @@ public struct ProductInteractionRecord: Identifiable, Equatable, Sendable {
     public let correlationID: String?
     public var isCurrent: Bool { expiresAt.map { $0 > Date() } ?? true }
     public var mayAnswer: Bool { kind == "question" && status == "pending" && isCurrent }
+    /// The durable `delivered` state records the native add acknowledgement,
+    /// not an observed banner, Notification Center entry or physical click.
+    public var notificationAcceptanceText: (title: String, explanation: String)? {
+        guard kind == "notification", status == "delivered" else { return nil }
+        return ("Aceptado por macOS",
+                "macOS aceptó la solicitud; su visualización depende de los ajustes del sistema.")
+    }
 
     public init(_ row: RPCValue, binding: ProductInteractionBinding) throws {
         self.binding = binding

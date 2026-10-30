@@ -1,12 +1,20 @@
 # Variante propia inspirada en OpenClaw — base limpia
 
 El incremento de [producto y coordinación avanzada](PHASE_A_PRODUCT_COORDINATION.md)
-está implementado y conectado en una revisión nueva pendiente de CI y
-cualificación nativa. Incluye proyectos/GitHub, workspaces por sesión,
+está implementado y conectado. La CI completa de `4686f25` y los recorridos
+finitos de clientes, GitHub, Git y preguntas ya están registrados. La copia
+estable verificó panel oscuro, sugerencias como borrador, descarte, aislamiento
+de dos chats y cierre normal sin procesos conocidos ni cuotas montadas.
+El permiso de avisos y la aceptación de una solicitud por macOS están observados;
+su visualización y clic real siguen sin acreditarse porque el dueño no encontró
+el aviso. La corrección del texto que distingue esos estados y sus regresiones
+requieren su propia CI remota. Incluye proyectos/GitHub, workspaces por sesión,
 colaboración local, preguntas/paneles/avisos, presupuestos inclusivos y
 clientes propios CLI/TUI/ACP. La [revisión OC-28](REA_OC28_PRODUCT_COORDINATION.md)
 conserva tres particiones y sus límites. No se presenta como paridad acreditada
-por haber escrito código o pruebas.
+por haber escrito código o pruebas. La matriz actual contiene **62 familias
+parciales, 18 sin implementar y ninguna completa**; REA conserva **48 lotes y
+186 rutas TS/JS únicas** seleccionadas. La fase B sigue aplazada.
 
 El incremento de [distribución autocontenida y servicio residente](PHASE_A_DISTRIBUTION_RESIDENT.md)
 incorpora el runtime base completo, verificación del manifiesto cuyo pin está en

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "decision_date": "2026-10-29",
+  "decision_date": "2026-10-30",
   "reference": {
     "project": "OpenClaw",
     "revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
@@ -6105,6 +6105,629 @@
         "semantic_unknowns": 552
       },
       "evidence_record": "docs/rebuild/REA_OC26_SUMMARIES.json"
+    },
+    {
+      "id": "OC-28A",
+      "topic": "product, structured questions and scoped presence",
+      "source_paths": [
+        "src/gateway/server-methods/projects.ts",
+        "src/gateway/server-methods/worktrees.ts",
+        "src/gateway/server-methods/question.ts",
+        "src/gateway/server-methods/presence.ts",
+        "src/agents/embedded-agent-runner/runs.question-answer.ts"
+      ],
+      "parent_evidence_id": "ev_bd297cef6b24c9b5d5b58f5460d92ad26ca8d4faae7da7a735e20d5e82213720",
+      "summary_evidence_id": "ev_c78b372c3a086d37160a13bb749b5ed2c0858db6be6559e610575d9e73ac32f1",
+      "partition_sha256": "bb92499fbd60bb8b98de2decb3770826b067952c99de8b67bf7066b6a5e991d6",
+      "reference_commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "reference_tree": "197c70097790e30087bbef323b0f2cc5148ab9b7",
+      "source_manifest": "docs/rebuild/REA_OC28_SOURCE_MANIFEST.json",
+      "source_manifest_sha256": "7ae956cfc18fe1ff5c6b931e70e36d817c8eea47c6b376388f7bea21c42760fa",
+      "source_files": [
+        {
+          "path": "src/gateway/server-methods/projects.ts",
+          "bytes": 18989,
+          "sha256": "e8d1be12c6b01f42326824da060e90a998e3305bf58a5459e3faaf9aeaea20a8"
+        },
+        {
+          "path": "src/gateway/server-methods/worktrees.ts",
+          "bytes": 11523,
+          "sha256": "facad1c81c1c094758942e9d8374a10f560e09845d5ec46bc25d71fdc80b6526"
+        },
+        {
+          "path": "src/gateway/server-methods/question.ts",
+          "bytes": 24993,
+          "sha256": "2862a579c940f24b2d2c4fb1aa631a95740387bb5f46edad6a7c48c984fe9d1a"
+        },
+        {
+          "path": "src/gateway/server-methods/presence.ts",
+          "bytes": 14412,
+          "sha256": "72476cb7ac7e106f5b011a3e1788e0ef1fe83a60bd45581c7d743ac57abfdc6b"
+        },
+        {
+          "path": "src/agents/embedded-agent-runner/runs.question-answer.ts",
+          "bytes": 2513,
+          "sha256": "8705027c9c4051fa01cf6ff1d92df7ce948dececde7ba6f84c43de1cef9e216b"
+        }
+      ],
+      "statistics": {
+        "relevant_files": 5,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 72430,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 5,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 7999,
+        "findings": 235,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "complete",
+          "truncated": false,
+          "omitted_count": 0,
+          "limits": []
+        },
+        "semantic": {
+          "status": "partial",
+          "truncated": true,
+          "omitted_unknown_occurrences": [
+            {
+              "family": "call-flow",
+              "reason": "dynamic-call",
+              "occurrences": 411
+            },
+            {
+              "family": "data-flow",
+              "reason": "unknown-value",
+              "occurrences": 334
+            },
+            {
+              "family": "object-flow",
+              "reason": "ambiguous-target",
+              "occurrences": 647
+            },
+            {
+              "family": "object-flow",
+              "reason": "dynamic-property",
+              "occurrences": 5
+            }
+          ],
+          "omitted_nodes": null,
+          "omitted_relations": null,
+          "limits": [
+            {
+              "name": "semantic_graph_file_node_ceiling",
+              "value": 600,
+              "unit": "items"
+            },
+            {
+              "name": "semantic_graph_file_unknown_ceiling",
+              "value": 60,
+              "unit": "items"
+            },
+            {
+              "name": "semantic_graph_node_ceiling",
+              "value": 3000,
+              "unit": "items"
+            },
+            {
+              "name": "semantic_graph_unknown_ceiling",
+              "value": 300,
+              "unit": "items"
+            }
+          ],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": null,
+              "unknown_count": 0
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 177,
+              "omitted_relations": null,
+              "unknown_count": 13
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": null,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 541,
+              "omitted_relations": null,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": null,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 1304,
+              "omitted_relations": null,
+              "unknown_count": 259
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": null,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 11,
+              "omitted_relations": null,
+              "unknown_count": 11
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 1,
+              "omitted_relations": null,
+              "unknown_count": 1
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": null,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": null,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": null,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 0,
+        "semantic_unknowns": 284
+      },
+      "execution_observed": false,
+      "evidence_record": "docs/rebuild/REA_OC28_PRODUCT.json",
+      "evidence_record_sha256": "9ecb8a1d31673375bcfe3b4f0f9be471310249ce65a5e21a18cfd5b891e8e090",
+      "limitations": [
+        "Only five exact source blobs of the fixed reference revision were selected; dependencies outside each partition remain unknown.",
+        "The exhausted summary projection is complete-within-view only; application and semantic coverage below retain their actual partial/unknown limits.",
+        "No reference runtime was executed, installed or imported into Jarvis; static relationships do not establish productive parity."
+      ]
+    },
+    {
+      "id": "OC-28B",
+      "topic": "session/project binding and correlated local A2A delivery",
+      "source_paths": [
+        "src/gateway/server-methods/projects-session-store.ts",
+        "src/gateway/server-methods/session-create-project.ts",
+        "src/agents/tools/sessions-send-tool.a2a.ts",
+        "src/agents/tools/sessions-send-tool.delivery.ts",
+        "src/agents/tools/sessions-send-communication-endpoint.ts"
+      ],
+      "parent_evidence_id": "ev_5d59772b29a423c494be32b4042d5c04f7fcddc9ad3f400160250aff9d9a082b",
+      "summary_evidence_id": "ev_8098ebf1fb92a61b850e2509cdf626172b29d43047f1cf51e012cc2065a18462",
+      "partition_sha256": "7378f217f309aea7acec23a6d9cac2d3b55df3a494e616491fc60f840876a056",
+      "reference_commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "reference_tree": "197c70097790e30087bbef323b0f2cc5148ab9b7",
+      "source_manifest": "docs/rebuild/REA_OC28_SOURCE_MANIFEST.json",
+      "source_manifest_sha256": "7ae956cfc18fe1ff5c6b931e70e36d817c8eea47c6b376388f7bea21c42760fa",
+      "source_files": [
+        {
+          "path": "src/gateway/server-methods/projects-session-store.ts",
+          "bytes": 8270,
+          "sha256": "3a16d5400899f9728a4db809c62d4ffea0532a01aa45665a73ca426692ed0919"
+        },
+        {
+          "path": "src/gateway/server-methods/session-create-project.ts",
+          "bytes": 23758,
+          "sha256": "48ea818fe10cdff05317e672f33269391f1f69a1aea8227c5f232c503d50e535"
+        },
+        {
+          "path": "src/agents/tools/sessions-send-tool.a2a.ts",
+          "bytes": 9485,
+          "sha256": "b5b0c15d4f5defc2e796cedd400c11d9b69adecbff9a0355d0a0c7fbe2bead95"
+        },
+        {
+          "path": "src/agents/tools/sessions-send-tool.delivery.ts",
+          "bytes": 22652,
+          "sha256": "67e53ca02ccaadeb7cbaa00bbd75148dead6cc5a92689a0747abf949268bd17f"
+        },
+        {
+          "path": "src/agents/tools/sessions-send-communication-endpoint.ts",
+          "bytes": 3820,
+          "sha256": "3f3653fd5b6dbd99533ebb9b0d2564125a425e352869d438a901bb61bb762f6c"
+        }
+      ],
+      "statistics": {
+        "relevant_files": 5,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 67985,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 5,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 7261,
+        "findings": 238,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "partial",
+          "truncated": false,
+          "omitted_count": null,
+          "limits": []
+        },
+        "semantic": {
+          "status": "partial",
+          "truncated": true,
+          "omitted_unknown_occurrences": [
+            {
+              "family": "call-flow",
+              "reason": "dynamic-call",
+              "occurrences": 231
+            },
+            {
+              "family": "object-flow",
+              "reason": "ambiguous-target",
+              "occurrences": 138
+            },
+            {
+              "family": "object-flow",
+              "reason": "dynamic-property",
+              "occurrences": 6
+            },
+            {
+              "family": "promise-ownership",
+              "reason": "ambiguous-target",
+              "occurrences": 9
+            }
+          ],
+          "omitted_nodes": null,
+          "omitted_relations": null,
+          "limits": [
+            {
+              "name": "semantic_graph_file_node_ceiling",
+              "value": 1200,
+              "unit": "items"
+            },
+            {
+              "name": "semantic_graph_file_unknown_ceiling",
+              "value": 240,
+              "unit": "items"
+            },
+            {
+              "name": "semantic_graph_node_ceiling",
+              "value": 6000,
+              "unit": "items"
+            },
+            {
+              "name": "semantic_graph_unknown_ceiling",
+              "value": 1200,
+              "unit": "items"
+            }
+          ],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 3,
+              "omitted_relations": null,
+              "unknown_count": 0
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 80,
+              "omitted_relations": null,
+              "unknown_count": 72
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": null,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 414,
+              "omitted_relations": null,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": null,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 2663,
+              "omitted_relations": null,
+              "unknown_count": 428
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": null,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 491,
+              "omitted_relations": null,
+              "unknown_count": 471
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 20,
+              "omitted_relations": null,
+              "unknown_count": 11
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": null,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": null,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": null,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 0,
+        "semantic_unknowns": 982
+      },
+      "execution_observed": false,
+      "evidence_record": "docs/rebuild/REA_OC28_COORDINATION.json",
+      "evidence_record_sha256": "5f2e4ae61b2462b0518e622062e4f5223763b23225b196ad87a0382f246d7f34",
+      "limitations": [
+        "Only five exact source blobs of the fixed reference revision were selected; dependencies outside each partition remain unknown.",
+        "The exhausted summary projection is complete-within-view only; application and semantic coverage below retain their actual partial/unknown limits.",
+        "No reference runtime was executed, installed or imported into Jarvis; static relationships do not establish productive parity."
+      ]
+    },
+    {
+      "id": "OC-28C",
+      "topic": "worktree ownership, checkout, publication and exact-state recovery",
+      "source_paths": [
+        "src/agents/worktrees/owner-protection.ts",
+        "src/agents/worktrees/checkout-policy.ts",
+        "src/agents/worktrees/registry-publication.ts",
+        "src/agents/worktrees/snapshot-exact-state-contract.ts",
+        "src/agents/worktrees/removal-recovery.ts"
+      ],
+      "parent_evidence_id": "ev_235cae7796bc600835d3e2d8a88a93a037072e5c6cafb140585be591238ab665",
+      "summary_evidence_id": "ev_69a9742200017bed02a1210707b63b51689c08f7ca9aca7e65d39312598ad9d9",
+      "partition_sha256": "062c0c25bff94339ef6c400d417beef1a2ca4429ce37860ef439cdc0a2e78065",
+      "reference_commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "reference_tree": "197c70097790e30087bbef323b0f2cc5148ab9b7",
+      "source_manifest": "docs/rebuild/REA_OC28_SOURCE_MANIFEST.json",
+      "source_manifest_sha256": "7ae956cfc18fe1ff5c6b931e70e36d817c8eea47c6b376388f7bea21c42760fa",
+      "source_files": [
+        {
+          "path": "src/agents/worktrees/owner-protection.ts",
+          "bytes": 11012,
+          "sha256": "c612644a5e13190ae0de1648428495ffebb332e85abbada67a64e3e8cfb43383"
+        },
+        {
+          "path": "src/agents/worktrees/checkout-policy.ts",
+          "bytes": 2712,
+          "sha256": "d09a5f045f69384dfb31be20c6205b5b502a3f7ed510ce4bd550cbd8545877ab"
+        },
+        {
+          "path": "src/agents/worktrees/registry-publication.ts",
+          "bytes": 6162,
+          "sha256": "5ee601562b1cf42878cd9649a7267f143c2b80b257f63614c048a2558f3d96af"
+        },
+        {
+          "path": "src/agents/worktrees/snapshot-exact-state-contract.ts",
+          "bytes": 666,
+          "sha256": "75ff231532a9b6805694b50dce49c634144da574e0414d3064822520e0e0d363"
+        },
+        {
+          "path": "src/agents/worktrees/removal-recovery.ts",
+          "bytes": 21949,
+          "sha256": "4b5516060b82a6259deb83243298389186dd244708cd6e490d87e62fc442da01"
+        }
+      ],
+      "statistics": {
+        "relevant_files": 5,
+        "nested_asar_containers": 0,
+        "text_bytes_read": 42501,
+        "invalid_utf8_files": 0,
+        "parsed_javascript_files": 5,
+        "skipped_javascript_files": 0,
+        "visited_ast_nodes": 5164,
+        "findings": 127,
+        "modules": 0,
+        "parse_failures": 0
+      },
+      "coverage": {
+        "application": {
+          "status": "complete",
+          "truncated": false,
+          "omitted_count": 0,
+          "limits": []
+        },
+        "semantic": {
+          "status": "partial",
+          "truncated": true,
+          "omitted_unknown_occurrences": [
+            {
+              "family": "call-flow",
+              "reason": "dynamic-call",
+              "occurrences": 176
+            },
+            {
+              "family": "object-flow",
+              "reason": "ambiguous-target",
+              "occurrences": 146
+            }
+          ],
+          "omitted_nodes": null,
+          "omitted_relations": null,
+          "limits": [
+            {
+              "name": "semantic_graph_file_node_ceiling",
+              "value": 1200,
+              "unit": "items"
+            },
+            {
+              "name": "semantic_graph_file_unknown_ceiling",
+              "value": 240,
+              "unit": "items"
+            },
+            {
+              "name": "semantic_graph_node_ceiling",
+              "value": 6000,
+              "unit": "items"
+            },
+            {
+              "name": "semantic_graph_unknown_ceiling",
+              "value": 1200,
+              "unit": "items"
+            }
+          ],
+          "families": [
+            {
+              "family": "boundary",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": null,
+              "unknown_count": 0
+            },
+            {
+              "family": "call-flow",
+              "status": "partial",
+              "retained_relations": 149,
+              "omitted_relations": null,
+              "unknown_count": 94
+            },
+            {
+              "family": "child-process",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": null,
+              "unknown_count": 0
+            },
+            {
+              "family": "closure",
+              "status": "partial",
+              "retained_relations": 328,
+              "omitted_relations": null,
+              "unknown_count": 0
+            },
+            {
+              "family": "configuration",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": null,
+              "unknown_count": 0
+            },
+            {
+              "family": "data-flow",
+              "status": "partial",
+              "retained_relations": 1825,
+              "omitted_relations": null,
+              "unknown_count": 286
+            },
+            {
+              "family": "event",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": null,
+              "unknown_count": 0
+            },
+            {
+              "family": "object-flow",
+              "status": "partial",
+              "retained_relations": 280,
+              "omitted_relations": null,
+              "unknown_count": 313
+            },
+            {
+              "family": "promise-ownership",
+              "status": "partial",
+              "retained_relations": 14,
+              "omitted_relations": null,
+              "unknown_count": 12
+            },
+            {
+              "family": "request",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": null,
+              "unknown_count": 0
+            },
+            {
+              "family": "resource-lifecycle",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": null,
+              "unknown_count": 0
+            },
+            {
+              "family": "timer",
+              "status": "partial",
+              "retained_relations": 0,
+              "omitted_relations": null,
+              "unknown_count": 0
+            }
+          ]
+        },
+        "application_unknowns": 0,
+        "semantic_unknowns": 705
+      },
+      "execution_observed": false,
+      "evidence_record": "docs/rebuild/REA_OC28_WORKTREES.json",
+      "evidence_record_sha256": "4cb010b1903ba1abcb6c1f3d17cbf8ed11e22995cf61dda58347050527101441",
+      "limitations": [
+        "Only five exact source blobs of the fixed reference revision were selected; dependencies outside each partition remain unknown.",
+        "The exhausted summary projection is complete-within-view only; application and semantic coverage below retain their actual partial/unknown limits.",
+        "No reference runtime was executed, installed or imported into Jarvis; static relationships do not establish productive parity."
+      ]
     }
   ],
   "remaining_parts": [
@@ -6115,9 +6738,11 @@
       "original_plan_id": "OC-01B",
       "reviewed_subsets": [
         "OC-21C",
-        "OC-22A"
+        "OC-22A",
+        "OC-28B",
+        "OC-28C"
       ],
-      "remaining_note": "OC-21C adds a fixed static subset for subagent controls, owner scope, steering identity and restart helpers. Remaining orchestration, resources, runtime dependencies and reference settlement behavior are unqualified. OC-22A adds a selected PTY/worker lifecycle subset; remaining orchestration, execution resources and full settlement behavior remain unqualified."
+      "remaining_note": "OC-21C adds a fixed static subset for subagent controls, owner scope, steering identity and restart helpers. Remaining orchestration, resources, runtime dependencies and reference settlement behavior are unqualified. OC-22A adds a selected PTY/worker lifecycle subset; remaining orchestration, execution resources and full settlement behavior remain unqualified. OC-28 adds only the selected source contracts for product/session/worktree or local message identity. Full reference handlers, transports, interface behavior, dependencies and runtime qualification remain open."
     },
     {
       "id": "SCOPE-02",
@@ -6127,9 +6752,11 @@
       "reviewed_subsets": [
         "OC-21A",
         "OC-21B",
-        "OC-22B1"
+        "OC-22B1",
+        "OC-28A",
+        "OC-28B"
       ],
-      "remaining_note": "OC-21A/21B add client identity/lock-recovery and compaction/rewind/fork source subsets. The complete gateway/API, ownership/session handlers and unselected dependencies remain unreviewed or unqualified. OC-22B1 adds source and dedicated desktop invocation shapes; full gateway/API, authentication routes and ownership handlers remain unreviewed or unqualified."
+      "remaining_note": "OC-21A/21B add client identity/lock-recovery and compaction/rewind/fork source subsets. The complete gateway/API, ownership/session handlers and unselected dependencies remain unreviewed or unqualified. OC-22B1 adds source and dedicated desktop invocation shapes; full gateway/API, authentication routes and ownership handlers remain unreviewed or unqualified. OC-28 adds only the selected source contracts for product/session/worktree or local message identity. Full reference handlers, transports, interface behavior, dependencies and runtime qualification remain open."
     },
     {
       "id": "SCOPE-03",
@@ -6195,15 +6822,20 @@
       "reviewed_subsets": [
         "OC-22B1",
         "OC-22B2",
-        "OC-22C"
+        "OC-22C",
+        "OC-28A"
       ],
-      "remaining_note": "Selected requesting-client presentation and observation identity sources are static evidence. They do not qualify the complete UI, client runtime or platform event/state behavior."
+      "remaining_note": "Selected requesting-client presentation and observation identity sources are static evidence. They do not qualify the complete UI, client runtime or platform event/state behavior. OC-28 adds only the selected source contracts for product/session/worktree or local message identity. Full reference handlers, transports, interface behavior, dependencies and runtime qualification remain open."
     },
     {
       "id": "SCOPE-09",
       "scope": "Messaging channels, schedules, proactive work and connected devices",
       "status": "pending",
-      "original_plan_id": "OC-09"
+      "original_plan_id": "OC-09",
+      "reviewed_subsets": [
+        "OC-28B"
+      ],
+      "remaining_note": "OC-28 adds only the selected source contracts for product/session/worktree or local message identity. Full reference handlers, transports, interface behavior, dependencies and runtime qualification remain open."
     },
     {
       "id": "SCOPE-10",
@@ -6223,9 +6855,10 @@
         "OC-22A",
         "OC-22B1",
         "OC-22B2",
-        "OC-22C"
+        "OC-22C",
+        "OC-28C"
       ],
-      "remaining_note": "Static subsets add WAL prefixes, file walking, update intents/pointers/launchers and dead-lock recovery identity. Remaining helpers, distribution/authenticity and full reference runtime are unqualified; Jarvis implementations and native qualification are tracked separately. Selected source subsets inform resource identity, bounded input and action lifecycle. This does not certify full sandbox, secrets, distribution, recovery or reference runtime behavior."
+      "remaining_note": "Static subsets add WAL prefixes, file walking, update intents/pointers/launchers and dead-lock recovery identity. Remaining helpers, distribution/authenticity and full reference runtime are unqualified; Jarvis implementations and native qualification are tracked separately. Selected source subsets inform resource identity, bounded input and action lifecycle. This does not certify full sandbox, secrets, distribution, recovery or reference runtime behavior. OC-28 adds only the selected source contracts for product/session/worktree or local message identity. Full reference handlers, transports, interface behavior, dependencies and runtime qualification remain open."
     },
     {
       "id": "SCOPE-11",
@@ -6234,7 +6867,7 @@
       "original_plan_id": "OC-11"
     }
   ],
-  "rea_parsed_unique_source_files": 171,
+  "rea_parsed_unique_source_files": 186,
   "remaining_parts_id_note": "Los scopes restantes usan SCOPE para no confundir etiquetas del plan inicial con lotes OC completados. Un lote estático no cierra un scope.",
   "rea_parsed_unique_source_paths": [
     "cli-parent-lifetime.mjs",
@@ -6299,6 +6932,7 @@
     "src/agents/apply-patch-parse.ts",
     "src/agents/compaction.ts",
     "src/agents/embedded-agent-runner/run-orchestrator.ts",
+    "src/agents/embedded-agent-runner/runs.question-answer.ts",
     "src/agents/mcp-app-extension-metadata.ts",
     "src/agents/mcp-app-sandbox.ts",
     "src/agents/mcp-client-elicitation.ts",
@@ -6320,7 +6954,15 @@
     "src/agents/tools/computer-tool-control.ts",
     "src/agents/tools/nodes-tool-invoke.ts",
     "src/agents/tools/screen-tool.ts",
+    "src/agents/tools/sessions-send-communication-endpoint.ts",
+    "src/agents/tools/sessions-send-tool.a2a.ts",
+    "src/agents/tools/sessions-send-tool.delivery.ts",
     "src/agents/tools/subagents-tool.ts",
+    "src/agents/worktrees/checkout-policy.ts",
+    "src/agents/worktrees/owner-protection.ts",
+    "src/agents/worktrees/registry-publication.ts",
+    "src/agents/worktrees/removal-recovery.ts",
+    "src/agents/worktrees/snapshot-exact-state-contract.ts",
     "src/auto-reply/heartbeat.ts",
     "src/commands/backup-restore.ts",
     "src/commands/backup-sqlite.ts",
@@ -6340,7 +6982,13 @@
     "src/gateway/server-methods/chat.ts",
     "src/gateway/server-methods/cron-wake.ts",
     "src/gateway/server-methods/health.ts",
+    "src/gateway/server-methods/presence.ts",
+    "src/gateway/server-methods/projects-session-store.ts",
+    "src/gateway/server-methods/projects.ts",
+    "src/gateway/server-methods/question.ts",
+    "src/gateway/server-methods/session-create-project.ts",
     "src/gateway/server-methods/sessions-rewind.ts",
+    "src/gateway/server-methods/worktrees.ts",
     "src/gateway/server-shutdown.ts",
     "src/gateway/server.ts",
     "src/gateway/server/hooks-event-dispatch.ts",
@@ -6409,5 +7057,46 @@
     "src/web-fetch/content-extractors.runtime.ts",
     "src/web-fetch/runtime.ts"
   ],
-  "unique_source_count_method": "Union of exact TS/JS paths including MJS/CJS selected in completed static batches; excludes package/license metadata, deduplicates across batches and includes selected test sources. This count is not semantic or runtime coverage."
+  "unique_source_count_method": "Union of exact TS/JS paths including MJS/CJS selected in completed static batches; excludes package/license metadata, deduplicates across batches and includes selected test sources. This count is not semantic or runtime coverage.",
+  "jarvis_implementation_checkpoint": {
+    "date": "2026-10-30",
+    "progress_id": "P-PRODUCT-COORDINATION",
+    "qualification_file": "PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json",
+    "reference_coverage_changed": false,
+    "reference_runtime_executed": false,
+    "latest_ci": {
+      "commit": "4686f25c960bf1b76702b91f66a3d20915cff22b",
+      "ci_run_id": 41108646785,
+      "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41108646785",
+      "status": "completed",
+      "conclusion": "success",
+      "ubuntu": {
+        "passed": 3952,
+        "skipped": 47,
+        "failed": 0,
+        "seconds": 297.72
+      },
+      "macos": {
+        "python_passed": 3999,
+        "python_skipped": 0,
+        "python_failed": 0,
+        "python_seconds": 434.08,
+        "swift_executed": 705,
+        "swift_skipped": 1,
+        "swift_failed": 0,
+        "swift_seconds": 199.849
+      },
+      "basis": "Conclusión y cifras del checkpoint exacto comunicadas por coordinación; no atribuirlas a otro commit."
+    },
+    "selected_native_observations": "QA estable en dos sesiones reales: A panel oscuro legible y dos sugerencias conocidas; selección sólo prepara borrador. B nuevo vacío sin panel; sugerencias de B descartadas y canceladas rev2. Permiso OS permitido y native/RPC delivered rev3; dueño no encuentra aviso en centro y clic OS real pendiente.",
+    "prior_failures_and_unknown_custody_preserved": true,
+    "scope_limit": "Evidencia de la implementación propia, separada de la REA estática: no amplía los 48 lotes/186 rutas ni acredita ejecución o paridad runtime de OpenClaw. No completa el incremento ni ninguna familia.",
+    "capability_status_counts": {
+      "implementacion_parcial_contratos_probados": 62,
+      "no_implementado": 18,
+      "complete": 0
+    },
+    "phase_a_complete": false,
+    "phase_b_started": false
+  }
 }

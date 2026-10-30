@@ -36,7 +36,7 @@
     "implementation_complete": false,
     "runtime_validation_of_reference_performed": false,
     "initial_jarvis_state": "Línea base original: núcleo Python con pruebas sintéticas. Conservar como historia del inicio; el avance actual se registra separadamente en progress_snapshot y BASELINE_VERTICAL_SLICE.md, sin cerrar paridad.",
-    "rea": "No se usó sesión REA compartida. E### son IDs propios de fuente estática, no ev_ de REA. Ver REA_COVERAGE.json para cobertura REA efectiva.",
+    "rea": "E### son IDs locales de fuente estática con hashes, no ev_ de REA. El inventario inicial y los lotes posteriores se distinguen; cobertura efectiva de 48 lotes y 186 rutas TS/JS únicas en REA_COVERAGE.json, con semántica parcial e incógnitas y sin ejecución de la referencia.",
     "method": "Catálogos canónicos, registros/manifests, entradas de arquitectura y contratos documentales fijados. Catálogos generados se contrastan con manifest disponible; no son evidencia runtime.",
     "limits": [
       "Censo funcional no equivale a lectura semántica de 59.267 archivos o certificación de 554 APIs.",
@@ -45,7 +45,7 @@
       "Contratos declarados y rutas UI no acreditan disponibilidad ni funcionamiento real.",
       "No se ejecutó OpenClaw ni se leyó configuración/cuenta del dueño."
     ],
-    "current_jarvis_state": "Desarrollo propio con incrementos de Telegram, voz, documentos y multimedia cualificados en sus alcances finitos. Runtime autocontenido y residencia de app implementados: CI exacta 29b730c aprobada; recorrido nativo de distribución aprobado en su registro. 54 familias parciales y 26 sin implementación; ninguna familia amplia completa. Fase A abierta y fase B aplazada."
+    "current_jarvis_state": "Desarrollo propio con incrementos de Telegram, voz, documentos, multimedia, distribución autocontenida y residencia cualificados en sus alcances y registros finitos. Producto y coordinación añaden contratos con CI exacta 4686f25 aprobada y recorridos locales acotados: panel oscuro legible, sugerencias conocidas, selección sólo a borrador, descarte y aislamiento entre dos chats. Permiso OS permitido y native/RPC delivered revisión 3; el dueño no encuentra el aviso y el clic OS real sigue pendiente. 62 familias parciales y 18 sin implementación; ninguna familia amplia completa. Fallos y custodias previos conservados. Fase A abierta y fase B aplazada."
   },
   "status_vocabulary": {
     "no_implementado": "Sin evidencia productiva propia de cierre.",
@@ -664,6 +664,10 @@
         {
           "progress_id": "P-CORE-SESSIONS",
           "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        },
+        {
+          "progress_id": "P-PRODUCT-COORDINATION",
+          "scope": "Agrupación/fijado CAS, catálogo filtrado y organización nativa con generación cero observados; sesiones durables/temporales mantienen su contrato histórico. Familia amplia parcial."
         }
       ],
       "acceptance": {
@@ -675,9 +679,24 @@
       "reference_evidence": [
         "E001",
         "E021",
-        "E022"
+        "E022",
+        "E287",
+        "E288"
       ],
-      "closure_status": "pendiente_equivalencia_productiva"
+      "closure_status": "pendiente_equivalencia_productiva",
+      "reference_analysis": [
+        {
+          "batch_id": "OC-28B",
+          "summary_record": "REA_OC28_COORDINATION.json",
+          "parent_evidence_id": "ev_5d59772b29a423c494be32b4042d5c04f7fcddc9ad3f400160250aff9d9a082b",
+          "summary_evidence_id": "ev_8098ebf1fb92a61b850e2509cdf626172b29d43047f1cf51e012cc2065a18462",
+          "scope": "Fuentes seleccionadas estáticas; no equivalencia runtime ni cierre de la familia.",
+          "reference_evidence": [
+            "E287",
+            "E288"
+          ]
+        }
+      ]
     },
     {
       "id": "A-15",
@@ -742,8 +761,13 @@
       "family": "sessions",
       "name": "Usuarios, propiedad y colaboración",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-PRODUCT-COORDINATION",
+          "scope": "Dos clientes locales Ed25519 admitidos, membresía read/collaborate, revocación y atribución solicitante/aprobador. No usuarios OS múltiples, atestación Apple ni colaboración cloud."
+        }
+      ],
       "acceptance": {
         "observable_success": "Dos identidades de prueba colaboran por membresía explícita; la app atribuye petición y aprobación.",
         "observable_failure_or_revocation": "Participante retirado o enlace revocado no lee sesión; seleccionar identidad ajena no crea su consentimiento.",
@@ -753,17 +777,48 @@
       "reference_evidence": [
         "E001",
         "E021",
-        "E022"
+        "E022",
+        "E284",
+        "E285",
+        "E287"
       ],
-      "closure_status": "pendiente_equivalencia_productiva"
+      "closure_status": "pendiente_equivalencia_productiva",
+      "reference_analysis": [
+        {
+          "batch_id": "OC-28A",
+          "summary_record": "REA_OC28_PRODUCT.json",
+          "parent_evidence_id": "ev_bd297cef6b24c9b5d5b58f5460d92ad26ca8d4faae7da7a735e20d5e82213720",
+          "summary_evidence_id": "ev_c78b372c3a086d37160a13bb749b5ed2c0858db6be6559e610575d9e73ac32f1",
+          "scope": "Fuentes seleccionadas estáticas; no equivalencia runtime ni cierre de la familia.",
+          "reference_evidence": [
+            "E284",
+            "E285"
+          ]
+        },
+        {
+          "batch_id": "OC-28B",
+          "summary_record": "REA_OC28_COORDINATION.json",
+          "parent_evidence_id": "ev_5d59772b29a423c494be32b4042d5c04f7fcddc9ad3f400160250aff9d9a082b",
+          "summary_evidence_id": "ev_8098ebf1fb92a61b850e2509cdf626172b29d43047f1cf51e012cc2065a18462",
+          "scope": "Fuentes seleccionadas estáticas; no equivalencia runtime ni cierre de la familia.",
+          "reference_evidence": [
+            "E287"
+          ]
+        }
+      ]
     },
     {
       "id": "A-18",
       "family": "sessions",
       "name": "Decisiones, preguntas, progreso, presencia y sugerencias",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-PRODUCT-COORDINATION",
+          "scope": "Dos preguntas simultáneas reales con alias wire, seis negativos de scope/run/revisión/forma, consumo y sumas diferenciadas; progreso/presencia observados. Tras corregir el descriptor en 6cef5d7, CI exacta 4686f25 aprobada y QA estable con dos sugerencias conocidas en A, selección que sólo prepara borrador y descarte en B cancelado en revisión 2; B nuevo vacío sin panel."
+        }
+      ],
       "acceptance": {
         "observable_success": "Responder pregunta estructurada, actualizar progreso y aceptar/descartar sugerencia cambia el objeto previsto.",
         "observable_failure_or_revocation": "Respuesta caducada o de otro run no se aplica; evaluación del modelo no concede autoridad.",
@@ -773,9 +828,26 @@
       "reference_evidence": [
         "E001",
         "E021",
-        "E022"
+        "E022",
+        "E284",
+        "E285",
+        "E286"
       ],
-      "closure_status": "pendiente_equivalencia_productiva"
+      "closure_status": "pendiente_equivalencia_productiva",
+      "reference_analysis": [
+        {
+          "batch_id": "OC-28A",
+          "summary_record": "REA_OC28_PRODUCT.json",
+          "parent_evidence_id": "ev_bd297cef6b24c9b5d5b58f5460d92ad26ca8d4faae7da7a735e20d5e82213720",
+          "summary_evidence_id": "ev_c78b372c3a086d37160a13bb749b5ed2c0858db6be6559e610575d9e73ac32f1",
+          "scope": "Fuentes seleccionadas estáticas; no equivalencia runtime ni cierre de la familia.",
+          "reference_evidence": [
+            "E284",
+            "E285",
+            "E286"
+          ]
+        }
+      ]
     },
     {
       "id": "A-19",
@@ -791,6 +863,10 @@
         {
           "progress_id": "P-CORE-DELEGATION",
           "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        },
+        {
+          "progress_id": "P-PRODUCT-COORDINATION",
+          "scope": "Workspaces físicos por sesión y callbacks paralelos con contexto/cliente/agente/generación; cambio de ruta revoca membresía y claims antiguos. No completa todas las políticas multiagente/plataforma."
         }
       ],
       "acceptance": {
@@ -803,9 +879,37 @@
         "E023",
         "E024",
         "E025",
-        "E026"
+        "E026",
+        "E287",
+        "E288",
+        "E292",
+        "E293"
       ],
-      "closure_status": "pendiente_equivalencia_productiva"
+      "closure_status": "pendiente_equivalencia_productiva",
+      "reference_analysis": [
+        {
+          "batch_id": "OC-28B",
+          "summary_record": "REA_OC28_COORDINATION.json",
+          "parent_evidence_id": "ev_5d59772b29a423c494be32b4042d5c04f7fcddc9ad3f400160250aff9d9a082b",
+          "summary_evidence_id": "ev_8098ebf1fb92a61b850e2509cdf626172b29d43047f1cf51e012cc2065a18462",
+          "scope": "Fuentes seleccionadas estáticas; no equivalencia runtime ni cierre de la familia.",
+          "reference_evidence": [
+            "E287",
+            "E288"
+          ]
+        },
+        {
+          "batch_id": "OC-28C",
+          "summary_record": "REA_OC28_WORKTREES.json",
+          "parent_evidence_id": "ev_235cae7796bc600835d3e2d8a88a93a037072e5c6cafb140585be591238ab665",
+          "summary_evidence_id": "ev_69a9742200017bed02a1210707b63b51689c08f7ca9aca7e65d39312598ad9d9",
+          "scope": "Fuentes seleccionadas estáticas; no equivalencia runtime ni cierre de la familia.",
+          "reference_evidence": [
+            "E292",
+            "E293"
+          ]
+        }
+      ]
     },
     {
       "id": "A-20",
@@ -817,6 +921,10 @@
         {
           "progress_id": "P-CORE-DELEGATION",
           "scope": "Contrato propio finito y cualificación nativa acotada en PHASE_A_CORE_CLOSEOUT.md; no cierra la familia completa."
+        },
+        {
+          "progress_id": "P-PRODUCT-COORDINATION",
+          "scope": "Reservas padre/hijos, presupuesto inclusivo, cancelación y conciliación con uso/coste desconocido conservados. Los recibos de clientes cubren el alcance elegido; no swarm distribuido ni tope de facturación del proveedor."
         }
       ],
       "acceptance": {
@@ -1674,8 +1782,13 @@
       "family": "channels",
       "name": "A2A, canales entre agentes y conversaciones externas",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-PRODUCT-COORDINATION",
+          "scope": "Buzón A2A local con remitente/destinatario/correlación/TTL y ACK explícito; prueba entre clientes firmados del mismo servicio, sin inferencia ni autoridad implícitas. No dos gateways externos ni Internet."
+        }
+      ],
       "acceptance": {
         "observable_success": "Dos instancias propias intercambian mensaje autenticado y respuesta correlacionada con identidades y límites.",
         "observable_failure_or_revocation": "Agente desconocido, replay y respuesta tardía no amplían tools ni se vuelven petición del dueño.",
@@ -1685,9 +1798,26 @@
       "reference_evidence": [
         "E075",
         "E005",
-        "E076"
+        "E076",
+        "E289",
+        "E290",
+        "E291"
       ],
-      "closure_status": "pendiente_equivalencia_productiva"
+      "closure_status": "pendiente_equivalencia_productiva",
+      "reference_analysis": [
+        {
+          "batch_id": "OC-28B",
+          "summary_record": "REA_OC28_COORDINATION.json",
+          "parent_evidence_id": "ev_5d59772b29a423c494be32b4042d5c04f7fcddc9ad3f400160250aff9d9a082b",
+          "summary_evidence_id": "ev_8098ebf1fb92a61b850e2509cdf626172b29d43047f1cf51e012cc2065a18462",
+          "scope": "Fuentes seleccionadas estáticas; no equivalencia runtime ni cierre de la familia.",
+          "reference_evidence": [
+            "E289",
+            "E290",
+            "E291"
+          ]
+        }
+      ]
     },
     {
       "id": "A-51",
@@ -2023,8 +2153,13 @@
       "family": "ui",
       "name": "Widgets, canvas, dashboards y temas",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-PRODUCT-COORDINATION",
+          "scope": "Panel/editor/checklist, fuente interna y aislamiento A/B observados. Tras el fallo de tema oscuro y su corrección en 6cef5d7, CI exacta 4686f25 aprobada y panel oscuro legible observado en QA estable; B nuevo vacío sin panel. No canvas HTML/JS ni dashboards remotos universales."
+        }
+      ],
       "acceptance": {
         "observable_success": "Presentar widget/dashboard/tema propios y verificar interacción autorizada y datos de prueba actualizados.",
         "observable_failure_or_revocation": "Contenido no confiable no accede a host/secretos; retirar permiso detiene actualización/acción.",
@@ -2070,8 +2205,13 @@
       "family": "projects",
       "name": "Proyectos, repositorios y worktrees",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-PRODUCT-COORDINATION",
+          "scope": "Diez planes Git con conservación y oráculos sobre proyecto/worktrees/snapshots propios; se conserva el fallo Darwin anterior. No operaciones arbitrarias ni activación automática de rutas/autoridades al restaurar sidecar."
+        }
+      ],
       "acceptance": {
         "observable_success": "Registrar repo temporal, crear worktree, asociar sesión, inspeccionar diff y restaurar archivo/snapshot.",
         "observable_failure_or_revocation": "Archivar/eliminar conserva recuperación y no borra cambios ajenos; fallo Git deja estado explicable.",
@@ -2082,17 +2222,56 @@
         "E095",
         "E096",
         "E097",
-        "E098"
+        "E098",
+        "E287",
+        "E288",
+        "E292",
+        "E293",
+        "E294",
+        "E295",
+        "E296"
       ],
-      "closure_status": "pendiente_equivalencia_productiva"
+      "closure_status": "pendiente_equivalencia_productiva",
+      "reference_analysis": [
+        {
+          "batch_id": "OC-28A",
+          "summary_record": "REA_OC28_PRODUCT.json",
+          "parent_evidence_id": "ev_bd297cef6b24c9b5d5b58f5460d92ad26ca8d4faae7da7a735e20d5e82213720",
+          "summary_evidence_id": "ev_c78b372c3a086d37160a13bb749b5ed2c0858db6be6559e610575d9e73ac32f1",
+          "scope": "Fuentes seleccionadas estáticas; no equivalencia runtime ni cierre de la familia.",
+          "reference_evidence": [
+            "E095",
+            "E096"
+          ]
+        },
+        {
+          "batch_id": "OC-28C",
+          "summary_record": "REA_OC28_WORKTREES.json",
+          "parent_evidence_id": "ev_235cae7796bc600835d3e2d8a88a93a037072e5c6cafb140585be591238ab665",
+          "summary_evidence_id": "ev_69a9742200017bed02a1210707b63b51689c08f7ca9aca7e65d39312598ad9d9",
+          "scope": "Fuentes seleccionadas estáticas; no equivalencia runtime ni cierre de la familia.",
+          "reference_evidence": [
+            "E292",
+            "E293",
+            "E294",
+            "E295",
+            "E296"
+          ]
+        }
+      ]
     },
     {
       "id": "A-64",
       "family": "projects",
       "name": "Identidad GitHub, revisión y publicación",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-PRODUCT-COORDINATION",
+          "scope": "Dos lecturas GitHub acotadas del repositorio elegido, identidad/HEAD/checks/diff como datos externos no verificados y sin POST. Publicación real de PR no observada; mantiene aprobación exacta por conexión/repositorio/HEAD."
+        }
+      ],
       "acceptance": {
         "observable_success": "Con autorización y repo de prueba mostrar identidad/checks/diff y preparar publicación vinculada a sesión.",
         "observable_failure_or_revocation": "Credencial revocada, cambios concurrentes y destino incorrecto bloquean publicación sin enviar/push implícito.",
@@ -2178,8 +2357,13 @@
       "family": "ops",
       "name": "CLI, TUI, ACP y clientes de automatización",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-PRODUCT-COORDINATION",
+          "scope": "Siete selecciones reales de clientes locales: CLI/TUI, ACP v1 declarado, colaboración, cancelación, A2A, presupuesto y revocación. Identidades explícitas y autoridad central; no compatibilidad ACP universal ni servidor público."
+        }
+      ],
       "acceptance": {
         "observable_success": "Controlar sesión desde CLI/TUI y cliente ACP de prueba con los mismos eventos y autoridad que app.",
         "observable_failure_or_revocation": "Cliente no autenticado, versión incompatible y cancelación no eluden política ni dejan run huérfano.",
@@ -2519,8 +2703,13 @@
       "family": "ops",
       "name": "Notificaciones, push, suspensión y reanudación",
       "scope": "base_nativa_openclaw",
-      "current_status": "no_implementado",
-      "implementation_evidence": [],
+      "current_status": "implementacion_parcial_contratos_probados",
+      "implementation_evidence": [
+        {
+          "progress_id": "P-PRODUCT-COORDINATION",
+          "scope": "Outbox local durable opt-in, claim/validación/revocación y navegación sin replay con contratos CI. En QA estable el permiso OS está permitido y native/RPC registran delivered en revisión 3; el dueño no encuentra el aviso en el centro de notificaciones y el clic OS real sigue sin acreditarse. Conservar el intento previo UNErrorDomain 1 y su causa no establecida; no push remoto ni suspensión universal acreditados."
+        }
+      ],
       "acceptance": {
         "observable_success": "Con permiso elegido notificar fin de prueba, suspender/reanudar y recuperar estado sin repetir aviso.",
         "observable_failure_or_revocation": "Revocación o suscripción borrada impiden aviso; suspensión durante efecto conserva recibo sin repetirlo.",
@@ -14145,6 +14334,162 @@
       "commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
       "url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/extensions/visitor-access/openclaw.plugin.json",
       "analysis_limit": "Ruta/catálogo/contrato documental; no acredita runtime ni revisión completa de sus dependencias."
+    },
+    {
+      "id": "E284",
+      "kind": "fuente_estatica_manifest_fijado",
+      "path": "src/gateway/server-methods/question.ts",
+      "sha256": "2862a579c940f24b2d2c4fb1aa631a95740387bb5f46edad6a7c48c984fe9d1a",
+      "bytes": 24993,
+      "commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/gateway/server-methods/question.ts",
+      "source_manifest": "REA_OC28_SOURCE_MANIFEST.json",
+      "rea_batch": "OC-28A",
+      "analysis_limit": "SHA-256/tamaño del blob adquirido según manifiesto OC28; git_blob_sha1 no registrado aquí. REA estática de la partición, sin runtime ni revisión completa de dependencias."
+    },
+    {
+      "id": "E285",
+      "kind": "fuente_estatica_manifest_fijado",
+      "path": "src/gateway/server-methods/presence.ts",
+      "sha256": "72476cb7ac7e106f5b011a3e1788e0ef1fe83a60bd45581c7d743ac57abfdc6b",
+      "bytes": 14412,
+      "commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/gateway/server-methods/presence.ts",
+      "source_manifest": "REA_OC28_SOURCE_MANIFEST.json",
+      "rea_batch": "OC-28A",
+      "analysis_limit": "SHA-256/tamaño del blob adquirido según manifiesto OC28; git_blob_sha1 no registrado aquí. REA estática de la partición, sin runtime ni revisión completa de dependencias."
+    },
+    {
+      "id": "E286",
+      "kind": "fuente_estatica_manifest_fijado",
+      "path": "src/agents/embedded-agent-runner/runs.question-answer.ts",
+      "sha256": "8705027c9c4051fa01cf6ff1d92df7ce948dececde7ba6f84c43de1cef9e216b",
+      "bytes": 2513,
+      "commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/agents/embedded-agent-runner/runs.question-answer.ts",
+      "source_manifest": "REA_OC28_SOURCE_MANIFEST.json",
+      "rea_batch": "OC-28A",
+      "analysis_limit": "SHA-256/tamaño del blob adquirido según manifiesto OC28; git_blob_sha1 no registrado aquí. REA estática de la partición, sin runtime ni revisión completa de dependencias."
+    },
+    {
+      "id": "E287",
+      "kind": "fuente_estatica_manifest_fijado",
+      "path": "src/gateway/server-methods/projects-session-store.ts",
+      "sha256": "3a16d5400899f9728a4db809c62d4ffea0532a01aa45665a73ca426692ed0919",
+      "bytes": 8270,
+      "commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/gateway/server-methods/projects-session-store.ts",
+      "source_manifest": "REA_OC28_SOURCE_MANIFEST.json",
+      "rea_batch": "OC-28B",
+      "analysis_limit": "SHA-256/tamaño del blob adquirido según manifiesto OC28; git_blob_sha1 no registrado aquí. REA estática de la partición, sin runtime ni revisión completa de dependencias."
+    },
+    {
+      "id": "E288",
+      "kind": "fuente_estatica_manifest_fijado",
+      "path": "src/gateway/server-methods/session-create-project.ts",
+      "sha256": "48ea818fe10cdff05317e672f33269391f1f69a1aea8227c5f232c503d50e535",
+      "bytes": 23758,
+      "commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/gateway/server-methods/session-create-project.ts",
+      "source_manifest": "REA_OC28_SOURCE_MANIFEST.json",
+      "rea_batch": "OC-28B",
+      "analysis_limit": "SHA-256/tamaño del blob adquirido según manifiesto OC28; git_blob_sha1 no registrado aquí. REA estática de la partición, sin runtime ni revisión completa de dependencias."
+    },
+    {
+      "id": "E289",
+      "kind": "fuente_estatica_manifest_fijado",
+      "path": "src/agents/tools/sessions-send-tool.a2a.ts",
+      "sha256": "b5b0c15d4f5defc2e796cedd400c11d9b69adecbff9a0355d0a0c7fbe2bead95",
+      "bytes": 9485,
+      "commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/agents/tools/sessions-send-tool.a2a.ts",
+      "source_manifest": "REA_OC28_SOURCE_MANIFEST.json",
+      "rea_batch": "OC-28B",
+      "analysis_limit": "SHA-256/tamaño del blob adquirido según manifiesto OC28; git_blob_sha1 no registrado aquí. REA estática de la partición, sin runtime ni revisión completa de dependencias."
+    },
+    {
+      "id": "E290",
+      "kind": "fuente_estatica_manifest_fijado",
+      "path": "src/agents/tools/sessions-send-tool.delivery.ts",
+      "sha256": "67e53ca02ccaadeb7cbaa00bbd75148dead6cc5a92689a0747abf949268bd17f",
+      "bytes": 22652,
+      "commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/agents/tools/sessions-send-tool.delivery.ts",
+      "source_manifest": "REA_OC28_SOURCE_MANIFEST.json",
+      "rea_batch": "OC-28B",
+      "analysis_limit": "SHA-256/tamaño del blob adquirido según manifiesto OC28; git_blob_sha1 no registrado aquí. REA estática de la partición, sin runtime ni revisión completa de dependencias."
+    },
+    {
+      "id": "E291",
+      "kind": "fuente_estatica_manifest_fijado",
+      "path": "src/agents/tools/sessions-send-communication-endpoint.ts",
+      "sha256": "3f3653fd5b6dbd99533ebb9b0d2564125a425e352869d438a901bb61bb762f6c",
+      "bytes": 3820,
+      "commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/agents/tools/sessions-send-communication-endpoint.ts",
+      "source_manifest": "REA_OC28_SOURCE_MANIFEST.json",
+      "rea_batch": "OC-28B",
+      "analysis_limit": "SHA-256/tamaño del blob adquirido según manifiesto OC28; git_blob_sha1 no registrado aquí. REA estática de la partición, sin runtime ni revisión completa de dependencias."
+    },
+    {
+      "id": "E292",
+      "kind": "fuente_estatica_manifest_fijado",
+      "path": "src/agents/worktrees/owner-protection.ts",
+      "sha256": "c612644a5e13190ae0de1648428495ffebb332e85abbada67a64e3e8cfb43383",
+      "bytes": 11012,
+      "commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/agents/worktrees/owner-protection.ts",
+      "source_manifest": "REA_OC28_SOURCE_MANIFEST.json",
+      "rea_batch": "OC-28C",
+      "analysis_limit": "SHA-256/tamaño del blob adquirido según manifiesto OC28; git_blob_sha1 no registrado aquí. REA estática de la partición, sin runtime ni revisión completa de dependencias."
+    },
+    {
+      "id": "E293",
+      "kind": "fuente_estatica_manifest_fijado",
+      "path": "src/agents/worktrees/checkout-policy.ts",
+      "sha256": "d09a5f045f69384dfb31be20c6205b5b502a3f7ed510ce4bd550cbd8545877ab",
+      "bytes": 2712,
+      "commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/agents/worktrees/checkout-policy.ts",
+      "source_manifest": "REA_OC28_SOURCE_MANIFEST.json",
+      "rea_batch": "OC-28C",
+      "analysis_limit": "SHA-256/tamaño del blob adquirido según manifiesto OC28; git_blob_sha1 no registrado aquí. REA estática de la partición, sin runtime ni revisión completa de dependencias."
+    },
+    {
+      "id": "E294",
+      "kind": "fuente_estatica_manifest_fijado",
+      "path": "src/agents/worktrees/registry-publication.ts",
+      "sha256": "5ee601562b1cf42878cd9649a7267f143c2b80b257f63614c048a2558f3d96af",
+      "bytes": 6162,
+      "commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/agents/worktrees/registry-publication.ts",
+      "source_manifest": "REA_OC28_SOURCE_MANIFEST.json",
+      "rea_batch": "OC-28C",
+      "analysis_limit": "SHA-256/tamaño del blob adquirido según manifiesto OC28; git_blob_sha1 no registrado aquí. REA estática de la partición, sin runtime ni revisión completa de dependencias."
+    },
+    {
+      "id": "E295",
+      "kind": "fuente_estatica_manifest_fijado",
+      "path": "src/agents/worktrees/snapshot-exact-state-contract.ts",
+      "sha256": "75ff231532a9b6805694b50dce49c634144da574e0414d3064822520e0e0d363",
+      "bytes": 666,
+      "commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/agents/worktrees/snapshot-exact-state-contract.ts",
+      "source_manifest": "REA_OC28_SOURCE_MANIFEST.json",
+      "rea_batch": "OC-28C",
+      "analysis_limit": "SHA-256/tamaño del blob adquirido según manifiesto OC28; git_blob_sha1 no registrado aquí. REA estática de la partición, sin runtime ni revisión completa de dependencias."
+    },
+    {
+      "id": "E296",
+      "kind": "fuente_estatica_manifest_fijado",
+      "path": "src/agents/worktrees/removal-recovery.ts",
+      "sha256": "4b5516060b82a6259deb83243298389186dd244708cd6e490d87e62fc442da01",
+      "bytes": 21949,
+      "commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "url": "https://github.com/openclaw/openclaw/blob/1e3ff306abaff29f03e7668d53b01c07f10294ac/src/agents/worktrees/removal-recovery.ts",
+      "source_manifest": "REA_OC28_SOURCE_MANIFEST.json",
+      "rea_batch": "OC-28C",
+      "analysis_limit": "SHA-256/tamaño del blob adquirido según manifiesto OC28; git_blob_sha1 no registrado aquí. REA estática de la partición, sin runtime ni revisión completa de dependencias."
     }
   ],
   "next_review_partition_contract": {
@@ -14158,8 +14503,8 @@
     ]
   },
   "progress_snapshot": {
-    "date": "2026-10-29",
-    "revision_scope": "Incremento elegido de automatización cualificado: ocho recorridos nativos iniciales y recorrido posterior d474 con diagnóstico/cierre; producto idéntico a 1481983, cuya CI exacta 40877800263 pasó Ubuntu y macOS, Swift, bundle y paquetes/smoke. 52 familias parciales y 28 sin implementar; ninguna familia amplia completa. Fase A abierta y B no iniciada.",
+    "date": "2026-10-30",
+    "revision_scope": "Producto y coordinación propios con CI exacta 4686f25 aprobada (run 41108646785) y recorridos finitos por checkpoint. QA estable acredita panel oscuro legible, dos sugerencias conocidas, selección sólo a borrador, descarte rev2 y aislamiento A/B. Permiso OS permitido y native/RPC delivered rev3, pero el dueño no encuentra el aviso: clic OS real pendiente. 62 familias parciales, 18 sin implementar y 0 completas; REA: 48 lotes y 186 rutas TS/JS únicas. Custodias/fallos previos conservados. Fase A abierta y B no iniciada.",
     "complete_capability_count": 0,
     "complete_reference_parity": false,
     "authenticated_inference_verified": true,
@@ -15183,13 +15528,197 @@
         "verified_scope": "CI exacta 29b730c28b1a9afed23a6cfc58634ebd055ef32c, run 41069453178, aprobada: 3682 Python en Ubuntu y 46 omisiones de plataforma, 3728 Python en macOS, 660 Swift con una omisión y cero fallos; bundle/helper/runtime-check, paquetes y smoke. Runtime de 713071726 bytes y 4528 archivos, con traslado, dependencias nativas reales, MiniLM CPU, Codex oficial sin cuenta e IPC/SQLite y cierre por EOF. Pin del manifiesto en Info.plist firmado. El artefacto de CI, con perfil sintético nuevo, respondió 4 mediante ChatGPT real, conservó la misma identidad/lease/IPC al cerrar ventanas y reabrir, y cerró normalmente por GUI con cuatro identidades ausentes, lease libre y desmontaje sin fuerza ni señales; recibos en PHASE_A_DISTRIBUTION_RESIDENT_QUALIFICATION.json.",
         "remaining": "El modo de cualificación no registra un Login Item real; macOS 14 no fue probado. Developer ID/notarización pública y actualización pública siguen pendientes y requieren las decisiones/credenciales que correspondan. El runtime base incluido no aporta automáticamente los programas/runtimes de servidores MCP externos. Inicio optativo de sesión no relanza tras Salir o caída del host; no cierra la fase A global ni inicia B.",
         "qualification_file": "PHASE_A_DISTRIBUTION_RESIDENT_QUALIFICATION.json"
+      },
+      {
+        "id": "P-PRODUCT-COORDINATION",
+        "component": "Producto, sesiones y coordinación locales",
+        "status": "contract_tested_partial",
+        "qualification_status": "partial_native_observed_os_click_pending",
+        "capability_ids": [
+          "A-14",
+          "A-17",
+          "A-18",
+          "A-19",
+          "A-20",
+          "A-50",
+          "A-61",
+          "A-63",
+          "A-64",
+          "A-68",
+          "A-79"
+        ],
+        "code": [
+          "src/jarvis_core/session_coordination.py",
+          "src/jarvis_core/product_management.py",
+          "native/JarvisDesktop/Sources/DesktopCore/ProductCoordinationStore.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Views/ProductCoordinationView.swift",
+          "src/jarvis_core/client_identity.py",
+          "src/jarvis_core/product_client.py",
+          "src/jarvis_core/product_interactions.py",
+          "src/jarvis_core/product_tools.py",
+          "src/jarvis_core/codex.py",
+          "native/JarvisDesktop/Sources/DesktopCore/ProductInteractionStore.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Views/ProductInteractionQuestionView.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Views/ProductInteractionWidgets.swift",
+          "src/jarvis_core/product_runtime.py",
+          "src/jarvis_core/session_coordination_budgets.py",
+          "src/jarvis_core/runtime.py",
+          "src/jarvis_core/session_coordination_messages.py",
+          "native/JarvisDesktop/Sources/DesktopCore/ProductInteractionModels.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Views/ProductInteractionPanel.swift",
+          "src/jarvis_core/product_projects.py",
+          "src/jarvis_core/product_recovery.py",
+          "src/jarvis_core/host_profile.py",
+          "native/JarvisDesktop/Sources/DesktopCore/ProductProjectsStore.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Views/ProductProjectsView.swift",
+          "src/jarvis_core/product_projects_github.py",
+          "src/jarvis_core/product_acp.py",
+          "src/jarvis_core/host_tool_runs.py",
+          "src/jarvis_core/product_interactions_notifications.py",
+          "native/JarvisDesktop/Sources/DesktopCore/ProductNotificationDelivery.swift",
+          "native/JarvisDesktop/Sources/JarvisApp/Stores/MacProductNotificationCenter.swift"
+        ],
+        "tests": [
+          "tests/test_session_coordination.py",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/ProductCoordinationIntegrationTests.swift",
+          "tests/test_product_client_service.py",
+          "tests/test_product_interactions.py",
+          "tests/test_product_goal_budgets.py",
+          "tests/test_product_projects.py",
+          "tests/test_product_recovery.py",
+          "tests/test_product_projects_github.py",
+          "tests/test_product_acp.py",
+          "native/JarvisDesktop/Tests/DesktopCoreTests/ProductNotificationDeliveryTests.swift",
+          "tests/test_product_tools.py",
+          "native/JarvisDesktop/Tests/QALaunchSupportTests/QALaunchContractTests.swift"
+        ],
+        "evidence": [
+          "PHASE_A_PRODUCT_COORDINATION.md",
+          "PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json",
+          "REA_OC28_PRODUCT_COORDINATION.md",
+          "REA_OC28_SOURCE_MANIFEST.json",
+          "REA_OC28_PRODUCT.json",
+          "REA_OC28_COORDINATION.json",
+          "REA_OC28_WORKTREES.json"
+        ],
+        "verified_scope": "Código propio de preguntas/progreso/presencia/sugerencias/panel, organización y workspaces por sesión, colaboración/A2A, presupuestos, proyectos/GitHub y clientes firmados. CI completa de 4686f25 aprobada: Ubuntu 3952 pass/47 skip, macOS 3999 pass/0 skip y Swift 705 ejecutadas/1 skip/0 fallos. Se conservan siete selecciones live de clientes, dos lecturas GitHub sin publicación, diez planes Git, dos preguntas simultáneas con negativos/consumo y grupos/pins/editor/checklist/fuente interna A/B. QA estable posterior observa panel oscuro legible y dos sugerencias conocidas en A, selección sólo a borrador, B nuevo vacío sin panel y descarte de sugerencias en B canceladas rev2. Permiso OS permitido y native/RPC delivered rev3, sin aviso encontrado por el dueño ni clic OS acreditado. Cada recibo conserva su checkpoint; no completa la familia ni el incremento.",
+        "ci_verified_checkpoint": {
+          "commit": "64fbc48ac1b1b3d77d74f0d0576a02ada3be65e8",
+          "ci_run_id": 41103606527,
+          "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41103606527",
+          "conclusion": "success",
+          "ubuntu": {
+            "passed": 3903,
+            "skipped": 47,
+            "failed": 0,
+            "seconds": 319.84,
+            "saved_log_sha256": "cb636810c45b66d7031916e73afbf17cf34a258b596eb1522a5f0ecc04658503"
+          },
+          "macos": {
+            "python_passed": 3950,
+            "python_skipped": 0,
+            "python_failed": 0,
+            "python_seconds": 446.47,
+            "swift_executed": 698,
+            "swift_skipped": 1,
+            "swift_failed": 0,
+            "swift_seconds": 204.531,
+            "saved_log_sha256": "330725a864d336ce93f4296389e1f92ff4f6c0b2a7779dc7147b2ed907d0fb99"
+          },
+          "wheel_sdist_isolated_installation": "success_both_platforms",
+          "self_contained_bundle_and_parent_eof": "success"
+        },
+        "latest_ci": {
+          "commit": "4686f25c960bf1b76702b91f66a3d20915cff22b",
+          "ci_run_id": 41108646785,
+          "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41108646785",
+          "status": "completed",
+          "conclusion": "success",
+          "ubuntu": {
+            "passed": 3952,
+            "skipped": 47,
+            "failed": 0,
+            "seconds": 297.72
+          },
+          "macos": {
+            "python_passed": 3999,
+            "python_skipped": 0,
+            "python_failed": 0,
+            "python_seconds": 434.08,
+            "swift_executed": 705,
+            "swift_skipped": 1,
+            "swift_failed": 0,
+            "swift_seconds": 199.849
+          },
+          "basis": "Conclusión y cifras del checkpoint exacto comunicadas por coordinación; no atribuirlas a otro commit."
+        },
+        "observed_selected_cases": {
+          "local_client_selections": 7,
+          "github_read_only_cases": 2,
+          "git_host_plans": 10,
+          "simultaneous_real_questions": 2,
+          "question_negative_cases": 6,
+          "question_answers_consumed": true,
+          "answers_available_after_consumption": false,
+          "observed_public_data_contains_answers_or_digests": false,
+          "provider_internal_retention_claimed": false,
+          "groups_pins_generation_zero_rendered": true,
+          "panel_editor_checklist_internal_source_and_chat_isolation": true,
+          "github_publication_observed": false,
+          "os_notification_delivery_qualified": false,
+          "qualification_record": "PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json",
+          "stable_native_two_session_retest": true,
+          "dark_panel_legible": true,
+          "session_a_known_suggestions": 2,
+          "suggestion_selection_only_updates_draft": true,
+          "new_session_b_empty_without_panel": true,
+          "session_b_suggestions_dismissed_status": "cancelled",
+          "session_b_suggestions_dismissed_revision": 2,
+          "os_notification_permission": "allowed",
+          "native_rpc_notification_status": "delivered",
+          "native_rpc_notification_revision": 3,
+          "os_notification_found_in_notification_center": false,
+          "os_notification_click_verified": false
+        },
+        "failures_and_custody_preserved": [
+          {
+            "scope": "suggestions_and_dark_panel",
+            "status": "corrected_selected_retest_observed_original_failure_preserved",
+            "correction_commit": "6cef5d7efcde296b8d800ad053f23ef885b3483a",
+            "facts": "El modelo recibió descriptores incompletos y cinco llamadas de sugerencias fueron rechazadas; el panel oscuro perdió texto sobre fondo claro. Esquemas anidados autosuficientes y superficie semántica corregidos en 6cef5d7. CI exacta 4686f25 aprobada y QA estable posterior observa panel oscuro legible, dos sugerencias conocidas, selección sólo a borrador y descarte en B rev2. El fallo original se conserva; el positivo sólo cubre estos casos."
+          },
+          {
+            "scope": "native_notifications",
+            "status": "prior_error_preserved_stable_rpc_delivery_observed_os_click_pending",
+            "os_error_domain": "UNErrorDomain",
+            "os_error_code": 1,
+            "facts": "El intento previo devolvió UNErrorDomain 1 sin underlying establecido; su causa sigue desconocida. En QA estable posterior el permiso OS está permitido y native/RPC registran delivered rev3, pero el dueño no encuentra el aviso en el centro de notificaciones. No acredita banner visible ni clic OS real, y no atribuye una causa al error previo."
+          },
+          {
+            "scope": "native_close_57f3a631",
+            "status": "original_unknown_preserved",
+            "facts": "El cierre usó fallback después de que un hash malformado del harness impidiera el flujo normal. La reconciliación posterior no lo reescribe como Cmd-Q normal."
+          },
+          {
+            "scope": "native_close_probe_6cef5d7",
+            "status": "mixed_original_receipts_preserved",
+            "facts": "Cmd-Q normal observado; primer intento de desmontaje false y segundo desmontaje normal correcto. Conservar el resultado/unknown inicial, sin convertirlo retroactivamente en cierre íntegro al primer intento."
+          }
+        ],
+        "remaining": "Encontrar el aviso en el centro de notificaciones y acreditar su clic OS real y navegación correlacionada; resto de variantes por familia y cierre del incremento con sus recibos finales. CI 4686f25 y los casos nativos de esquema/tema oscuro descritos ya son positivos acotados. No inferir colaboración cloud, múltiples usuarios OS, ACP universal, push remoto, canvas ejecutable, publicación GitHub real ni facturación exacta ausente.",
+        "phase_a_complete": false,
+        "phase_b_started": false,
+        "qualification_file": "PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json",
+        "test_evidence_note": "La lista identifica contratos escritos; CI exacta 4686f25, run 41108646785, completada con éxito, incluye las correcciones 6cef5d7 y el helper estable. El recorrido nativo posterior sólo acredita los casos descritos; el clic de notificación OS sigue pendiente.",
+        "new_corrections_ci_and_native_retest_pending": false,
+        "os_notification_click_pending": true
       }
     ],
-    "detail_file": "PHASE_A_AUTOMATION_CLOSEOUT.md",
+    "detail_file": "PHASE_A_PRODUCT_COORDINATION.md",
     "rea": {
       "source_file": "REA_COVERAGE.json",
-      "static_batches": 45,
-      "unique_typescript_paths_in_completed_batches": 169,
+      "static_batches": 48,
+      "unique_typescript_paths_in_completed_batches": 184,
       "global_status": "partial",
       "runtime_executed": false,
       "semantic_unknowns_remain": true,
@@ -15238,16 +15767,19 @@
         "OC-26A",
         "OC-26B",
         "OC-26C",
-        "OC-26D"
+        "OC-26D",
+        "OC-28A",
+        "OC-28B",
+        "OC-28C"
       ],
       "limits": "Contar rutas examinadas no significa comprensión semántica ni revisión global. IDs y evidencias completos en REA_COVERAGE.json/provenance.",
-      "unique_ts_js_paths_in_completed_batches": 171,
-      "source_count_note": "El contador TypeScript conserva su sentido estricto; el total TS/JS incluye también MJS/CJS."
+      "unique_ts_js_paths_in_completed_batches": 186,
+      "source_count_note": "184 rutas TypeScript y dos MJS; unión de rutas únicas, no cobertura semántica o runtime. OC28 conserva 15 blobs/182916 bytes, manifiesto, EIDs y límites propios."
     },
-    "previous_detail_file": "PHASE_A_CORE_CLOSEOUT.md",
+    "previous_detail_file": "PHASE_A_AUTOMATION_CLOSEOUT.md",
     "qualification_file": "PHASE_A_RECOVERY_QUALIFICATION.json",
-    "latest_qualification_status": "qualified_selected_increment",
-    "latest_qualification_record": "PHASE_A_AUTOMATION_QUALIFICATION.json",
+    "latest_qualification_status": "partial_native_observed_os_click_pending",
+    "latest_qualification_record": "PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json",
     "completion_increment_file": "PHASE_A_RECOVERY_COMPLETION.md",
     "completion_increment_qualification": "recovery_finite_matrix_and_local_reconciliation_native_verified",
     "previous_qualification_status": "2540python_332native_ci_success_core_finite_contract_closed",
@@ -15266,8 +15798,8 @@
       "No cierra ninguna familia amplia ni revisión global de OpenClaw."
     ],
     "capability_status_counts": {
-      "implementacion_parcial_contratos_probados": 52,
-      "no_implementado": 28
+      "implementacion_parcial_contratos_probados": 62,
+      "no_implementado": 18
     },
     "mac_browser_increment_file": "PHASE_A_MAC_BROWSER_CLOSEOUT.md",
     "mac_browser_contract_files": [
@@ -15301,7 +15833,7 @@
       "record": "PHASE_A_MCP_EXTENSIONS_QUALIFICATION.json",
       "closeout": "PHASE_A_MCP_EXTENSIONS_CLOSEOUT.md"
     },
-    "latest_increment": "P-AUTOMATION-EVENTS",
+    "latest_increment": "P-PRODUCT-COORDINATION",
     "automation_qualification_basis": {
       "ci_commit": "14819831499ec4472bba506f820eb51f56b29149",
       "ci_run_id": 40877800263,
@@ -15312,7 +15844,19 @@
       "remaining_in_selected_increment": []
     },
     "distribution_resident_status": "qualified_selected_increment",
-    "distribution_resident_qualification_file": "PHASE_A_DISTRIBUTION_RESIDENT_QUALIFICATION.json"
+    "distribution_resident_qualification_file": "PHASE_A_DISTRIBUTION_RESIDENT_QUALIFICATION.json",
+    "previous_qualified_increment": {
+      "id": "P-AUTOMATION-EVENTS",
+      "status": "qualified_selected_increment",
+      "record": "PHASE_A_AUTOMATION_QUALIFICATION.json"
+    },
+    "product_coordination_selected_scope_status": "implemented_partial_os_notification_click_pending",
+    "product_coordination_increment_file": "PHASE_A_PRODUCT_COORDINATION.md",
+    "product_coordination_qualification_file": "PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json",
+    "product_coordination_latest_ci_commit": "4686f25c960bf1b76702b91f66a3d20915cff22b",
+    "product_coordination_latest_ci_status": "success",
+    "product_coordination_latest_ci_run_id": 41108646785,
+    "product_coordination_os_notification_click_verified": false
   },
   "target_decisions": {
     "date": "2026-10-24",

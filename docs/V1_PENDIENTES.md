@@ -8,6 +8,23 @@ producto anterior sigue en Git y sus inventarios están congelados.
 Alcance inicial elegido: macOS Apple Silicon y Telegram como primer canal externo.
 El dueño aplazó expresamente la app de iPhone; ver [decisiones](rebuild/PHASE_A_TARGETS.md).
 
+El [bloque de producto y sesiones avanzadas](rebuild/PHASE_A_PRODUCT_COORDINATION.md)
+ya implementa proyectos/GitHub, preguntas/progreso/presencia/sugerencias, paneles,
+avisos optativos, carpetas por conversación, colaboración/A2A local, presupuestos
+y clientes CLI/TUI/ACP. La [evidencia por checkpoint](rebuild/PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json)
+conserva la CI completa de `4686f25`, siete selecciones de clientes, dos lecturas
+GitHub, diez planes Git y dos preguntas simultáneas con seis rechazos y consumo.
+La copia estable de ese commit acreditó panel oscuro legible, sugerencias sólo
+como borrador, descarte y aislamiento entre dos chats. Cerró normalmente, sin
+señales ni procesos conocidos retenidos, y desmontó ambas cuotas sin fuerza.
+El dueño concedió avisos y macOS aceptó una solicitud; el aviso no fue localizado
+por el dueño, por lo que su visualización y clic real siguen sin acreditarse.
+Se añade una corrección de texto para distinguir aceptación de visualización,
+con regresiones que deben pasar su propia CI remota antes del cierre.
+La matriz actual tiene **62 familias parciales, 18 sin implementar y ninguna
+completa**. REA registra **48 lotes y 186 rutas TS/JS únicas** seleccionadas.
+Las cifras de cierres anteriores que siguen abajo pertenecen a sus checkpoints.
+
 Alcance elegido cualificado: [distribución autocontenida y servicio residente](rebuild/PHASE_A_DISTRIBUTION_RESIDENT.md).
 La app incorpora Python, dependencias, Codex y MiniLM; el registro de inicio en
 macOS es optativo. La [CI exacta de `29b730c`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41069453178)

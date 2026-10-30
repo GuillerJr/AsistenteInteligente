@@ -95,23 +95,30 @@ struct ProductInteractionPanel: View {
     }
     @ViewBuilder private var notificationSection: some View {
         if let preferences = store.snapshot?.notificationPreferences {
+            let identity = store.viewIdentity
             Divider()
             VStack(alignment: .leading, spacing: 10) {
                 Text("Avisos locales de este chat").font(.headline)
                 Toggle("Permitir avisos", isOn: Binding(get: { preferences.enabled }, set: { enabled in
-                    let identity = store.viewIdentity
                     Task { await store.configureNotifications(enabled: enabled, silenced: preferences.silenced, expectedIdentity: identity) }
                 })).disabled(store.blocksInteraction)
+                    .accessibilityIdentifier("jarvis.product.notifications.enabled")
                 Toggle("Silenciar avisos", isOn: Binding(get: { preferences.silenced }, set: { silenced in
-                    let identity = store.viewIdentity
                     Task { await store.configureNotifications(enabled: preferences.enabled, silenced: silenced, expectedIdentity: identity) }
                 })).disabled(store.blocksInteraction || !preferences.enabled)
+                    .accessibilityIdentifier("jarvis.product.notifications.silenced")
                 Text("Los avisos del sistema dependen del permiso que concedas a Jarvis en macOS.")
                     .font(.caption).foregroundStyle(.secondary)
                 ForEach(store.notifications) { row in
                     HStack {
-                        Label(Self.status(row.status), systemImage: "bell")
-                            .font(.callout).foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label(row.notificationAcceptanceText?.title ?? Self.status(row.status), systemImage: "bell")
+                                .font(.callout).foregroundStyle(.secondary)
+                            if let acceptance = row.notificationAcceptanceText {
+                                Text(acceptance.explanation).font(.caption).foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
                         Spacer()
                         if ["queued", "delivered", "failed", "unknown"].contains(row.status), row.isCurrent {
                             Button("Ver chat") {
@@ -126,7 +133,7 @@ struct ProductInteractionPanel: View {
     private static func status(_ status: String) -> String {
         ["pending": "Pendiente", "queued": "En espera", "running": "En curso", "waiting": "En espera",
          "completed": "Completado", "failed": "Falló", "cancelled": "Cancelado", "unknown": "Sin confirmar",
-         "dispatching": "Aviso en preparación", "delivered": "Aviso entregado", "resumed": "Chat abierto",
+         "dispatching": "Aviso en preparación", "resumed": "Chat abierto",
          "revoked": "Retirado", "expired": "Caducado", "interrupted": "Interrumpido"][status] ?? "Actividad local"
     }
 }
