@@ -70,6 +70,40 @@
         "failure": "Existing WAL-expiry test used a 100ms wall-clock deadline and missed its pending card under CI load; now expires the exact published synthetic ticket and controlled review clock."
       },
       "follow_up": "Safe phase/class/errno/HTTP diagnostics without exception strings; independent full suites and Python packages even if desktop packaging fails."
+    },
+    {
+      "commit": "e341edb76d8b375e210e39567c821e56342021fb",
+      "run_id": 41067610061,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41067610061",
+      "status": "failed_preserved",
+      "ubuntu": {
+        "status": "success",
+        "passed": 3681,
+        "skipped": 46,
+        "seconds": 389.73,
+        "python_packages_and_isolated_smoke": "passed",
+        "cleanup_confirmed": true
+      },
+      "macos": {
+        "python_passed": 3727,
+        "python_seconds": 273.25,
+        "python_packages_and_isolated_smoke": "passed",
+        "app_qa_and_runtime_check_compilation": "passed",
+        "runtime_assembly": {
+          "phase": "manifest",
+          "error": "runtime_tree_limit_or_order",
+          "exception_type": "BundledRuntimeError"
+        },
+        "swift": {
+          "executed": 660,
+          "skipped": 1,
+          "assertion_failures": 2,
+          "failed_case": "ProcessBootstrapTests.testExplicitProviderStateIsForwardedWithoutReplacingSessionState",
+          "reason": "Old expected argv omitted the new parent-watch stdin flag; actual child contract and FIFO are now asserted."
+        },
+        "cleanup_confirmed": true
+      },
+      "follow_up": "Wire-string path sorting and a real parser regression; existing native argv oracle updated to the owned pipe contract without removing provider-state isolation."
     }
   ],
   "native_qualification": [],

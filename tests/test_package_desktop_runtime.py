@@ -255,6 +255,45 @@ def test_native_signing_follows_dependency_admission_before_manifest(tmp_path):
                                         runtime=output.root, rpaths=[])
 
 
+def test_package_and_dist_info_inventory_uses_wire_string_order_with_real_verifier(tmp_path):
+    output = writer(tmp_path)
+    source = "site-packages/tokenizers/__init__.py"
+    legal = "site-packages/tokenizers-0.22.1.dist-info/LICENSE"
+    for name, payload in {
+        package.ENTRYPOINTS["python"]: MACHO, package.ENTRYPOINTS["codex"]: MACHO,
+        "core/jarvis_core/__init__.py": b"# synthetic own package",
+        package.CA_CERTIFICATES_PATH: b"synthetic trust store",
+        source: b"raise AssertionError('must never import fixture')",
+        legal: b"shared synthetic license fixture; no third-party code",
+    }.items():
+        output.bytes(name, payload, executable=name in (package.ENTRYPOINTS["python"],
+                                                        package.ENTRYPOINTS["codex"]))
+    rows = package.file_inventory(output.root)
+    paths = [row["path"] for row in rows]
+    assert paths.index(legal) < paths.index(source)
+    manifest = {"schema": package.SCHEMA, "source_commit": "4" * 40,
+                "target": "aarch64-apple-darwin", "minimum_macos": "14.0",
+                "python_version": "3.11.18", "codex_version": "0.163.0",
+                "entrypoints": dict(package.ENTRYPOINTS), "files": rows,
+                "components": [{"id": name, "version": "inert",
+                                "origin": "https://example.com/inert-fixture",
+                                "archive_sha256": "0" * 64, "license_paths": [legal]}
+                               for name in ("python", "codex", "jarvis-core")]}
+    raw = package.canonical(manifest)
+    output.bytes(package.MANIFEST_NAME, raw)
+    verified = package.verify_runtime_tree(output.root,
+                                           expected_manifest_sha256=package.sha256(raw))
+    assert verified.files == len(rows) and verified.path("source") == output.root / "core"
+    # Recreate the former component-wise Path ordering: '-' sorts differently
+    # from '/' on the wire, so the actual parser must reject that inventory.
+    manifest["files"] = sorted(rows, key=lambda row: Path(row["path"]))
+    assert [row["path"] for row in manifest["files"]] != paths
+    wrong = package.canonical(manifest)
+    (output.root / package.MANIFEST_NAME).write_bytes(wrong)
+    with pytest.raises(package.BundledRuntimeError, match="runtime_tree_limit_or_order"):
+        package.verify_runtime_tree(output.root, expected_manifest_sha256=package.sha256(wrong))
+
+
 def test_pins_only_refer_to_exact_official_archives_and_legal_text():
     pins = json.loads((Path(__file__).parents[1] / "script/runtime_artifacts.json").read_bytes())
     assert pins["python"]["version"] == "3.11.18"

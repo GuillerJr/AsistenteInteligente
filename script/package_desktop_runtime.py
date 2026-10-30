@@ -509,7 +509,7 @@ def sign_nested(runtime, identity, budget, *, runner=_run):
 
 def file_inventory(root):
     rows = []
-    for path in sorted(root.rglob("*")):
+    for path in sorted(root.rglob("*"), key=lambda path: path.relative_to(root).as_posix()):
         if path.is_dir():
             require(not path.is_symlink(), "runtime_output_link")
             continue

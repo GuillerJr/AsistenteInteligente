@@ -94,8 +94,11 @@ final class ProcessBootstrapTests: XCTestCase {
                                                 attributes: [.posixPermissions: 0o700])
         defer { try? FileManager.default.removeItem(atPath: directory) }
         let launcher = directory + "/fixture-python"
-        let script = "#!" + python + "\nimport json, pathlib, signal, sys\n" +
-            "pathlib.Path(__file__).with_name('args.json').write_text(json.dumps(sys.argv[1:]))\nsignal.pause()\n"
+        let script = "#!" + python + "\nimport fcntl, json, os, pathlib, signal, stat, sys\n" +
+            "pipe = {'fifo': stat.S_ISFIFO(os.fstat(0).st_mode), 'read_only': fcntl.fcntl(0, fcntl.F_GETFL) & os.O_ACCMODE == os.O_RDONLY}\n" +
+            "pathlib.Path(__file__).with_name('pipe.json').write_text(json.dumps(pipe))\n" +
+            "target = pathlib.Path(__file__).with_name('args.json')\npending = target.with_suffix('.tmp')\n" +
+            "pending.write_text(json.dumps(sys.argv[1:]))\npending.replace(target)\nsignal.pause()\n"
         try Data(script.utf8).write(to: URL(fileURLWithPath: launcher))
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: launcher)
         let options = try LaunchOptions.parse(["--python", launcher, "--source", "/fixture-source",
@@ -110,9 +113,14 @@ final class ProcessBootstrapTests: XCTestCase {
                 try await Task.sleep(for: .milliseconds(20))
             }
             let arguments = try JSONDecoder().decode([String].self, from: Data(contentsOf: target))
-            XCTAssertEqual(arguments, try ServiceLaunchPlan(options).arguments)
-            XCTAssertEqual(Array(arguments.suffix(6)), ["--state", options.state,
-                                       "--codex", options.codex, "--provider-state", try XCTUnwrap(options.providerState)])
+            let plan = try ServiceLaunchPlan(options)
+            XCTAssertEqual(arguments, plan.arguments + ["--parent-watch-stdin"])
+            XCTAssertFalse(plan.arguments.contains("--parent-watch-stdin"))
+            XCTAssertEqual(Array(arguments.suffix(7)), ["--state", options.state,
+                                       "--codex", options.codex, "--provider-state", try XCTUnwrap(options.providerState), "--parent-watch-stdin"])
+            let pipe = try JSONDecoder().decode([String: Bool].self,
+                from: Data(contentsOf: URL(fileURLWithPath: directory + "/pipe.json")))
+            XCTAssertEqual(pipe, ["fifo": true, "read_only": true])
             let graceful = await service.stop()
             XCTAssertTrue(graceful)
         } catch { _ = await service.stop(); throw error }
