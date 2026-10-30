@@ -360,5 +360,17 @@ La cobertura global sigue parcial: un grafo estático no acredita comportamiento
    separada del recibo de reproducción. Nunca inferir audibilidad de un ACK.
 
 Las aprobaciones de los perfiles sintéticos están delegadas expresamente al
-agente. Credenciales, TCC y autenticación siguen requiriendo al dueño. No se leen
-sus chats de Telegram, historial de Jarvis ni credenciales de otros perfiles.
+agente. Credenciales, TCC y autenticación siguen requiriendo al dueño. La política
+es limitar Telegram a los chats de prueba y evitar el historial personal de
+Jarvis y las credenciales de otros perfiles; la excepción visual se registra abajo.
+
+Durante el recorrido hubo una exposición accidental de credencial: una captura
+de Telegram mostró BotFather después de que el dueño cambiara allí para obtener
+el token. Se informó al dueño; el agente no lo reutilizó desde esa imagen ni lo
+reprodujo como texto o código, ni lo transcribió a archivos de texto locales o al
+repositorio. La retención de la imagen de la herramienta no está auditada. El
+registro global conserva la excepción y no afirma ausencia total de lectura.
+No se afirma haber borrado aquella imagen ni invalidado la credencial. Antes de
+reutilizar ese token, el dueño debe revocarlo o regenerarlo desde BotFather. Esta
+recomendación operativa no se confunde con una lectura de archivos de credenciales
+por los observadores de custodia o los recolectores de CI.

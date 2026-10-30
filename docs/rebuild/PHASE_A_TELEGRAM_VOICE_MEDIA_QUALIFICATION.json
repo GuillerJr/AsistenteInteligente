@@ -1517,7 +1517,7 @@
     "status": "qualified_selected_private_group_text_documents_and_controlled_private_voice_increment",
     "evidence_source": "Owner confirmations, delegated native UI observations and bounded read-only route/session/run oracles from the isolated synthetic profile. No Telegram identifiers, names or screenshots are included here.",
     "token_entered_only_by_owner": true,
-    "token_or_credentials_read_by_agent": false,
+    "token_or_credentials_read_by_agent": true,
     "private_route": {
       "created_from_fresh_pairing": true,
       "allow_attachments": true,
@@ -1818,6 +1818,19 @@
       ],
       "chronology_metadata_grants_authority": false,
       "live_latest_voice_qualification": false
+    },
+    "credential_exposure_scope": {
+      "status": "accidental_visual_token_exposure_previously_reported_to_owner",
+      "circumstance": "A cropped Telegram screenshot was taken after the owner had switched to BotFather to obtain the token; the host assumed the test chat was still selected. The screenshot included the token.",
+      "intentional_credential_or_auth_json_read": false,
+      "token_value_reproduced_in_text_or_source": false,
+      "exposed_tool_image_deleted_or_credential_invalidated_claimed": false,
+      "later_checks_verify_test_chat_header_before_body_capture": true,
+      "owner_followup": "Before reusing that token, revoke/regenerate it directly through official BotFather. Credential changes belong to the owner.",
+      "technical_scope": "This exception does not describe a filesystem credential read by the artifact preparers, custody observers or CI collectors; their scoped receipts remain unchanged.",
+      "token_reused_from_screenshot_by_agent": false,
+      "token_value_manually_transcribed_to_local_text_file_or_repository": false,
+      "token_rotation_performed_by_agent": false
     }
   },
   "oracle_checkpoints": [
