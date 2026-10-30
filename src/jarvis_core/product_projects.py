@@ -485,7 +485,10 @@ class BoundedGitRunner:
 
     def __init__(self, executable=Path("/usr/bin/git"), *, timeout=10, max_output=4259840,
                  child_custody=None):
-        self.executable = _system_git(executable)
+        self.executable = Path(executable)
+        self._developer_lookup_pending = (
+            sys.platform == "darwin" and self.executable == Path("/usr/bin/git")
+        )
         if (not self.executable.is_absolute() or type(timeout) not in {float, int}
                 or not 0 < timeout <= 30 or type(max_output) is not int
                 or not 1024 <= max_output <= 16777216):
@@ -501,6 +504,22 @@ class BoundedGitRunner:
         self.child_custody = child_custody or (lambda: ())
         self._pending_processes, self._processes, self._spawns = set(), set(), set()
         self._metadata_tree_cache = {}
+
+    def _admit_executable(self):
+        # Opening Jarvis does not require Xcode/CLT or launch a lookup process.
+        # Resolve this optional tool only when a Git operation is requested.
+        if not self._developer_lookup_pending:
+            return
+        selected = _system_git(self.executable)
+        try:
+            info = selected.stat()
+        except OSError:
+            raise ProjectError("project_git_unavailable") from None
+        if not stat.S_ISREG(info.st_mode) or not os.access(selected, os.X_OK):
+            raise ProjectError("project_git_unavailable")
+        self.executable = selected
+        self.identity = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+        self._developer_lookup_pending = False
 
     def _safe_metadata(self, pin):
         """Reject config includes and link/special-file metadata before Git reads.
@@ -626,6 +645,7 @@ class BoundedGitRunner:
         # Only the backend constructs argv. No public arbitrary Git endpoint.
         pin.assert_current()
         self._safe_metadata(pin)
+        self._admit_executable()
         with _directory(pin.root, pin.root_identity) as (root, _), \
                 _directory(pin.git_dir, pin.git_identity) as (git_dir, _), \
                 _directory(pin.common_dir, pin.common_identity) as (common, _):

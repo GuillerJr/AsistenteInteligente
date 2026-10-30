@@ -244,6 +244,8 @@ def test_macos_default_resolves_real_git_without_ambient_environment(tmp_path, m
     monkeypatch.setattr(module.subprocess, "run", lookup)
     monkeypatch.setenv("DEVELOPER_DIR", "/untrusted-selection")
     runner = BoundedGitRunner()
+    assert calls == []  # No developer lookup during service construction.
+    runner._admit_executable()
     assert runner.executable == selected and len(calls) == 1
     argv, options = calls[0]
     assert argv == ["/usr/bin/xcrun", "--find", "git"]
@@ -261,7 +263,7 @@ def test_macos_unusable_developer_tool_never_falls_back(raw, code, monkeypatch):
     monkeypatch.setattr(module.subprocess, "run", lambda *_args, **_options:
                         SimpleNamespace(returncode=code, stdout=raw))
     with pytest.raises(ProjectError, match="git_unavailable"):
-        BoundedGitRunner()
+        BoundedGitRunner()._admit_executable()
 
 
 def test_macos_developer_tool_lookup_timeout_has_no_fallback(monkeypatch):
@@ -272,7 +274,19 @@ def test_macos_developer_tool_lookup_timeout_has_no_fallback(monkeypatch):
         raise subprocess.TimeoutExpired(["/usr/bin/xcrun"], 5)
     monkeypatch.setattr(module.subprocess, "run", timeout)
     with pytest.raises(ProjectError, match="git_unavailable"):
-        BoundedGitRunner()
+        BoundedGitRunner()._admit_executable()
+
+
+def test_macos_optional_git_lookup_is_not_a_service_startup_dependency(tmp_path, monkeypatch):
+    from jarvis_core import product_projects as module
+
+    monkeypatch.setattr(module.sys, "platform", "darwin")
+    monkeypatch.setattr(module.subprocess, "run", lambda *_args, **_options:
+                        pytest.fail("Opening the product must not launch Xcode lookup."))
+    trees = tmp_path.resolve() / "worktrees"
+    trees.mkdir(mode=0o700)
+    api = ProjectsBackend(ProjectsStore(tmp_path.resolve() / "private"), trees)
+    assert api.store.list() == [] and api.runner.active_children == 0
 
 
 def test_git_metadata_includes_and_object_symlinks_are_rejected_before_git(tmp_path):
@@ -348,10 +362,10 @@ def real_git(tmp_path):
 async def test_real_default_git_keeps_pinned_directory_descriptors(real_git):
     root, git = real_git
     runner = BoundedGitRunner()
-    if sys.platform == "darwin":
-        assert runner.executable != Path("/usr/bin/git")
     try:
         output = await runner.run(RepositoryPin.capture(root), ("rev-parse", "--verify", "HEAD"))
+        if sys.platform == "darwin":
+            assert runner.executable != Path("/usr/bin/git")
         assert output.returncode == 0 and output.stdout.decode().strip() == git("rev-parse", "HEAD")
         assert not runner.pending_cleanup and runner.active_children == 0
     finally:
