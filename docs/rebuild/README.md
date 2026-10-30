@@ -27,9 +27,10 @@ nota y transcripción controlada. Wake en 450621f no produjo el resultado espera
 la causa del origen/prefijo sigue sin establecerse. Talk acreditó tres turnos
 conocidos, las respuestas audibles 4/6, cero herramientas y entrada/salida inactivas
 tras detenerse; no cierra la activación por frase.
-La [CI del diagnóstico `0efc977`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40977114002)
-pasó macOS y detectó en Ubuntu un plazo de sondeo reutilizado por el oráculo de
-recuperación; la corrección de esa prueba espera una nueva CI completa.
+La [CI de `076170d`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40978876012)
+aprobó completa la corrección del oráculo de recuperación. El refinamiento
+posterior que atribuye el diagnóstico sólo a su chat espera su propia CI
+y la repetición nativa; el cierre por plazo de la copia 450 está conservado.
 Estos pendientes no reabren el corpus local ya cualificado. La familia amplia y
 la fase A siguen abiertas; la fase B continúa aplazada.
 

@@ -29,9 +29,10 @@ privado/grupo, rechazo, retirada y pausa/reactivación sin replay; sendVoice A/B
 terminó conocido y mostró dos notas nativas, pero faltan reingreso, selección de
 la última y transcripción controlada. Wake en 450621f falló en el resultado de
 origen/prefijo sin causa establecida. Talk acreditó tres turnos conocidos, 4/6
-audibles, cero herramientas y entrada/salida inactivas tras detenerse. La [CI del diagnóstico `0efc977`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40977114002)
-pasó macOS y detectó en Ubuntu un plazo de sondeo reutilizado por el oráculo de
-recuperación; la corrección de esa prueba espera una nueva CI completa.
+audibles, cero herramientas y entrada/salida inactivas tras detenerse. La [CI de `076170d`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40978876012)
+aprobó completa la corrección del oráculo de recuperación. El refinamiento
+posterior que atribuye el diagnóstico sólo a su chat espera su propia CI
+y la repetición nativa; el cierre por plazo de la copia 450 está conservado.
 No se declara cerrado el bloque conjunto, ninguna familia amplia ni la fase A;
 la fase B continúa aplazada.
 

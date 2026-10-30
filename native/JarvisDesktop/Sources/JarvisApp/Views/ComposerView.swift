@@ -83,7 +83,7 @@ struct ComposerView: View {
                 }
             }
             if let notice = store.dictationNotice { Text(notice).font(.caption).foregroundStyle(.secondary) }
-            if let receipt = store.voice.lastCaptureReceipt, let projection = receipt.wakeProjection {
+            if let receipt = store.selectedVoiceCaptureReceipt, let projection = receipt.wakeProjection {
                 DisclosureGroup("Revisar activación local") {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Coincidencias en el texto reconocido: \(projection.matchCount). Se usa la primera; las menciones posteriores se conservan como dictado.")

@@ -99,4 +99,31 @@ final class LocalVoiceCaptureModeIntegrationTests: XCTestCase {
         XCTAssertEqual(store.voice.lastCaptureReceipt?.wakeMatched, false)
         XCTAssertTrue(store.messages.isEmpty); XCTAssertNil(store.activeRunID)
     }
+    @MainActor func testCaptureDiagnosticFollowsItsConversationAndRuntimeWithoutCrossPublishingOnSelection() throws {
+        let (store, driver) = try fixture()
+        defer { store.voice.cancel(); store.runtime.retire() }
+        let original = try XCTUnwrap(store.selected)
+        let other = try XCTUnwrap(ChatSession(.object([
+            "session_id": .string(String(repeating: "b", count: 32)), "temporary": .bool(true),
+            "title": .string("Otra conversación sintética"), "archived": .bool(false),
+            "agent_id": .string("jarvis"), "parent_session_id": .null,
+        ])))
+        store.sessions.append(other)
+        store.startDictation()
+        let late = try XCTUnwrap(driver.receive)
+        late(.final("Antes. Jarvis el marcador es 42."))
+        let receipt = try XCTUnwrap(store.selectedVoiceCaptureReceipt)
+        XCTAssertNotNil(receipt.wakeProjection)
+        let originalDraft = store.draft
+        // selectSession performs this stop before committing its successfully
+        // loaded selectedID. No server or account is needed for this attribution.
+        store.stopVoice(); store.selectedID = other.id
+        XCTAssertEqual(store.voice.lastCaptureReceipt, receipt)
+        XCTAssertNil(store.selectedVoiceCaptureReceipt); XCTAssertTrue(store.draft.isEmpty)
+        late(.final("Antes. Jarvis callback tardío"))
+        XCTAssertTrue(store.draft.isEmpty); XCTAssertTrue(store.messages.isEmpty); XCTAssertNil(store.activeRunID)
+        store.selectedID = original.id
+        XCTAssertEqual(store.selectedVoiceCaptureReceipt, receipt); XCTAssertEqual(store.draft, originalDraft)
+        store.runtime.retire(); XCTAssertNil(store.selectedVoiceCaptureReceipt)
+    }
 }

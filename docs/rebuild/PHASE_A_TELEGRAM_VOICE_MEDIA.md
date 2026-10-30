@@ -199,6 +199,20 @@ operativo normal sin repetir acciones ni cambiar el runtime. El fallo se
 conserva y esta corrección necesita una CI completa nueva antes de lanzar la
 app con el diagnóstico.
 
+La [CI completa de `076170d`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40978876012)
+aprobó después 3526 casos Python en Ubuntu (46 omitidos), 3572 en macOS y
+633 Swift (uno omitido, cero fallos), bundle, paquetes y smoke. La revisión
+posterior liga el diagnóstico en RAM a su conversación y contexto de ejecución,
+con una regresión de cambio de chat y callback tardío; necesita su propia CI
+antes de abrir la siguiente copia. No modifica la política del primer trigger.
+
+La copia 450 alcanzó el plazo de 3600 segundos y el supervisor envió SIGTERM
+a sus procesos de app y servicio, sin SIGKILL. La reconciliación confirmó
+la salida de las identidades observadas y el mismo bloqueo de perfil libre.
+No se presenta como Salir normal por GUI. Los dos reenvíos de voz no se
+enviaron: quedaron seleccionados y con el bot filtrado, a la espera de
+otro servicio activo. Las confirmaciones previas A/B y Talk se conservan.
+
 ## Contratos incorporados
 
 - Telegram: rutas privadas compatibles, grupos/supergrupos tipados, remitentes

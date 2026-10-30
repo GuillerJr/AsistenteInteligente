@@ -125,6 +125,14 @@ final class ChatStore {
         return current.lastRecall?.notice(for: observedConversationRunID)
     }
     var canUseVoice: Bool { canChangeSession && connected && selected?.archived == false && selected != nil }
+    /// A settled capture remains in RAM, but its diagnostic belongs only to the
+    /// originating conversation and runtime. Returning there can reveal it again
+    /// until another capture replaces it; selecting another chat never does.
+    var selectedVoiceCaptureReceipt: LocalVoiceCaptureReceipt? {
+        guard runtime.isActive, let selected, let receipt = voice.lastCaptureReceipt,
+              receipt.contextID == LocalVoiceDraftBridge.contextID(selected.scope, runtimeID: runtime.id) else { return nil }
+        return receipt
+    }
 
     init(voice: LocalVoiceController? = nil, options: LaunchOptions? = nil, target: ProfileOpenTarget? = nil, runtime: ProfileRuntimeGuard = ProfileRuntimeGuard()) {
         self.runtime = runtime; memoryRestoration = RestoredMemoryStore(runtime: runtime); memoryIntelligence = MemoryIntelligenceStore(runtime: runtime); recovery = RecoveryExtensionStore(runtime: runtime); suppliedOptions = options; openTarget = target
