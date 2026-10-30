@@ -14444,7 +14444,7 @@
       {
         "id": "P-TELEGRAM",
         "component": "Telegram privado y vinculación explícita",
-        "status": "contract_tested_partial",
+        "status": "qualified_selected_increment",
         "code": [
           "src/jarvis_core/telegram.py",
           "src/jarvis_core/telegram_pairing.py",
@@ -14471,7 +14471,10 @@
           "native/JarvisDesktop/Tests/DesktopCoreTests/ChannelReconciliationTests.swift",
           "native/JarvisDesktop/Tests/DesktopCoreTests/ChannelReconciliationLifecycleTests.swift",
           "native/JarvisDesktop/Tests/DesktopCoreTests/ChannelReconciliationIntegrationTests.swift",
-          "native/JarvisDesktop/Tests/DesktopCoreTests/TelegramRestoredPairingClientTests.swift"
+          "native/JarvisDesktop/Tests/DesktopCoreTests/TelegramRestoredPairingClientTests.swift",
+          "tests/test_telegram_voice.py",
+          "tests/test_telegram_voice_tools.py",
+          "tests/test_media_attachments.py"
         ],
         "capability_ids": [
           "A-03",
@@ -14480,16 +14483,18 @@
           "A-60",
           "A-72"
         ],
-        "verified_scope": "Pruebas RPC/HTTP sintéticas y recorridos reales limitados: vinculación, suma, y workspace_write con aprobación nativa y archivo/hash verificado. Tarjeta y resultado observados en el chat seleccionado sin recarga del agente. Reconciliación local de rutas restauradas implementada con la autoridad central, revisión exacta, recibos durables, incertidumbre/custodia y limpieza sin replay. No inicia conexión ni restaura tokens o permisos. El arranque exige nonce/claim nuevo del chat, con prueba sólo en RAM ligada a conexión/ruta/agente/workspace; reiniciar o cambiar esos vínculos la invalida. Se descarta el primer segundo parcial del lector. Tests de RPC/Store y transportes propios separan esas garantías de una cuenta externa; la evidencia GUI final se registra en PHASE_A_RECONCILIATION_CLOSEOUT.md.",
-        "remaining": "La reconciliación local previa conserva su cierre. El incremento acredita recorridos externos de privado/grupo, descubrimiento, documento con fuente, envío recibido, rechazo sin subida, retirada y stop/start sin replay. Falta voz recibida por Telegram y cierre final; supergrupos/foros sólo tienen contratos sintéticos. Ver PHASE_A_TELEGRAM_VOICE_MEDIA_QUALIFICATION.json.",
-        "qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json",
-        "live_scope": "Suma y salida confirmada; archivo sintético de20bytes/hash coincide con recibo tras aprobación del dueño. Token/nonce no documentados. Una detención posterior tuvo causa no establecida; nueva UI distingue errores futuros seguros.",
-        "current_increment_file": "PHASE_A_TELEGRAM_VOICE_MEDIA.md"
+        "verified_scope": "Pruebas RPC/HTTP sintéticas y recorridos reales limitados: vinculación, suma, y workspace_write con aprobación nativa y archivo/hash verificado. Tarjeta y resultado observados en el chat seleccionado sin recarga del agente. Reconciliación local de rutas restauradas implementada con la autoridad central, revisión exacta, recibos durables, incertidumbre/custodia y limpieza sin replay. No inicia conexión ni restaura tokens o permisos. El arranque exige nonce/claim nuevo del chat, con prueba sólo en RAM ligada a conexión/ruta/agente/workspace; reiniciar o cambiar esos vínculos la invalida. Se descarta el primer segundo parcial del lector. Tests de RPC/Store y transportes propios separan esas garantías de una cuenta externa; la evidencia GUI final se registra en PHASE_A_RECONCILIATION_CLOSEOUT.md. El incremento integrado conserva privado/grupo estándar elegido, documentos con fuente, rechazo sin subida, retirada y pausa/reactivación sin replay. CI de 9d4edfb completa: 3526 Python Ubuntu / 46 omitidas, 3572 macOS y634 Swift / una omisión/cero fallos. SendVoice propio A/B produjo dos notas nativas; reingreso privado conservó bytes/SHA y mismo nombre con secuencias 3 y 4. Una sola media_list y una sola transcripción local aprobada leyeron el ID exacto del último ingreso, recuperaron73, sin 42 y ligaron operación/argumentos/ACK SDK/sesión/revisión/respuesta externa. Cuatro manifests v1 y un tombstone intactos; cronología v1 desconocida.",
+        "remaining": "Fuera de este incremento finito: supergrupos/foros y otras variantes sólo conservan contratos sintéticos, no recorridos externos generales. La fidelidad controlada privada no borra los fallos de marcador de las grabaciones ambientales históricas del grupo ni acredita fidelidad acústica universal. No cierra las familias amplias A-03/A-48/A-49/A-60/A-72 ni la fase A.",
+        "qualification_file": "PHASE_A_TELEGRAM_VOICE_MEDIA_QUALIFICATION.json",
+        "live_scope": "Suma y salida confirmada; archivo sintético de20bytes/hash coincide con recibo tras aprobación del dueño. Token/nonce no documentados. Una detención posterior tuvo causa no establecida; nueva UI distingue errores futuros seguros. Recorrido controlado privado posterior cualificado en 9d4edfb; cierre GUI y custodia final registrados, sin afirmar recepción física independiente por un ACK.",
+        "current_increment_file": "PHASE_A_TELEGRAM_VOICE_MEDIA.md",
+        "prior_increment_qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json",
+        "remaining_in_selected_increment": []
       },
       {
         "id": "P-VOICE-LOCAL",
         "component": "Dictado y lectura locales de macOS",
-        "status": "contract_tested_partial",
+        "status": "qualified_selected_increment",
         "code": [
           "native/JarvisDesktop/Sources/JarvisApp/Audio/MacLocalVoiceDriver.swift",
           "native/JarvisDesktop/Sources/DesktopCore/LocalVoiceController.swift",
@@ -14499,17 +14504,22 @@
         "tests": [
           "native/JarvisDesktop/Tests/DesktopCoreTests/LocalVoiceControllerTests.swift",
           "native/JarvisDesktop/Tests/DesktopCoreTests/LocalVoiceDraftBridgeTests.swift",
-          "native/JarvisDesktop/Tests/DesktopCoreTests/LocalSpeechPolicyTests.swift"
+          "native/JarvisDesktop/Tests/DesktopCoreTests/LocalSpeechPolicyTests.swift",
+          "native/JarvisDesktop/Tests/AppLayoutTests/LocalVoiceCaptureModeIntegrationTests.swift",
+          "native/JarvisDesktop/Tests/AppLayoutTests/LocalCaptureMonitorTests.swift",
+          "native/JarvisDesktop/Tests/AppLayoutTests/LocalVoiceConversationLifecycleTests.swift"
         ],
         "capability_ids": [
           "A-54",
           "A-55",
           "A-60"
         ],
-        "verified_scope": "SpeechAnalyzer exactlocale ya instalado en macOS26+, legacy sólo con soporte local real, preparación/captura cancelables y borrador sin autoSend. Una frase es-ES real se añadió preservando BORRADOR BASE; reproducción sintética volvió a idle sin error visible.",
-        "remaining": "El nuevo incremento implementa captura extendida, activación explícita por frase, Talk acotado y STT de archivos sólo local. Cualificación integrada/TCC/acústica en curso, sin servicios de audio adicionales elegidos. iPhone continúa aplazado.",
-        "qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json",
-        "current_increment_file": "PHASE_A_TELEGRAM_VOICE_MEDIA.md"
+        "verified_scope": "SpeechAnalyzer exactlocale ya instalado en macOS26+, legacy sólo con soporte local real, preparación/captura cancelables y borrador sin autoSend. Una frase es-ES real se añadió preservando BORRADOR BASE; reproducción sintética volvió a idle sin error visible. El incremento integrado acredita STT local de WAV/Ogg y nota privada nativa Telegram, lectura audible confirmada, dictado y frase de activación explícitos sin autoSend. Talk en 450621f completó tres turnos con Codex, respuestas objetivo «4» y «6» audibles confirmadas y cero herramientas; límite de tres turnos también alcanzado, sin atribuir parada sólo al botón. Activación controlada en 9d4edfb: una coincidencia, posición 17,25 caracteres retirados, base conservada y sufijo de 18 bytes/SHA coincidente; diagnóstico RAM oculto en otro chat y recuperado al volver al origen. Entrada/salida CoreAudio propias inactivas después de captura y Talk, con TCC concedido por el dueño. CI de 9d4edfb completa y cierre de identidades/lease observado.",
+        "remaining": "Fuera del alcance finito: escucha permanente o en segundo plano, conversación sin límite, precisión universal del ASR e idiomas/modelos/dispositivos no observados. El fallo histórico de 450621f se conserva con causa no establecida; el primer intento de 9d4edfb tuvo dos menciones y el dueño confirmó una activación previa, coherente con usar la primera. No incorpora servicios de audio externos ni nuevos proveedores; iPhone sigue aplazado y las familias amplias permanecen abiertas.",
+        "qualification_file": "PHASE_A_TELEGRAM_VOICE_MEDIA_QUALIFICATION.json",
+        "current_increment_file": "PHASE_A_TELEGRAM_VOICE_MEDIA.md",
+        "prior_increment_qualification_file": "PHASE_A_CHANNELS_VOICE_WEB_QUALIFICATION.json",
+        "remaining_in_selected_increment": []
       },
       {
         "id": "P-WEB-FETCH",
@@ -15086,7 +15096,7 @@
           "A-58"
         ],
         "verified_scope": "CI 450621f completa: 3526 Python Ubuntu / 46 omitidas, 3572 macOS y 628 Swift / una omisión/cero fallos, bundle/helper, paquetes y smoke. Recorridos reales anteriores conservados y relacionados en el registro integrado: corpus local con Codex real y fuentes/citas de texto/Markdown, PDF textual y escaneado, DOCX/XLSX/PPTX/RTF, HTML inerte, JSON/XML, CSV/TSV, imagen y vídeo muestreado; WAV/Ogg con transcripción local. El PDF cifrado y 16 MiB+1 fueron rechazados; el adjunto retirado quedó bloqueado antes del despacho con original/tombstone intactos. Reproductor nativo dbad498: pausa, búsqueda pausada, selección de auriculares conservando posición, reanudación explícita audible confirmada por el dueño y desconexión física sin fallback; cierre/reapertura pausada a cero. Ogg llegó a 3,80425 s y vídeo a 2 s con búsqueda a 1 s y colores/marcador observados. Originales, recibos y fallos históricos se conservan; no se presenta toda la GUI como ejecutada de nuevo en 450.",
-        "remaining": "Fuera de este incremento finito: cobertura universal de documentos, idiomas, códecs, salidas y recursos remotos/URLs caducadas. OCR sigue siendo falible: se conserva TARLIS Y2 en el bitmap segmentado y el OCR positivo MARCADOROCRZAFIRO3582/VALOR 76 del PDF legible. Vídeo sólo acredita sus muestras 0/1/1,5 s y alcance parcial. El reingreso/última nota y fidelidad de voz Telegram, wake/Talk y cierre del nuevo recorrido integrado siguen pendientes por separado; no reabren las pruebas locales ya agotadas ni completan A-56/A-58, la fase A o B.",
+        "remaining": "Fuera de este incremento finito: cobertura universal de documentos, idiomas, códecs, salidas y recursos remotos/URLs caducadas. OCR sigue siendo falible: se conserva TARLIS Y2 en el bitmap segmentado y el OCR positivo MARCADOROCRZAFIRO3582/VALOR 76 del PDF legible. Vídeo sólo acredita sus muestras 0/1/1,5 s y alcance parcial. Los recorridos controlados privados de Telegram, wake local, Talk acotado y cierre se cualificaron por separado en el registro integrado; este resultado no reabre las pruebas locales agotadas ni completa A-56/A-58, la fase A o B.",
         "evidence": [
           "PHASE_A_DOCUMENTS_MEDIA.md",
           "PHASE_A_TELEGRAM_VOICE_MEDIA.md",

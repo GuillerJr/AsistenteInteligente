@@ -20,19 +20,35 @@ positivo legible; el vídeo declara sus muestras, no análisis universal. El
 [registro integrado](PHASE_A_TELEGRAM_VOICE_MEDIA_QUALIFICATION.json) conserva
 fuentes, huellas, límites y fallos anteriores.
 
-El bloque conjunto continúa [en cualificación](PHASE_A_TELEGRAM_VOICE_MEDIA.md).
-Telegram ya envió dos originales Ogg OPUS como notas nativas mediante sendVoice,
-con recibos conocidos y observación en la app; faltan reingreso, orden de la última
-nota y transcripción controlada. Wake en 450621f no produjo el resultado esperado;
+El [incremento conjunto elegido](PHASE_A_TELEGRAM_VOICE_MEDIA.md) está
+cualificado en su alcance finito de Telegram, voz local, documentos y multimedia.
+Telegram acreditó el recorrido privado controlado A/B: envío como notas nativas,
+reingreso con secuencias 3/4 y huellas coincidentes, selección de la última y una
+única inspección aprobada con «73», su cita temporal y respuesta correlacionada.
+El oráculo final pasó ocho comprobaciones. Los fallos de fidelidad de las notas
+ambientales del grupo se conservan; el éxito privado no los cualifica.
+Wake en 450621f no produjo el resultado esperado;
 la causa del origen/prefijo sigue sin establecerse. Talk acreditó tres turnos
-conocidos, las respuestas audibles 4/6, cero herramientas y entrada/salida inactivas
-tras detenerse; no cierra la activación por frase.
-La [CI de `076170d`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40978876012)
-aprobó completa la corrección del oráculo de recuperación. El refinamiento
-posterior que atribuye el diagnóstico sólo a su chat espera su propia CI
-y la repetición nativa; el cierre por plazo de la copia 450 está conservado.
-Estos pendientes no reabren el corpus local ya cualificado. La familia amplia y
-la fase A siguen abiertas; la fase B continúa aplazada.
+conocidos, las respuestas «4» y «6» audibles, cero herramientas y entrada/salida
+inactivas tras detenerse; no cierra la activación por frase.
+La [CI completa de `9d4edfb`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40982348625)
+aprobó 3526 casos Python en Ubuntu (46 omitidos), 3572 en macOS y 634 Swift
+(uno omitido, cero fallos), bundle/helper, paquetes y smoke. Incluye el oráculo de
+recuperación corregido y el diagnóstico de wake ligado a su chat. Wake controlado
+conservó el borrador, retiró el prefijo y añadió sólo «el marcador es 42.» sin
+crear mensajes; el cambio de chat ocultó el diagnóstico ajeno. Se conservan el
+caso de dos menciones que el dueño confirmó y el fallo histórico 450, cuya causa
+no se establece retroactivamente.
+La copia 9d terminó con Salir antes del plazo; supervisor cero, sin señales,
+siete identidades ausentes y mismo lease libre. El pico observado fue 384,56 MiB
+del nuevo presupuesto de 448 MiB, sin ampliar el recorrido 450 de 384 MiB. Una
+instancia sintética adicional observada tras otra consulta de interfaz se cerró
+y reconcilió por separado; el mecanismo interno exacto de apertura no está trazado.
+Se conservan el intento incierto de LaunchServices y el cierre por plazo de 450,
+sin presentarlo como Salir normal. Este cierre no acredita cobertura universal,
+la fidelidad de las notas ambientales fallidas del grupo ni toda la familia amplia.
+La matriz mantiene 54 familias parciales y 26 sin implementar; la fase A sigue
+abierta y la fase B continúa aplazada.
 
 Decisión del dueño, 24-10-2026: construir la nueva variante de Jarvis **en este
 repositorio**, con implementación propia y arquitectura informada por el estudio

@@ -36,12 +36,17 @@ pruebas no equivalen a una revisión exhaustiva de la referencia.
 
 ```bash
 uv sync --locked --group dev
-./script/setup_git_gates.sh --install
-.venv/bin/python script/check_clean_base.py
-.venv/bin/ruff check src tests script
-PYTHONPATH=src .venv/bin/python -m pytest -p no:warnings
-./script/test_desktop.sh
+.venv/bin/python -B script/check_clean_base.py
+.venv/bin/ruff check --no-cache src tests script
+./script/setup_git_gates.sh --check
 ```
+
+Estos comandos locales comprueban fuentes y configuración. Las suites completas
+Python y Swift, los paquetes, el smoke de instalación y el bundle se validan en
+[GitHub Actions](.github/workflows/ci.yml) para el commit exacto. No ejecutar
+directamente `pytest`, `swift test` ni compilaciones completas en el Mac del dueño.
+Una selección local focal necesita supervisor, cuota, plazo y recibo según los
+[límites de recursos](docs/rebuild/TEST_RESOURCE_LIMITS.md).
 
 Las pruebas de IPC necesitan poder crear sockets Unix privados. El servicio de
 prueba exige rutas absolutas: `python -m jarvis_core.service --state RUTA_NUEVA

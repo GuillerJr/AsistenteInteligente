@@ -1,10 +1,17 @@
 # Documentos, adjuntos y multimedia de Jarvis
 
-Estado del componente: `implemented_core_awaiting_remote_and_native_qualification`.
-Este contrato registra código propio y pruebas añadidas; no presenta sus fixtures
-como cualificación real ni adelanta el cierre que debe consolidar el host.
+Estado del componente: `qualified_selected_increment`, en el alcance finito de
+documentos y medios locales. La [CI completa de `450621f`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40951214228)
+y los recorridos nativos relacionados en el [registro integrado](PHASE_A_TELEGRAM_VOICE_MEDIA_QUALIFICATION.json)
+acreditan corpus sintético con Codex real, fuentes/citas, negativos de importación
+y extracción, retirada y reproducción local. No se presenta ese corpus como
+cobertura universal de formatos, idiomas, codecs o dispositivos, ni como una nueva
+ejecución de todos los recorridos en ese commit.
 El destino elegido es macOS Apple Silicon con Codex con ChatGPT. No incorpora
 generación de imagen/música/vídeo, otros proveedores ni inferencia NVIDIA.
+La voz recibida por Telegram, la activación por frase y Talk tienen evidencias y
+estado propios en el [registro narrativo](PHASE_A_TELEGRAM_VOICE_MEDIA.md); este
+cierre local no los acredita ni completa las familias amplias o la fase A.
 
 ## Entrada y propiedad
 
@@ -118,7 +125,7 @@ Si se publicó el blob y no se acredita su manifiesto, devuelve
 `media_publication_unknown`, conserva los originales y rechaza repetir esa misma
 identidad automáticamente. Un recibo del modelo no sustituye esa comprobación.
 
-## Pruebas añadidas y aceptación pendiente
+## Pruebas y aceptación del alcance elegido
 
 Los casos Python usan exclusivamente archivos, tonos y fuentes artificiales:
 
@@ -132,7 +139,9 @@ Los casos Python usan exclusivamente archivos, tonos y fuentes artificiales:
   cancelación y ausencia de fallback externo.
 
 Ruff y AST son controles estáticos, no sustitutos de esas pruebas. Las suites,
-paquetes, smoke y compilación se ejecutan en CI remota. El cierre integrado
-deberá registrar archivos reales del corpus sintético, hashes/citas coincidentes,
-errores/cancelación/revocación, reproducción nativa y resultados de Codex real.
-Este documento no declara cumplida esa aceptación antes de disponer de evidencia.
+paquetes, smoke y compilación se ejecutan en CI remota. El registro integrado
+conserva archivos del corpus sintético, hashes/citas, rechazos y revocación,
+reproducción nativa y resultados de Codex real. También conserva la discrepancia
+OCR del bitmap segmentado y su positivo legible; el vídeo sólo acredita sus
+muestras y declara su alcance parcial. Los fixtures no sustituyen esos recorridos
+ni acreditan exactitud universal o capacidades externas al incremento elegido.

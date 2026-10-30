@@ -1,13 +1,14 @@
 # Telegram, voz, documentos y multimedia — integración propia
 
-Estado: `in_progress` (29-10-2026).
-Este registro distingue implementación, pruebas escritas, CI y recorridos reales.
-No declara cerrado el bloque antes de cualificar el producto integrado.
+Estado: `qualified_selected_increment` (29-10-2026).
+Se cierra el incremento finito elegido de Telegram, voz local, documentos y
+multimedia en macOS Apple Silicon. Este registro distingue implementación, pruebas,
+CI y recorridos reales; no declara completas las familias amplias ni la fase A.
 La fase B no se inicia. La app del dueño y sus perfiles anteriores se conservan.
 
-La [CI completa de `450621f`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40951214228)
+La [CI completa de `9d4edfb`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40982348625)
 aprobó Python (3526 casos en Ubuntu con 46 omitidos y 3572 en macOS), Swift
-(628 casos, uno omitido y cero fallos), bundle/helper, paquetes, smoke y limpieza.
+(634 casos, uno omitido y cero fallos), bundle/helper, paquetes, smoke y limpieza.
 Pasaron los 13 casos del monitor de captura, los ocho del catálogo de adjuntos,
 los tres del navegador y los 12 contratos del lanzador. Las suites y compilaciones
 se ejecutaron en los runners remotos; ese éxito no acredita por sí solo TCC,
@@ -28,9 +29,9 @@ entrada. Su [CI](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/
 aprobó Ubuntu y compiló el bundle/helper, pero Swift tuvo un fallo entre 614
 casos (uno omitido). Los 13 casos del monitor pasaron; falló el oráculo asíncrono
 de cancelación del navegador. Se preparó una corrección sólo de esa prueba.
-MacPython, paquetes y smoke posteriores no se ejecutaron: todavía faltan la CI
-completa del nuevo commit y la repetición real de voz con su bundle en ese
-checkpoint histórico. La [CI completa de `f5e78ea`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40943870771)
+MacPython, paquetes y smoke posteriores no se ejecutaron: en ese checkpoint
+histórico faltaban la CI completa del nuevo commit y la repetición real de voz
+con su bundle. La [CI completa de `f5e78ea`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40943870771)
 aprobó después 3448 casos Python en Ubuntu (46 omitidos), 3494 en macOS y 614
 casos Swift (uno omitido, cero fallos), incluidos los 13 del monitor y los tres
 del navegador. También pasaron bundle/helper, paquetes, smoke y limpieza. Su
@@ -67,8 +68,9 @@ sesión bajo el bloqueo de publicación, hora UTC en milisegundos y procedencia
 mínima mediante ejecución interna y tipo de adjunto. La secuencia define el
 orden incluso si retrocede el reloj; los originales v1 conservan su cronología
 desconocida y no se reescriben. Estos metadatos no autorizan lecturas ni envíos.
-El cambio y sus pruebas pasaron la CI completa de `450621f`; queda el recorrido
-real con dos notas de igual nombre para acreditar la selección de la última.
+El cambio y sus pruebas pasaron la CI completa de `450621f`; en aquel checkpoint
+quedaba el recorrido con dos notas de igual nombre. El recorrido privado de
+`9d4edfb` descrito más abajo acreditó después la selección exacta de la última.
 
 En el mismo checkpoint se escribieron recuperación acotada sólo para fallos
 conocidos del GET de actualizaciones y envío explícito `delivery=voice` mediante
@@ -76,9 +78,10 @@ conocidos del GET de actualizaciones y envío explícito `delivery=voice` median
 acepta originales Ogg OPUS de hasta 5 MiB y 120 segundos, verificados localmente
 antes de una sola subida aprobada al destino de origen. El modo predeterminado
 sigue siendo documento. No cambia el audio ni captura micrófono; un ACK incierto
-no habilita reintentos. Ambos cambios pasaron la CI completa de `450621f`;
-queda su recorrido integrado real. El siguiente recorrido usará dos archivos
-Opus sintéticos como notas nativas de Telegram para verificar marcadores y orden sin captar el ambiente.
+no habilita reintentos. Ambos cambios pasaron la CI completa de `450621f`.
+En aquel checkpoint faltaba el recorrido integrado; posteriormente se enviaron y
+reenviaron dos originales Opus sintéticos como notas nativas para verificar
+marcadores y orden sin captar el ambiente, con el resultado registrado más abajo.
 
 Los ocho formatos adicionales acreditaron una inspección por archivo, recibos
 conocidos, originales y copias CAS con huellas coincidentes y marcadores/citas
@@ -110,8 +113,9 @@ estímulo con el aviso de cambio de entrada; conservaron el borrador y no enviar
 un run. La fuente trataba cualquier notificación de configuración como cambio
 de entrada, sin comprobar su identidad. La causa concreta de hardware de esos
 intentos no quedó establecida. La corrección pasó después la CI completa de
-`f5e78ea`; su repetición real de wake/Talk sigue pendiente junto con los cambios
-posteriores de Telegram y catálogo. Los procesos del harness fallido se cerraron
+`f5e78ea`; en aquel checkpoint quedaba la repetición real de wake/Talk junto
+con los cambios posteriores de Telegram y catálogo. Talk se acreditó después
+por separado, como se detalla más abajo. Los procesos del harness fallido se cerraron
 de forma explícita y los originales se conservaron. Ver el
 [contrato de arranque QA](NATIVE_QA_LAUNCH.md).
 
@@ -151,8 +155,8 @@ El segundo intento fue una operación separada, con recibos exclusivos y el mism
 bundle, helper, fuente y estado sintético. Se ejecutó fuera del sandbox de ejecución
 del primer intento y NSWorkspace confirmó el PID 84570, con identidad de nacimiento
 1793308302.132649 y efecto conocido. El cambio de entorno de ejecución no prueba
-la causa del fallo anterior. Se conservan ambos recibos; el nuevo recorrido aún
-no acredita voz, TCC ni cierre. La copia de QA conserva el ejecutable Mach-O y
+la causa del fallo anterior. Se conservan ambos recibos; aquel recibo de arranque
+no acreditaba por sí solo voz, TCC ni cierre. La copia de QA conserva el ejecutable Mach-O y
 las descripciones de permisos originales del artefacto remoto; no reemplaza la
 app instalada del dueño.
 
@@ -160,8 +164,8 @@ Los dos originales Opus se enviaron después con `delivery=voice`: hubo una
 aprobación exacta y un recibo conocido con ACK correlacionado por archivo.
 Telegram mostró dos burbujas nativas de voz, de tres y cuatro segundos.
 Esta observación distingue la entrega visible del ACK, pero no mide los bytes
-del servidor. El reingreso y la selección/transcripción de la última siguen
-pendientes.
+del servidor. En ese checkpoint quedaban el reingreso y la selección/transcripción
+de la última; su avance posterior se registra más abajo.
 
 La activación real iniciada y detenida por el dueño detectó «Jarvis», conservó
 «BORRADOR ACTIVACIÓN» y no creó mensajes en el chat temporal. Sin embargo,
@@ -171,8 +175,10 @@ una detección anterior podría explicar ese resultado, pero la entrada históri
 del reconocedor no está disponible y la causa no está demostrada. Se añadieron
 cinco pruebas y un diagnóstico en RAM con recuentos, posiciones y huella del
 sufijo, sin audio ni texto anterior. No se cambia el recorte por el último
-«Jarvis» ni se bloquean menciones legítimas posteriores. Esta revisión espera
-su CI remota y una comprobación nativa instrumentada.
+«Jarvis» ni se bloquean menciones legítimas posteriores. La instrumentación pasó
+después la CI de `076170d`; su atribución al chat y callback tardío pasó la CI
+de `9d4edfb`. Su comprobación nativa instrumentada se completó después, como
+se detalla en el cierre de este registro.
 
 La conversación local por voz completó tres turnos conocidos en otra sesión,
 con cero herramientas: tras una primera frase incompleta y su aclaración,
@@ -185,26 +191,22 @@ la causa de la primera frase incompleta. Las fases intermedias de micrófono,
 modelo y lectura tienen contratos probados; el sondeo real acredita el estado
 posterior, no su orden histórico ni precisión universal del reconocimiento.
 
-Quedan el reingreso de las dos notas de Telegram y su identificación/transcripción,
-la repetición de wake con diagnóstico y el cierre/custodia del nuevo recorrido.
-La CI completa, los permisos concedidos, el arranque confirmado y los WAV no
-acreditan esos pasos.
-
 La CI de `0efc977` terminó con un fallo global: macOS aprobó 3572 casos
 Python y 633 Swift (uno omitido, cero fallos), bundle/helper, paquetes y smoke.
 Ubuntu aprobó 3525 casos y omitió 46, pero el oráculo de recuperación reutilizaba
 un cliente de sondeo de 200 ms para `runs.start`, que agotó ese plazo antes de
 la comprobación de caída. Se separó y cerró el sondeo, devolviendo un cliente
 operativo normal sin repetir acciones ni cambiar el runtime. El fallo se
-conserva y esta corrección necesita una CI completa nueva antes de lanzar la
-app con el diagnóstico.
+conserva; en aquel checkpoint era necesaria una CI completa nueva antes de
+lanzar la app con el diagnóstico. Esa validación se obtuvo a continuación.
 
 La [CI completa de `076170d`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40978876012)
 aprobó después 3526 casos Python en Ubuntu (46 omitidos), 3572 en macOS y
 633 Swift (uno omitido, cero fallos), bundle, paquetes y smoke. La revisión
 posterior liga el diagnóstico en RAM a su conversación y contexto de ejecución,
-con una regresión de cambio de chat y callback tardío; necesita su propia CI
-antes de abrir la siguiente copia. No modifica la política del primer trigger.
+con una regresión de cambio de chat y callback tardío. Pasó completa la CI de
+`9d4edfb` antes de abrir su copia de prueba. No modifica la política del primer
+trigger.
 
 La copia 450 alcanzó el plazo de 3600 segundos y el supervisor envió SIGTERM
 a sus procesos de app y servicio, sin SIGKILL. La reconciliación confirmó
@@ -212,6 +214,83 @@ la salida de las identidades observadas y el mismo bloqueo de perfil libre.
 No se presenta como Salir normal por GUI. Los dos reenvíos de voz no se
 enviaron: quedaron seleccionados y con el bot filtrado, a la espera de
 otro servicio activo. Las confirmaciones previas A/B y Talk se conservan.
+
+La nueva copia `9d4edfb` arrancó con efecto conocido mediante el helper nativo de
+su CI, después de verificar el cierre por plazo de 450. Su fuente Python reutiliza
+98 archivos de la copia anterior cuyas huellas coinciden con Git en el nuevo
+commit. ZIP y TAR se validaron sólo en RAM; se conservan sus huellas, procedencia
+y los segmentos `__TEXT` originales comparados con la copia firmada. No se
+reemplazó la app instalada. La nueva operación usa un presupuesto observado de
+448 MiB: la preparación duró 10,123 segundos y observó un pico de 399138816 bytes.
+Esta elección operativa no amplía retroactivamente los 384 MiB del recorrido 450.
+Su recorrido y cierre se acreditaron después con los recibos finales descritos
+más abajo; la preparación por sí sola no los acreditaba.
+
+El recorrido privado de las dos notas controladas quedó aprobado en su alcance
+finito. Los reenvíos llegaron como voz al ámbito privado esperado; el catálogo v2
+les asignó las secuencias 3 y 4 y sus huellas coinciden con los originales A y B.
+El oráculo final v5 pasó sus ocho comprobaciones, junto con la revisión de las
+observaciones nativas y del runtime. La ejecución `b0c0bf68d27442f2a9642d18644fa909`
+leyó el catálogo una vez e inspeccionó una vez, con aprobación, la última nota
+exacta: secuencia 4, marcador «73» y ausencia del marcador anterior «42».
+Se comprobaron los argumentos y su vínculo con la sesión/ruta/revisión, el recibo
+local conocido y el ACK correlacionado de la respuesta. El intervalo del recibo
+es `time:0-4.222`; la respuesta visible citó `00:00–00:04.222`. El comparador del
+literal `time:0-4.222` no encontró esa misma cadena en la respuesta, lo que no se
+presenta como ausencia de cita temporal.
+
+El [registro integrado](PHASE_A_TELEGRAM_VOICE_MEDIA_QUALIFICATION.json) fija el
+oráculo `qualification-telegram-controlled-private-v5-final.json`, SHA-256
+`48393693fa49347bbd39a61e1b0e53edfc821f41d562de45b959e0a0e436b2d9`.
+Los cuatro manifiestos v1 y su tombstone permanecen intactos, con cronología
+desconocida; los cuatro v2 nuevos se contabilizan por separado. Los fallos de
+fidelidad de las grabaciones ambientales del grupo se conservan y este recorrido
+privado no los convierte en éxitos ni cualifica esa fidelidad del grupo. Un ACK
+del API tampoco demuestra por sí solo identidad de bytes o escucha humana.
+
+La primera repetición instrumentada de wake mostró dos coincidencias, la primera
+en la posición 61, 69 caracteres retirados y un sufijo de 44 bytes. El dueño
+confirmó haber mencionado «Jarvis» antes de la frase de control: ese resultado es
+coherente con la política de primera activación. No establece retroactivamente
+qué ocurrió en la captura 450. Al abrir otro chat temporal desaparecieron el
+diagnóstico y el borrador del primero; volver al chat original conservó sus
+metadatos. Así se comprobó también el aislamiento del diagnóstico en la interfaz.
+
+La captura final controlada quedó aprobada: conservó «BORRADOR CONTROLADO» y
+sólo añadió «el marcador es 42.». El diagnóstico registró una coincidencia,
+posición 17, 25 caracteres retirados y sufijo de 18 bytes con SHA-256
+`f21f84e9c883ca343603b529e2bd890333a9a6ecd83b1073cc8c9700f5856288`.
+No se crearon mensajes ni se envió un run. Tras detener la captura, la consulta
+CoreAudio limitada al PID propio indicó entrada y salida inactivas. El recibo
+`qualification-wake-real-9d-controlled-pass.json` tiene SHA-256
+`3f2a8efceaaaf2781c59eb36c84861c883957cbbe37a3a1307dc3f2034edfea6`.
+
+El recorrido original 9d terminó mediante Salir en la interfaz antes de su plazo.
+El supervisor finalizó con cero, sin señales ni incidencias, después de 2993,049
+segundos y con un pico observado de 403243008 bytes (384,56 MiB) dentro del nuevo
+presupuesto de 448 MiB. La reconciliación confirmó la ausencia de las siete
+identidades observadas, incluido el supervisor, y el mismo lease de perfil libre.
+El recibo `handoff-9d4edfb-v2-close-confirmed.json` tiene SHA-256
+`c972f87d8ce7e98eab0872415c4f5002e010cab31366b14758ec0e1063b1c911`.
+El cero es del supervisor y acredita su limpieza observada; no es un código de
+salida `waitpid` de la app nativa ni una garantía de cuota física dura.
+
+Después de ese cierre, una consulta de interfaz coincidió con la aparición de
+otra instancia sintética, PID 96852, sin configuración y sin proceso Python
+observado. No se trazó el mecanismo interno exacto de CUA que la abrió. Se cerró
+mediante Salir y otra comprobación de metadatos confirmó su ausencia; el recibo
+`native-9d4edfb-post-quit-extra-close-confirmed.json` conserva SHA-256
+`f7f2246572a566bd5229ed286c7c7da75c844aebd3fd932d88dc99a56536a392`.
+No se volvió a leer ni reabrir la app después de ese segundo cierre. Se conserva
+esta incidencia de custodia por separado, sin convertirla en parte del recorrido
+original ni ocultarla tras su recibo satisfactorio.
+
+El incremento elegido queda cualificado con esos límites: Telegram privado
+controlado, rutas de grupo observadas, dictado/wake y Talk local, y el corpus y
+reproductor finitos. No implica fidelidad universal de voz, documentos, idiomas,
+codecs o salidas. No cualifica las grabaciones ambientales fallidas del grupo,
+foros/supergrupos no recorridos realmente, nuevos proveedores, generación de
+medios ni la app de iPhone aplazada. La fase A global sigue abierta y B posterior.
 
 ## Contratos incorporados
 

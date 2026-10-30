@@ -23,18 +23,31 @@ desconexión sin fallback. Se conservan el fallo OCR tipográfico, el positivo
 legible y el alcance muestreado del vídeo; no es cobertura universal de formatos.
 Ver [evidencia y límites](rebuild/PHASE_A_TELEGRAM_VOICE_MEDIA_QUALIFICATION.json).
 
-El bloque conjunto de **Telegram, voz, documentos y multimedia** sigue
-[en cualificación](rebuild/PHASE_A_TELEGRAM_VOICE_MEDIA.md). Telegram acredita
-privado/grupo, rechazo, retirada y pausa/reactivación sin replay; sendVoice A/B
-terminó conocido y mostró dos notas nativas, pero faltan reingreso, selección de
-la última y transcripción controlada. Wake en 450621f falló en el resultado de
-origen/prefijo sin causa establecida. Talk acreditó tres turnos conocidos, 4/6
-audibles, cero herramientas y entrada/salida inactivas tras detenerse. La [CI de `076170d`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40978876012)
-aprobó completa la corrección del oráculo de recuperación. El refinamiento
-posterior que atribuye el diagnóstico sólo a su chat espera su propia CI
-y la repetición nativa; el cierre por plazo de la copia 450 está conservado.
-No se declara cerrado el bloque conjunto, ninguna familia amplia ni la fase A;
-la fase B continúa aplazada.
+El incremento elegido de **Telegram, voz, documentos y multimedia** está
+[cualificado en su alcance finito](rebuild/PHASE_A_TELEGRAM_VOICE_MEDIA.md). Telegram acredita
+privado/grupo, rechazo, retirada y pausa/reactivación sin replay. El recorrido
+privado controlado A/B quedó aprobado: notas nativas, reingreso con secuencias 3/4
+y huellas coincidentes, última nota inspeccionada una vez con aprobación, «73»,
+cita temporal y respuesta correlacionada; ocho comprobaciones del oráculo final.
+Se conservan los fallos de fidelidad de las grabaciones ambientales del grupo,
+que el resultado privado no cualifica. Wake en 450621f falló en el resultado de
+origen/prefijo sin causa establecida. Talk acreditó tres turnos conocidos, las respuestas «4» y
+«6» audibles, cero herramientas y entrada/salida inactivas tras detenerse. La
+[CI completa de `9d4edfb`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40982348625)
+aprobó 3526 casos Python en Ubuntu (46 omitidos), 3572 en macOS y 634 Swift
+(uno omitido, cero fallos), bundle/helper, paquetes y smoke. Wake controlado
+conservó el borrador y añadió sólo «el marcador es 42.» después de retirar el
+prefijo, sin crear mensajes. El diagnóstico se ocultó en otro chat y se conservó
+al regresar. El caso de dos menciones confirmado por el dueño no establece la
+causa de la captura histórica 450.
+La copia 9d cerró con Salir antes del plazo: supervisor cero, sin señales, siete
+identidades ausentes y mismo lease libre, con pico observado de 384,56 MiB dentro
+del nuevo presupuesto de 448 MiB. Una instancia adicional observada después se
+cerró y reconcilió por separado; no se atribuye un mecanismo interno de apertura
+sin traza. Los recibos y límites están en el registro integrado. Se conservan el
+cierre por plazo de 450, su intento anterior incierto y los fallos anteriores.
+Este cierre elegido no completa ninguna familia amplia ni la fase A; la matriz
+sigue con 54 parciales y 26 sin implementar, y la fase B continúa aplazada.
 
 ## Fase A — base completa primero
 
