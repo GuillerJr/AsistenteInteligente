@@ -663,6 +663,29 @@
       "receipt": "/private/tmp/jarvis-telegram-voice-media-live-20261029/ci-450621f-attempt1-success.json",
       "receipt_sha256": "9ffc29fd33d73af7910afd4ab1a420ddc3097603406cd08628eaf695314c7af4",
       "implemented_increment": "Catalog v2 chronology/provenance, bounded known getUpdates read recovery, approved original Opus sendVoice output and corrected local capture monitor; complete exact-commit remote qualification."
+    },
+    {
+      "commit": "0efc9771385e095b2e75db2463dd42813eb87cbc",
+      "run_id": 40977114002,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40977114002",
+      "status": "completed",
+      "conclusion": "failure",
+      "full_CI_qualification": false,
+      "macos_job_result": "success",
+      "macos_python_passed": 3572,
+      "macos_swift_executed": 633,
+      "macos_swift_skipped": 1,
+      "macos_swift_failures": 0,
+      "macos_bundle_packages_installation_smoke": "passed",
+      "ubuntu_python_passed": 3525,
+      "ubuntu_python_skipped": 46,
+      "ubuntu_python_failed": 1,
+      "ubuntu_failure": "test_service_crash_recovery.py::test_own_process_crash_releases_flock_reclaims_only_socket_and_never_replays",
+      "failure_location": "runs.start ACK timed out before crash/recovery oracle; readiness client timeout0.2 was unintentionally reused as operational RPC deadline",
+      "test_only_correction": "Use and close a short-lived health probe, then return a normal operational client under the existing bounded readiness window; no action replay or new runtime timeout.",
+      "new_native_app_launched": false,
+      "record": "/private/tmp/jarvis-telegram-voice-media-live-20261029/ci-0efc977-attempt1-final-result.json",
+      "record_sha256": "721f6c9fb6b55918de1447fbab485832a9e6b7bf8fc4686b37ffd3430906b86e"
     }
   ],
   "native_cases": [
@@ -1256,6 +1279,30 @@
       "receipt": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-wake-real-450-prefix-failure.json",
       "receipt_sha256": "4c301cf1f3d0342821b5821d930f39378f7c7f7f8398d287dfb3f4f3e0564787",
       "cause": "under_investigation"
+    },
+    {
+      "case": "native_450_bounded_Talk_real_three_turns",
+      "status": "passed_selected_text_local_audio_conversation_scope",
+      "runtime_commit": "450621fb63e5e8e80f98353ff83603baa829cf4b",
+      "synthetic_session_id": "c6022bad56df44889b8346c1283b4c2c",
+      "completed_known_settled_runs": 3,
+      "action_receipts": 0,
+      "tools_requested_or_completed": 0,
+      "first_incomplete_utterance_and_model_clarification_preserved": true,
+      "target_answers": [
+        "4",
+        "6"
+      ],
+      "owner_confirmed_both_target_answers_audible": true,
+      "owner_reported_manual_stop": true,
+      "observed_three_turn_limit_also_reached": true,
+      "stop_attributed_solely_to_manual_button": false,
+      "native_stopped_state_observed": true,
+      "own_CoreAudio_input_running_after_stop": 0,
+      "own_CoreAudio_output_running_after_stop": 0,
+      "volume_restored_to_zero_muted": true,
+      "intermediate_capture_model_TTS_phase_order_directly_observed_by_agent": false,
+      "limits": "CoreAudio proof is after-stop only. No new cloud STT/TTS/realtime provider, no universal ASR fidelity or attribution of the first incomplete utterance to a product defect."
     }
   ],
   "telegram_live_checkpoint": {
@@ -1743,6 +1790,26 @@
       "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-wake-real-450-prefix-failure.json",
       "sha256": "4c301cf1f3d0342821b5821d930f39378f7c7f7f8398d287dfb3f4f3e0564787",
       "scope": "Owner-started real wake capture preserved the base draft and added the entire prefix despite activation detection; failed qualification, cause under investigation."
+    },
+    {
+      "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-talk450-three-turns-no-tools.json",
+      "sha256": "f11ee7f1a8cff845c9cecebd4dfe6093fb668503c50ff55bb1b14aacfeb62267",
+      "scope": "Three settled known text-only conversation turns with zero tools; two target answers audibly confirmed by the owner, with initial clarification preserved."
+    },
+    {
+      "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-talk-450-audio-process-idle.json",
+      "sha256": "ffa69f83409abef55a9ea6ba3ec4acb7189a04020a3525120ff721cd7e3afaf1",
+      "scope": "Targeted CoreAudio translation of the kernel-bound Jarvis PID after Talk: its input and output running flags were both zero. Instantaneous state only."
+    },
+    {
+      "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/qualification-volume-restored-after-talk450.json",
+      "sha256": "c8b06723f9f19d805f4f437a200c6bc60772fe6df264042dc84636b24cebf69c",
+      "scope": "Owner-approved temporary output30 percent restored to zero and muted; routing/balance/pairing unchanged by the agent."
+    },
+    {
+      "oracle": "/private/tmp/jarvis-telegram-voice-media-live-20261029/ci-0efc977-attempt1-final-result.json",
+      "sha256": "721f6c9fb6b55918de1447fbab485832a9e6b7bf8fc4686b37ffd3430906b86e",
+      "scope": "Preserved global failure with complete successful Mac native/Python/package job and isolated Ubuntu readiness-oracle failure; does not qualify this commit globally."
     }
   ],
   "pending_corrections": [
@@ -1813,6 +1880,15 @@
       "closed": false,
       "diagnostic_scope": "Count matches, first-trigger character offset, discarded prefix length and reviewed suffix byte count/SHA only in the capture receipt in RAM. Optional native disclosure; no raw prefix, audio, persistence or changed authorization.",
       "cause_limit": "The single-trigger source rule removes the prefix. An earlier recognized trigger could produce the observed draft, but the historical recognizer input is unavailable and this hypothesis is not established."
+    },
+    {
+      "case": "readiness_probe_deadline_not_inherited_by_operational_RPC",
+      "status": "test_fixture_corrected_new_complete_remote_CI_pending",
+      "failure_commit": "0efc9771385e095b2e75db2463dd42813eb87cbc",
+      "source_scope": "tests/test_service_crash_recovery.py only",
+      "production_code_changed": false,
+      "action_retry_added": false,
+      "closed": false
     }
   ],
   "manual_budget": {
@@ -1937,7 +2013,7 @@
   ],
   "remaining_in_selected_increment": [
     "Controlled native Telegram voice send/forward of two original Opus fixtures, correct latest identically named note in the v2 catalog and accurate local marker transcription with a correlated reply.",
-    "Wake phrase and bounded Talk on the corrected 450621f capture-monitor bundle; a confirmed launch and full CI do not qualify either microphone journey.",
+    "Instrumented real wake-phrase repetition after full remote CI; bounded Talk has now passed separately, and that success does not qualify wake.",
     "Final native runtime/custody/resource and output-state restoration receipts for the new round; preserve the preceding unknown LaunchServices attempt and do not infer its historical absence of effects."
   ],
   "current_native_blocker": {
@@ -2025,6 +2101,14 @@
           "launcher_failure_correction_scope": "QALaunchSupport, JarvisQALauncher and their tests; DesktopCore/JarvisApp unchanged"
         }
       }
+    },
+    "live_bounded_Talk_postfix_qualified": true,
+    "live_wake_postfix_qualified": false,
+    "diagnostic_commit_CI": {
+      "commit": "0efc9771385e095b2e75db2463dd42813eb87cbc",
+      "global": "failed_Ubuntu_test_readiness_oracle",
+      "macos_job": "passed",
+      "new_complete_exact_commit_CI_required_before_native_launch": true
     }
   },
   "prepared_Telegram_voice_oracle_plan": {
@@ -2032,5 +2116,17 @@
     "sha256": "d07d4c101d76ffe3580e7040e0bac90ab162ea08612ca6a140c4add22fe50fad",
     "executed": false,
     "account_or_credentials_read": false
+  },
+  "selected_subblocks": {
+    "documents_and_local_media": {
+      "status": "qualified_selected_increment",
+      "checkpoint_commit": "450621fb63e5e8e80f98353ff83603baa829cf4b",
+      "qualification_scope": "Finite native corpus, selected local codecs/player and negative cases recorded here; excludes universal OCR/video/format/resource coverage and does not close the broad phaseA families."
+    },
+    "bounded_local_Talk": {
+      "status": "qualified_selected_increment",
+      "checkpoint_commit": "450621fb63e5e8e80f98353ff83603baa829cf4b",
+      "qualification_scope": "Owner-started local recognition, three bounded text turns with Codex, audible target answers and after-stop native/CoreAudio idle. Wake remains separately failed/unqualified."
+    }
   }
 }

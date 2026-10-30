@@ -63,14 +63,25 @@ async def ready(profile, process):
     async with asyncio.timeout(8):
         while True:
             assert process.returncode is None
-            client = LocalRpcClient(profile, timeout=0.2)
+            probe = LocalRpcClient(profile, timeout=0.2)
+            try:
+                try:
+                    await probe.connect()
+                    await probe.call("health")
+                finally:
+                    await probe.aclose()
+            except (OSError, TransportSecurityError, TimeoutError):
+                await asyncio.sleep(0.01)
+                continue
+            # The short readiness probe is not an operational RPC deadline.
+            # Close it before opening the normal client; never retry runs.start.
+            client = LocalRpcClient(profile)
             try:
                 await client.connect()
-                await client.call("health")
                 return client
-            except (OSError, TransportSecurityError):
+            except BaseException:
                 await client.aclose()
-                await asyncio.sleep(0.01)
+                raise
 
 
 async def test_own_process_crash_releases_flock_reclaims_only_socket_and_never_replays():

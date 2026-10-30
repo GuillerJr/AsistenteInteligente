@@ -10,11 +10,28 @@ REA mantiene 45 lotes y 171 rutas TS/JS seleccionadas; no es revisión exhaustiv
 La matriz conserva 54 familias parciales y 26 sin implementar: este cierre no
 completa la fase A ni inicia B.
 
-El bloque de **Telegram, voz, documentos y multimedia** incorpora rutas de grupo,
-adjuntos por sesión, codecs locales y conversación por voz explícita. Está en
-[cualificación integrada](PHASE_A_TELEGRAM_VOICE_MEDIA.md);
-la CI201a5b7 está aprobada y conserva pendientes nativos explícitos. A-58 registra
-ahora el reproductor propio y sus pruebas; el bloque no se declara cerrado.
+Dentro de **Telegram, voz, documentos y multimedia**, el incremento elegido de
+documentos y medios locales está cualificado al checkpoint
+[450621f](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40951214228):
+CI completa, corpus finito con Codex real, rechazos de PDF cifrado/tamaño excesivo,
+retirada y reproductor nativo con pausa, búsqueda, dos salidas físicas observadas
+y desconexión sin fallback. Se conservan el OCR fallido de una tipografía y su
+positivo legible; el vídeo declara sus muestras, no análisis universal. El
+[registro integrado](PHASE_A_TELEGRAM_VOICE_MEDIA_QUALIFICATION.json) conserva
+fuentes, huellas, límites y fallos anteriores.
+
+El bloque conjunto continúa [en cualificación](PHASE_A_TELEGRAM_VOICE_MEDIA.md).
+Telegram ya envió dos originales Ogg OPUS como notas nativas mediante sendVoice,
+con recibos conocidos y observación en la app; faltan reingreso, orden de la última
+nota y transcripción controlada. Wake en 450621f no produjo el resultado esperado;
+la causa del origen/prefijo sigue sin establecerse. Talk acreditó tres turnos
+conocidos, las respuestas audibles 4/6, cero herramientas y entrada/salida inactivas
+tras detenerse; no cierra la activación por frase.
+La [CI del diagnóstico `0efc977`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40977114002)
+pasó macOS y detectó en Ubuntu un plazo de sondeo reutilizado por el oráculo de
+recuperación; la corrección de esa prueba espera una nueva CI completa.
+Estos pendientes no reabren el corpus local ya cualificado. La familia amplia y
+la fase A siguen abiertas; la fase B continúa aplazada.
 
 Decisión del dueño, 24-10-2026: construir la nueva variante de Jarvis **en este
 repositorio**, con implementación propia y arquitectura informada por el estudio

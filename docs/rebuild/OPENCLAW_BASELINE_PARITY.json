@@ -1809,7 +1809,7 @@
       "implementation_evidence": [
         {
           "progress_id": "P-DOCUMENTS-MEDIA",
-          "scope": "Implementación propia conectada al host y pruebas remotas de contratos; cualificación nativa integrada en curso. Ver PHASE_A_TELEGRAM_VOICE_MEDIA.md."
+          "scope": "Incremento local elegido cualificado al checkpoint 450621f: corpus finito de texto/Markdown, PDF textual/escaneado, imagen OCR/visual, DOCX/XLSX/PPTX/RTF, HTML inerte, JSON/XML y CSV/TSV, con fuentes/citas y Codex real; negativos de PDF cifrado, 16 MiB+1 y retirada comprobados. El OCR tipográfico fallido se conserva junto al positivo legible. Vídeo con muestras temporales explícitas, no análisis universal. Alcance y recibos en PHASE_A_TELEGRAM_VOICE_MEDIA_QUALIFICATION.json; no cierra la familia amplia ni califica voz Telegram o wake/Talk."
         }
       ],
       "acceptance": {
@@ -1861,7 +1861,7 @@
       "implementation_evidence": [
         {
           "progress_id": "P-DOCUMENTS-MEDIA",
-          "scope": "Reproductor local en memoria, identidad original/derivada y salida física fijada por reproductor; contratos y bundle aprobados en CI201a5b7. Recorrido GUI final de pausa, búsqueda y salida pendiente. No cierra la familia."
+          "scope": "Incremento elegido de reproducción local cualificado: WAV/Ogg y vídeo propios en memoria, identidad original/derivada separada, reproducción/pausa/búsqueda, selección de las dos salidas físicas observadas y retirada real sin fallback. Recorridos dbad498 y complemento del reproductor conservados; CI 450621f completa. No se afirma medición acústica independiente de cada clip, todas las salidas posibles ni acceso remoto/URLs caducadas. No cierra la familia amplia."
         }
       ],
       "acceptance": {
@@ -15056,7 +15056,7 @@
       {
         "id": "P-DOCUMENTS-MEDIA",
         "component": "Adjuntos de sesión, documentos y multimedia locales",
-        "status": "contract_tested_partial",
+        "status": "qualified_selected_increment",
         "code": [
           "src/jarvis_core/media_attachments.py",
           "src/jarvis_core/media_documents.py",
@@ -15085,12 +15085,49 @@
           "A-56",
           "A-58"
         ],
-        "verified_scope": "CI completa de 201a5b7: Python 3447 Ubuntu/3493 macOS y Swift 593 con una omisión y cero fallos, bundle y paquetes. Corpus propio observado desde app y Codex real: PDF, Markdown, DOCX/CSV, imagen OCR/colores y vídeo con muestreo temporal declarado; WAV/Ogg transcritos localmente y lectura audible confirmada por el dueño. Correcciones CAS incluyen texto/recibo aprobados junto a imágenes. El documento retirado conserva 119 bytes/SHA y no se vuelve a subir. Pruebas distinguen identidad/tamaño original y WAV derivado, salidas admitidas por reproductor y retirada sin fallback.",
-        "remaining": "Recorrido GUI final del reproductor201a5b7, negativos de importación/extracción y cierre del incremento. Sólo hay una salida física conectada; no afirmar cambio acústico entre dos dispositivos. No presentar los contratos de todos los formatos o familias como recorridos reales exhaustivos.",
+        "verified_scope": "CI 450621f completa: 3526 Python Ubuntu / 46 omitidas, 3572 macOS y 628 Swift / una omisión/cero fallos, bundle/helper, paquetes y smoke. Recorridos reales anteriores conservados y relacionados en el registro integrado: corpus local con Codex real y fuentes/citas de texto/Markdown, PDF textual y escaneado, DOCX/XLSX/PPTX/RTF, HTML inerte, JSON/XML, CSV/TSV, imagen y vídeo muestreado; WAV/Ogg con transcripción local. El PDF cifrado y 16 MiB+1 fueron rechazados; el adjunto retirado quedó bloqueado antes del despacho con original/tombstone intactos. Reproductor nativo dbad498: pausa, búsqueda pausada, selección de auriculares conservando posición, reanudación explícita audible confirmada por el dueño y desconexión física sin fallback; cierre/reapertura pausada a cero. Ogg llegó a 3,80425 s y vídeo a 2 s con búsqueda a 1 s y colores/marcador observados. Originales, recibos y fallos históricos se conservan; no se presenta toda la GUI como ejecutada de nuevo en 450.",
+        "remaining": "Fuera de este incremento finito: cobertura universal de documentos, idiomas, códecs, salidas y recursos remotos/URLs caducadas. OCR sigue siendo falible: se conserva TARLIS Y2 en el bitmap segmentado y el OCR positivo MARCADOROCRZAFIRO3582/VALOR 76 del PDF legible. Vídeo sólo acredita sus muestras 0/1/1,5 s y alcance parcial. El reingreso/última nota y fidelidad de voz Telegram, wake/Talk y cierre del nuevo recorrido integrado siguen pendientes por separado; no reabren las pruebas locales ya agotadas ni completan A-56/A-58, la fase A o B.",
         "evidence": [
           "PHASE_A_DOCUMENTS_MEDIA.md",
-          "PHASE_A_TELEGRAM_VOICE_MEDIA.md"
-        ]
+          "PHASE_A_TELEGRAM_VOICE_MEDIA.md",
+          "PHASE_A_TELEGRAM_VOICE_MEDIA_QUALIFICATION.json"
+        ],
+        "selected_increment_scope": {
+          "qualification_status": "qualified_selected_increment",
+          "acceptance_is_finite": true,
+          "document_cases": [
+            "Texto UTF-8 y Markdown",
+            "PDF textual",
+            "PDF escaneado con OCR/observación visual y positivo legible separado",
+            "DOCX, XLSX, PPTX y RTF",
+            "HTML inerte, JSON y XML",
+            "CSV y TSV",
+            "Imagen de colores/OCR",
+            "Vídeo corto con tiempos reales muestreados y alcance parcial"
+          ],
+          "local_audio_and_player_cases": [
+            "WAV y Ogg originales propios con transcripción local",
+            "Original Ogg y WAV derivado distinguidos",
+            "Reproducción, pausa y búsqueda nativas",
+            "Salida inicial y auriculares observados; cambio preserva pausa/posición",
+            "Reanudación audible confirmada por el dueño y desconexión real sin fallback",
+            "Cierre/reapertura a cero pausado; Ogg y vídeo hasta fin observado"
+          ],
+          "negative_cases": [
+            "PDF cifrado: error conocido sin contraseña ni replay",
+            "16MiB+1: rechazo antes de revisión/importación",
+            "Adjunto retirado: gate deshabilitado y cero despacho; original y tombstone intactos"
+          ],
+          "does_not_qualify": [
+            "Todos los formatos o documentos posibles",
+            "OCR infalible o análisis integral de vídeo",
+            "Todos los códecs/dispositivos ni recursos remotos",
+            "Voz Telegram controlada, wake o Talk",
+            "Paridad global de fase A o mejoras de fase B"
+          ]
+        },
+        "remaining_in_selected_increment": [],
+        "qualification_file": "PHASE_A_TELEGRAM_VOICE_MEDIA_QUALIFICATION.json"
       }
     ],
     "detail_file": "PHASE_A_AUTOMATION_CLOSEOUT.md",

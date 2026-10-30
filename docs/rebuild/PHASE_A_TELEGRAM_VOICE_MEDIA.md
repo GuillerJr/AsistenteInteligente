@@ -174,10 +174,30 @@ sufijo, sin audio ni texto anterior. No se cambia el recorte por el último
 «Jarvis» ni se bloquean menciones legítimas posteriores. Esta revisión espera
 su CI remota y una comprobación nativa instrumentada.
 
-Quedan las dos notas controladas de Telegram y su identificación/transcripción,
-wake/Talk con el monitor corregido y el cierre/custodia del nuevo recorrido.
+La conversación local por voz completó tres turnos conocidos en otra sesión,
+con cero herramientas: tras una primera frase incompleta y su aclaración,
+las preguntas de suma recibieron «4» y «6», ambas audibles según el dueño.
+La UI quedó detenida y CoreAudio, consultando sólo el PID verificado de Jarvis,
+informó entrada y salida sin ejecución. Se restauró el volumen a cero y
+silenciado. El dueño reportó pulsar Detener, pero también se alcanzaron los
+tres turnos máximos; no se atribuye el cierre sólo a ese botón ni se infiere
+la causa de la primera frase incompleta. Las fases intermedias de micrófono,
+modelo y lectura tienen contratos probados; el sondeo real acredita el estado
+posterior, no su orden histórico ni precisión universal del reconocimiento.
+
+Quedan el reingreso de las dos notas de Telegram y su identificación/transcripción,
+la repetición de wake con diagnóstico y el cierre/custodia del nuevo recorrido.
 La CI completa, los permisos concedidos, el arranque confirmado y los WAV no
 acreditan esos pasos.
+
+La CI de `0efc977` terminó con un fallo global: macOS aprobó 3572 casos
+Python y 633 Swift (uno omitido, cero fallos), bundle/helper, paquetes y smoke.
+Ubuntu aprobó 3525 casos y omitió 46, pero el oráculo de recuperación reutilizaba
+un cliente de sondeo de 200 ms para `runs.start`, que agotó ese plazo antes de
+la comprobación de caída. Se separó y cerró el sondeo, devolviendo un cliente
+operativo normal sin repetir acciones ni cambiar el runtime. El fallo se
+conserva y esta corrección necesita una CI completa nueva antes de lanzar la
+app con el diagnóstico.
 
 ## Contratos incorporados
 

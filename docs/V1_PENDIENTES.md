@@ -15,12 +15,25 @@ La matriz actual incluye también reproducción de medios: 54 familias parciales
 implementación, ninguna familia amplia completa. REA conserva 45 lotes y 171
 rutas TS/JS seleccionadas; no es cobertura exhaustiva.
 
-El bloque de **Telegram, voz, documentos y multimedia** incorpora rutas de grupo,
-adjuntos por sesión, codecs locales y conversación por voz explícita. Está en
-[cualificación integrada](rebuild/PHASE_A_TELEGRAM_VOICE_MEDIA.md);
-la CI201a5b7 está aprobada. Telegram acredita rechazo, retirada y pausa/reactivación
-sin replay además de los recorridos privados y de grupo; quedan los controles
-nativos finales de voz, reproductor y negativos de medios. No se declara cerrado.
+El incremento elegido de **documentos y medios locales** está cualificado al
+checkpoint [450621f](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40951214228):
+corpus finito con fuentes/citas, negativos de PDF cifrado/tamaño excesivo, retirada
+y reproducción nativa con pausa, búsqueda, cambio entre las salidas observadas y
+desconexión sin fallback. Se conservan el fallo OCR tipográfico, el positivo
+legible y el alcance muestreado del vídeo; no es cobertura universal de formatos.
+Ver [evidencia y límites](rebuild/PHASE_A_TELEGRAM_VOICE_MEDIA_QUALIFICATION.json).
+
+El bloque conjunto de **Telegram, voz, documentos y multimedia** sigue
+[en cualificación](rebuild/PHASE_A_TELEGRAM_VOICE_MEDIA.md). Telegram acredita
+privado/grupo, rechazo, retirada y pausa/reactivación sin replay; sendVoice A/B
+terminó conocido y mostró dos notas nativas, pero faltan reingreso, selección de
+la última y transcripción controlada. Wake en 450621f falló en el resultado de
+origen/prefijo sin causa establecida. Talk acreditó tres turnos conocidos, 4/6
+audibles, cero herramientas y entrada/salida inactivas tras detenerse. La [CI del diagnóstico `0efc977`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/40977114002)
+pasó macOS y detectó en Ubuntu un plazo de sondeo reutilizado por el oráculo de
+recuperación; la corrección de esa prueba espera una nueva CI completa.
+No se declara cerrado el bloque conjunto, ninguna familia amplia ni la fase A;
+la fase B continúa aplazada.
 
 ## Fase A — base completa primero
 
