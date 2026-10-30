@@ -4,7 +4,9 @@
   "phase_a_complete": false,
   "phase_b_started": false,
   "notification_presentation_follow_up": {
-    "status": "implemented_remote_ci_pending",
+    "status": "implemented_requires_exact_commit_remote_ci",
+    "verification_authority": "This record is published before its containing commit can be tested. Consult GitHub Actions for that exact commit; a historical failed checkpoint is retained below and is not the latest live CI result.",
+    "workflow_results_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/workflows/ci.yml?query=branch%3Amain",
     "acceptance_label": "Aceptado por macOS",
     "acceptance_explanation": "macOS aceptó la solicitud; su visualización depende de los ajustes del sistema.",
     "durable_delivered_semantics": "UNUserNotificationCenter.add acknowledgement only; no observed banner or physical click claim.",
@@ -36,6 +38,37 @@
   },
   "reference": "REA_OC28_PRODUCT_COORDINATION.md",
   "checkpoints": [
+    {
+      "commit": "3c35fa0825be001a28f6abbd6c744e249d42181b",
+      "ci_run_id": 41115001544,
+      "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41115001544",
+      "status": "completed",
+      "conclusion": "failure",
+      "ubuntu": {
+        "passed": 3952, "skipped": 47, "failed": 0, "seconds": 285.50,
+        "saved_log_sha256": "e63bd9c06df1b513dcf871694b30a2c1a0446520921bb67a33755c5c5b95011e"
+      },
+      "macos": {
+        "python_passed": 3999, "python_skipped": 0, "python_failed": 0,
+        "python_seconds": 417.38, "swift_executed": 708, "swift_skipped": 1,
+        "swift_failures": 2, "swift_unexpected_failures": 1, "swift_seconds": 264.172,
+        "saved_log_sha256": "15e268a27c5618d8b055d826666ab2795480e5a2ecfff86de381db9f41f66bcc",
+        "notification_delivery_core_tests": "six_passed",
+        "panel_appearance_tests": "three_passed"
+      },
+      "wheel_sdist_isolated_installation": "success_both_platforms",
+      "self_contained_bundle_and_parent_eof": "success",
+      "qualified": false,
+      "failure": {
+        "test": "ProductNotificationPanelRenderingTests.testRenderedNotificationToggleTracksAThenBThenAAndIgnoresLateAResponse",
+        "assertion_line": 129,
+        "assertion": "The production panel's own AX toggle/text did not reflect the selected synthetic chat",
+        "unexpected_error": "InvalidTransition { phase: idle; targetPhase: failed(deinit) }",
+        "seconds": 11.369,
+        "cause": "Not established from this log: the assertion omitted the observed AX state and the failing A/B stage.",
+        "follow_up": "The bounded oracle now starts at the owned NSWindow as well as its hosting/content views, accepts only public toggle values 0/1, uses held/returned events for the delayed read, and reports its exact stage and observed state. A failed observation remains XCTFail; no skip, production source change, permission grant or relaxed A/B/A state/text requirement. Requalify in remote CI; this does not establish the original cause."
+      }
+    },
     {
       "commit": "4686f25c960bf1b76702b91f66a3d20915cff22b",
       "ci_run_id": 41108646785,

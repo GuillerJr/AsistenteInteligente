@@ -19,6 +19,24 @@ su CI remota; no se ejecutaron suites ni compilaciones locales. Un valor AX de
 preferencias que no coincidió con el snapshot RPC de B se conserva como
 observación sin causa establecida, no como una fuga de permisos demostrada.
 
+La primera CI de esa continuación (`3c35fa0`, ejecución `41115001544`) aprobó
+3952 casos Python en Ubuntu (47 omitidos), 3999 en macOS, bundle y paquetes.
+Swift ejecutó 708 casos con una omisión y dos fallos del único caso nuevo de
+render, uno inesperado. Los seis casos del núcleo de avisos y los tres de
+apariencia pasaron. El oráculo AX no informó el estado ni la etapa que no
+coincidían; ese registro no acredita una fuga de preferencias ni una causa de la
+ausencia del aviso. Se conserva y se corrige el oráculo antes de volver a
+cualificar, sin omitir el recorrido A → B → A ni ejecutar pruebas locales.
+La corrección parte también de la ventana propia, admite sólo los valores AX
+públicos `0`/`1`, sincroniza la retención y el retorno mediante eventos y añade
+diagnósticos acotados por etapa. Una observación fallida sigue fallando; se evita
+añadirle un segundo error genérico. No cambia la app ni amplía permisos y no se
+presenta como causa establecida del fallo original.
+Los [resultados vigentes de CI](https://github.com/GuillerJr/AsistenteInteligente/actions/workflows/ci.yml?query=branch%3Amain)
+deben contrastarse con el SHA exacto de la revisión publicada. Este documento se
+versiona antes de ejecutar esa revisión y conserva los checkpoints históricos;
+una ejecución posterior aprobada no transforma el fallo `3c35fa0` en un éxito.
+
 ## Alcance de esta entrega
 
 - Proyectos, repositorios y worktrees propios: selección explícita, estado/diff,
