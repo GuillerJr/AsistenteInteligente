@@ -10,6 +10,7 @@ import tarfile
 import time
 import zipfile
 from pathlib import Path
+from urllib.error import HTTPError, URLError
 
 import pytest
 
@@ -288,3 +289,39 @@ def test_builder_requires_remote_commit_and_guard_not_unpropagated_ci_flag(tmp_p
     monkeypatch.delenv("JARVIS_TEST_GUARD_CHILD_CHECKED")
     with pytest.raises(package.PackageError, match="runtime_build_not_admitted"):
         package._admission(app, root / "new-stage", commit)
+
+
+@pytest.mark.parametrize("error", [
+    HTTPError("https://example.com/private?token=SECRET", 403, "SECRET reason",
+              {"Authorization": "SECRET header"}, io.BytesIO(b"SECRET body")),
+    OSError(2, "SECRET filename", "/private/SECRET"),
+    URLError(OSError(-2, "SECRET host")),
+    ValueError("SECRET arbitrary exception"),
+    package.PackageError("https://example.com/?token=SECRET"),
+])
+def test_failure_diagnostics_preserve_only_phase_class_and_safe_numeric_codes(error):
+    diagnostic = package.BuildDiagnostics()
+    diagnostic.enter("download", "flatbuffers-license")
+    result = package.failure_diagnostic(error, diagnostic)
+    assert result["phase"] == "download:flatbuffers-license"
+    assert result["error"] == "runtime_build_failed"
+    assert "SECRET" not in json.dumps(result) and "https" not in json.dumps(result)
+    assert set(result) <= {"status", "error", "phase", "exception_type", "errno",
+                           "http_status", "cause_type"}
+    if isinstance(error, HTTPError):
+        assert result["http_status"] == 403
+    elif isinstance(error, OSError) and not isinstance(error, URLError):
+        assert result["errno"] == 2
+    elif isinstance(error, URLError):
+        assert result["errno"] == -2 and result["cause_type"] == "OSError"
+
+
+def test_known_verifier_failure_is_not_masked_by_generic_packaging_error():
+    diagnostic = package.BuildDiagnostics()
+    diagnostic.enter("manifest")
+    assert package.failure_diagnostic(
+        package.BundledRuntimeError("runtime_executable_architecture"), diagnostic) == {
+            "status": "failed", "error": "runtime_executable_architecture", "phase": "manifest",
+            "exception_type": "BundledRuntimeError"}
+    with pytest.raises(package.PackageError, match="runtime_diagnostic_phase_invalid"):
+        diagnostic.enter("download", "https://example.com/?token=SECRET")

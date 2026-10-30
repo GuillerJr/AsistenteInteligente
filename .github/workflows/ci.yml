@@ -28,12 +28,14 @@ jobs:
         with:
           enable-cache: true
       - name: Preparar Python y dependencias de desarrollo
+        id: dependencies
         run: uv sync --locked --group dev --python 3.11
       - name: Comprobar pureza de la base
         run: uv run --no-sync python script/check_clean_base.py
       - name: Ruff
         run: uv run --no-sync ruff check --no-cache src tests script
       - name: Preparar el modelo CPU público fijado para cualificación real
+        id: memory_model
         shell: bash
         run: |
           JARVIS_MODEL_TEST_ROOT="$(mktemp -d "$RUNNER_TEMP/jarvis-minilm.XXXXXX")"
@@ -92,9 +94,12 @@ jobs:
           if-no-files-found: error
           retention-days: 3
       - name: Pruebas Swift
-        if: runner.os == 'macOS'
+        id: native_contracts
+        if: ${{ !cancelled() && runner.os == 'macOS' && steps.dependencies.outcome == 'success' && steps.memory_model.outcome == 'success' }}
         run: ./script/test_desktop.sh --full --budget-mib 6144
       - name: Pruebas de contratos propios
+        id: contracts
+        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && steps.memory_model.outcome == 'success' }}
         run: >-
           .venv/bin/python -B script/test_resource_guard.py run
           --profile ci --kind python --selection tests --full
@@ -102,6 +107,8 @@ jobs:
           --budget-mib 12288 --deadline 1800 --
           .venv/bin/python -B -m pytest -o addopts= -q tests
       - name: Construir el paquete propio
+        id: python_package
+        if: ${{ !cancelled() && steps.contracts.outcome == 'success' }}
         shell: bash
         run: |
           uv build --offline --sdist --out-dir dist
@@ -109,6 +116,7 @@ jobs:
           test "${#sdists[@]}" -eq 1
           uv build --offline --wheel "${sdists[0]}" --out-dir dist
       - name: Validar artefactos e instalación aislada sin red
+        if: ${{ !cancelled() && steps.python_package.outcome == 'success' }}
         shell: bash
         run: |
           wheels=(dist/*.whl)

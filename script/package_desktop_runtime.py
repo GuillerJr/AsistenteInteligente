@@ -27,6 +27,7 @@ import urllib.request
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from urllib.error import HTTPError, URLError
 
 from packaging.markers import Marker
 from packaging.tags import compatible_tags, cpython_tags, mac_platforms
@@ -41,6 +42,7 @@ from jarvis_core.bundled_runtime import (
     MAX_TREE_BYTES,
     MODEL_ENTRYPOINT,
     SCHEMA,
+    BundledRuntimeError,
     relative_path,
     verify_runtime_tree,
 )
@@ -63,6 +65,50 @@ TARGET_ENVIRONMENT = {
 
 class PackageError(ValueError):
     pass
+
+
+@dataclass
+class BuildDiagnostics:
+    phase: str = "admission"
+
+    def enter(self, stage, component=None):
+        require(stage in {"admission", "setup", "pins", "download", "extract", "wheellegal",
+                          "wheels", "certs", "source", "model", "sign", "manifest", "info",
+                          "receipt"}, "runtime_diagnostic_phase_invalid")
+        require(component is None or (isinstance(component, str) and re.fullmatch(
+            r"[A-Za-z0-9_.-]{1,96}", component) is not None), "runtime_diagnostic_phase_invalid")
+        self.phase = stage + (":" + component if component is not None else "")
+
+
+def failure_diagnostic(error, diagnostic):
+    """No exception messages, URL queries, paths, response bodies or headers."""
+    code = "runtime_build_failed"
+    if isinstance(error, PackageError):
+        candidate = error.args[0] if error.args else None
+    elif isinstance(error, BundledRuntimeError):
+        candidate = error.code
+    else:
+        candidate = None
+    if isinstance(candidate, str) and re.fullmatch(r"[a-z0-9_.:-]{1,192}", candidate):
+        code = candidate
+    kind = type(error).__name__
+    phase = diagnostic.phase
+    value = {"status": "failed", "error": code,
+             "phase": phase if isinstance(phase, str) and re.fullmatch(
+                 r"[a-z]+(?::[A-Za-z0-9_.-]{1,96})?", phase) else "unknown",
+             "exception_type": kind if re.fullmatch(r"[A-Za-z0-9_]{1,96}", kind)
+             else "Exception"}
+    if isinstance(error, HTTPError) and type(error.code) is int and 100 <= error.code <= 599:
+        value["http_status"] = error.code
+    reason = error.reason if isinstance(error, URLError) else error
+    number = getattr(reason, "errno", None)
+    if type(number) is int and -4096 <= number <= 4096:
+        value["errno"] = number
+    if reason is not error and isinstance(reason, BaseException):
+        kind = type(reason).__name__
+        if re.fullmatch(r"[A-Za-z0-9_]{1,96}", kind):
+            value["cause_type"] = kind
+    return value
 
 
 def require(condition, code):
@@ -500,31 +546,42 @@ def _admission(app, scratch, commit):
             "runtime_build_source_identity")
 
 
-def assemble(app, scratch, commit, model_assets, *, identity="-", deadline_seconds=900):
+def assemble(app, scratch, commit, model_assets, *, identity="-", deadline_seconds=900,
+             diagnostic=None):
+    diagnostic = diagnostic or BuildDiagnostics()
+    diagnostic.enter("admission")
     _admission(app, scratch, commit)
     require(identity == "-", "runtime_signing_identity_not_selected")
     runtime = app / "Contents/Resources/JarvisRuntime"
     require(not runtime.exists() and not runtime.is_symlink(), "runtime_already_present")
+    diagnostic.enter("setup")
     scratch.mkdir(mode=0o700)
     runtime.mkdir(parents=True, mode=0o755)
     budget = Budget(time.monotonic() + deadline_seconds)
     writer, components = TreeWriter(runtime, budget), []
+    diagnostic.enter("pins")
     pins = json.loads((REPO / "script/runtime_artifacts.json").read_bytes())
     require(pins["schema"] == "jarvis.runtime-artifact-pins.v1"
             and pins["target"] == "aarch64-apple-darwin", "runtime_pin_schema")
     for key, anchor in (("python", "bin/python3.11"), ("codex", "bin/codex")):
         pin = pins[key]
+        diagnostic.enter("download", key)
         archive = download(pin, scratch / (key + ".tar.gz"), budget)
+        diagnostic.enter("extract", key)
         extract_tar(archive, writer, key, anchor=anchor)
         components.append({"id": key, "version": pin["version"], "origin": pin["url"],
                            "archive_sha256": pin["sha256"], "license_paths": []})
     for pin in pins["codex_legal"]:
+        diagnostic.enter("download", "codex-" + pin["name"].lower())
         path = download(pin, scratch / ("codex-" + pin["name"]), budget)
+        diagnostic.enter("extract", "codex-legal")
         with path.open("rb") as stream:
             writer.write("licenses/codex/" + pin["name"], stream, pin["bytes"])
+    diagnostic.enter("extract", "legal-inventory")
     components[0]["license_paths"] = _license_paths(writer, "python")
     components[1]["license_paths"] = sorted(set(_license_paths(writer, "codex", required=False)
                                                 + _license_paths(writer, "licenses/codex")))
+    diagnostic.enter("extract", "codex-metadata")
     package_info = json.loads((runtime / "codex/codex-package.json").read_bytes())
     require(package_info.get("version") == "0.163.0"
             and package_info.get("target") == "aarch64-apple-darwin"
@@ -532,12 +589,17 @@ def assemble(app, scratch, commit, model_assets, *, identity="-", deadline_secon
             and {"codex/bin/codex-code-mode-host"} <= writer.names,
             "codex_package_incomplete")
 
+    diagnostic.enter("wheels", "resolve")
     lock = tomllib.loads((REPO / "uv.lock").read_text())
     for wheel in target_wheels(lock):
+        diagnostic.enter("download", wheel["name"])
         path = download(wheel, scratch / wheel["filename"], budget)
         fallbacks = []
+        diagnostic.enter("wheellegal", wheel["name"])
         for pin in reviewed_license_fallbacks(pins, name=wheel["name"], version=wheel["version"]):
+            diagnostic.enter("download", wheel["name"] + "-" + pin["name"].lower())
             legal = download(pin, scratch / (wheel["name"] + "-" + pin["name"]), budget)
+            diagnostic.enter("wheellegal", wheel["name"])
             relative = "licenses/wheels/" + wheel["name"] + "/" + pin["name"]
             with legal.open("rb") as stream:
                 writer.write(relative, stream, pin["bytes"])
@@ -545,6 +607,7 @@ def assemble(app, scratch, commit, model_assets, *, identity="-", deadline_secon
             components.append({"id": wheel["name"] + "-" + pin["name"].lower(),
                                "version": wheel["version"], "origin": pin["url"],
                                "archive_sha256": pin["sha256"], "license_paths": [relative]})
+        diagnostic.enter("extract", wheel["name"])
         licenses = extract_wheel(path, writer, name=wheel["name"], version=wheel["version"],
                                  license_fallbacks=fallbacks,
                                  embedded_legal=reviewed_embedded_licenses(
@@ -552,10 +615,12 @@ def assemble(app, scratch, commit, model_assets, *, identity="-", deadline_secon
         components.append({"id": wheel["name"], "version": wheel["version"],
                            "origin": wheel["url"], "archive_sha256": wheel["sha256"],
                            "license_paths": licenses})
+    diagnostic.enter("certs")
     with (runtime / "site-packages/certifi/cacert.pem").open("rb") as stream:
         writer.write(CA_CERTIFICATES_PATH, stream,
                      (runtime / "site-packages/certifi/cacert.pem").stat().st_size)
 
+    diagnostic.enter("source")
     source_archive = _run(["git", "-C", str(REPO), "archive", "--format=tar", commit,
                            "src/jarvis_core", "LICENSE"])
     require(len(source_archive) <= 32 * 1024 * 1024, "runtime_source_limit")
@@ -575,6 +640,7 @@ def assemble(app, scratch, commit, model_assets, *, identity="-", deadline_secon
                        "archive_sha256": sha256(source_archive),
                        "license_paths": ["licenses/jarvis-core/LICENSE"]})
 
+    diagnostic.enter("model")
     from jarvis_core.model_artifacts import MODEL_SPEC, REVISION, inspect_model
     inspect_model(model_assets)
     model_archive = _ArchiveDigest()
@@ -593,7 +659,9 @@ def assemble(app, scratch, commit, model_assets, *, identity="-", deadline_secon
                        "archive_sha256": model_archive.digest.hexdigest(),
                        "license_paths": [MODEL_ENTRYPOINT + "/LICENSE.Apache-2.0.txt"]})
 
+    diagnostic.enter("sign")
     signed = sign_nested(runtime, identity, budget)
+    diagnostic.enter("manifest")
     manifest = {"schema": SCHEMA, "source_commit": commit, "target": pins["target"],
                 "minimum_macos": pins["minimum_macos"],
                 "python_version": pins["python"]["version"],
@@ -606,11 +674,13 @@ def assemble(app, scratch, commit, model_assets, *, identity="-", deadline_secon
     pin = sha256(raw)
     verified = verify_runtime_tree(runtime, expected_manifest_sha256=pin,
                                    expected_source_commit=commit)
+    diagnostic.enter("info")
     info_path = app / "Contents/Info.plist"
     info = plistlib.loads(info_path.read_bytes())
     info["JarvisRuntimeManifestSHA256"] = pin
     info["JarvisDistributionChannel"] = "self-contained"
     info_path.write_bytes(plistlib.dumps(info, sort_keys=True))
+    diagnostic.enter("receipt")
     receipt = {"schema": "jarvis.runtime-build.v1", "source_commit": commit,
                "manifest_sha256": pin, "files": verified.files, "bytes": verified.bytes,
                "nested_macho_signed": signed, "staging_reserved_bytes": budget.staged_bytes,
@@ -629,13 +699,14 @@ def main():
     parser.add_argument("--identity", default="-")
     parser.add_argument("--deadline", type=int, default=900)
     args = parser.parse_args()
+    diagnostic = BuildDiagnostics()
     try:
         require(1 <= args.deadline <= 1200, "runtime_build_deadline_invalid")
         receipt = assemble(args.app, args.scratch, args.source_commit, args.model_assets,
-                           identity=args.identity, deadline_seconds=args.deadline)
-    except (PackageError, OSError, ValueError, tarfile.TarError, zipfile.BadZipFile) as error:
-        code = str(error) if isinstance(error, PackageError) else "runtime_build_failed"
-        print(json.dumps({"status": "failed", "error": code}))
+                           identity=args.identity, deadline_seconds=args.deadline,
+                           diagnostic=diagnostic)
+    except Exception as error:
+        print(json.dumps(failure_diagnostic(error, diagnostic)))
         return 1
     print(json.dumps({"status": "ready", **receipt}))
     return 0

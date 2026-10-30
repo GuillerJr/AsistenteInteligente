@@ -50,6 +50,26 @@
         "failure": "Negative surrogate fixture failed during JSON encoding before the parser; fixture corrected to valid escaped JSON."
       },
       "follow_up": "Pinned official legal sources; separate bounded product export; physical path verification without Foundation private-prefix normalization."
+    },
+    {
+      "commit": "8c0fec2a7473f0a26a8ed440928224a9dd64f550",
+      "run_id": 41066580541,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41066580541",
+      "status": "failed_preserved",
+      "macos": {
+        "app_qa_and_runtime_check_compilation": "passed",
+        "runtime_assembly": "runtime_build_failed_without_phase_in_old_diagnostic",
+        "full_suite": "not_run"
+      },
+      "ubuntu": {
+        "passed": 3674,
+        "skipped": 46,
+        "failed": 1,
+        "seconds": 276.3,
+        "cleanup_confirmed": true,
+        "failure": "Existing WAL-expiry test used a 100ms wall-clock deadline and missed its pending card under CI load; now expires the exact published synthetic ticket and controlled review clock."
+      },
+      "follow_up": "Safe phase/class/errno/HTTP diagnostics without exception strings; independent full suites and Python packages even if desktop packaging fails."
     }
   ],
   "native_qualification": [],

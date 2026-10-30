@@ -96,23 +96,36 @@ async def test_wal_copy_retains_originals_and_provenance_then_observes_without_r
 
 
 @pytest.mark.parametrize("decision", ["deny", "cancel", "expire"])
-async def test_wal_negative_before_authority_never_opens_or_changes_any_source(cold, decision):
+async def test_wal_negative_before_authority_never_opens_or_changes_any_source(
+        cold, decision, monkeypatch):
     service, coordinator, provider, parent, value = cold
+    clock = [coordinator.clock()]
+    if decision == "expire":
+        monkeypatch.setattr(coordinator, "clock", lambda: clock[0])
     _, prepared = await review(coordinator)
     if decision == "expire":
         current = coordinator._reviews[prepared["review_id"]]
-        coordinator._reviews[prepared["review_id"]] = replace(
-            current, expires=coordinator.clock() + .1)
     operation = await coordinator.memory_copy(copy_params(prepared))
-    await pending(coordinator)
+    card = await pending(coordinator)
     if decision == "deny":
         await decide(coordinator, False)
     elif decision == "cancel":
         await coordinator.cancel({"operation_id": operation["operation_id"]})
+    else:
+        # Publish the actual authority ticket first, then expire that exact
+        # ticket and its review. A 100ms wall-clock race could hide the card
+        # before pending() observed it on a busy CI runner.
+        clock[0] = current.expires + 1
+        ticket = coordinator.authority._host_pending[card["approval_id"]]
+        assert ticket.operation.operation_id == operation["operation_id"]
+        ticket.deadline = 0
+        assert (await coordinator.pending({}))["pending"] == []
     result = await finish(coordinator, operation)
     assert result["phase"] == {"deny": "denied", "cancel": "cancelled", "expire": "failed"}[
         decision], result
     assert result["receipt"] is None and service.memory._disk is None
+    if decision == "expire":
+        assert result["error_code"] == "memory_restore_review_expired"
     assert fixture.physical_family(service.directory) == value["source_family"]
     assert fixture.observe(parent)["receipts"] == [] and provider.calls == 0
 
