@@ -64,7 +64,7 @@ public struct QALaunchAdmission: Sendable {
               Set(object.keys) == ["schema", "app_path", "expected_bundle_id", "expected_executable_sha256", "arguments", "environment"],
               let request = try? JSONDecoder().decode(QALaunchRequest.self, from: data)
         else { throw QALaunchIssue.request }
-        let app = URL(fileURLWithPath: request.appPath, isDirectory: true)
+        let app = try applicationPath(from: request.appPath, realUIDHome: realUIDHome())
         let executable = app.appendingPathComponent("Contents/MacOS/Jarvis")
         let infoData = try validate(request, app: app, executable: executable)
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
@@ -88,9 +88,11 @@ public struct QALaunchAdmission: Sendable {
               request.expectedExecutableSHA256.range(of: #"^[0-9a-f]{64}$"#, options: .regularExpression) != nil,
               app.path == request.appPath, app.pathExtension == "app"
         else { throw QALaunchIssue.request }
-        try syntheticPath(app, directory: true)
+        try applicationFile(app, app: app, directory: true)
+        if !app.path.hasPrefix("/private/tmp/") && !request.arguments.isEmpty { throw QALaunchIssue.arguments }
         let plistURL = app.appendingPathComponent("Contents/Info.plist")
-        try syntheticPath(plistURL, directory: false); try syntheticPath(executable, directory: false)
+        try applicationFile(plistURL, app: app, directory: false)
+        try applicationFile(executable, app: app, directory: false)
         let plistData = try read(plistURL, limit: 65_536)
         guard let plist = try? PropertyListSerialization.propertyList(from: plistData, options: [], format: nil) as? [String: Any],
               plist["CFBundleIdentifier"] as? String == request.expectedBundleID,
@@ -130,7 +132,7 @@ public struct QALaunchAdmission: Sendable {
                   let runtimePin = plist["JarvisRuntimeManifestSHA256"] as? String,
                   runtimePin.range(of: #"^[0-9a-f]{64}$"#, options: .regularExpression) != nil else { throw QALaunchIssue.arguments }
             let config = app.appendingPathComponent("Contents/Resources/JarvisQualification.json")
-            try syntheticPath(config, directory: false)
+            try applicationFile(config, app: app, directory: false)
             let data = try read(config, limit: 16_384)
             guard digest(data) == configPin,
                   let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -151,7 +153,7 @@ public struct QALaunchAdmission: Sendable {
                 }
             }
             let manifest = app.appendingPathComponent("Contents/Resources/JarvisRuntime/runtime-manifest.json")
-            try syntheticPath(manifest, directory: false)
+            try applicationFile(manifest, app: app, directory: false)
             guard digest(try read(manifest, limit: 8 * 1024 * 1024)) == runtimePin else { throw QALaunchIssue.changed }
             return
         }
@@ -178,9 +180,55 @@ public struct QALaunchAdmission: Sendable {
     /// Lexical admission intentionally does not use Foundation's private-prefix normalization.
     /// Only explicit /private/tmp paths are accepted; OS lstat checks each component separately.
     public static func fileURL(from path: String, isDirectory: Bool) throws -> URL {
+        try anchoredURL(from: path, isDirectory: isDirectory, anchor: "/private/tmp")
+    }
+
+    /// Internal lexical policy for this helper only. Production obtains home
+    /// from getpwuid(getuid()); environment HOME is never a path authority.
+    static func applicationPath(from path: String, realUIDHome home: String) throws -> URL {
+        if path.hasPrefix("/private/tmp/") { return try fileURL(from: path, isDirectory: true) }
+        let homeParts = home.split(separator: "/", omittingEmptySubsequences: false)
+        guard home.hasPrefix("/"), home != "/", !home.hasSuffix("/"),
+              !home.unicodeScalars.contains(where: { $0.value < 32 || $0.value == 127 }),
+              homeParts.dropFirst().allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else { throw QALaunchIssue.path }
+        let anchor = home + "/Library/Application Support/JarvisQualification"
+        let url = try anchoredURL(from: path, isDirectory: true, anchor: anchor)
+        let suffix = String(path.dropFirst(anchor.count + 1)).split(separator: "/", omittingEmptySubsequences: false)
+        guard suffix.count == 2, suffix[1] == "Jarvis.app", suffix[0].count == 32,
+              suffix[0].allSatisfy({ "0123456789abcdef".contains($0) }) else { throw QALaunchIssue.path }
+        return url
+    }
+
+    private static func realUIDHome() throws -> String {
+        guard let entry = getpwuid(getuid()), let directory = entry.pointee.pw_dir else { throw QALaunchIssue.path }
+        return String(cString: directory)
+    }
+
+    private static func applicationFile(_ url: URL, app: URL, directory: Bool) throws {
+        let home = try realUIDHome()
+        _ = try applicationPath(from: app.path, realUIDHome: home)
+        let allowed = directory ? [app.path] : [
+            app.appendingPathComponent("Contents/Info.plist").path,
+            app.appendingPathComponent("Contents/MacOS/Jarvis").path,
+            app.appendingPathComponent("Contents/Resources/JarvisQualification.json").path,
+            app.appendingPathComponent("Contents/Resources/JarvisRuntime/runtime-manifest.json").path,
+        ]
+        guard allowed.contains(url.path) else { throw QALaunchIssue.path }
+        if app.path.hasPrefix("/private/tmp/") { try syntheticPath(url, directory: directory); return }
+        // Check root-owned system ancestors without allowing them to substitute
+        // an app component. From the UID's home onward, every inode is its own.
+        var cursor = ""
+        for part in home.split(separator: "/") {
+            cursor += "/" + String(part)
+            try component(cursor, allowSystemOwner: cursor != home)
+        }
+        try anchoredPath(url, directory: directory, anchor: home)
+    }
+
+    private static func anchoredURL(from path: String, isDirectory: Bool, anchor: String) throws -> URL {
         let canonical = isDirectory && path.hasSuffix("/") ? String(path.dropLast()) : path
         let components = canonical.split(separator: "/", omittingEmptySubsequences: false)
-        guard canonical.hasPrefix("/private/tmp/"), canonical.utf8.count <= 4096,
+        guard canonical.hasPrefix(anchor + "/"), canonical.utf8.count <= 4096,
               !canonical.unicodeScalars.contains(where: { $0.value < 32 || $0.value == 127 }),
               components.dropFirst().allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." })
         else { throw QALaunchIssue.path }
@@ -188,17 +236,30 @@ public struct QALaunchAdmission: Sendable {
     }
 
     static func syntheticPath(_ url: URL, directory: Bool) throws {
+        try anchoredPath(url, directory: directory, anchor: "/private/tmp")
+    }
+
+    static func ownershipAllowed(uid: uid_t, mode: mode_t, allowSystemOwner: Bool = false) -> Bool {
+        (uid == geteuid() || (allowSystemOwner && uid == 0)) && (mode & 0o022) == 0
+    }
+
+    private static func component(_ path: String, allowSystemOwner: Bool = false) throws {
+        var info = stat()
+        guard lstat(path, &info) == 0 else { throw QALaunchIssue.ownership }
+        guard (info.st_mode & S_IFMT) != S_IFLNK else { throw QALaunchIssue.path }
+        guard ownershipAllowed(uid: info.st_uid, mode: info.st_mode, allowSystemOwner: allowSystemOwner)
+        else { throw QALaunchIssue.ownership }
+    }
+
+    private static func anchoredPath(_ url: URL, directory: Bool, anchor: String) throws {
         let path = url.path
         guard url.isFileURL else { throw QALaunchIssue.path }
-        _ = try fileURL(from: path, isDirectory: directory)
+        _ = try anchoredURL(from: path, isDirectory: directory, anchor: anchor)
         let components = path.split(separator: "/", omittingEmptySubsequences: false)
-        var cursor = "/private/tmp"
-        for component in components.dropFirst(3) {
-            cursor += "/" + String(component)
-            var info = stat()
-            guard lstat(cursor, &info) == 0 else { throw QALaunchIssue.ownership }
-            guard (info.st_mode & S_IFMT) != S_IFLNK else { throw QALaunchIssue.path }
-            guard info.st_uid == geteuid(), (info.st_mode & 0o022) == 0 else { throw QALaunchIssue.ownership }
+        var cursor = anchor
+        for part in components.dropFirst(anchor.split(separator: "/").count + 1) {
+            cursor += "/" + String(part)
+            try component(cursor)
         }
         var info = stat()
         guard lstat(path, &info) == 0,

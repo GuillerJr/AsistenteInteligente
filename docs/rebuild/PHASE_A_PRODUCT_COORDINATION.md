@@ -59,6 +59,18 @@ los nuevos recorridos permanecen pendientes de cualificación.
 
 ## Clientes locales
 
+La comprobación de avisos distingue el estado del producto de la respuesta de
+UserNotifications. Una copia temporal de QA devolvió un error del sistema; no
+se atribuye todavía a su ubicación ni a una denegación del dueño. El helper de
+cualificación permite ahora únicamente una app autocontenida bajo
+`<home-del-UID>/Library/Application Support/JarvisQualification/<32-hex>/Jarvis.app`,
+con argumentos vacíos, identidad `local.jarvis.qa`, manifiesto/configuración
+fijados y los mismos controles de propietario, enlaces y cambios. El home se
+obtiene de `getpwuid`, no de `HOME`. Solicitud, recibo, perfil, proveedor y entorno
+siguen limitados a `/private/tmp`. Esta excepción es del helper optativo de QA;
+no activa perfiles ni amplía los destinos del producto. El recorrido estable
+queda pendiente hasta aprobar su CI y conservar recibos nuevos.
+
 El paquete instala `jarvis` y `jarvis-acp`; también están disponibles mediante
 `python -m jarvis_core.product_client` y `python -m jarvis_core.product_acp`.
 Requieren `--state` y `--identity-file` explícitos. `identity-create --directory`

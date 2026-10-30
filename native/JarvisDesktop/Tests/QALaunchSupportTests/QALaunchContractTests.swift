@@ -4,6 +4,96 @@ import XCTest
 @testable import QALaunchSupport
 
 final class QALaunchContractTests: XCTestCase {
+    func testStableApplicationLexicalAdmissionIsOnlyUIDHomeTokenAndExactApp() throws {
+        let home = "/Users/synthetic-qa", token = String(repeating: "a", count: 32)
+        let base = home + "/Library/Application Support/JarvisQualification/"
+        let app = base + token + "/Jarvis.app"
+        XCTAssertEqual(try QALaunchAdmission.applicationPath(from: app, realUIDHome: home).path, app)
+        XCTAssertEqual(try QALaunchAdmission.applicationPath(from: "/private/tmp/qa/Jarvis.app", realUIDHome: home).path,
+                       "/private/tmp/qa/Jarvis.app")
+        for invalid in [base + String(repeating: "a", count: 31) + "/Jarvis.app",
+                        base + String(repeating: "A", count: 32) + "/Jarvis.app",
+                        base + token + "/Other.app", app + "/Contents/Info.plist", app + "/",
+                        base + token + "/./Jarvis.app", base + token + "/../Jarvis.app",
+                        base + token + "//Jarvis.app",
+                        app.replacingOccurrences(of: home, with: "/Users/another-user"),
+                        app.replacingOccurrences(of: "JarvisQualification/", with: "JarvisQualificationExtra/"),
+                        "~/Library/Application Support/JarvisQualification/" + token + "/Jarvis.app",
+                        "$HOME/Library/Application Support/JarvisQualification/" + token + "/Jarvis.app"] {
+            XCTAssertThrowsError(try QALaunchAdmission.applicationPath(from: invalid, realUIDHome: home)) {
+                XCTAssertEqual($0 as? QALaunchIssue, .path)
+            }
+        }
+        XCTAssertThrowsError(try QALaunchAdmission.fileURL(from: app, isDirectory: true),
+                             "Stable application admission never broadens profile/environment paths")
+    }
+
+    func testStableQualificationRetainsPinsZeroArgumentsAndRevalidation() throws {
+        let fixture = try QALaunchFixture(stableApplication: true); defer { fixture.remove() }
+        _ = try fixture.writeQualification()
+        try fixture.writeRequest(arguments: [])
+        let admitted = try fixture.admit()
+        XCTAssertEqual(admitted.appURL, fixture.app)
+        try admitted.revalidate()
+        try fixture.writeRequest()
+        XCTAssertThrowsError(try fixture.admit(), "Stable app cannot use development argv")
+        try fixture.writeRequest(arguments: [])
+        var changed = try Data(contentsOf: fixture.executable); changed.append(42)
+        try fixture.writeBinary(changed)
+        XCTAssertThrowsError(try admitted.revalidate())
+        XCTAssertThrowsError(try fixture.admit())
+    }
+
+    func testStableAppNeverAdmitsStableRequestReceiptProfileProviderOrEnvironment() throws {
+        let fixture = try QALaunchFixture(stableApplication: true); defer { fixture.remove() }
+        _ = try fixture.writeQualification()
+        try fixture.writeRequest(arguments: [])
+        XCTAssertNoThrow(try fixture.admit())
+        XCTAssertThrowsError(try QALaunchAdmission.admit(requestURL: fixture.app.appendingPathComponent("request.json"),
+            receiptURL: fixture.receiptURL))
+        XCTAssertThrowsError(try QALaunchAdmission.admit(requestURL: fixture.requestURL,
+            receiptURL: fixture.app.deletingLastPathComponent().appendingPathComponent("receipt.json")))
+        for key in ["HOME", "TMPDIR"] {
+            var environment = fixture.environment
+            environment[key] = fixture.app.deletingLastPathComponent().path
+            try fixture.writeRequest(arguments: [], environment: environment)
+            XCTAssertThrowsError(try fixture.admit())
+        }
+        _ = try fixture.writeQualification(state: fixture.app.deletingLastPathComponent().path)
+        try fixture.writeRequest(arguments: [])
+        XCTAssertThrowsError(try fixture.admit())
+        _ = try fixture.writeQualification(providerState: fixture.app.deletingLastPathComponent().path)
+        XCTAssertThrowsError(try fixture.admit())
+    }
+
+    func testStableAppRejectsLinksUnsafeOwnershipAndConfigurationTampering() throws {
+        let fixture = try QALaunchFixture(stableApplication: true); defer { fixture.remove() }
+        let config = try fixture.writeQualification()
+        try fixture.writeRequest(arguments: [])
+        let admitted = try fixture.admit()
+        let foreign: uid_t = geteuid() == 0 ? 501 : 0
+        XCTAssertTrue(QALaunchAdmission.ownershipAllowed(uid: geteuid(), mode: mode_t(0o700)))
+        XCTAssertFalse(QALaunchAdmission.ownershipAllowed(uid: foreign, mode: mode_t(0o700)))
+        XCTAssertFalse(QALaunchAdmission.ownershipAllowed(uid: geteuid(), mode: mode_t(0o722)))
+        XCTAssertEqual(chmod(fixture.app.path, 0o777), 0)
+        XCTAssertThrowsError(try fixture.admit())
+        XCTAssertEqual(chmod(fixture.app.path, 0o700), 0)
+        let manifest = fixture.app.appendingPathComponent("Contents/Resources/JarvisRuntime/runtime-manifest.json")
+        let linked = fixture.app.deletingLastPathComponent().appendingPathComponent("linked-manifest.json")
+        XCTAssertEqual(link(manifest.path, linked.path), 0)
+        XCTAssertThrowsError(try fixture.admit(), "Stable manifest keeps the single-link file guard")
+        XCTAssertEqual(unlink(linked.path), 0)
+        let held = fixture.app.deletingLastPathComponent().appendingPathComponent("held-config.json")
+        try FileManager.default.moveItem(at: config, to: held)
+        try FileManager.default.createSymbolicLink(at: config, withDestinationURL: held)
+        XCTAssertThrowsError(try fixture.admit())
+        try FileManager.default.removeItem(at: config)
+        try FileManager.default.moveItem(at: held, to: config)
+        var bytes = try Data(contentsOf: config); bytes.append(10)
+        try bytes.write(to: config)
+        XCTAssertThrowsError(try admitted.revalidate())
+    }
+
     func testArgumentFreeQualificationRequiresPinnedPrivateConfigurationAndRechecksIt() throws {
         let fixture = try QALaunchFixture(); defer { fixture.remove() }
         let config = try fixture.writeQualification()
@@ -261,9 +351,16 @@ private struct QALaunchFixture {
          "--state", root.appendingPathComponent("state").path, "--codex", "/usr/bin/true",
          "--provider-state", root.appendingPathComponent("provider").path]
     }
-    init() throws {
+    init(stableApplication: Bool = false) throws {
         root = URL(fileURLWithPath: "/private/tmp/jarvis-qa-contract-\(UUID().uuidString)", isDirectory: true)
-        app = root.appendingPathComponent("Jarvis.app", isDirectory: true)
+        if stableApplication {
+            guard let entry = getpwuid(getuid()), let directory = entry.pointee.pw_dir else { throw QALaunchIssue.path }
+            let home = String(cString: directory)
+            let token = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+            app = URL(fileURLWithPath: home, isDirectory: true)
+                .appendingPathComponent("Library/Application Support/JarvisQualification/" + token + "/Jarvis.app", isDirectory: true)
+            guard !FileManager.default.fileExists(atPath: app.deletingLastPathComponent().path) else { throw QALaunchIssue.path }
+        } else { app = root.appendingPathComponent("Jarvis.app", isDirectory: true) }
         executable = app.appendingPathComponent("Contents/MacOS/Jarvis")
         requestURL = root.appendingPathComponent("request.json"); receiptURL = root.appendingPathComponent("receipt.json")
         for directory in [executable.deletingLastPathComponent()] + ["home", "tmp", "source", "dependencies", "state", "provider"].map({ root.appendingPathComponent($0) }) {
@@ -288,13 +385,13 @@ private struct QALaunchFixture {
         try PropertyListSerialization.data(fromPropertyList: value, format: .xml, options: 0)
             .write(to: app.appendingPathComponent("Contents/Info.plist"))
     }
-    func writeQualification(state: String? = nil) throws -> URL {
+    func writeQualification(state: String? = nil, providerState: String? = nil) throws -> URL {
         let resources = app.appendingPathComponent("Contents/Resources", isDirectory: true)
         let runtime = resources.appendingPathComponent("JarvisRuntime", isDirectory: true)
         try FileManager.default.createDirectory(at: runtime, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let config = resources.appendingPathComponent("JarvisQualification.json")
         let raw: [String: String] = ["format": "jarvis.qualification-profile.v1", "state": state ?? root.appendingPathComponent("state").path,
-                                     "provider_state": root.appendingPathComponent("provider").path]
+                                     "provider_state": providerState ?? root.appendingPathComponent("provider").path]
         let data = try JSONSerialization.data(withJSONObject: raw, options: [.sortedKeys, .withoutEscapingSlashes])
         try data.write(to: config)
         // Contract fixture only, not a complete product manifest or executable.
@@ -318,5 +415,8 @@ private struct QALaunchFixture {
     func process(at date: Date) -> QALaunchProcessIdentity {
         .init(pid: 4321, parentPID: 1, startSeconds: UInt64(date.timeIntervalSince1970), startMicroseconds: 1234, executablePath: executable.path)
     }
-    func remove() { try? FileManager.default.removeItem(at: root) }
+    func remove() {
+        if !app.path.hasPrefix(root.path + "/") { try? FileManager.default.removeItem(at: app.deletingLastPathComponent()) }
+        try? FileManager.default.removeItem(at: root)
+    }
 }
