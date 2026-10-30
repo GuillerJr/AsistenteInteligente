@@ -83,6 +83,20 @@ struct ComposerView: View {
                 }
             }
             if let notice = store.dictationNotice { Text(notice).font(.caption).foregroundStyle(.secondary) }
+            if let receipt = store.voice.lastCaptureReceipt, let projection = receipt.wakeProjection {
+                DisclosureGroup("Revisar activación local") {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Coincidencias en el texto reconocido: \(projection.matchCount). Se usa la primera; las menciones posteriores se conservan como dictado.")
+                        Text("Caracteres anteriores a la primera coincidencia: \(projection.triggerCharacterOffset). Caracteres retirados antes del sufijo: \(projection.discardedPrefixCharacters).")
+                        Text("Último sufijo proyectado: \(projection.suffixUTF8Bytes) bytes UTF-8.")
+                        Text("SHA-256 del sufijo: \(projection.suffixSHA256)").font(.caption2.monospaced()).textSelection(.enabled)
+                        if receipt.outcome != .transcript {
+                            Text("La captura terminó sin añadir texto; estos datos corresponden a la última hipótesis proyectada.")
+                        }
+                        Text("Estos metadatos permanecen en memoria. No contienen audio ni el texto anterior a la activación.")
+                    }.font(.caption).foregroundStyle(.secondary)
+                }.font(.caption)
+            }
         }
         .onAppear { focused = true }
     }

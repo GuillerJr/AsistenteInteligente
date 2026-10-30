@@ -50,6 +50,42 @@ final class LocalVoiceCaptureModeIntegrationTests: XCTestCase {
         XCTAssertTrue(store.dictationNotice?.contains("Frase de activación detectada") == true)
         XCTAssertEqual(store.voice.lastCaptureReceipt?.wakeMatched, true)
         XCTAssertEqual(store.voice.lastCaptureReceipt?.captureMode, .wakePhrase)
+        XCTAssertEqual(store.voice.lastCaptureReceipt?.wakeProjection?.matchCount, 1)
+        XCTAssertEqual(store.voice.lastCaptureReceipt?.wakeProjection?.triggerCharacterOffset, 18)
+        XCTAssertTrue(store.messages.isEmpty); XCTAssertNil(store.activeRunID)
+    }
+    @MainActor func testRepeatedHypothesesUpdateRAMProjectionAndKeepALegitimateLaterMentionOnlyOnce() throws {
+        let (store, driver) = try fixture()
+        defer { store.voice.cancel(); store.runtime.retire() }
+        store.startDictation()
+        driver.receive?(.partial("Antes. Jarvis abre"))
+        driver.receive?(.partial("Antes. Jarvis abre la carpeta Jarvis."))
+        driver.receive?(.partial("Antes. Jarvis abre la carpeta Jarvis."))
+        store.voice.stopDictation()
+        driver.receive?(.final("Antes. Jarvis abre la carpeta Jarvis."))
+        XCTAssertEqual(store.draft, "BORRADOR ACTIVACIÓN\nabre la carpeta Jarvis.")
+        XCTAssertEqual(store.voice.lastCaptureReceipt?.wakeProjection?.matchCount, 2)
+        XCTAssertEqual(store.voice.lastCaptureReceipt?.wakeProjection?.suffixSHA256,
+                       "8770f66163b45e6d449d18c7ff8d1fe17c4bb83967ec29df4376c24f46317bb6")
+        XCTAssertTrue(store.messages.isEmpty); XCTAssertNil(store.activeRunID)
+        store.startDictation(); XCTAssertNil(store.voice.lastCaptureReceipt)
+        driver.receive?(.partial("Sin activación")); store.stopVoice()
+        XCTAssertNil(store.voice.lastCaptureReceipt?.wakeProjection)
+    }
+    @MainActor func testSegmentedSDKStyleStreamCountsBothTriggersWithoutSilentlyRecuttingThePayload() throws {
+        let (store, driver) = try fixture()
+        defer { store.voice.cancel(); store.runtime.retire() }
+        store.startDictation()
+        var segments = LocalSpeechSegments()
+        driver.receive?(.partial(try segments.accept(text: "Jarvis.", start: 0, end: 1, isFinal: true)))
+        driver.receive?(.partial(try segments.accept(text: "Esto se descarta Jarvis, el marcador es 42.", start: 1, end: 4, isFinal: false)))
+        driver.receive?(.partial(try segments.accept(text: "Esto se descarta Jarvis, el marcador es 42.", start: 1, end: 4, isFinal: true)))
+        store.voice.stopDictation(); driver.receive?(.final(segments.text))
+        XCTAssertEqual(store.draft, "BORRADOR ACTIVACIÓN\nEsto se descarta Jarvis, el marcador es 42.")
+        XCTAssertEqual(store.voice.lastCaptureReceipt?.wakeProjection?.matchCount, 2)
+        XCTAssertEqual(store.voice.lastCaptureReceipt?.wakeProjection?.discardedPrefixCharacters, 8)
+        XCTAssertEqual(store.voice.lastCaptureReceipt?.wakeProjection?.suffixSHA256,
+                       "5db2e269d767f02a540e46a26f0794e31be5f2c1d22dc1fc6e09b65af8782ce9")
         XCTAssertTrue(store.messages.isEmpty); XCTAssertNil(store.activeRunID)
     }
     @MainActor func testCancelFromChatStoreNeverPublishesAmbientTextOrChangesSelectedWakePreference() throws {

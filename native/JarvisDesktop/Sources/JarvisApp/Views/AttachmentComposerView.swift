@@ -71,7 +71,7 @@ struct AttachmentComposerView: View {
                 Button("Autorizar transcripción local") {
                     Task {
                         let result = await MacLocalFileTranscriber.requestSpeechPermission()
-                        pickerError = result == .authorized ? "Reconocimiento local autorizado. El micrófono no se abrió." : "No se autorizó el reconocimiento local de archivos."
+                        pickerError = result == .authorized ? "Reconocimiento local autorizado. Este permiso no activa el micrófono." : "No se autorizó el reconocimiento local de archivos."
                     }
                 }.help("Permiso de reconocimiento de voz para archivos; no solicita el micrófono")
             }.font(.caption)
