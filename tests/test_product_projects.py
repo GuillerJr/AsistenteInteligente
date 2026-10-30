@@ -321,7 +321,7 @@ async def test_unknown_git_effect_survives_restart_and_blocks_automatic_new_revi
 
 @pytest.fixture
 def real_git(tmp_path):
-    if os.environ.get("CI") != "true":
+    if os.environ.get("JARVIS_TEST_GUARD_PROFILE") != "ci":
         pytest.skip("Los repositorios y procesos Git reales se ejecutan sólo en CI.")
     root = tmp_path.resolve() / "source"
     root.mkdir(mode=0o700)

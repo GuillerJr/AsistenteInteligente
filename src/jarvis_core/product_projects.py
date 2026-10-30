@@ -454,9 +454,8 @@ def _system_git(executable):
     selected = Path(executable)
     if sys.platform != "darwin" or selected != Path("/usr/bin/git"):
         return selected
-    # Apple's /usr/bin launcher can close inherited descriptors before it
-    # reaches Git. Resolve the selected developer tool before passing our
-    # pinned directory/lease descriptors; never search PATH or invoke a shell.
+    # Select the actual developer executable rather than the OS launcher before
+    # inheriting our lease descriptors. Never search PATH or invoke a shell.
     try:
         result = subprocess.run(
             ["/usr/bin/xcrun", "--find", "git"],
@@ -636,6 +635,12 @@ class BoundedGitRunner:
             env = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "GIT_CONFIG_NOSYSTEM": "1",
                    "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0",
                    "GIT_OPTIONAL_LOCKS": "0", "GIT_COMMON_DIR": f"/dev/fd/{common}"}
+            # Darwin's /dev/fd does not make directory descriptors traversable
+            # by Git. Retain all pins/lease descriptors, but use the exact named
+            # paths there with identity checks immediately before and after IO.
+            named_directories = sys.platform == "darwin"
+            if named_directories:
+                env["GIT_COMMON_DIR"] = pin.common_dir
             if arguments[:2] in {("worktree", "add"), ("worktree", "remove")}:
                 # Git writes persistent gitdir pointers when adding worktrees;
                 # never publish a descriptor alias into those pointers.
@@ -643,8 +648,11 @@ class BoundedGitRunner:
             argv = (str(self.executable), "--no-pager", "--no-optional-locks",
                     "-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false",
                     "-c", "core.excludesFile=/dev/null", "-c", "diff.external=",
-                    "-c", "core.attributesFile=/dev/null", "-C", f"/dev/fd/{root}",
-                    f"--git-dir=/dev/fd/{git_dir}", f"--work-tree=/dev/fd/{root}", *arguments)
+                    "-c", "core.attributesFile=/dev/null", "-C",
+                    pin.root if named_directories else f"/dev/fd/{root}",
+                    "--git-dir=" + (pin.git_dir if named_directories else f"/dev/fd/{git_dir}"),
+                    "--work-tree=" + (pin.root if named_directories else f"/dev/fd/{root}"),
+                    *arguments)
             if cancellation is not None and cancellation.is_set():
                 raise ProjectError("project_cancelled")
             if authorize is not None:
@@ -721,7 +729,10 @@ class BoundedGitRunner:
                     raise ProjectError("project_git_timeout")
                 if cancellation_task in done:
                     raise ProjectError("project_cancelled")
-                return await collection
+                result = await collection
+                if named_directories and arguments[:2] != ("worktree", "remove"):
+                    pin.assert_current()
+                return result
             finally:
                 if process.returncode is None:
                     try:

@@ -171,7 +171,7 @@ async def initialize(client, *, temporary=False):
 
 
 async def test_project_registration_reuses_existing_workspace_admission(product_connection):
-    if os.environ.get("CI") != "true":
+    if os.environ.get("JARVIS_TEST_GUARD_PROFILE") != "ci":
         pytest.skip("Git real sólo en CI remota.")
     _, client, _, root, _, _ = product_connection
     await initialize(client)

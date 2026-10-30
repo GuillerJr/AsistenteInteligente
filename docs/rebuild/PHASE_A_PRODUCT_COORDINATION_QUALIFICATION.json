@@ -130,8 +130,10 @@
         "effect_status": "known",
         "cleanup_confirmed": true,
         "error": "project_git_failed",
-        "readonly_diagnostic": "Apple /usr/bin/git launcher loses inherited descriptors: cannot change to /dev/fd/9: Not a directory.",
-        "correction": "Resolve the selected real developer Git with bounded /usr/bin/xcrun --find git before passing pinned descriptors; no PATH or launcher fallback."
+        "readonly_diagnostic": "Both /usr/bin/git and the selected developer Git return cannot change to /dev/fd/9: Not a directory on this Mac.",
+        "initial_launcher_only_hypothesis": "Disproved by the second readonly comparison; retained here rather than credited as a working correction.",
+        "correction": "Darwin uses exact named directories with retained descriptor custody and immediate pre/post identity checks. Resolve the selected real developer Git with bounded xcrun; no PATH fallback.",
+        "ci_coverage_gap": "Four real-Git tests skipped because CI is removed by the guard allowlist. Use the admitted JARVIS_TEST_GUARD_PROFILE=ci marker so these integrations actually run remotely."
       }
     ]
   }
