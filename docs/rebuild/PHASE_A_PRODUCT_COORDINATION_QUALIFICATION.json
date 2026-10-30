@@ -1,0 +1,39 @@
+{
+  "schema": "jarvis.product-coordination-qualification/1",
+  "status": "implementation_in_validation",
+  "phase_a_complete": false,
+  "phase_b_started": false,
+  "reference": "REA_OC28_PRODUCT_COORDINATION.md",
+  "checkpoints": [
+    {
+      "commit": "38e227384f257c43fa332f845586dc44cfe5841b",
+      "ci_run_id": 41086476829,
+      "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41086476829",
+      "ubuntu": {
+        "conclusion": "failure",
+        "passed": 3799,
+        "failed": 52,
+        "skipped": 50,
+        "seconds": 261.4,
+        "log_sha256": "d52b30060fb19280f087b01694b9e8448d90f8504dd11957d28f3d830da34d05"
+      },
+      "macos": "queued_at_record",
+      "qualified": false,
+      "causal_groups": [
+        "Product read callbacks lacked attribution independent of effect authority; write callbacks did not commit their issued lease.",
+        "Cancellation rebuilt RunResult and discarded confirmed cleanup; repeated cancellation of a shielded finalizer was confused with unconfirmed finalizer completion.",
+        "Doctor role allowlist did not include the new virtual product image.",
+        "Counter protocol fixture supplied str instead of required executable Path.",
+        "MCP exact catalogue expectations omitted the new product tools; cost split expectation ignored explicit downward rounding."
+      ]
+    }
+  ],
+  "native_qualification": {
+    "status": "pending",
+    "local_full_suites_run": false,
+    "local_builds_run": false,
+    "owner_installed_app_modified": false,
+    "github_selected_repository": "GuillerJr/ecommerce",
+    "github_credential_entered": false
+  }
+}

@@ -10,7 +10,10 @@ struct ProductCoordinationView: View {
     let onSelectSession: (SessionScope) -> Void
     let onRunStarted: (String) -> Void
     var canManage = true
+    var canCreateSession = true
     @State private var choosingFolder = false
+    @State private var folderIdentity: String?
+    @State private var folderScope: SessionScope?
     @State private var workspaceID = ""
     @State private var group = ""
     @State private var pinned = false
@@ -76,7 +79,7 @@ struct ProductCoordinationView: View {
                                 Text(workspace.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                             }
                             Spacer()
-                            Button("Nueva conversación") { onCreateSession(workspace.id) }.disabled(!canManage)
+                            Button("Nueva conversación") { onCreateSession(workspace.id) }.disabled(!canCreateSession)
                         }
                     }
                 }
@@ -91,6 +94,7 @@ struct ProductCoordinationView: View {
             if budgetRevision == -1 { loadBudget() }
         }
         .onChange(of: store.viewIdentity) {
+            choosingFolder = false; folderIdentity = nil; folderScope = nil
             draftRevision = 0; budgetRevision = -1; memberID = ""
             targetID = ""; recipientID = ""; reply = nil; messageBody = ""
             loadOrganization(); loadBudget()
@@ -100,15 +104,20 @@ struct ProductCoordinationView: View {
         }
         .onChange(of: targetID) { recipientID = selectedTarget?.ownerID ?? "" }
         .fileImporter(isPresented: $choosingFolder, allowedContentTypes: [.folder], allowsMultipleSelection: false) { result in
-            guard case .success(let urls) = result, let url = urls.first else { return }
-            let access = url.startAccessingSecurityScopedResource()
+            guard case .success(let urls) = result, let url = urls.first,
+                  let identity = folderIdentity, let scope = folderScope,
+                  identity == store.viewIdentity, scope == store.scope else { return }
+            folderIdentity = nil; folderScope = nil
             Task {
+                guard identity == store.viewIdentity, scope == store.scope else { return }
+                let access = url.startAccessingSecurityScopedResource()
                 defer { if access { url.stopAccessingSecurityScopedResource() } }
                 _ = await store.registerWorkspace(path: url.path, name: url.lastPathComponent)
             }
         }
         .fileDialogMessage("Elige una carpeta de trabajo para Jarvis. Su contenido no se abrirá automáticamente.")
         .fileDialogConfirmationLabel("Registrar carpeta")
+        .onDisappear { choosingFolder = false; folderIdentity = nil; folderScope = nil }
     }
 
     @ViewBuilder private func workspaceSection(_ snapshot: ProductCoordinationSnapshot) -> some View {
@@ -134,7 +143,9 @@ struct ProductCoordinationView: View {
                             pinned: pinned) { loadOrganization() }
                     }
                 }.disabled(!mayChange || draftRevision != snapshot.binding.revision || workspaceID.isEmpty)
-                Button("Añadir carpeta…", systemImage: "folder.badge.plus") { choosingFolder = true }
+                Button("Añadir carpeta…", systemImage: "folder.badge.plus") {
+                    folderIdentity = store.viewIdentity; folderScope = store.scope; choosingFolder = true
+                }
                     .disabled(!mayChange)
             }
             Text("Al cambiar de carpeta se retiran los accesos compartidos de esta conversación. Cada acción conserva su propia autorización.")
@@ -282,7 +293,7 @@ struct ProductCoordinationView: View {
                         Text(workspace.name).font(.headline)
                         Spacer()
                         Button("Nueva conversación aquí", systemImage: "plus") { onCreateSession(workspace.id) }
-                            .disabled(!canManage || store.blocksInteraction)
+                            .disabled(!canCreateSession || store.isChanging)
                     }
                     ForEach(snapshot.sessions.filter { $0.workspaceID == workspace.id }) { session in
                         HStack {

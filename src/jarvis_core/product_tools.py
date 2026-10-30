@@ -11,12 +11,13 @@ from jsonschema import Draft202012Validator, ValidationError
 from jarvis_core.product_interactions import ProductInteractionError
 from jarvis_core.product_management import workspace_key
 from jarvis_core.product_projects import ProjectError
-from jarvis_core.runtime import ToolDefinition, ToolResult
+from jarvis_core.runtime import ToolDefinition, ToolResult, current_dispatch_operation
 from jarvis_core.session_coordination_types import CoordinationError
 from jarvis_core.state import SessionRef
 from jarvis_core.tools import (
     ToolError,
     ToolSpec,
+    check_tool_authority,
     current_tool_operation,
     revalidate_committed_tool_authority,
 )
@@ -244,7 +245,9 @@ class ProductTools:
             raise ToolError("invalid_product_arguments") from None
 
     async def execute(self, name, arguments, cancellation):
-        operation = current_tool_operation()
+        operation = current_dispatch_operation()
+        if operation is None or operation.tool_name != name:
+            raise ToolError("product_runtime_context_required")
         service = self.service
         ref = service._refs[operation.run_id]
         identity = service._run_clients.get(operation.run_id)
@@ -256,6 +259,7 @@ class ProductTools:
         if cancellation.is_set():
             raise asyncio.CancelledError()
         value = json.loads(operation.arguments_json)
+        needs_authority = CONTRACTS[name][2] or service.host_tools.get(operation.run_id) is not None
         _, scope, actor = product.context(
             {"session_id": ref.session_id, "temporary": ref.temporary, "run_id": operation.run_id},
             identity=identity,
@@ -266,9 +270,14 @@ class ProductTools:
                 raise asyncio.CancelledError()
             service._assert_run_client(operation.run_id)
             product.guard_run(operation.run_id)
-            revalidate_committed_tool_authority(name, arguments)
+            if needs_authority:
+                revalidate_committed_tool_authority(name, arguments)
 
         try:
+            if needs_authority:
+                if current_tool_operation() != operation:
+                    raise ToolError("tool_authority_mismatch")
+                check_tool_authority(name, arguments, commit=True)
             guard()
             if name == "request_user_input":
                 row = product.interactions.create_question(scope, actor, value["questions"])

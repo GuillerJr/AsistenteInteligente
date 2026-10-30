@@ -684,6 +684,12 @@ class ProductManagementAPI:
             result = api.select_suggestion(
                 scope, actor, identity, revision, selected["suggestion_id"]
             )
+        elif kind == "suggestion.dismiss":
+            params(selected, set())
+            row = api.get(scope, actor, identity)
+            if row["kind"] != "suggestions":
+                raise ProductInteractionError("product_suggestions_invalid")
+            result = api.cancel(scope, actor, identity, revision)
         elif kind == "panel.set":
             params(selected, {"panel"}, {"panel"})
             result = api.set_panel(scope, actor, expected_revision=revision, **selected)

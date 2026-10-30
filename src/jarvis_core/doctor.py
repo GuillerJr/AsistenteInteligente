@@ -43,6 +43,7 @@ _PATHS = {
     "plugins": ("profiles", "plugins.json"),
     "telegram": ("telegram", "telegram.json"),
     "automations": ("automation.json",),
+    "product": ("product-recovery.json",),
 }
 _ROLES = (*_PATHS, "configuration_portable", "restore_record")
 _COUNTS = frozenset(
@@ -157,12 +158,33 @@ class DoctorSqliteImage:
 
 
 @dataclass(frozen=True)
+class DoctorProductImage:
+    """Generated portable product JSON, scoped by its host-owned image bundle."""
+
+    disposition: str
+    data: bytes | None = field(default=None, repr=False)
+    sha256: str | None = None
+
+    def __post_init__(self):
+        if self.disposition == "image":
+            valid = (type(self.data) is bytes and isinstance(self.sha256, str)
+                     and re.fullmatch(r"[a-f0-9]{64}", self.sha256) is not None)
+        elif self.disposition == "absent":
+            valid = self.data is None and self.sha256 is None
+        else:
+            valid = False
+        if not valid:
+            raise DoctorError("doctor_image_invalid")
+
+
+@dataclass(frozen=True)
 class DoctorSqliteImages:
     profile_id: str
     generation: int
     profile_identity: tuple[int, int]
     cut_id: str
     images: tuple[DoctorSqliteImage, ...]
+    product: DoctorProductImage | None = field(default=None, repr=False)
 
     def __post_init__(self):
         if (
@@ -175,6 +197,7 @@ class DoctorSqliteImages:
             or len(self.images) > len(_SQLITE)
             or any(type(image) is not DoctorSqliteImage for image in self.images)
             or len({image.role for image in self.images}) != len(self.images)
+            or (self.product is not None and type(self.product) is not DoctorProductImage)
         ):
             raise DoctorError("doctor_images_invalid")
 
@@ -185,12 +208,14 @@ class DoctorLimits:
     json_bytes: int = 4 * 1024 * 1024
     total_bytes: int = 128 * 1024 * 1024
     timeout_seconds: float = 20
+    product_bytes: int = 96 * 1024 * 1024
 
     def __post_init__(self):
         for value, maximum in (
             (self.sqlite_bytes, 64 * 1024 * 1024),
             (self.json_bytes, 4 * 1024 * 1024),
             (self.total_bytes, 128 * 1024 * 1024),
+            (self.product_bytes, 96 * 1024 * 1024),
         ):
             if type(value) is not int or not 100 <= value <= maximum:
                 raise DoctorError("doctor_limits_invalid")
@@ -500,7 +525,7 @@ def _object(pairs):
     return result
 
 
-def _json_check(role, data, context):
+def _json_check(role, data, context, *, history_only=False):
     context.checkpoint("json_validation")
     try:
         value = json.loads(
@@ -510,16 +535,36 @@ def _json_check(role, data, context):
                 DoctorError("doctor_json_invalid")
             ),
         )
-        {
-            "agents": validate_agents,
-            "skills": validate_skills,
-            "plugins": validate_plugins,
-            "telegram": validate_telegram,
-            "automations": validate_automation_document,
-        }[role](value)
+        if role == "product":
+            from jarvis_core.product_recovery import validate_product_document
+            validate_product_document(value)
+        else:
+            {
+                "agents": validate_agents,
+                "skills": validate_skills,
+                "plugins": validate_plugins,
+                "telegram": validate_telegram,
+                "automations": validate_automation_document,
+            }[role](value)
+        if role == "product" and history_only and value["state"] != "restored_history":
+            raise DoctorError("doctor_json_invalid")
     except (ValueError, UnicodeError, RecursionError, KeyError, TypeError):
         raise DoctorError("doctor_json_invalid") from None
     context.checkpoint("json_validated")
+    if role == "product":
+        archives = value["archives"]
+        counts = (
+            ("product_archives", len(archives)),
+            ("product_snapshot_blobs", len(value["blobs"])),
+            ("product_project_history", sum(len(row["source"]["projects"]["projects"])
+                for row in archives if row["source"]["projects"] is not None)),
+            ("product_interaction_history", sum(
+                len(row["source"]["interactions"]["product_records"])
+                for row in archives if row["source"]["interactions"] is not None)),
+            ("product_session_history", sum(len(row["source"]["coordination"]["session_links"])
+                for row in archives if row["source"]["coordination"] is not None)),
+        )
+        return 1, tuple(sorted(counts)), frozenset()
     if role == "agents":
         counts = (("agents", len(value["agents"])),)
     elif role == "skills":
@@ -729,6 +774,10 @@ def _select_images(inventory, context, bundle):
     images = {image.role: image for image in bundle.images}
     if set(images) != set(inventory.roles).intersection(_SQLITE):
         raise _ImagesRejected("doctor_snapshot_roles_mismatch")
+    if (bundle.product is None) != ("product" not in inventory.roles):
+        raise _ImagesRejected("doctor_snapshot_roles_mismatch")
+    if bundle.product is not None:
+        images["product"] = bundle.product
     context.checkpoint("images_scoped")
     return images
 
@@ -773,6 +822,36 @@ def _resource(inventory, root, role, context, inspector, facts, images):
     image = images.get(role)
     try:
         context.checkpoint("resource_metadata")
+        if role == "product":
+            if image is not None:
+                if image.disposition == "absent":
+                    return DoctorCheck(role, "absent", "doctor_resource_absent")
+                if inventory.coherence == "unverified" or inventory.blockers:
+                    raise DoctorError("doctor_needs_quiescent_snapshot")
+                if len(image.data) > context.limits.product_bytes:
+                    raise DoctorError("doctor_resource_limit")
+                context.admit_bytes(len(image.data))
+                digest = hashlib.sha256()
+                for start in range(0, len(image.data), 65536):
+                    context.checkpoint("product_image_hash")
+                    digest.update(memoryview(image.data)[start:start + 65536])
+                if digest.hexdigest() != image.sha256:
+                    raise DoctorError("doctor_snapshot_hash_mismatch")
+                version, counts, _ = _json_check(role, image.data, context)
+                return DoctorCheck(role, "ok", format_version=version, counts=counts,
+                                   inspection_source="host_ram_snapshot",
+                                   snapshot_byte_length=len(image.data),
+                                   snapshot_sha256=image.sha256)
+            # Offline inspection cannot present an old sidecar as a complete
+            # view of current databases/project registries. Request the host's
+            # coherent generated image instead of opening live product stores.
+            for name in ("session-coordination.sqlite3", "product-interactions.sqlite3",
+                         "projects"):
+                try:
+                    os.stat(name, dir_fd=root, follow_symlinks=False)
+                except FileNotFoundError:
+                    continue
+                raise DoctorError("doctor_needs_quiescent_snapshot")
         parts = _PATHS[role]
         parent = _open_parent(root, parts[:-1])
         name = parts[-1]
@@ -796,7 +875,7 @@ def _resource(inventory, root, role, context, inspector, facts, images):
             image.disposition == "absent" or image.source_identity != _identity(info)
         ):
             raise _Stop("doctor_snapshot_source_changed")
-        limit = (
+        limit = context.limits.product_bytes if role == "product" else (
             context.limits.sqlite_bytes
             if role in _SQLITE
             else min(
@@ -860,7 +939,8 @@ def _resource(inventory, root, role, context, inspector, facts, images):
                 **base,
             )
         else:
-            version, counts, references = _json_check(role, bytes(data), context)
+            version, counts, references = _json_check(
+                role, bytes(data), context, history_only=role == "product")
             check = DoctorCheck(
                 role, "ok", format_version=version, counts=counts, **base
             )

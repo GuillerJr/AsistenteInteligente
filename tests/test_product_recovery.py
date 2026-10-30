@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import sqlite3
+import threading
 from dataclasses import asdict, replace
 
 import pytest
@@ -349,3 +350,102 @@ async def test_stable_unknown_project_journal_can_be_backed_up_without_replaying
     archived = captured["archives"][0]["source"]["projects"]
     assert archived["operations"]["8" * 32]["receipt"]["effect_status"] == "unknown"
     assert store.operation("8" * 32)["phase"] == "dispatched"
+
+
+def test_doctor_admits_absent_product_role_without_creating_sources(tmp_path):
+    from jarvis_core.doctor import DoctorContext, DoctorInventory, inspect_report
+
+    root = private_profile(tmp_path)
+    info = root.stat()
+    selected = DoctorInventory("product_fixture", 1, root, (info.st_dev, info.st_ino),
+                               "offline_quiescent", roles=("product",))
+    context = DoctorContext(lambda _stage, write=False: None, threading.Event())
+    report = inspect_report(selected, context)
+    assert report.status == "uninitialized"
+    assert report.checks[0].role == "product" and report.checks[0].status == "absent"
+    assert not tuple(root.iterdir())
+
+
+@pytest.mark.asyncio
+async def test_doctor_uses_frozen_virtual_product_image_without_reading_live_database(
+        service, monkeypatch):
+    from jarvis_core.doctor import DoctorContext, DoctorInventory, inspect_report
+    from jarvis_core.host_profile import freeze_sources
+
+    path = populate_coordination(service.directory)
+    before = path.read_bytes()
+    with service.profile_gate.exclusive() as cut:
+        frozen = freeze_sources(service, cut)
+        context = DoctorContext(lambda _stage, write=False: frozen.assert_current(cut),
+                                threading.Event())
+        images = frozen.doctor_images(cut, context, RecoveryLimits())
+        selected = DoctorInventory(frozen.scope.profile_id, frozen.scope.generation,
+            service.directory, (frozen.root_identity.device, frozen.root_identity.inode),
+            "coherent_snapshot", roles=tuple(row["role"] for row in frozen.metadata),
+            cut_id=cut.cut_id)
+        assert images.product is not None and images.product.disposition == "image"
+        import os
+        original_open = os.open
+
+        def no_source_reads(name, *args, **kwargs):
+            assert os.fspath(name) not in {str(path), path.name, SIDECAR}
+            return original_open(name, *args, **kwargs)
+        monkeypatch.setattr(os, "open", no_source_reads)
+        report = inspect_report(selected, context, sqlite_images=images)
+    product = next(check for check in report.checks if check.role == "product")
+    assert product.status == "ok" and product.inspection_source == "host_ram_snapshot"
+    assert dict(product.counts)["product_session_history"] == 1
+    assert "/synthetic/external" not in json.dumps(report.to_dict())
+    assert "Origen histórico" not in json.dumps(report.to_dict())
+    assert path.read_bytes() == before
+
+
+def test_doctor_offline_does_not_silently_omit_live_product_databases(tmp_path, monkeypatch):
+    from jarvis_core.doctor import DoctorContext, DoctorInventory, inspect_report
+
+    root = private_profile(tmp_path)
+    source = populate_coordination(root)
+    before = source.read_bytes()
+    info = root.stat()
+    selected = DoctorInventory("product_fixture", 1, root, (info.st_dev, info.st_ino),
+                               "offline_quiescent", roles=("product",))
+    monkeypatch.setattr(sqlite3, "connect", lambda *_args, **_kwargs: pytest.fail(
+        "Doctor no puede abrir ni construir un store productivo."))
+    context = DoctorContext(lambda _stage, write=False: None, threading.Event())
+    report = inspect_report(selected, context)
+    assert report.status == "blocked"
+    assert report.checks[0].code == "doctor_needs_quiescent_snapshot"
+    assert source.read_bytes() == before
+
+
+def test_doctor_product_ram_hash_and_global_quota_are_checked_before_validation(tmp_path):
+    from jarvis_core.doctor import (
+        DoctorContext,
+        DoctorInventory,
+        DoctorLimits,
+        DoctorProductImage,
+        DoctorSqliteImages,
+        inspect_report,
+    )
+
+    root = private_profile(tmp_path)
+    populate_coordination(root)
+    data = export_product_state(root)
+    info = root.stat()
+    identity = info.st_dev, info.st_ino
+    selected = DoctorInventory("product_fixture", 1, root, identity, "coherent_snapshot",
+                               roles=("product",), cut_id="product_cut")
+    image = DoctorProductImage("image", data, "0" * 64)
+    bundle = DoctorSqliteImages(selected.profile_id, selected.generation, identity,
+                                selected.cut_id, (), image)
+    context = DoctorContext(lambda _stage, write=False: None, threading.Event())
+    report = inspect_report(selected, context, sqlite_images=bundle)
+    assert report.status == "corrupt"
+    assert report.checks[0].code == "doctor_snapshot_hash_mismatch"
+    assert "/synthetic/external" not in json.dumps(report.to_dict())
+    image = DoctorProductImage("image", data, hashlib.sha256(data).hexdigest())
+    bundle = replace(bundle, product=image)
+    context = DoctorContext(lambda _stage, write=False: None, threading.Event(),
+                            limits=DoctorLimits(total_bytes=100))
+    report = inspect_report(selected, context, sqlite_images=bundle)
+    assert report.status == "blocked" and report.checks[0].code == "doctor_byte_budget"

@@ -256,9 +256,38 @@ async def test_cancellation_retains_session_until_cleanup_and_other_sessions_are
     assert (await settled(other)).answer == "other"
     assert admitted == ["first", "other"] and second.phase is RunPhase.QUEUED
     release.set()
-    assert (await settled(first)).status == "cancelled"
+    result = await settled(first)
+    assert result.status == "cancelled" and result.cleanup_confirmed
     assert (await settled(second)).answer == "second"
     assert admitted == ["first", "other", "second"]
+
+
+async def test_read_callback_attribution_is_exact_but_cannot_grant_effect_authority():
+    from jarvis_core.runtime import current_dispatch_operation
+    from jarvis_core.tools import ToolError, current_tool_operation
+
+    seen = []
+
+    class Provider:
+        async def next_step(self, context):
+            return (ToolProposal("read_metadata", {"value": context.message})
+                    if not context.tool_results else FinalAnswer("Terminado"))
+
+    async def execute(arguments, cancellation):
+        operation = current_dispatch_operation()
+        assert operation is not None and operation.tool_name == "read_metadata"
+        seen.append(operation)
+        with pytest.raises(ToolError, match="tool_authority_required"):
+            current_tool_operation()
+        return ToolResult("read_metadata", True, True, output="Sólo metadatos")
+
+    runtime = AgentRuntime(Provider(), [ToolDefinition("read_metadata", lambda value: None,
+                                                      execute, requires_confirmation=False)])
+    handle = runtime.start("same", "Dato")
+    result = await settled(handle)
+    assert result.status == "completed" and result.cleanup_confirmed
+    assert len(seen) == 1 and seen[0].run_id == handle.run_id and seen[0].session_id == "same"
+    assert current_dispatch_operation() is None
 
 
 async def test_cancel_while_waiting_for_approval_prevents_effect_even_if_gate_ignores_cancel():

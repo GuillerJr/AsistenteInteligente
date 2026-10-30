@@ -225,3 +225,22 @@ async def test_client_exposes_no_approval_mutation_route():
     with pytest.raises(ProductClientError, match="method_unavailable"):
         await wire.client()._call("approvals.decide", {"allow": True})
     assert wire.calls == []
+
+
+@pytest.mark.parametrize("changed", ["session_id", "run_id", "digest"])
+async def test_approval_review_rejects_foreign_scope_or_invalid_digest(changed):
+    row = {"approval_id": "d" * 32, "session_id": SESSION, "run_id": RUN,
+           "tool_name": "synthetic_action", "digest": "e" * 64,
+           "arguments": {"text": "SYNTHETIC_PRIVATE_ARGUMENT"}}
+    row[changed] = "f" * 32 if changed != "digest" else "invalid-digest"
+    calls = []
+
+    async def request(method, params):
+        calls.append((method, params))
+        return {"approvals": [row]}
+
+    with pytest.raises(ProductClientError, match="response_invalid") as captured:
+        await ProductClient(request).approvals(ClientSession(SESSION), RUN)
+    assert "SYNTHETIC_PRIVATE_ARGUMENT" not in str(captured.value)
+    assert calls == [("approvals.list", {"session_id": SESSION, "temporary": False,
+                                         "run_id": RUN})]

@@ -236,7 +236,8 @@ import SwiftUI
                     ProductCoordinationView(store: store.productCoordination,
                         onCreateSession: { id in Task { await store.createProductSession(workspaceID: id) } },
                         onSelectSession: { scope in Task { await store.selectSession(scope.sessionID) } },
-                        onRunStarted: store.observeProductRun, canManage: store.canChangeSession)
+                        onRunStarted: store.observeProductRun, canManage: store.canChangeSession,
+                        canCreateSession: store.canNavigateSession)
                 }
                 else if inspector.selection == "projects" {
                     ProductProjectsView(store: store.productProjects,

@@ -31,6 +31,10 @@ BASE_TOOL_NAMES = {
     "desktop_resolve", "desktop_windows", "desktop_observe", "desktop_action",
     "browser_open", "browser_attach", "browser_observe", "browser_action",
     "browser_navigate", "browser_history", "browser_close", "browser_search", "browser_download",
+    "request_user_input", "report_progress", "report_presence", "suggest_next_actions",
+    "publish_panel", "agent_directory", "agent_inbox", "agent_message_send",
+    "project_list", "project_register", "project_inspect", "project_log", "project_worktrees",
+    "project_operation", "github_connection", "github_pull_request", "github_publish",
 }
 
 SERVER = r"""

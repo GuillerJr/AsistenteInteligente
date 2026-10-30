@@ -1,6 +1,7 @@
 """Provider counters are correlated wire data, never model estimates or USD."""
 
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -9,7 +10,7 @@ from jarvis_core.codex import CodexClient
 
 class CounterPeer(CodexClient):
     def __init__(self, directory, samples):
-        super().__init__(sys.executable, directory)
+        super().__init__(Path(sys.executable), directory)
         self.samples = iter(samples)
         self.turn = 0
 

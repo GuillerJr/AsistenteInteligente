@@ -284,6 +284,7 @@ import Observation
             if unknown { uncertain.insert(key) } else { pending.removeValue(forKey: scope) }
             guard current == version else { return nil }
             responseUnconfirmed = unknown
+            if !unknown { pendingRequestID = nil }
             errorMessage = unknown ? "El inicio quedó sin confirmar. Sólo se consultará su identidad; no se reenviará."
                 : Self.message(error)
             return nil

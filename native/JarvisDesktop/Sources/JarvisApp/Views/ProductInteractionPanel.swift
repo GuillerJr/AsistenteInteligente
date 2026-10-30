@@ -76,12 +76,17 @@ struct ProductInteractionPanel: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Puedes continuar con…").font(.headline)
                 ForEach(store.suggestions) { row in
-                    ForEach(row.suggestions) { suggestion in
-                        Button(suggestion.label, systemImage: "text.badge.plus") {
-                            Task {
-                                if let text = await store.selectSuggestion(row, suggestionID: suggestion.id) { onDraft(text) }
-                            }
-                        }.help(suggestion.text).disabled(store.blocksInteraction)
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(row.suggestions) { suggestion in
+                            Button(suggestion.label, systemImage: "text.badge.plus") {
+                                Task {
+                                    if let text = await store.selectSuggestion(row, suggestionID: suggestion.id) { onDraft(text) }
+                                }
+                            }.help(suggestion.text).disabled(store.blocksInteraction)
+                        }
+                        Button("Descartar sugerencias") { Task { _ = await store.dismissSuggestions(row) } }
+                            .controlSize(.small).disabled(store.blocksInteraction)
+                            .help("Oculta estas opciones sin añadir un borrador ni enviar mensajes.")
                     }
                 }
                 Text("La sugerencia se coloca en tu borrador para que la revises.").font(.caption).foregroundStyle(.secondary)

@@ -88,6 +88,10 @@ class ProductPeer:
             self.process_reply = await on_tool_call("process_run", {
                 "argv": ["/bin/cat"], "wait_ms": 10, "timeout_seconds": 30,
             })
+        elif message == "approval_attribution":
+            await on_tool_call("workspace_write", {
+                "path": "approved-by-owner.txt", "text": "Efecto sintético aprobado",
+            })
         return {"thread_id": thread_id, "answer": "Respuesta sintética terminada"}
 
     async def aclose(self):
@@ -249,6 +253,55 @@ async def test_collaboration_read_only_upgrade_and_identity_revocation_use_signe
     with pytest.raises(RpcError):
         await other.call("sessions.messages", ref)
     assert len(peer.calls) == 1
+
+
+async def test_approval_events_attribute_signed_requester_and_approver_without_identity_grant(
+        product_connection):
+    service, owner, _, _, owner_key, clients = product_connection
+    workspace = (await initialize(owner))["workspaces"][0]
+    ref = await new_session(owner, workspace_id=workspace["workspace_id"])
+    requester = ClientIdentity.generate()
+    review = await owner.call("clients.review", {"public_key": requester.public_key,
+                                                 "scope": "owner", "expected_revision": 1})
+    await owner.call("clients.admit", {key: review[key]
+                                       for key in ("review_id", "review_digest")})
+    other = LocalRpcClient(service.directory, identity=requester, max_frame_bytes=1024 * 1024)
+    clients.append(other)
+    await other.connect()
+    await coordinate(owner, ref, "session.member", {
+        "member_id": requester.client_id, "role": "collaborate", "expected_revision": 1,
+    })
+    started = await other.call("runs.start", {**ref, "message": "approval_attribution",
+                                              "request_id": uuid4().hex})
+    approval = await pending_approval(owner, ref, started["run_id"])
+    assert approval["requester_client_id"] == requester.client_id
+    assert approval["requester_client_id"] != owner_key.client_id
+    destination = Path(workspace["path"]) / "approved-by-owner.txt"
+    assert not destination.exists()
+    # A mismatched digest cannot produce an approval event or release the effect.
+    stale_digest = "0" * 64 if approval["digest"] != "0" * 64 else "1" * 64
+    assert await decide(owner, ref, {**approval, "digest": stale_digest}) == {"accepted": False}
+    before = (await owner.call("events.poll", {**ref, "run_id": started["run_id"]}))["events"]
+    assert not [row for row in before if row["kind"].startswith("approval.decision_")]
+    assert not destination.exists()
+    assert await decide(owner, ref, approval) == {"accepted": True}
+    receipt = await settle(owner, ref, started["run_id"])
+    assert receipt["status"] == "completed" and receipt["cleanup_confirmed"] is True
+    assert destination.read_text() == "Efecto sintético aprobado"
+    events = (await owner.call("events.poll", {**ref, "run_id": started["run_id"]}))["events"]
+    requested = [row["payload"] for row in events if row["kind"] == "approval.decision_requested"]
+    recorded = [row["payload"] for row in events if row["kind"] == "approval.decision_recorded"]
+    assert requested == [{
+        "approval_id": approval["approval_id"], "digest": approval["digest"],
+        "requester_client_id": requester.client_id, "approver_client_id": owner_key.client_id,
+        "allow": True, "remember": "operation", "grants_model_identity": False,
+    }]
+    assert recorded == [{"approval_id": approval["approval_id"], "accepted": True,
+                         "approver_client_id": owner_key.client_id}]
+    assert await decide(owner, ref, approval) == {"accepted": False}
+    after = (await owner.call("events.poll", {**ref, "run_id": started["run_id"]}))["events"]
+    assert [row for row in after if row["kind"].startswith("approval.decision_")] == [
+        row for row in events if row["kind"].startswith("approval.decision_")]
 
 
 async def test_temporary_product_initialization_and_chat_never_open_durable_chat_databases(

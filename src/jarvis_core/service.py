@@ -732,7 +732,17 @@ class JarvisService(SessionWorkspaceMixin, ProductManagementAPI,
                             workspace = self.bind_product_workspace(identity, ref)
                             if workspace:
                                 self._product_workspace_context.set(workspace)
-                        return await callback(params)
+                        response = await callback(params)
+                        # A membership/key can be revoked while a bounded read
+                        # awaits Git/network I/O. Never release its result under
+                        # the authority that was valid only before that await.
+                        if identity is not None:
+                            self.client_authority.lookup(identity)
+                            if (self.product.enabled and "session_id" in params
+                                    and name != "sessions.delete"):
+                                self.product.check_access(identity, self._ref(params),
+                                                           write=name not in READ_RPCS)
+                        return response
                 except (HostProfileError, ProviderChoiceError) as error:
                     raise RpcError(-32037, error.code) from None
                 except ClientIdentityError:

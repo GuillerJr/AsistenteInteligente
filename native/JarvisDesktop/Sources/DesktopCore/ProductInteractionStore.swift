@@ -177,6 +177,17 @@ import Observation
             }
         return result?["draft_text"].string
     }
+    public func dismissSuggestions(_ row: ProductInteractionRecord) async -> Bool {
+        guard owns(row), row.kind == "suggestions", row.status == "active", row.isCurrent else { return false }
+        let result = await perform("suggestion.dismiss", arguments: ["id": .string(row.id),
+            "revision": .number(Double(row.revision))], runID: row.scopeRunID,
+            id: row.id, revision: row.revision) { value in
+                guard value["id"].string == row.id, value["kind"].string == "suggestions",
+                      value["status"].string == "cancelled", value["revision"].integer == row.revision + 1,
+                      value["payload"]["execution"].string == "draft_only" else { throw RPCFailure.invalidResponse }
+            }
+        return result != nil
+    }
     public func configureNotifications(enabled: Bool, silenced: Bool, expectedIdentity: String? = nil) async {
         if let expectedIdentity, expectedIdentity != viewIdentity { return }
         guard let preferences = snapshot?.notificationPreferences else { return }

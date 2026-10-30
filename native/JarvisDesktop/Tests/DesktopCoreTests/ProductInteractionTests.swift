@@ -8,6 +8,14 @@ private enum ProductInteractionFixture {
     static let run = String(repeating: "c", count: 32)
     static let questionID = String(repeating: "d", count: 32)
     static let scope = SessionScope(sessionID: session, temporary: false)
+    static func suggestions(status: String = "active", revision: Int = 1) -> RPCValue {
+        .object(["id": .string("suggestions_a"), "kind": .string("suggestions"),
+            "scope_run_id": .string(run), "revision": .number(Double(revision)), "status": .string(status),
+            "expires_ns": .number((Date().timeIntervalSince1970 + 900) * 1_000_000_000),
+            "payload": .object(["execution": .string("draft_only"), "suggestions": .array([
+                .object(["id": .string("continue_a"), "label": .string("Continuar"),
+                    "text": .string("Borrador sintético para revisar")])])])])
+    }
     static func question(_ changes: [String: RPCValue] = [:]) -> RPCValue {
         let options: [RPCValue] = ["simple", "expanded"].map { id in .object([
             "id": .string(id), "label": .string(id == "simple" ? "Simple" : "Amplio"),
@@ -42,6 +50,9 @@ private actor ProductInteractionWire {
     private var actionStarted = false
     private var loseAnswerACK = false
     private var generation = 0
+    private var showSuggestions = false
+    private var suggestionDismissed = false
+    func useSuggestions() { showSuggestions = true }
     func holdNextRead() { holdRead = true; readStarted = false }
     func holdNextAction() { holdAction = true; actionStarted = false }
     func loseACK() { loseAnswerACK = true }
@@ -58,7 +69,9 @@ private actor ProductInteractionWire {
             readStarted = true
             if holdRead { holdRead = false; await withCheckedContinuation { readGate = $0 } }
             return ProductInteractionFixture.snapshot(session: params["session_id"]?.string ?? "",
-                run: params["run_id"]?.string ?? ProductInteractionFixture.run, generation: generation)
+                run: params["run_id"]?.string ?? ProductInteractionFixture.run, generation: generation,
+                records: showSuggestions ? [ProductInteractionFixture.suggestions(
+                    status: suggestionDismissed ? "cancelled" : "active", revision: suggestionDismissed ? 2 : 1)] : nil)
         }
         guard method == "product.interaction" else { throw RPCFailure.invalidResponse }
         actionStarted = true
@@ -68,6 +81,11 @@ private actor ProductInteractionWire {
         if params["kind"]?.string == "question.answer" {
             return .object(["result": .object(["id": args["id"], "status": .string("answered"),
                 "revision": .number(Double((args["revision"].integer ?? 0) + 1)), "grants_tool_approval": .bool(false)])])
+        }
+        if params["kind"]?.string == "suggestion.dismiss" {
+            XCTAssertEqual(args["revision"].integer, 1)
+            suggestionDismissed = true
+            return .object(["result": ProductInteractionFixture.suggestions(status: "cancelled", revision: 2)])
         }
         throw RPCFailure.invalidResponse
     }
@@ -223,5 +241,26 @@ final class ProductInteractionTests: XCTestCase {
         await store.configureNotifications(enabled: true, silenced: false, expectedIdentity: expectedIdentity)
         XCTAssertFalse(saved)
         let count = await wire.actionCount(); XCTAssertEqual(count, 0)
+    }
+
+    @MainActor func testDismissSuggestionsBindsOriginalScopeAndRevisionWithoutSelectingOrSendingDraft() async throws {
+        let wire = ProductInteractionWire(), store = ProductInteractionStore()
+        store.configure(request: { try await wire.request($0, $1) })
+        await wire.useSuggestions()
+        store.setScope(ProductInteractionFixture.scope); await store.refresh()
+        let row = try XCTUnwrap(store.suggestions.first)
+        let dismissed = await store.dismissSuggestions(row); XCTAssertTrue(dismissed)
+        XCTAssertTrue(store.suggestions.isEmpty)
+        let action = await wire.lastAction()
+        XCTAssertEqual(action?["kind"], .string("suggestion.dismiss"))
+        XCTAssertEqual(action?["session_id"], .string(ProductInteractionFixture.session))
+        XCTAssertEqual(action?["run_id"], .string(ProductInteractionFixture.run))
+        XCTAssertEqual(action?["arguments"]?["revision"], .number(1))
+        XCTAssertNil(action?["arguments"]?["suggestion_id"].string)
+        let repeated = await store.dismissSuggestions(row); XCTAssertFalse(repeated)
+        store.setScope(SessionScope(sessionID: ProductInteractionFixture.otherSession, temporary: false))
+        await store.refresh()
+        let stale = await store.dismissSuggestions(row); XCTAssertFalse(stale)
+        let writes = await wire.actionCount(); XCTAssertEqual(writes, 1)
     }
 }

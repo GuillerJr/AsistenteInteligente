@@ -233,7 +233,7 @@ async def test_three_child_cost_slices_are_exact_decimals_and_unknown_billing_st
     assert sum(slices) <= Decimal("1")
     summary = await budget(client, ref)
     assert summary["committed_tokens"] == summary["actual_tokens"] == 6
-    assert summary["committed_cost"] == "1"
+    assert Decimal(summary["committed_cost"]) == sum(slices) == Decimal("0.999999999999")
     assert summary["actual_cost"] is None and not summary["cost_known"]
     assert len(peer.calls) == 3
 

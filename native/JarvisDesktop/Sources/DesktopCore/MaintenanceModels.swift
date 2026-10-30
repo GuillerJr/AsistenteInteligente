@@ -3,12 +3,13 @@ import Foundation
 public enum MaintenanceValidation {
     static let legacyRoles = Set(["state", "memory", "schedules", "agents", "skills", "telegram", "configuration_portable"])
     static let pluginRoles = legacyRoles.union(["plugins"])
-    static let roles = pluginRoles.union(["automations"])
+    static let automationRoles = pluginRoles.union(["automations"])
+    static let roles = automationRoles.union(["product"])
     static let exclusions = Set(["provider_credentials_and_state", "transport_tokens_sockets_and_locks", "mcp_programs_arguments_and_runtime_homes", "external_and_internal_workspace_files", "external_skill_resources", "temporary_sessions_and_memory", "live_approvals_and_grants", "running_processes_audio_and_network_clients", "host_maintenance_journal"])
     static let legacyDisarms = Set(["provider_threads_and_bindings_cleared", "workspace_unselected", "mcp_programs_absent", "schedules_disabled", "telegram_routes_disabled", "skills_disabled", "unfinished_records_interrupted_unknown_no_replay", "fresh_transport_required", "fresh_channel_pairing_and_delivery_cutoff_required", "memory_workspace_association_requires_separate_review"])
     static let disarms = legacyDisarms.union(["automation_hooks_disabled_and_checkpoints_disarmed"])
     static func acceptsRoles(_ actual: Set<String>, includesConfiguration: Bool) -> Bool {
-        [legacyRoles, pluginRoles, roles].contains { expected in
+        [legacyRoles, pluginRoles, automationRoles, roles].contains { expected in
             actual == (includesConfiguration ? expected : expected.subtracting(["configuration_portable"]))
         }
     }
@@ -442,7 +443,7 @@ public enum MaintenancePresentation {
         ["awaiting_owner":"Esperando tu aprobación", "quiescing":"Comprobando disponibilidad", "working":"En curso", "complete":"Completada", "staged_disarmed":"Perfil preparado y desarmado", "activated_not_opened":"Perfil activado; aún sin abrir", "cancelled":"Cancelada", "denied":"No autorizada", "failed":"Fallida", "publication_unknown":"Resultado sin confirmar", "cleanup_pending":"Limpieza pendiente"][phase] ?? "Sin confirmar"
     }
     public static func role(_ role: String) -> String {
-        ["state":"Conversaciones y recibos", "memory":"Memoria", "schedules":"Tareas", "agents":"Agentes", "skills":"Skills", "plugins":"Plugins", "automations":"Automatizaciones y flujos", "telegram":"Registro de Telegram", "configuration_portable":"Configuración del respaldo", "cross_references":"Relaciones entre recursos"][role] ?? "Recurso propio"
+        ["state":"Conversaciones y recibos", "memory":"Memoria", "schedules":"Tareas", "agents":"Agentes", "skills":"Skills", "plugins":"Plugins", "automations":"Automatizaciones y flujos", "product":"Producto y coordinación conservados", "telegram":"Registro de Telegram", "configuration_portable":"Configuración del respaldo", "cross_references":"Relaciones entre recursos"][role] ?? "Recurso propio"
     }
 }
 

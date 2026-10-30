@@ -84,6 +84,15 @@ final class ChatStore {
     @ObservationIgnored private var parkedSubmissions: [SessionScope: PendingSubmission] = [:]
     @ObservationIgnored private var runWatchID = UUID()
     @ObservationIgnored private var notificationStores: [String: ProductInteractionStore] = [:]
+    @ObservationIgnored private var pendingProductNavigation: PendingProductNavigation?
+    @ObservationIgnored private var productNavigationReading = false
+    @ObservationIgnored private var productNavigationVersion = 0
+    private struct PendingProductNavigation {
+        let navigation: ProductNotificationNavigation
+        let runtimeID: UUID
+        let namespace: String
+        let version: Int
+    }
     @ObservationIgnored private var stopping = false
     private var nativeCleanupPending = false
     @ObservationIgnored private var awaitingStartupReadiness = false
@@ -410,7 +419,8 @@ final class ChatStore {
         productInteractions.configure(connection)
         productCoordination.configure(connection)
         productProjects.configure(connection)
-        productNotifications.configure(isActive: { [weak self] in self?.runtime.isActive == true && self?.stopping == false },
+        productNotifications.configure(namespace: { [weak self] in self?.productNotificationNamespace },
+            isActive: { [weak self] in self?.runtime.isActive == true && self?.stopping == false },
             onNavigate: { [weak self] navigation in await self?.navigateProductNotification(navigation) })
         telegram.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
         maintenance.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
@@ -544,6 +554,7 @@ final class ChatStore {
         if activeRunID == nil { try await access.refreshApprovals(runID: nil) }
         guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !memoryIntelligence.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         if runPhase == "disconnected", activeRunID != nil { resumeStatus() }
+        await processPendingProductNavigation()
         // Recovery performs only reads. It never selects/creates a
         // conversation, relaunches a child, or resends an operation.
         finishStartupRecovery()
@@ -820,13 +831,41 @@ final class ChatStore {
     }
 
     func navigateProductNotification(_ navigation: ProductNotificationNavigation) async {
-        guard runtime.isActive, !stopping, canNavigateSession else { return }
+        guard runtime.isActive, !stopping, let namespace = productNotificationNamespace else { return }
+        productNavigationVersion += 1
+        pendingProductNavigation = PendingProductNavigation(navigation: navigation,
+            runtimeID: runtime.id, namespace: namespace, version: productNavigationVersion)
+        await processPendingProductNavigation()
+    }
+
+    private var productNotificationNamespace: String? {
+        guard let options, let status = localProfileStatus else { return nil }
+        return ManagementValidation.digest(["jarvis-notifications/1", options.state,
+            status.identity.device, status.identity.inode].joined(separator: "\0"))
+    }
+
+    private func processPendingProductNavigation() async {
+        guard let pending = pendingProductNavigation, !productNavigationReading else { return }
+        guard runtime.isActive, !stopping, pending.runtimeID == runtime.id,
+              productNotificationNamespace == pending.namespace else { pendingProductNavigation = nil; return }
+        guard canNavigateSession else { return }
+        productNavigationReading = true
+        defer { productNavigationReading = false }
         do {
             try await refreshSessions()
-            guard sessions.contains(where: { $0.scope == navigation.scope }) else { return }
-            await selectSession(navigation.scope.sessionID)
-            guard selected?.scope == navigation.scope else { return }
-            productInteractions.setScope(navigation.scope, runID: navigation.runID == "host" ? nil : navigation.runID)
+            guard pendingProductNavigation?.version == pending.version, runtime.isActive,
+                  pending.runtimeID == runtime.id, productNotificationNamespace == pending.namespace else { return }
+            guard sessions.contains(where: { $0.scope == pending.navigation.scope }) else {
+                pendingProductNavigation = nil; return
+            }
+            guard canNavigateSession else { return }
+            await selectSession(pending.navigation.scope.sessionID)
+            guard pendingProductNavigation?.version == pending.version else { return }
+            pendingProductNavigation = nil
+            guard selected?.scope == pending.navigation.scope, runtime.isActive,
+                  pending.runtimeID == runtime.id, productNotificationNamespace == pending.namespace else { return }
+            productInteractions.setScope(pending.navigation.scope,
+                runID: pending.navigation.runID == "host" ? nil : pending.navigation.runID)
             await productInteractions.refresh()
         } catch { report(error) }
     }
@@ -1026,6 +1065,7 @@ final class ChatStore {
     private func refreshProductState() async {
         guard !isRecoveryOnly, ready, !stopping, !handoffPreparing else { return }
         synchronizeProductContext()
+        await productNotifications.reconcileOwnNotifications()
         await productCoordination.refresh()
         cacheProductSidebar()
         await productInteractions.refresh()
@@ -1068,6 +1108,7 @@ final class ChatStore {
     }
 
     private func closeProductSurface(retainingRuns: Bool) {
+        pendingProductNavigation = nil; productNavigationVersion += 1
         runWatchID = UUID()
         productInteractions.close(); productCoordination.close(); productProjects.close()
         productNotifications.close()

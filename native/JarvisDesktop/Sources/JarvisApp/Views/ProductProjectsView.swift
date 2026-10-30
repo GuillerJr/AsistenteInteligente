@@ -7,6 +7,8 @@ struct ProductProjectsView: View {
     let onRunStarted: (String) -> Void
     var canManage = true
     @State private var choosingProject = false
+    @State private var folderIdentity: String?
+    @State private var folderScope: SessionScope?
     @State private var operation = "worktree.create"
     @State private var worktreeName = ""
     @State private var reference = ""
@@ -17,6 +19,7 @@ struct ProductProjectsView: View {
     @State private var githubRepository = "ecommerce"
     @State private var githubToken = ""
     @State private var confirmingGithub = false
+    @State private var githubConfirmationIdentity: String?
     @State private var pullNumber = ""
     @State private var pullTitle = ""
     @State private var pullBody = ""
@@ -94,9 +97,13 @@ struct ProductProjectsView: View {
             if let id = store.pendingRunID { onRunStarted(id) }
         }
         .fileImporter(isPresented: $choosingProject, allowedContentTypes: [.folder], allowsMultipleSelection: false) { result in
-            guard case .success(let urls) = result, let url = urls.first else { return }
-            let access = url.startAccessingSecurityScopedResource()
+            guard case .success(let urls) = result, let url = urls.first,
+                  let identity = folderIdentity, let scope = folderScope,
+                  identity == store.viewIdentity, scope == store.scope else { return }
+            folderIdentity = nil; folderScope = nil
             Task {
+                guard identity == store.viewIdentity, scope == store.scope else { return }
+                let access = url.startAccessingSecurityScopedResource()
                 defer { if access { url.stopAccessingSecurityScopedResource() } }
                 _ = await store.register(path: url.path, name: url.lastPathComponent)
             }
@@ -106,15 +113,24 @@ struct ProductProjectsView: View {
         .confirmationDialog("Conectar GitHub a \(githubOwner)/\(githubRepository)",
                             isPresented: $confirmingGithub, titleVisibility: .visible) {
             Button("Conectar este destino") {
+                guard let identity = githubConfirmationIdentity, identity == store.viewIdentity else {
+                    githubToken = ""; githubConfirmationIdentity = nil; return
+                }
                 let token = githubToken, owner = githubOwner, repository = githubRepository
-                githubToken = ""
-                Task { _ = await store.connectGithub(token: token, owner: owner, repository: repository) }
+                githubToken = ""; githubConfirmationIdentity = nil
+                Task {
+                    guard identity == store.viewIdentity else { return }
+                    _ = await store.connectGithub(token: token, owner: owner, repository: repository)
+                }
             }
-            Button("Cancelar", role: .cancel) { githubToken = "" }
+            Button("Cancelar", role: .cancel) { githubToken = ""; githubConfirmationIdentity = nil }
         } message: {
             Text("Se consultará GitHub para comprobar la cuenta y el repositorio. El token se mantendrá sólo en memoria del servicio; no se enviará al modelo ni se guardará en preferencias.")
         }
-        .onDisappear { githubToken = ""; confirmingGithub = false }
+        .onDisappear {
+            githubToken = ""; confirmingGithub = false; githubConfirmationIdentity = nil
+            choosingProject = false; folderIdentity = nil; folderScope = nil
+        }
     }
 
     private var projectSection: some View {
@@ -130,7 +146,9 @@ struct ProductProjectsView: View {
                 LabeledContent("Tipo", value: project.owned ? "Copia de trabajo creada por Jarvis" : "Repositorio registrado")
                 if project.temporary { Text("Registro temporal en memoria.").font(.caption).foregroundStyle(.secondary) }
             }
-            Button("Registrar carpeta de proyecto…", systemImage: "folder.badge.plus") { choosingProject = true }
+            Button("Registrar carpeta de proyecto…", systemImage: "folder.badge.plus") {
+                folderIdentity = store.viewIdentity; folderScope = store.scope; choosingProject = true
+            }
                 .disabled(!mayChange)
         }
     }
@@ -147,8 +165,10 @@ struct ProductProjectsView: View {
                 Text(page.hasChanges ? "\(page.changeCount) cambios; página desde el cambio \(page.offset + 1)." : "No se observaron cambios en el alcance consultado.")
                 if !page.status.isEmpty { Text(page.status).font(.system(.caption, design: .monospaced)).textSelection(.enabled) }
                 if !page.diff.isEmpty {
-                    TextEditor(text: .constant(page.diff)).font(.system(.caption, design: .monospaced))
-                        .frame(minHeight: 220, maxHeight: 380)
+                    ScrollView([.horizontal, .vertical]) {
+                        Text(page.diff).font(.system(.caption, design: .monospaced))
+                            .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .topLeading)
+                    }.frame(minHeight: 220, maxHeight: 380)
                         .accessibilityLabel("Diff de sólo lectura de esta página")
                 }
                 if page.diffTruncated || page.omittedLargeFiles > 0 {
@@ -234,7 +254,9 @@ struct ProductProjectsView: View {
                 SecureField("Token de GitHub", text: $githubToken).privacySensitive()
                 Text("Introduce tú la credencial. Se borrará del formulario al confirmar, cancelar o cambiar de conversación.")
                     .font(.caption).foregroundStyle(.secondary)
-                Button("Conectar GitHub…") { confirmingGithub = true }
+                Button("Conectar GitHub…") {
+                    githubConfirmationIdentity = store.viewIdentity; confirmingGithub = true
+                }
                     .disabled(!mayChange || githubToken.isEmpty
                         || !ProductProjectValidation.repository(owner: githubOwner, name: githubRepository))
             }
@@ -294,6 +316,7 @@ struct ProductProjectsView: View {
     }
 
     private func clearDrafts() {
+        choosingProject = false; folderIdentity = nil; folderScope = nil; githubConfirmationIdentity = nil
         githubToken = ""; confirmingGithub = false; githubOwner = "GuillerJr"; githubRepository = "ecommerce"
         worktreeName = ""; reference = ""; snapshotID = ""; relativePath = ""; expectedFileSHA = ""
         pullNumber = ""; pullTitle = ""; pullBody = ""; headBranch = ""; baseBranch = "main"; expectedHeadSHA = ""

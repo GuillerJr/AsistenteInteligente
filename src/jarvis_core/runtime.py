@@ -12,7 +12,8 @@ import json
 import math
 import re
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from contextlib import AbstractContextManager, ExitStack
+from contextlib import AbstractContextManager, ExitStack, contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from types import MappingProxyType
@@ -115,6 +116,23 @@ class ApprovalRequest:
     tool_name: str
     arguments_json: str
     digest: str
+
+
+_DISPATCH_OPERATION = ContextVar("jarvis_runtime_dispatch_operation", default=None)
+
+
+def current_dispatch_operation() -> ApprovalRequest | None:
+    """Trusted callback attribution only; possession never grants tool authority."""
+    return _DISPATCH_OPERATION.get()
+
+
+@contextmanager
+def _dispatch_scope(operation):
+    token = _DISPATCH_OPERATION.set(operation)
+    try:
+        yield
+    finally:
+        _DISPATCH_OPERATION.reset(token)
 
 
 @dataclass(frozen=True)
@@ -432,8 +450,7 @@ class AgentRuntime:
                             cancellation_type = await self._finish_cleanup(final_context)
                             if cancellation_type and outcome.error_type is None:
                                 outcome = replace(outcome, error_type=cancellation_type)
-                            if cancellation_type is None:
-                                outcome = replace(outcome, cleanup_confirmed=True)
+                            outcome = replace(outcome, cleanup_confirmed=True)
                         except BaseException as error:
                             self._failed_cleanup_sessions.add(context.session_id)
                             outcome = RunResult(
@@ -447,13 +464,8 @@ class AgentRuntime:
                     else:
                         outcome = replace(outcome, cleanup_confirmed=True)
                     if handle._cancellation.is_set() and outcome.error != "cleanup_failed":
-                        outcome = RunResult(
-                            context.run_id,
-                            "cancelled",
-                            None,
-                            tuple(results),
-                            error_type=outcome.error_type,
-                        )
+                        outcome = replace(outcome, status="cancelled", answer=None,
+                                          answer_source=None, error=None, failure_cause=None)
         except asyncio.CancelledError as error:
             outcome = RunResult(
                 context.run_id, "cancelled", None, tuple(results), error_type=type(error).__name__
@@ -591,6 +603,7 @@ class AgentRuntime:
         # effect. Preserve uncertainty even if it suppresses cancellation and
         # returns a seemingly successful value. Never replay that effect.
         with ExitStack() as scope:
+            scope.enter_context(_dispatch_scope(operation))
             if confirmation and self._execution_scope:
                 try:
                     scope.enter_context(self._execution_scope(operation, grant))

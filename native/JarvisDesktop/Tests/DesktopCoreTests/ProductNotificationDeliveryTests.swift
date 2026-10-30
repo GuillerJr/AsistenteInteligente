@@ -3,6 +3,7 @@ import XCTest
 @testable import DesktopCore
 
 private enum NotificationFixture {
+    static let namespace = String(repeating: "f", count: 64)
     static let session = String(repeating: "a", count: 32)
     static let run = String(repeating: "b", count: 32)
     static let id = String(repeating: "c", count: 32)
@@ -71,16 +72,23 @@ private actor NotificationWire {
     var permissions = 0
     var added: [String] = []
     var removed: [String] = []
+    var visible: [String: String] = [:]
     var validationObserved = false
     var addFollowedValidation = false
     var duringAdd: (@MainActor () async -> Void)?
     func requestPermission() async throws -> Bool { permissions += 1; return true }
     func canDeliver() async -> Bool { true }
-    func add(identifier: String, title: String, body: String) async throws {
-        addFollowedValidation = validationObserved
-        added.append(identifier); await duringAdd?()
+    func existingIdentifiers(namespace: String) async -> [String] {
+        visible.filter { $0.value == namespace }.map(\.key)
     }
-    func remove(identifiers: [String]) { removed += identifiers }
+    func add(identifier: String, title: String, body: String, namespace: String) async throws {
+        addFollowedValidation = validationObserved
+        added.append(identifier); visible[identifier] = namespace; await duringAdd?()
+    }
+    func remove(identifiers: [String]) {
+        removed += identifiers
+        for id in identifiers { visible.removeValue(forKey: id) }
+    }
 }
 
 final class ProductNotificationDeliveryTests: XCTestCase {
@@ -101,7 +109,7 @@ final class ProductNotificationDeliveryTests: XCTestCase {
         let store = await configured(wire, center: center)
         let driver = ProductNotificationDelivery(center: center)
         var navigation: ProductNotificationNavigation?
-        driver.configure(isActive: { true }, onNavigate: { navigation = $0 })
+        driver.configure(namespace: { NotificationFixture.namespace }, isActive: { true }, onNavigate: { navigation = $0 })
         await driver.process(store)
         XCTAssertEqual(center.permissions, 0, "Polling must never request macOS permission")
         XCTAssertTrue(center.addFollowedValidation); XCTAssertEqual(center.added.count, 1)
@@ -115,7 +123,7 @@ final class ProductNotificationDeliveryTests: XCTestCase {
         let wire = NotificationWire(), center = SyntheticNotificationCenter()
         let store = await configured(wire, center: center)
         let driver = ProductNotificationDelivery(center: center)
-        driver.configure(isActive: { true }, onNavigate: { _ in })
+        driver.configure(namespace: { NotificationFixture.namespace }, isActive: { true }, onNavigate: { _ in })
         await wire.invalidate(); await driver.process(store); await driver.process(store)
         XCTAssertTrue(center.added.isEmpty)
         let claims = await wire.count("notification.claim"); XCTAssertEqual(claims, 1)
@@ -124,12 +132,40 @@ final class ProductNotificationDeliveryTests: XCTestCase {
         let wire = NotificationWire(), center = SyntheticNotificationCenter()
         let store = await configured(wire, center: center)
         let driver = ProductNotificationDelivery(center: center)
-        driver.configure(isActive: { true }, onNavigate: { _ in })
+        driver.configure(namespace: { NotificationFixture.namespace }, isActive: { true }, onNavigate: { _ in })
         center.duringAdd = { await wire.revoke(); await store.refresh() }
         await driver.process(store)
         XCTAssertEqual(center.added.count, 1)
         XCTAssertTrue(center.removed.contains(center.added[0]))
         let status = await wire.currentStatus; XCTAssertEqual(status, "unknown")
         await driver.process(store); XCTAssertEqual(center.added.count, 1)
+    }
+
+    @MainActor func testNewDriverRemovesOnlyOwnProfileOrphansAndNeverRepublishesHistoricalRow() async {
+        let wire = NotificationWire(), center = SyntheticNotificationCenter()
+        let store = await configured(wire, center: center)
+        let old = ProductNotificationDelivery(center: center)
+        old.configure(namespace: { NotificationFixture.namespace }, isActive: { true }, onNavigate: { _ in })
+        await old.process(store)
+        let id = "jarvis.product.\(NotificationFixture.id)"
+        XCTAssertEqual(center.added, [id])
+        let otherProfile = "jarvis.product.other-profile-record"
+        let foreign = "another.application.notice"
+        center.visible[otherProfile] = String(repeating: "9", count: 64)
+        center.visible[foreign] = NotificationFixture.namespace
+        // A process crash does not execute old.close(). The new driver has no
+        // nonce or routes, and must not claim/add the delivered outbox again.
+        let restarted = ProductNotificationDelivery(center: center)
+        restarted.configure(namespace: { NotificationFixture.namespace }, isActive: { true }, onNavigate: { _ in })
+        await store.refresh(); await restarted.process(store)
+        XCTAssertNil(center.visible[id]); XCTAssertNotNil(center.visible[otherProfile])
+        XCTAssertNotNil(center.visible[foreign]); XCTAssertEqual(center.added.count, 1)
+        let claims = await wire.count("notification.claim"); XCTAssertEqual(claims, 1)
+        // Fresh metadata reconstructed only a navigation route. Revocation can
+        // still remove this durable native ID after RAM-only claims were lost.
+        center.visible[id] = NotificationFixture.namespace
+        await wire.revoke(); await store.refresh(); await restarted.process(store)
+        XCTAssertNil(center.visible[id]); XCTAssertNotNil(center.visible[otherProfile])
+        XCTAssertEqual(center.added.count, 1)
     }
 }

@@ -870,7 +870,7 @@ class FrozenSources:
         )
 
     def doctor_images(self, cut, context, limits):
-        from jarvis_core.doctor import DoctorSqliteImage, DoctorSqliteImages
+        from jarvis_core.doctor import DoctorProductImage, DoctorSqliteImage, DoctorSqliteImages
         from jarvis_core.recovery import capture_sqlite_snapshot
 
         context.checkpoint("doctor_source_images")
@@ -902,9 +902,13 @@ class FrozenSources:
             images.append(DoctorSqliteImage(row.role, "image", row.fingerprint[1:3], data,
                                            hashlib.sha256(data).hexdigest()))
         self.assert_current(cut, full=True)
+        product = next(row for row in self._json if row.role == "product")
+        product_image = (DoctorProductImage("absent") if product.data is None else
+                         DoctorProductImage("image", product.data,
+                                            hashlib.sha256(product.data).hexdigest()))
         return DoctorSqliteImages(self.scope.profile_id, self.scope.generation,
                                   (self.root_identity.device, self.root_identity.inode),
-                                  cut.cut_id, tuple(images))
+                                  cut.cut_id, tuple(images), product_image)
 
 
 def freeze_sources(service, cut: ProfileCut) -> FrozenSources:

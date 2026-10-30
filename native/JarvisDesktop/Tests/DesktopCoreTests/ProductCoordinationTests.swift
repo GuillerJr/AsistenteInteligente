@@ -74,11 +74,13 @@ private actor CoordinationWire {
     private var budget: RPCValue = .null
     private var loseChangeResponse = false
     private var loseStartResponse = false
+    private var rejectStartResponse = false
     private var holdSnapshot = false
     private var held: CheckedContinuation<RPCValue, Error>?
     private var requestID: String?
     func losingChange() { loseChangeResponse = true }
     func losingStart() { loseStartResponse = true }
+    func rejectingStart(_ value: Bool) { rejectStartResponse = value }
     func holdNextSnapshot() { holdSnapshot = true }
     var isHolding: Bool { held != nil }
     func releaseSnapshot() {
@@ -116,6 +118,7 @@ private actor CoordinationWire {
             }
         case "product.tool.start":
             requestID = params["request_id"]?.string
+            if rejectStartResponse { throw RPCFailure.remote(-32011, "session_busy") }
             if loseStartResponse { throw RPCFailure.disconnected }
             return .object(["run_id": .string(requestID!), "status": .string("queued")])
         case "product.tool.result":
@@ -232,5 +235,22 @@ final class ProductCoordinationTests: XCTestCase {
         XCTAssertEqual(params?["request_id"], .string(identity))
         XCTAssertEqual(params?["arguments"]?["recipient_client_id"], .string(CoordinationFixture.peer))
         XCTAssertNil(params?["arguments"]?["grant"].object)
+    }
+
+    @MainActor func testKnownStartRejectionReleasesPendingIdentityForAnExplicitNewSend() async {
+        let wire = CoordinationWire(), store = ProductCoordinationStore()
+        store.configure(request: { try await wire.request($0, $1) })
+        store.setScope(CoordinationFixture.scope); await store.refresh()
+        await wire.rejectingStart(true)
+        let first = await store.send(to: SessionScope(sessionID: CoordinationFixture.other, temporary: false),
+            clientID: CoordinationFixture.peer, body: "Primer intento explícito")
+        XCTAssertNil(first); XCTAssertNil(store.pendingRequestID); XCTAssertFalse(store.responseUnconfirmed)
+        await store.refresh()
+        let polls = await wire.count("product.tool.result"); XCTAssertEqual(polls, 0)
+        await wire.rejectingStart(false)
+        let second = await store.send(to: SessionScope(sessionID: CoordinationFixture.other, temporary: false),
+            clientID: CoordinationFixture.peer, body: "Segundo envío explícito")
+        XCTAssertNotNil(second); XCTAssertEqual(store.pendingRequestID, second)
+        let starts = await wire.count("product.tool.start"); XCTAssertEqual(starts, 2)
     }
 }
