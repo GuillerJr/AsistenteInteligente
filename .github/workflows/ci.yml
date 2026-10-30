@@ -98,7 +98,20 @@ jobs:
       - name: Pruebas Swift
         id: native_contracts
         if: ${{ !cancelled() && runner.os == 'macOS' && steps.dependencies.outcome == 'success' && steps.memory_model.outcome == 'success' }}
-        run: ./script/test_desktop.sh --full --budget-mib 6144
+        shell: bash
+        run: |
+          set -o pipefail
+          ./script/test_desktop.sh --full --budget-mib 6144 \
+            2>&1 | tee "$RUNNER_TEMP/jarvis-swift-diagnostic.log"
+      - name: Conservar diagnóstico acotado de Swift
+        id: native_diagnostic
+        if: ${{ always() && runner.os == 'macOS' && steps.native_contracts.outcome != 'skipped' && steps.native_contracts.outcome != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-swift-diagnostic-${{ github.sha }}
+          path: ${{ runner.temp }}/jarvis-swift-diagnostic.log
+          if-no-files-found: error
+          retention-days: 3
       - name: Pruebas de contratos propios
         id: contracts
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' && steps.memory_model.outcome == 'success' }}

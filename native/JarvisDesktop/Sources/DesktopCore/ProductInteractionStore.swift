@@ -188,9 +188,14 @@ import Observation
             }
         return result != nil
     }
-    public func configureNotifications(enabled: Bool, silenced: Bool, expectedIdentity: String? = nil) async {
+    public func configureNotifications(enabled: Bool, silenced: Bool, expectedIdentity: String? = nil,
+                                       expectedRevision: Int? = nil) async {
         if let expectedIdentity, expectedIdentity != viewIdentity { return }
         guard let preferences = snapshot?.notificationPreferences else { return }
+        if let expectedRevision, expectedRevision != preferences.revision {
+            errorMessage = "Los avisos cambiaron. Revísalos antes de continuar."
+            return
+        }
         _ = await perform("notifications.configure", arguments: ["revision": .number(Double(preferences.revision)),
             "enabled": .bool(enabled), "silenced": .bool(silenced)], runID: "host", id: "preferences", revision: preferences.revision) { value in
                 let observed = try ProductNotificationPreferences(value)

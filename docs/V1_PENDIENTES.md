@@ -17,10 +17,12 @@ GitHub, diez planes Git y dos preguntas simultáneas con seis rechazos y consumo
 La copia estable de ese commit acreditó panel oscuro legible, sugerencias sólo
 como borrador, descarte y aislamiento entre dos chats. Cerró normalmente, sin
 señales ni procesos conocidos retenidos, y desmontó ambas cuotas sin fuerza.
-El dueño concedió avisos y macOS aceptó una solicitud; el aviso no fue localizado
-por el dueño, por lo que su visualización y clic real siguen sin acreditarse.
-Se añade una corrección de texto para distinguir aceptación de visualización,
-con regresiones que deben pasar su propia CI remota antes del cierre.
+El dueño concedió avisos y macOS aceptó una solicitud. Después confirmó que
+pulsó «Ver chat», gesto que la consume y retira; no hay un fallo de envío
+demostrado. Su visualización y clic OS siguen sin acreditarse. Se distingue
+aceptación de visualización y se corrige un clic de preferencias obsoletas que
+podía sobrescribir una revisión más reciente. CI debe acreditar inputs y estado;
+la UI real y navegación OS siguen siendo requisitos del cierre nativo.
 La matriz actual tiene **62 familias parciales, 18 sin implementar y ninguna
 completa**. REA registra **48 lotes y 186 rutas TS/JS únicas** seleccionadas.
 Las cifras de cierres anteriores que siguen abajo pertenecen a sus checkpoints.

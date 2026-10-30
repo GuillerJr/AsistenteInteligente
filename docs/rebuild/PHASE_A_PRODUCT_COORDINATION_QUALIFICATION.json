@@ -10,16 +10,28 @@
     "acceptance_label": "Aceptado por macOS",
     "acceptance_explanation": "macOS aceptó la solicitud; su visualización depende de los ajustes del sistema.",
     "durable_delivered_semantics": "UNUserNotificationCenter.add acknowledgement only; no observed banner or physical click claim.",
-    "binding_context": "Capture the rendered view identity when constructing notification bindings; a deferred choice cannot borrow another chat's current identity.",
+    "binding_context": "The production UI uses immutable ProductNotificationPreferenceChoice inputs: view identity, preference revision, enabled and silenced. Store validates both expected identity and expected revision before any RPC.",
     "regressions": [
       "Native ACK presentation and in-app resume without physical click attribution",
       "Host readers for A enabled and B disabled retain A without a second add or claim",
-      "Production SwiftUI panel AX A=true then B=false then A=true, including a delayed A read and no mutations"
+      "Production preference adapter plus real Store: A=true, B=false, held A response, B unchanged, A=true; immutable choices and obsolete context send no RPC",
+      "Same view identity with an advanced preference revision: old choice cannot borrow the current CAS revision or overwrite the newer silence value; a fresh choice updates exactly once"
     ],
+    "confirmed_static_preference_race": {
+      "old_behavior": "A rendered control retained flags from revision 1; a normal snapshot refresh advanced preferences to revision 2 without changing viewIdentity. Its old callback supplied an old flag while Store took the current revision 2 for CAS, allowing it to overwrite the newer choice.",
+      "correction": "Capture all input values and both pins together. Reject another context silently before touching its UI error; reject an obsolete revision in the same context without RPC or snapshot mutation and explain that the owner must review current preferences.",
+      "original_ax_discrepancy_causally_attributed_to_this_race": false
+    },
+    "external_ui_qualification": {
+      "status": "required_before_qualification",
+      "in_process_extractor_retired": true,
+      "reason": "c403 observed zero controls and no panel text in Ainitial. It did not reach B and is not an isolation or render oracle.",
+      "required": "A real green-CI QA app with CUA must expose the strict checkbox values and texts with correlated snapshots, including B after A completes. A callback test or an RPC-only observation cannot replace this UI evidence. Physical OS click remains separate."
+    },
     "observed_ax_preference_discrepancy": {
       "status": "cause_not_established",
       "observation": "An AX snapshot showed B selected with its own messages but enabled=1, while the selected earlier RPC snapshot for B reported revision=0 and enabled=false. No cross-chat mutation was observed.",
-      "limit": "The new rendering regression is not a reproduction until executed; the binding fence is not presented as the established cause of that observation."
+      "limit": "The retired in-process extractor could not observe the first control at all; it did not reproduce the earlier native observation. The context/revision fixes are not presented as the established cause of that observation."
     },
     "local_tests_or_builds_run": false,
     "os_delivery_repeated": false
@@ -38,6 +50,36 @@
   },
   "reference": "REA_OC28_PRODUCT_COORDINATION.md",
   "checkpoints": [
+    {
+      "commit": "c403ba7776f02aeea44849259304ae554428c82d",
+      "ci_run_id": 41118849186,
+      "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41118849186",
+      "status": "completed", "conclusion": "failure", "qualified": false,
+      "ubuntu": {
+        "passed": 3952, "skipped": 47, "failed": 0, "seconds": 315.09,
+        "saved_log_sha256": "bb75de12f0488b12e1d32eeae5003972e2c5a933dbee0ad5d33cb94fa50dfb67"
+      },
+      "macos": {
+        "python_passed": 3999, "python_skipped": 0, "python_failed": 0,
+        "python_seconds": 403.25, "swift_executed": 708, "swift_skipped": 1,
+        "swift_failures": 1, "swift_unexpected_failures": 0, "swift_seconds": 228.258,
+        "saved_log_sha256": "5e9c365f365d7f129a5a06ae9807e12bbe0fe4b8c9d4416636e1a7a0a52a2d60",
+        "notification_delivery_core_tests": "six_passed",
+        "panel_appearance_tests": "three_passed"
+      },
+      "wheel_sdist_isolated_installation": "success_both_platforms",
+      "self_contained_bundle_and_parent_eof": "success",
+      "failure": {
+        "test": "ProductNotificationPanelRenderingTests.testRenderedNotificationToggleTracksAThenBThenAAndIgnoresLateAResponse",
+        "stage": "Ainitial", "scope": "A", "store_enabled": true,
+        "nodes": 47, "controls": 0, "values": [], "invalid_values": [],
+        "title_observed": false, "explanation_observed": false,
+        "window_visible": true, "window_key": false, "hosting_size": [560, 760],
+        "held_read": false, "mutations": 0, "samples": [], "seconds": 5.186,
+        "limit": "The extractor never observed the first control or text and did not reach B. These data do not demonstrate a wrong toggle value, isolation breach, OS-send failure or the cause of missing virtual AX nodes.",
+        "replacement": "Remove the unsupported in-process extractor from active tests, retaining it and both failures in Git/evidence. Test actual production preference inputs and Store with deterministic barriers in CI; require the full external UI path in a bounded real QA app before qualification. No skip or synthetic AX overlay stands in for UI."
+      }
+    },
     {
       "commit": "3c35fa0825be001a28f6abbd6c744e249d42181b",
       "ci_run_id": 41115001544,
@@ -2398,6 +2440,12 @@
         "physical_os_click_attributable": false,
         "end_to_end_os_navigation_qualified": false,
         "owner_report": "No encuentro el aviso",
+        "later_owner_clarification": {
+          "source": "Direct human reply in this task, 2026-10-30",
+          "internal_Ver_chat_was_clicked": true,
+          "interpretation": "Internal navigation consumes the outbox and the native reconciler removes its OS request. This is consistent with resumed revision 4 and the later absence; it is not evidence that the OS send failed.",
+          "physical_os_click_verified": false
+        },
         "final_resumed_attribution": "A later read-only snapshot records resumed revision 4. The initiating path was not independently traced, so it is not evidence of a physical OS click.",
         "silence_then_reenable_preferences_revision": 3,
         "preferences_final": {
@@ -2407,7 +2455,7 @@
         },
         "automatic_effect_or_model_replay_observed": false,
         "private_notification_center_read": false,
-        "cause": "Not established; do not attribute absence to focus settings, owner denial, temporary placement or an application defect without evidence."
+        "cause": "The owner later confirmed the internal Ver chat action, which is consistent with consumption and removal. No physical OS visibility/click or earlier presentation behavior is inferred; do not attribute a separate send defect to focus, permissions or placement without evidence."
       },
       "final_selected_state_receipt": {
         "file": "a-final-state.json",

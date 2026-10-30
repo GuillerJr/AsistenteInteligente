@@ -94,18 +94,17 @@ struct ProductInteractionPanel: View {
         }
     }
     @ViewBuilder private var notificationSection: some View {
-        if let preferences = store.snapshot?.notificationPreferences {
-            let identity = store.viewIdentity
+        if let choice = ProductNotificationPreferenceChoice(store: store) {
             Divider()
             VStack(alignment: .leading, spacing: 10) {
                 Text("Avisos locales de este chat").font(.headline)
-                Toggle("Permitir avisos", isOn: Binding(get: { preferences.enabled }, set: { enabled in
-                    Task { await store.configureNotifications(enabled: enabled, silenced: preferences.silenced, expectedIdentity: identity) }
+                Toggle("Permitir avisos", isOn: Binding(get: { choice.enabled }, set: { enabled in
+                    Task { await choice.setEnabled(enabled) }
                 })).disabled(store.blocksInteraction)
                     .accessibilityIdentifier("jarvis.product.notifications.enabled")
-                Toggle("Silenciar avisos", isOn: Binding(get: { preferences.silenced }, set: { silenced in
-                    Task { await store.configureNotifications(enabled: preferences.enabled, silenced: silenced, expectedIdentity: identity) }
-                })).disabled(store.blocksInteraction || !preferences.enabled)
+                Toggle("Silenciar avisos", isOn: Binding(get: { choice.silenced }, set: { silenced in
+                    Task { await choice.setSilenced(silenced) }
+                })).disabled(store.blocksInteraction || !choice.enabled)
                     .accessibilityIdentifier("jarvis.product.notifications.silenced")
                 Text("Los avisos del sistema dependen del permiso que concedas a Jarvis en macOS.")
                     .font(.caption).foregroundStyle(.secondary)

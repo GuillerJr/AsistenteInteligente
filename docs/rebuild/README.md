@@ -6,9 +6,11 @@ finitos de clientes, GitHub, Git y preguntas ya están registrados. La copia
 estable verificó panel oscuro, sugerencias como borrador, descarte, aislamiento
 de dos chats y cierre normal sin procesos conocidos ni cuotas montadas.
 El permiso de avisos y la aceptación de una solicitud por macOS están observados;
-su visualización y clic real siguen sin acreditarse porque el dueño no encontró
-el aviso. La corrección del texto que distingue esos estados y sus regresiones
-requieren su propia CI remota. Incluye proyectos/GitHub, workspaces por sesión,
+su visualización y clic real siguen sin acreditarse. El dueño confirmó después
+que usó «Ver chat», lo que consume y retira el aviso; no demuestra un fallo de
+envío. La corrección del texto y de las preferencias obsoletas requiere su CI
+remota y el recorrido UI externo; el extractor AX in-process fallido no aporta
+esa evidencia. Incluye proyectos/GitHub, workspaces por sesión,
 colaboración local, preguntas/paneles/avisos, presupuestos inclusivos y
 clientes propios CLI/TUI/ACP. La [revisión OC-28](REA_OC28_PRODUCT_COORDINATION.md)
 conserva tres particiones y sus límites. No se presenta como paridad acreditada

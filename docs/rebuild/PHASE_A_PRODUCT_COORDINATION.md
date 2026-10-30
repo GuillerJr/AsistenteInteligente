@@ -5,17 +5,22 @@ Continuación solicitada el 30-10-2026. La implementación está conectada y la
 aprobó Ubuntu, macOS, Swift, paquetes y el bundle autocontenido. Los recorridos
 finitos de clientes, Git, GitHub, preguntas, carpetas y paneles tienen evidencia
 separada en el [registro de cualificación](PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json).
-Queda sin acreditar la presentación y el clic real de un aviso de macOS: el dueño
-no encontró el aviso. El ACK del sistema y un estado posterior `resumed` no
-demuestran por sí solos ese recorrido. Este bloque no se presenta como completo
+Queda sin acreditar la presentación y el clic real de un aviso de macOS. El dueño
+aclaró después que pulsó «Ver chat» dentro de Jarvis: ese gesto consume la
+notificación y el reconciliador retira su solicitud del sistema. Su ausencia
+posterior no demuestra un fallo de envío. El ACK y `resumed` tampoco demuestran
+por sí solos un clic del sistema. Este bloque no se presenta como completo
 ni cierra las familias amplias de la matriz; la fase B sigue aplazada.
 
 La continuación cambia la etiqueta de `delivered` a «Aceptado por macOS» y
-explica su límite en la propia fila. También fija la identidad al construir los
-controles de preferencias, en lugar de tomarla al pulsarlos. Se añaden casos de
-ACK y navegación interna, conservación del aviso A al consultar B sin permiso,
-y render SwiftUI/AX A → B → A con una respuesta anterior demorada. Deben pasar
-su CI remota; no se ejecutaron suites ni compilaciones locales. Un valor AX de
+explica su límite en la propia fila. El adaptador inmutable usado por los
+controles fija identidad, revisión y ambos valores al construirlos. Así un clic
+antiguo no puede tomar la revisión actual y sobrescribir una preferencia nueva
+del mismo chat. Una revisión obsoleta no envía RPC ni modifica el snapshot y
+pide revisar los avisos actuales; un contexto que ya cambió se descarta sin
+escribir errores en el nuevo chat. Las pruebas del adaptador y Store reales usan
+barreras para A → B → respuesta A demorada → B → A, rechazo de contexto/revisión
+y CAS vigente. Deben pasar su CI remota. Un valor AX de
 preferencias que no coincidió con el snapshot RPC de B se conserva como
 observación sin causa establecida, no como una fuga de permisos demostrada.
 
@@ -25,13 +30,21 @@ Swift ejecutó 708 casos con una omisión y dos fallos del único caso nuevo de
 render, uno inesperado. Los seis casos del núcleo de avisos y los tres de
 apariencia pasaron. El oráculo AX no informó el estado ni la etapa que no
 coincidían; ese registro no acredita una fuga de preferencias ni una causa de la
-ausencia del aviso. Se conserva y se corrige el oráculo antes de volver a
-cualificar, sin omitir el recorrido A → B → A ni ejecutar pruebas locales.
-La corrección parte también de la ventana propia, admite sólo los valores AX
-públicos `0`/`1`, sincroniza la retención y el retorno mediante eventos y añade
-diagnósticos acotados por etapa. Una observación fallida sigue fallando; se evita
-añadirle un segundo error genérico. No cambia la app ni amplía permisos y no se
-presenta como causa establecida del fallo original.
+ausencia del aviso. La segunda CI (`c403ba7`, ejecución `41118849186`) aprobó de
+nuevo Python, bundle y paquetes; Swift ejecutó 708 casos, una omisión y un fallo.
+El diagnóstico ahora identifica A inicial: 47 nodos, ningún control ni texto del
+panel, ventana visible pero no principal, sin mutaciones. Nunca alcanzó B.
+
+Ese extractor no permite evaluar la UI y se retira de las pruebas activas; su
+código y ambos fallos permanecen en Git y en el registro. Se sustituye por los
+contratos deterministas de inputs/Store, sin atribuirles cobertura de render.
+La UI A → B → B tras completar A → A y el texto de aceptación quedan como
+requisitos obligatorios del recorrido externo con CUA en una app real de CI
+aprobada, junto al clic OS del dueño. Ni un snapshot RPC ni una representación
+AX sintética los sustituyen. No se ejecutaron suites ni compilaciones locales.
+CI conservará además el log ya acotado de Swift inmediatamente después de esa
+suite, antes de Python, con `pipefail` y el código de salida original; las pruebas
+del fragmento YAML verifican fallo 37, éxito 0, salida y archivo exactos.
 Los [resultados vigentes de CI](https://github.com/GuillerJr/AsistenteInteligente/actions/workflows/ci.yml?query=branch%3Amain)
 deben contrastarse con el SHA exacto de la revisión publicada. Este documento se
 versiona antes de ejecutar esa revisión y conserva los checkpoints históricos;
