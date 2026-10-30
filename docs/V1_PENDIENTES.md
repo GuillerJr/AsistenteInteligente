@@ -447,8 +447,10 @@ Este bloque indexa notas autorizadas. No memoriza conversaciones automáticament
 no borra retroactivamente información ya enviada a un proveedor y no incorpora
 wiki, motores alternativos ni datos del Jarvis anterior sin elección explícita.
 
-La distribución autocontenida, Developer ID/notarización y actualización remota
-firmada siguen pendientes. La fase A sigue abierta y la fase B no ha comenzado.
+La distribución autocontenida posterior se acredita en su
+[registro separado](rebuild/PHASE_A_DISTRIBUTION_RESIDENT_QUALIFICATION.json).
+Developer ID/notarización y actualización remota firmada siguen pendientes.
+La fase A sigue abierta y la fase B no ha comenzado.
 
 ### MCP, plugins y skills — incremento elegido cualificado
 
