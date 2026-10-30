@@ -803,6 +803,26 @@ class CodexClient:
             or (tools and on_tool_call is None)
         ):
             raise ValueError("codex_tools_invalid")
+        # Avoid Codex's built-in request_user_input, whose availability depends
+        # on collaboration mode. Only the offered dynamic wire name is changed;
+        # Runtime proposals and their receipts retain the canonical Jarvis name.
+        if "request_user_input" in names:
+            alias = "jarvis_request_user_input"
+            if alias in names:
+                raise ValueError("codex_tools_invalid")
+            for spec in tools:
+                if spec["name"] == "request_user_input":
+                    spec["name"] = alias
+            names = [alias if name == "request_user_input" else name for name in names]
+            original_callback = on_tool_call
+
+            async def question_callback(name, arguments):
+                assert original_callback is not None
+                return await original_callback(
+                    "request_user_input" if name == alias else name, arguments
+                )
+
+            on_tool_call = question_callback
         if not (await self.account_status())["connected"]:
             raise CodexError("codex_login_required")
         if thread_id in self._uncertain_threads:
@@ -828,6 +848,12 @@ class CodexClient:
                         "comprobación independiente. verified=false no significa "
                         "que falte contenido. Puedes citar la salida disponible "
                         "como reporte externo sin presentarla como comprobada."
+                    )
+                    + (
+                        " Para hacer preguntas usa la herramienta dinámica "
+                        "jarvis_request_user_input de Jarvis, disponible también "
+                        "en modo Default; no invoques la pregunta integrada de Codex."
+                        if "jarvis_request_user_input" in names else ""
                     )
                     + (
                         "\nInstrucciones del perfil elegido por el dueño:\n" + instructions

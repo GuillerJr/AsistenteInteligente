@@ -272,6 +272,46 @@ def confirmed(text="recibo sintético"):
     return {"success": True, "contentItems": [{"type": "inputText", "text": text}]}
 
 
+@pytest.mark.parametrize("wire_name,expected_calls", [
+    ("jarvis_request_user_input", 1), ("request_user_input", 0),
+])
+async def test_jarvis_question_has_distinct_wire_name_and_canonical_host_receipt(
+        tmp_path, tool_peer, wire_name, expected_calls):
+    raw = tool_peer.read_text()
+    tool_peer.write_text(raw.replace("'tool': 'fixture_write'", "'tool': '" + wire_name + "'"))
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
+    calls = []
+    spec = {**TOOL, "name": "request_user_input"}
+
+    async def callback(name, arguments):
+        calls.append((name, arguments))
+        return confirmed("Respuesta sintética efímera sin autorización de herramientas.")
+
+    try:
+        await client.chat("question-alias", tool_specs=[spec], on_tool_call=callback)
+        assert len(calls) == expected_calls
+        if calls:
+            assert calls[0][0] == "request_user_input"
+        start = next(row for row in wire(client) if row.get("method") == "thread/start")
+        assert start["params"]["dynamicTools"][0]["name"] == "jarvis_request_user_input"
+        assert "jarvis_request_user_input" in start["params"]["developerInstructions"]
+        assert spec["name"] == "request_user_input"
+        assert tool_replies(client)[0]["result"]["success"] is bool(expected_calls)
+    finally:
+        await client.aclose()
+
+
+async def test_jarvis_question_wire_alias_collision_rejected_before_provider(tmp_path, tool_peer):
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
+    try:
+        with pytest.raises(ValueError, match="codex_tools_invalid"):
+            await client.chat("unused", tool_specs=[{**TOOL, "name": "request_user_input"},
+                {**TOOL, "name": "jarvis_request_user_input"}], on_tool_call=lambda *_: None)
+        assert wire(client) == []
+    finally:
+        await client.aclose()
+
+
 def approved_media_result(index, run_id="a" * 32, *, operation_id=None, output=None):
     """Synthetic host receipt/carrier, not evidence of a real owner's grant."""
     operation_id = operation_id or f"{index + 1:032x}"

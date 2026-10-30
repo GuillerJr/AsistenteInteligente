@@ -158,6 +158,7 @@ DESCRIPTIONS = {
         "Pedir de una a tres decisiones al dueño. Cada pregunta lleva id, header, prompt y "
         "2-3 options con id/label/description; permite texto libre. No pedir contraseñas. "
         "La respuesta es efímera y nunca concede autorización de herramienta."
+        " Codex ofrece esta pregunta propia con el nombre jarvis_request_user_input."
     ),
     "report_progress": (
         "Actualizar progreso de esta ejecución mediante revisión exacta; no ejecuta acciones."

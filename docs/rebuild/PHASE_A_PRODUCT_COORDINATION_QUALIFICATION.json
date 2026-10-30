@@ -107,6 +107,15 @@
     },
     "failures_preserved": [
       {
+        "scope": "real_codex_structured_question",
+        "run_id": "731896ea33fc49b289a751f4e5d4beda",
+        "status": "completed",
+        "progress_and_presence_calls": 2,
+        "question_created": false,
+        "cause": "Codex selected its built-in request_user_input, unavailable in Default mode, instead of the colliding dynamic name.",
+        "correction": "Offer jarvis_request_user_input on the official wire and map only that admitted call to canonical request_user_input inside Jarvis. No authority or receipt rename; reject collisions before provider dispatch."
+      },
+      {
         "scope": "native_coordination_initial_state",
         "error": "invalid_native_response",
         "observed_effect": "Groups and pinned sessions were not rendered; macOS notification permission button stayed disabled.",
