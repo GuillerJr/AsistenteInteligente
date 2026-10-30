@@ -286,7 +286,8 @@ def test_macos_optional_git_lookup_is_not_a_service_startup_dependency(tmp_path,
     trees = tmp_path.resolve() / "worktrees"
     trees.mkdir(mode=0o700)
     api = ProjectsBackend(ProjectsStore(tmp_path.resolve() / "private"), trees)
-    assert api.store.list() == [] and api.runner.active_children == 0
+    assert api.store.list() == ()
+    assert api.runner.active_children == 0
 
 
 def test_git_metadata_includes_and_object_symlinks_are_rejected_before_git(tmp_path):
