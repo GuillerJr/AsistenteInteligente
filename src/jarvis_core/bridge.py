@@ -39,6 +39,7 @@ class CodexBridge:
         on_thread: Callable[[RunContext, str], None],
         on_turn_closed: Callable[[RunContext], None] | None = None,
         take_tool_image: Callable | None = None,
+        take_tool_text: Callable | None = None,
     ) -> None:
         self.provider = provider
         self.prepare = prepare
@@ -46,6 +47,7 @@ class CodexBridge:
         self.on_thread = on_thread
         self.on_turn_closed = on_turn_closed
         self.take_tool_image = take_tool_image
+        self.take_tool_text = take_tool_text
         self._turns: dict[str, _Turn] = {}
 
     async def next_step(self, context: RunContext) -> FinalAnswer | ToolProposal:
@@ -121,6 +123,10 @@ class CodexBridge:
                         }
                     )
                 image_binding = None
+                if self.take_tool_text is not None:
+                    ephemeral = self.take_tool_text(receipt)
+                    if ephemeral is not None:
+                        items.append({"type": "inputText", "text": ephemeral})
                 if self.take_tool_image is not None:
                     image = self.take_tool_image(receipt)
                     if image is not None:

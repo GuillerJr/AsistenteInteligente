@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import configparser
 import email.parser
 import os
 import shutil
@@ -44,6 +45,8 @@ SIGNING_DEPENDENCIES = ("cryptography==50.0.2",)
 REVIEWED_DEPENDENCIES = (*SIGNING_DEPENDENCIES, "jsonschema==4.26.0", "numpy==2.3.5",
                          "onnxruntime==1.31.1", "referencing==0.37.0", "soundfile==0.13.1",
                          "tokenizers==0.22.1")
+PRODUCT_SCRIPTS = {"jarvis": "jarvis_core.product_client:main",
+                   "jarvis-acp": "jarvis_core.product_acp:main"}
 SDIST_REQUIRED = {
     "PKG-INFO", "pyproject.toml", "README.md", "LICENSE", "uv.lock", "MANIFEST.in",
     "script/check_clean_base.py", "script/research_inventory.py", "script/setup_git_gates.sh",
@@ -189,8 +192,8 @@ def _project(root: Path) -> dict:
     _dependencies(project.get("dependencies"))
     if project.get("optional-dependencies"):
         raise CleanBaseError("la base no admite extras heredados")
-    if project.get("scripts"):
-        raise CleanBaseError("la base todavía no declara un CLI de producto")
+    if project.get("scripts") and project["scripts"] != PRODUCT_SCRIPTS:
+        raise CleanBaseError("el CLI no corresponde a los clientes propios revisados")
     return project
 
 
@@ -253,6 +256,7 @@ def _metadata(data: bytes) -> dict:
 def check_wheel(path: Path, root: Path | None = None) -> dict:
     files: dict[str, bytes] = {}
     metadata = []
+    scripts = {}
     with zipfile.ZipFile(path) as archive:
         names = archive.namelist()
         if len(set(names)) != len(names):
@@ -271,10 +275,22 @@ def check_wheel(path: Path, root: Path | None = None) -> dict:
                 metadata_name = PurePosixPath(*name.parts[1:]).as_posix()
                 if metadata_name not in {
                     "METADATA", "WHEEL", "RECORD", "top_level.txt", "licenses/LICENSE",
+                    "entry_points.txt",
                 }:
                     raise CleanBaseError(f"recurso ajeno en metadata del wheel: {entry.filename}")
                 if name.name == "METADATA":
                     metadata.append(archive.read(entry))
+                elif name.name == "entry_points.txt":
+                    parser = configparser.ConfigParser(interpolation=None, strict=True)
+                    try:
+                        parser.read_string(archive.read(entry).decode())
+                        if parser.sections() != ["console_scripts"]:
+                            raise ValueError("sections")
+                        scripts = dict(parser.items("console_scripts"))
+                    except (ValueError, UnicodeError, configparser.Error):
+                        raise CleanBaseError("CLI inválido en wheel") from None
+                    if scripts != PRODUCT_SCRIPTS:
+                        raise CleanBaseError("CLI ajeno en wheel")
             else:
                 raise CleanBaseError(f"paquete o recurso ajeno en wheel: {entry.filename}")
     if "jarvis_core/__init__.py" not in files or len(metadata) != 1:
@@ -285,6 +301,8 @@ def check_wheel(path: Path, root: Path | None = None) -> dict:
         _check_imports(data, name, dependencies)
     if root is not None:
         project = _project(root)
+        if scripts != project.get("scripts", {}):
+            raise CleanBaseError("el CLI del wheel no corresponde al proyecto")
         if dependencies != _dependencies(project["dependencies"]):
             raise CleanBaseError("las dependencias del wheel no corresponden al proyecto")
         if identity != {"name": project["name"], "version": project["version"]}:
@@ -360,7 +378,8 @@ def check_sdist(path: Path, root: Path | None = None) -> dict:
         raise CleanBaseError("el sdist omite archivos necesarios para repetir la cualificación")
     identity = _metadata(metadata[0])
     if (manifest is None
-        or manifest.get("optional-dependencies") or manifest.get("scripts")
+        or manifest.get("optional-dependencies")
+        or (manifest.get("scripts") and manifest["scripts"] != PRODUCT_SCRIPTS)
         or identity != {"name": manifest.get("name"), "version": manifest.get("version")}):
         raise CleanBaseError("el manifiesto del sdist no coincide con la base propia")
     dependencies = _dependencies(manifest.get("dependencies"))

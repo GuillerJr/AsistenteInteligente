@@ -57,6 +57,7 @@ _ROLES = {
     "skills": ("profiles", "skills.json", 4_194_304),
     "plugins": ("profiles", "plugins.json", 4_194_304),
     "automations": (".", "automation.json", 4_194_304),
+    "product": (".", "product-recovery.json", 96 * 1024 * 1024),
     "telegram": ("telegram", "telegram.json", 1_048_576),
     "configuration_portable": (".", "configuration.json", 1024),
 }
@@ -330,7 +331,8 @@ def _read_prepared(directory, context, limits, *, owner=None):
     directory.check()
     root_entries = directory_entries(directory)
     known = {MARKER_NAME, "profile.lock", "profiles", "telegram", "configuration.json",
-             "jarvis.sqlite3", "memory.sqlite3", "schedules.sqlite3", "automation.json"}
+             "jarvis.sqlite3", "memory.sqlite3", "schedules.sqlite3", "automation.json",
+             "product-recovery.json"}
     if owner is not None:
         owner.assert_current()
         known.add(owner.pending_name)
@@ -398,6 +400,8 @@ def _read_prepared(directory, context, limits, *, owner=None):
                        for row in documents.get("automations", {}).get("hooks", []))
                 or any(row["status"] in {"queued", "running", "paused"}
                        for row in documents.get("automations", {}).get("flows", []))
+                or ("product" in documents
+                    and documents["product"]["state"] != "restored_history")
                 or any(row["enabled"] for row in documents.get("telegram", {}).get("routes", {})
                        .values())):
             _fail("activation_profile_not_disarmed")

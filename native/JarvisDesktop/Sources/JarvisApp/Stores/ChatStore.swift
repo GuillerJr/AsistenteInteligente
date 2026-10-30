@@ -32,6 +32,13 @@ final class ChatStore {
     let sessionCore = SessionCoreStore()
     let clientIdentities = ClientIdentityStore()
     let delegation = DelegationStore()
+    let productInteractions = ProductInteractionStore()
+    let productCoordination = ProductCoordinationStore()
+    let productProjects = ProductProjectsStore()
+    let runTracker = SessionRunTracker()
+    var sidebarBindings: [SessionScope: ProductSessionBinding] = [:]
+    var sidebarWorkspaces: [String: String] = [:]
+    let productNotifications = ProductNotificationDelivery(center: MacProductNotificationCenter())
     let automation = NativeAutomationHost()
     let telegram = TelegramStore()
     let maintenance = MaintenanceStore()
@@ -74,6 +81,9 @@ final class ChatStore {
     @ObservationIgnored private var pendingSubmission: PendingSubmission?
     @ObservationIgnored private var pendingQueue: PendingSubmission?
     @ObservationIgnored private var activeSession: ChatSession?
+    @ObservationIgnored private var parkedSubmissions: [SessionScope: PendingSubmission] = [:]
+    @ObservationIgnored private var runWatchID = UUID()
+    @ObservationIgnored private var notificationStores: [String: ProductInteractionStore] = [:]
     @ObservationIgnored private var stopping = false
     private var nativeCleanupPending = false
     @ObservationIgnored private var awaitingStartupReadiness = false
@@ -89,7 +99,27 @@ final class ChatStore {
     private var lifecycleBlocksInteraction: Bool {
         starting || stopping || recoveringCrash || nativeCleanupPending || automation.lifecycleBusy || attachments.busy
     }
-    var coreBlocksHost: Bool { sessionCore.blocksInteraction || clientIdentities.blocksInteraction || delegation.blocksInteraction || hasUnconfirmedQueue }
+    private var selectedDelegationBlocks: Bool { delegation.scope == selected?.scope && delegation.blocksInteraction }
+    private var selectedProductBlocks: Bool {
+        productInteractions.isChanging || productCoordination.isChanging || productProjects.isChanging
+    }
+    var coreBlocksHost: Bool { sessionCore.blocksInteraction || clientIdentities.blocksInteraction || selectedDelegationBlocks || hasUnconfirmedQueue || selectedProductBlocks }
+    /// Switching the viewer never cancels another conversation's execution.
+    var canNavigateSession: Bool {
+        !talk.isActive && !lifecycleBlocksInteraction && !isRecoveryOnly && ready && !busy
+            && !access.isChangingWorkspace && !mcp.blocksContextChanges && !plugins.isChanging
+            && access.decidingIDs.isEmpty
+            && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction
+            && !delegation.isChanging && !delegation.responseUnconfirmed && !hasUnconfirmedQueue
+            && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction
+            && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction
+            && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing
+            && !voice.canStopDictation && !selectedProductBlocks
+    }
+    var hasBackgroundRuns: Bool { runTracker.active.contains { $0.scope != selected?.scope } }
+    func isSessionRunning(_ scope: SessionScope) -> Bool {
+        (selected?.scope == scope && activeRunID != nil) || runTracker.observations[scope]?.isActive == true
+    }
     var hasUnconfirmedQueue: Bool { pendingQueue != nil }
     var canSupplyRunInput: Bool { !lifecycleBlocksInteraction && ready && connected && !busy && !handoffPreparing && !coldRecovery
         && activeRunID != nil && selected?.scope == activeSession?.scope && !coreBlocksHost && !lostTemporaryRun
@@ -117,7 +147,7 @@ final class ChatStore {
     var isRecoveryOnly: Bool { (options ?? suppliedOptions)?.recoveryOnly == true }
     var serviceOwner: ServiceOwnerIdentity? { service.ownedIdentity }
     var durableDraftSnapshot: SessionDrafts { drafts.durableOnly }
-    var mayHandoff: Bool { !talk.isActive && !lifecycleBlocksInteraction && !isRecoveryOnly && ready && !handoffPreparing && !busy && activeRunID == nil && !voice.canStopDictation && !access.isChangingWorkspace && !mcp.blocksContextChanges && !plugins.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.isRequesting && !restored.responseUnconfirmed && restored.operation?.workerPending != true && restored.operation?.cleanupOwnerPending != true }
+    var mayHandoff: Bool { !talk.isActive && !lifecycleBlocksInteraction && !isRecoveryOnly && ready && !handoffPreparing && !busy && activeRunID == nil && !runTracker.hasActiveRuns && !voice.canStopDictation && !access.isChangingWorkspace && !mcp.blocksContextChanges && !plugins.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !selectedDelegationBlocks && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.isRequesting && !restored.responseUnconfirmed && restored.operation?.workerPending != true && restored.operation?.cleanupOwnerPending != true }
     var shutdownWarning: String? { service.lastStopReport?.warning }
     var latestConversationRunID: String? { observedConversationRunID }
     var mcpSelectionKey: String {
@@ -129,9 +159,9 @@ final class ChatStore {
 
     var selected: ChatSession? { sessions.first { $0.id == selectedID } }
     var canSend: Bool { !talk.isActive && submissionEligible }
-    private var submissionContextEligible: Bool { !lifecycleBlocksInteraction && !isRecoveryOnly && ready && connected && !busy && !access.isChangingWorkspace && !mcp.blocksContextChanges && !plugins.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil && selected != nil && selected?.archived == false }
+    private var submissionContextEligible: Bool { !lifecycleBlocksInteraction && !isRecoveryOnly && ready && connected && !busy && !access.isChangingWorkspace && !mcp.blocksContextChanges && !plugins.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !selectedDelegationBlocks && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil && !selectedProductBlocks && selected != nil && selected?.archived == false }
     private var submissionEligible: Bool { submissionContextEligible && (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.selectedIDs.isEmpty) }
-    private var sessionChangeEligible: Bool { !isRecoveryOnly && ready && !busy && !access.isChangingWorkspace && !mcp.blocksContextChanges && !plugins.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !delegation.blocksInteraction && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil }
+    private var sessionChangeEligible: Bool { !isRecoveryOnly && ready && !busy && !access.isChangingWorkspace && !mcp.blocksContextChanges && !plugins.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !selectedDelegationBlocks && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.blocksInteraction && !handoffPreparing && !voice.canStopDictation && activeRunID == nil && !selectedProductBlocks }
     var canChangeSession: Bool { !talk.isActive && !lifecycleBlocksInteraction && sessionChangeEligible }
     private var canInitializeSession: Bool {
         starting && !stopping && !recoveringCrash && !nativeCleanupPending && !automation.lifecycleBusy && sessionChangeEligible
@@ -377,6 +407,11 @@ final class ChatStore {
         sessionCore.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
         clientIdentities.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
         delegation.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
+        productInteractions.configure(connection)
+        productCoordination.configure(connection)
+        productProjects.configure(connection)
+        productNotifications.configure(isActive: { [weak self] in self?.runtime.isActive == true && self?.stopping == false },
+            onNavigate: { [weak self] navigation in await self?.navigateProductNotification(navigation) })
         telegram.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
         maintenance.configure(client: LocalRPCClient(stateDirectory: options.state, runtime: runtime))
         restored.configure(LocalRPCClient(stateDirectory: options.state, runtime: runtime))
@@ -504,6 +539,7 @@ final class ChatStore {
         if canChangeSession { try await refreshSessions() }
         guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !memoryIntelligence.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         try await refreshSelectedConversation()
+        await refreshProductState()
         guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !memoryIntelligence.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
         if activeRunID == nil { try await access.refreshApprovals(runID: nil) }
         guard !maintenance.monitorPaused, !channelRestoration.monitorPaused, !memoryRestoration.monitorPaused, !memoryIntelligence.monitorPaused, !recovery.monitorPaused, !restored.monitorPaused, !handoffPreparing else { return }
@@ -539,6 +575,7 @@ final class ChatStore {
             guard await automation.stop(handshake: false) else { throw ServiceProcessFailure.cleanupUnconfirmed }
             nativeCleanupPending = false
             polling?.cancel(); memoryRecallRefresh?.cancel(); conversationRefresh?.setScope(nil)
+            closeProductSurface(retainingRuns: true)
             await client?.close(); await access.close(); await mcp.close(); await plugins.close(); await management.close()
             await sessionCore.close(); await clientIdentities.close(); await delegation.close(); await telegram.close()
             await maintenance.close(); await restored.close(); await channelRestoration.close()
@@ -649,18 +686,21 @@ final class ChatStore {
         await createSession(temporary: temporary, duringStartup: false)
     }
 
-    private func createSession(temporary: Bool, duringStartup: Bool) async {
-        guard duringStartup ? canInitializeSession : canChangeSession else { return }
+    private func createSession(temporary: Bool, duringStartup: Bool, workspaceID: String? = nil) async {
+        guard duringStartup ? canInitializeSession : canNavigateSession else { return }
         stopVoice(); dictationNotice = nil
         guard management.agents.contains(where: { $0.id == newAgentID }) else {
             errorMessage = "Selecciona un agente disponible para la conversación nueva."; return
         }
         conversationRefresh?.setScope(nil)
+        parkSelectedRun()
         busy = true
-        defer { busy = false; conversationRefresh?.setScope(selected?.scope) }
+        defer { busy = false; restoreTrackedSelection(); synchronizeProductContext(); conversationRefresh?.setScope(selected?.scope) }
         do {
-            let result = try await rpc("sessions.create", ["title": .string(temporary ? "Chat temporal" : "Nueva conversación"),
-                                                            "temporary": .bool(temporary), "agent_id": .string(newAgentID)])
+            var parameters: [String: RPCValue] = ["title": .string(temporary ? "Chat temporal" : "Nueva conversación"),
+                                                "temporary": .bool(temporary), "agent_id": .string(newAgentID)]
+            if let workspaceID { parameters["workspace_id"] = .string(workspaceID) }
+            let result = try await rpc("sessions.create", parameters)
             guard let session = ChatSession(result["session"]) else { throw RPCFailure.invalidResponse }
             await mcp.setContext(session.scope)
             guard mcp.context == session.scope, !mcp.appCleanupUnconfirmed else { throw RPCFailure.unavailable }
@@ -674,6 +714,8 @@ final class ChatStore {
             messages = []; activities = []; draft = ""; streamingText = ""; errorMessage = nil
             receipts = []
             observedConversationRunID = nil
+            synchronizeProductContext()
+            try await access.refreshCatalog()
         } catch { report(error) }
     }
 
@@ -682,12 +724,13 @@ final class ChatStore {
     }
 
     private func selectSession(_ id: String, duringStartup: Bool) async {
-        guard duringStartup ? canInitializeSession : canChangeSession,
+        guard duringStartup ? canInitializeSession : canNavigateSession,
               let session = sessions.first(where: { $0.id == id }) else { return }
         conversationRefresh?.setScope(nil)
         stopVoice(); dictationNotice = nil
+        parkSelectedRun()
         busy = true
-        defer { busy = false; conversationRefresh?.setScope(selected?.scope) }
+        defer { busy = false; restoreTrackedSelection(); synchronizeProductContext(); conversationRefresh?.setScope(selected?.scope) }
         do {
             let rows = try await fetchMessages(session)
             await mcp.setContext(session.scope)
@@ -698,6 +741,8 @@ final class ChatStore {
             management.setContext(session.scope)
             sessionCore.setScope(session.scope)
             delegation.setScope(session.scope)
+            synchronizeProductContext()
+            try await access.refreshCatalog()
             synchronizeMemoryIntelligenceContext()
             messages = try decodeMessages(rows, scope: session.scope)
             activities = []; streamingText = ""; errorMessage = nil
@@ -709,6 +754,81 @@ final class ChatStore {
 
     private func scope(_ session: ChatSession) -> [String: RPCValue] {
         ["session_id": .string(session.id), "temporary": .bool(session.temporary)]
+    }
+
+    private func parkSelectedRun() {
+        if let session = activeSession ?? selected, let id = activeRunID {
+            runTracker.record(scope: session.scope, runID: id,
+                              phase: runPhase.isEmpty ? "disconnected" : runPhase)
+            if let pendingSubmission { parkedSubmissions[session.scope] = pendingSubmission }
+        }
+        runWatchID = UUID(); polling?.cancel(); runTracker.select(nil)
+        activeRunID = nil; activeSession = nil; pendingSubmission = nil
+        runPhase = ""; streamingText = ""; observedConversationRunID = nil
+    }
+
+    private func restoreTrackedSelection() {
+        guard let session = selected else { runTracker.select(nil); return }
+        runTracker.select(session.scope)
+        guard let observed = runTracker.observations[session.scope] else { return }
+        observedConversationRunID = observed.runID
+        guard observed.isActive else { runPhase = observed.phase; return }
+        if activeRunID == observed.runID, activeSession?.scope == session.scope { return }
+        activeRunID = observed.runID; activeSession = session; runPhase = observed.phase
+        streamingText = observed.streamingText; pendingSubmission = parkedSubmissions[session.scope]
+        watchRun(observed.runID, session: session)
+    }
+
+    private func synchronizeProductContext() {
+        let scope = isRecoveryOnly ? nil : selected?.scope
+        let run = activeRunID ?? observedConversationRunID
+        productInteractions.setScope(scope, runID: run)
+        productCoordination.setScope(scope, runID: run)
+        productProjects.setScope(scope, runID: run)
+    }
+
+    func observeProductRun(_ id: String) {
+        guard let selected, ManagementValidation.identifier(id), !stopping,
+              activeRunID == nil || activeRunID == id else { return }
+        activeRunID = id; activeSession = selected; observedConversationRunID = id
+        runPhase = "queued"; watchRun(id, session: selected); synchronizeProductContext()
+    }
+
+    func createProductSession(workspaceID: String) async {
+        guard canNavigateSession, let workspace = productCoordination.workspaces.first(where: { $0.id == workspaceID }) else { return }
+        let previous = selected?.scope
+        await createSession(temporary: workspace.temporary, duringStartup: false, workspaceID: workspaceID)
+        guard let selected, selected.scope != previous else { return }
+        await productCoordination.refresh()
+        if let snapshot = productCoordination.snapshot {
+            for binding in snapshot.sessions { sidebarBindings[binding.scope] = binding }
+            for workspace in snapshot.workspaces { sidebarWorkspaces[workspace.id] = workspace.name }
+        }
+        await refreshProductWorkspace()
+    }
+
+    func refreshProductWorkspace() async {
+        guard selected?.scope == productCoordination.scope, !stopping else { return }
+        cacheProductSidebar()
+        do { try await access.refreshCatalog(); synchronizeMemoryIntelligenceContext() }
+        catch { report(error) }
+    }
+
+    func appendProductDraft(_ text: String) {
+        guard selected != nil, text.utf8.count <= 2048 else { return }
+        draft = draft.isEmpty ? text : draft + "\n" + text
+    }
+
+    func navigateProductNotification(_ navigation: ProductNotificationNavigation) async {
+        guard runtime.isActive, !stopping, canNavigateSession else { return }
+        do {
+            try await refreshSessions()
+            guard sessions.contains(where: { $0.scope == navigation.scope }) else { return }
+            await selectSession(navigation.scope.sessionID)
+            guard selected?.scope == navigation.scope else { return }
+            productInteractions.setScope(navigation.scope, runID: navigation.runID == "host" ? nil : navigation.runID)
+            await productInteractions.refresh()
+        } catch { report(error) }
     }
 
     private func observeMCPRun(_ id: String, scope: SessionScope) {
@@ -834,64 +954,128 @@ final class ChatStore {
     }
 
     private func watchRun(_ runID: String, session: ChatSession) {
+        guard selected?.scope == session.scope else { return }
         polling?.cancel()
+        let watchID = UUID(); runWatchID = watchID
+        runTracker.select(session.scope)
+        runTracker.record(scope: session.scope, runID: runID,
+                          phase: runPhase.isEmpty ? "queued" : runPhase)
+        synchronizeProductContext()
         polling = Task { [weak self] in
             guard let self else { return }
-            var after = 0
-            var params = self.scope(session)
-            params["run_id"] = .string(runID)
+            var after = self.runTracker.observations[session.scope]?.lastSequence ?? 0
+            var params = self.scope(session); params["run_id"] = .string(runID)
             while !Task.isCancelled {
                 do {
-                    var eventParams = params
-                    eventParams["after"] = .number(Double(after))
+                    var eventParams = params; eventParams["after"] = .number(Double(after))
                     let events = try await self.rpc("events.poll", eventParams)
+                    guard self.runViewIsCurrent(watchID, runID: runID, scope: session.scope) else { return }
                     if let rows = events["events"].array {
                         for row in rows {
                             if let sequence = row["sequence"].integer, sequence > after,
                                let kind = row["kind"].string {
+                                try self.runTracker.append(scope: session.scope, runID: runID,
+                                    sequence: sequence, delta: kind == "answer.delta" ? row["payload"]["text"].string : nil)
                                 self.activities.append(RunActivity(id: sequence, kind: kind))
                                 if self.activities.count > 500 { self.activities.removeFirst() }
+                                self.streamingText = self.runTracker.observations[session.scope]?.streamingText ?? ""
+                                after = sequence
                                 if kind == "coordination.created", let goalID = row["payload"]["goal_id"].string {
                                     await self.delegation.observe(scope: session.scope, parentRunID: runID, goalID: goalID)
+                                    guard self.runViewIsCurrent(watchID, runID: runID, scope: session.scope) else { return }
                                 }
-                                if kind == "answer.delta", let text = row["payload"]["text"].string {
-                                    self.streamingText = try RunPresentation.appendDelta(text, to: self.streamingText)
-                                }
-                                after = sequence
                             }
                         }
                     }
                     let result = try await self.rpc("runs.get", params)
+                    guard self.runViewIsCurrent(watchID, runID: runID, scope: session.scope) else { return }
+                    let receipt = try ConversationRun(result["run"], expectedID: runID)
                     try await self.access.refreshApprovals(runID: runID)
-                    guard let phase = result["run"]["status"].string else {
-                        throw RPCFailure.invalidResponse
-                    }
-                    self.runPhase = phase
-                    if phase == "waiting_approval" || !self.access.approvals.isEmpty { self.talk.approvalBecamePending() }
+                    guard self.runViewIsCurrent(watchID, runID: runID, scope: session.scope) else { return }
+                    self.runPhase = receipt.status
+                    self.runTracker.record(scope: session.scope, runID: runID, phase: receipt.status)
+                    if receipt.status == "waiting_approval" || !self.access.approvals.isEmpty { self.talk.approvalBecamePending() }
                     try self.applyReceipts(result["run"])
-                    if ["completed", "failed", "cancelled", "interrupted"].contains(phase) {
+                    if !receipt.active {
                         try await self.refreshMessages(session)
-                        if let error = result["run"]["error"].string, !error.isEmpty {
-                            self.errorMessage = RunPresentation.errorMessage(error)
-                        }
-                        self.streamingText = ""
-                        self.activeRunID = nil
-                        self.pendingSubmission = nil
-                        self.activeSession = nil
+                        guard self.runViewIsCurrent(watchID, runID: runID, scope: session.scope) else { return }
+                        if let error = receipt.errorCode, !error.isEmpty { self.errorMessage = RunPresentation.errorMessage(error) }
+                        self.streamingText = ""; self.activeRunID = nil; self.pendingSubmission = nil; self.activeSession = nil
+                        self.parkedSubmissions.removeValue(forKey: session.scope)
+                        self.synchronizeProductContext()
                         try await self.recoverLatestRun(session)
                         return
                     }
                     try await Task.sleep(for: .milliseconds(350))
                 } catch is CancellationError { return }
                 catch {
-                    if Task.isCancelled || self.stopping { return }
-                    self.report(error)
-                    // Preserve the run identity: connection failure is not settlement.
-                    self.runPhase = "disconnected"
+                    guard self.runViewIsCurrent(watchID, runID: runID, scope: session.scope) else { return }
+                    self.report(error); self.runPhase = "disconnected"
+                    self.runTracker.record(scope: session.scope, runID: runID, phase: "disconnected")
                     return
                 }
             }
         }
+    }
+
+    private func runViewIsCurrent(_ watchID: UUID, runID: String, scope: SessionScope) -> Bool {
+        !Task.isCancelled && !stopping && runtime.isActive && runWatchID == watchID
+            && selected?.scope == scope && activeRunID == runID
+    }
+
+    private func refreshProductState() async {
+        guard !isRecoveryOnly, ready, !stopping, !handoffPreparing else { return }
+        synchronizeProductContext()
+        await productCoordination.refresh()
+        cacheProductSidebar()
+        await productInteractions.refresh()
+        if let scope = selected?.scope { registerNotificationReader(scope, runID: activeRunID ?? observedConversationRunID ?? "host") }
+        for observation in runTracker.active where observation.scope != selected?.scope {
+            do {
+                var params = observation.scope.params; params["run_id"] = .string(observation.runID)
+                let result = try await rpc("runs.get", params)
+                guard !stopping, observation.scope != selected?.scope,
+                      runTracker.observations[observation.scope]?.runID == observation.runID else { continue }
+                let receipt = try ConversationRun(result["run"], expectedID: observation.runID)
+                runTracker.record(scope: observation.scope, runID: observation.runID, phase: receipt.status)
+                if !receipt.active { parkedSubmissions.removeValue(forKey: observation.scope) }
+                registerNotificationReader(observation.scope, runID: observation.runID)
+            } catch { /* A failed read retains the identity; it never cancels or repeats work. */ }
+        }
+        for key in Array(notificationStores.keys) {
+            guard let store = notificationStores[key] else { continue }
+            await store.refresh(); await productNotifications.process(store)
+            if let snapshot = store.snapshot, !snapshot.notificationPreferences.enabled
+                || snapshot.notificationPreferences.silenced
+                || !store.notifications.contains(where: { $0.isCurrent && ["queued", "dispatching", "delivered", "unknown"].contains($0.status) }) {
+                store.close(); notificationStores.removeValue(forKey: key)
+            }
+        }
+    }
+
+    private func cacheProductSidebar() {
+        guard let snapshot = productCoordination.snapshot else { return }
+        for binding in snapshot.sessions { sidebarBindings[binding.scope] = binding }
+        for workspace in snapshot.workspaces { sidebarWorkspaces[workspace.id] = workspace.name }
+    }
+
+    private func registerNotificationReader(_ scope: SessionScope, runID: String) {
+        let key = "\(scope.temporary):\(scope.sessionID):\(runID)"
+        guard notificationStores[key] == nil, notificationStores.count < 64, let client else { return }
+        let reader = ProductInteractionStore(); reader.configure(client)
+        reader.setScope(scope, runID: runID == "host" ? nil : runID)
+        notificationStores[key] = reader
+    }
+
+    private func closeProductSurface(retainingRuns: Bool) {
+        runWatchID = UUID()
+        productInteractions.close(); productCoordination.close(); productProjects.close()
+        productNotifications.close()
+        for store in notificationStores.values { store.close() }
+        notificationStores = [:]
+        sidebarBindings = [:]; sidebarWorkspaces = [:]
+        runTracker.reset(retainingDurable: retainingRuns)
+        parkedSubmissions = retainingRuns ? parkedSubmissions.filter { !$0.key.temporary } : [:]
     }
 
     func cancel() async {
@@ -932,9 +1116,12 @@ final class ChatStore {
               let phase = latest["status"].string else { return }
         var parameters = scope(session); parameters["run_id"] = .string(runID)
         let result = try await rpc("runs.get", parameters)
+        guard selected?.scope == session.scope, !stopping, !Task.isCancelled else { return }
         observedConversationRunID = runID
         try applyReceipts(result["run"])
         runPhase = phase
+        runTracker.record(scope: session.scope, runID: runID, phase: phase)
+        synchronizeProductContext()
         if ["queued", "running", "waiting_approval", "cancelling", "cleaning"].contains(phase) {
             activeRunID = runID
             activeSession = session
@@ -975,6 +1162,7 @@ final class ChatStore {
         nativeCleanupPending = false
         guard !stopping, runtime.isActive else { return }
         polling?.cancel(); memoryRecallRefresh?.cancel()
+        closeProductSurface(retainingRuns: true)
         await client?.close()
         await attachments.close()
         await access.close()
@@ -1068,13 +1256,13 @@ final class ChatStore {
     }
 
     func renameSession(_ session: ChatSession, title: String) async -> Bool {
-        guard canChangeSession else { return false }
+        guard canChangeSession, !isSessionRunning(session.scope) else { return false }
         var parameters = scope(session); parameters["title"] = .string(title)
         return await updateSession(parameters)
     }
 
     func forkSession(_ session: ChatSession) async {
-        guard canChangeSession else { return }
+        guard canChangeSession, !isSessionRunning(session.scope) else { return }
         stopVoice(); dictationNotice = nil
         if selectedID != session.id { await selectSession(session.id) }
         guard selected?.scope == session.scope else { return }
@@ -1100,7 +1288,7 @@ final class ChatStore {
     }
 
     func setArchived(_ session: ChatSession, archived: Bool) async {
-        guard canChangeSession else { return }
+        guard canChangeSession, !isSessionRunning(session.scope) else { return }
         if selectedID == session.id { stopVoice(); dictationNotice = nil }
         var parameters = scope(session); parameters["archived"] = .bool(archived)
         _ = await updateSession(parameters)
@@ -1121,7 +1309,7 @@ final class ChatStore {
     }
 
     func deleteSession(_ session: ChatSession) async {
-        guard canChangeSession else { return }
+        guard canChangeSession, !isSessionRunning(session.scope) else { return }
         if selectedID == session.id { conversationRefresh?.setScope(nil) }
         if selectedID == session.id { stopVoice(); dictationNotice = nil }
         busy = true
@@ -1130,6 +1318,8 @@ final class ChatStore {
             guard result["deleted"].bool == true else { throw RPCFailure.invalidResponse }
             sessions.removeAll(where: { $0.id == session.id })
             drafts.remove(session.scope)
+            runTracker.remove(session.scope); sidebarBindings.removeValue(forKey: session.scope)
+            productNotifications.remove(scope: session.scope)
             if selectedID == session.id {
                 selectedID = nil; messages = []; activities = []; streamingText = ""; receipts = []
                 access.setContext(nil)
@@ -1161,7 +1351,7 @@ final class ChatStore {
     }
 
     func logout() async {
-        guard !isRecoveryOnly, activeRunID == nil, !coreBlocksHost, !maintenance.blocksInteraction, !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction else { return }
+        guard !isRecoveryOnly, activeRunID == nil, !runTracker.hasActiveRuns, !coreBlocksHost, !maintenance.blocksInteraction, !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction else { return }
         stopVoice(); dictationNotice = nil
         do { _ = try await rpc("provider.logout"); try await refreshStatus() }
         catch { report(error) }
@@ -1190,6 +1380,7 @@ final class ChatStore {
         runtime.retire()
         statusText = "Cerrando el servicio y asentando las ejecuciones…"
         monitor?.cancel(); polling?.cancel(); memoryRecallRefresh?.cancel()
+        closeProductSurface(retainingRuns: false)
         access.setContext(nil)
         management.setContext(nil)
         sessionCore.setScope(nil)

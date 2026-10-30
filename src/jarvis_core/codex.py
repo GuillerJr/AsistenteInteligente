@@ -132,6 +132,7 @@ class CodexClient:
         self._pending: dict[int, asyncio.Future] = {}
         self._events: dict[str, asyncio.Queue] = {}
         self._threads: set[str] = set()
+        self._thread_token_totals: dict[str, int] = {}
         self._uncertain_threads: set[str] = set()
         self._tool_turns: dict[str, _ToolTurn] = {}
         self._active_turn_ids: dict[str, str] = {}
@@ -794,7 +795,8 @@ class CodexClient:
         tools = json.loads(json.dumps(list(tool_specs), allow_nan=False))
         names = [spec.get("name") for spec in tools if isinstance(spec, dict)]
         if (
-            len(tools) > 64
+            len(tools) > 128
+            or len(json.dumps(tools, ensure_ascii=False).encode()) > 262144
             or len(names) != len(tools)
             or any(not isinstance(name, str) for name in names)
             or len(set(names)) != len(names)
@@ -839,6 +841,7 @@ class CodexClient:
             if not isinstance(thread_id, str) or not 1 <= len(thread_id) <= 256:
                 raise CodexError("codex_thread_invalid")
             self._threads.add(thread_id)
+            self._thread_token_totals[thread_id] = 0
             items = list(history)
             if context_data:
                 items.insert(
@@ -878,6 +881,8 @@ class CodexClient:
             self._threads.add(thread_id)
         if thread_id in self._events:
             raise CodexError("codex_thread_busy")
+        usage_baseline = self._thread_token_totals.get(thread_id)
+        usage_total = None
         queue: asyncio.Queue = asyncio.Queue(maxsize=1024)
         self._events[thread_id] = queue
         tool_turn = (
@@ -934,7 +939,25 @@ class CodexClient:
                         raise CodexError("codex_event_invalid")
                     if params.get("turnId", turn.get("id")) != turn_id:
                         continue
-                    if method == "item/agentMessage/delta":
+                    if method == "thread/tokenUsage/updated":
+                        usage = params.get("tokenUsage")
+                        total = usage.get("total") if isinstance(usage, dict) else None
+                        tokens = total.get("totalTokens") if isinstance(total, dict) else None
+                        if (type(tokens) is int and 0 <= tokens <= 10**15
+                                and (usage_total is None or tokens >= usage_total)
+                                and (usage_baseline is None or tokens >= usage_baseline)):
+                            usage_total = tokens
+                            if on_event and usage_baseline is not None:
+                                on_event("usage.update", {
+                                    "run_total_tokens": tokens - usage_baseline,
+                                    "cost": None,
+                                    "source": "codex_cumulative_counter",
+                                })
+                        else:
+                            # An inconsistent cumulative counter cannot establish cost.
+                            usage_baseline = None
+                            usage_total = None
+                    elif method == "item/agentMessage/delta":
                         delta, item_id = params.get("delta"), params.get("itemId")
                         if not isinstance(delta, str) or not isinstance(item_id, str):
                             raise CodexError("codex_delta_invalid")
@@ -969,8 +992,20 @@ class CodexClient:
                         answer = "\n\n".join(text_parts.values()).strip()
                         if not answer or len(answer.encode()) > 32000:
                             raise CodexError("codex_answer_invalid")
+                        if usage_total is not None:
+                            self._thread_token_totals[thread_id] = usage_total
+                            if on_event:
+                                on_event("usage.final", {
+                                    "run_total_tokens": (usage_total - usage_baseline
+                                        if usage_baseline is not None else None),
+                                    "cost": None,
+                                    "source": "codex_cumulative_counter",
+                                })
+                        else:
+                            self._thread_token_totals.pop(thread_id, None)
                         return {"thread_id": thread_id, "answer": answer}
         except BaseException:
+            self._thread_token_totals.pop(thread_id, None)
             # An interrupt ACK is not settlement. Retain ownership until its
             # terminal event, or terminate the owned process and quarantine all
             # affected threads. Never replay a possibly accepted turn/start.
@@ -1160,6 +1195,7 @@ class CodexClient:
         self._process = None
         self._reader = self._stderr = None
         self._threads.clear()
+        self._thread_token_totals.clear()
         self._cleanup_pending = False
 
     async def aclose(self) -> None:

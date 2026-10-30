@@ -19,6 +19,7 @@ from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 from dataclasses import asdict
 from pathlib import Path
+from uuid import uuid4
 
 from jarvis_core.automation_events import AutomationEventsAPI
 from jarvis_core.automation_flows import AutomationFlowError
@@ -66,6 +67,11 @@ from jarvis_core.plugin_packages import PluginError
 from jarvis_core.plugins import PluginsStore
 from jarvis_core.private_json import PrivateJsonError
 from jarvis_core.processes import ProcessTools
+from jarvis_core.product_interactions import ProductInteractionError
+from jarvis_core.product_management import ProductManagementAPI
+from jarvis_core.product_projects import ProjectError
+from jarvis_core.product_runtime import SessionWorkspaceMixin
+from jarvis_core.product_tools import ProductTools
 from jarvis_core.profiles import ProfileError, ProfilesStore
 from jarvis_core.protocol import (
     LocalRpcServer,
@@ -77,6 +83,7 @@ from jarvis_core.provider_choice import ProviderChoice, ProviderChoiceError
 from jarvis_core.recovery_fs import FileIdentity
 from jarvis_core.runtime import AgentRuntime, FinalAnswer, RunContext, RunHandle, ToolResult
 from jarvis_core.scheduler import Scheduler, SchedulerError, SchedulerLimits, ScheduleStore
+from jarvis_core.session_coordination_types import CoordinationError
 from jarvis_core.skills import SkillError, SkillsStore
 from jarvis_core.state import (
     SessionRecord,
@@ -123,11 +130,13 @@ class _ProviderAdapter:
             on_thread=service._bind_thread,
             on_turn_closed=service._provider_turn_closed,
             take_tool_image=service._take_tool_image,
+            take_tool_text=service.product.take_ephemeral,
         )
 
     async def next_step(self, context: RunContext):
         service = self.service
         service._active_ref.set(service._refs[context.run_id])
+        service.activate_product_run(context.run_id)
         if service.host_tools.get(context.run_id) is not None:
             service._memory_run_id.set(context.run_id)
             return service.host_tools.next_step(context)
@@ -196,7 +205,8 @@ class _ApprovalGate:
                 self.service.store.set_run_status(ref, operation.run_id, "running")
 
 
-class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, AutomationAPI,
+class JarvisService(SessionWorkspaceMixin, ProductManagementAPI,
+                    TelegramManagementAPI, ManagementAPI, DelegationAPI, AutomationAPI,
                     AutomationEventsAPI, MediaManagementAPI,
                     ExtensionManagementAPI, MCPNetworkManagementAPI):
     def __init__(self, directory: Path, provider: CodexClient, *,
@@ -300,6 +310,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             else (ensure_private_directory(directory / "workspace"))
         )
         self.host_tools = HostToolRuns(self)
+        self.initialize_product()
         self.extension_hooks = ExtensionHooks(self)
         self.initialize_automation_events(directory)
         self.initialize_media()
@@ -329,6 +340,13 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             raise RpcError(-32037, error.code) from None
 
     def _configure_tools(self) -> None:
+        token = self._product_workspace_context.set(None)
+        try:
+            self._configure_default_tools()
+        finally:
+            self._product_workspace_context.reset(token)
+
+    def _configure_default_tools(self) -> None:
         self.workspace_tools = None
         self._workspace_error = None
         try:
@@ -362,6 +380,9 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         specs.extend(self.web_tools.specs())
         definitions.extend(self.delegation_tools.definitions())
         specs.extend(self.delegation_tools.specs())
+        self.product_tools = ProductTools(self)
+        definitions.extend(self.product_tools.definitions())
+        specs.extend(self.product_tools.specs())
         self.native_tools = NativeAutomationTools(self.native_broker,
             scope=self._native_scope, guard=self._native_guard,
             permissions=self.automation_permissions, workspace=lambda: self.workspace_tools)
@@ -373,14 +394,15 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         definitions.extend(self.telegram_tools.definitions())
         specs.extend(self.telegram_tools.specs())
         if self.workspace_tools:
-            definitions.extend(self.workspace_tools.definitions())
+            definitions.extend(self.workspace_definitions(self.workspace_tools.definitions()))
             specs.extend(self.workspace_tools.specs())
             if self.process_tools is None:
                 self.process_tools = ProcessTools(
                     self.workspace_tools, lambda: self._active_process_scope()
                 )
                 self.process_tools.child_custody = self.profile_lease.child_custody_fds
-            definitions.extend(self.process_tools.definitions())
+            definitions.extend(self.workspace_definitions(self.process_tools.definitions(),
+                                                          process=True))
             specs.extend(self.process_tools.specs())
         definitions.extend(self.mcp.definitions())
         specs.extend(self.mcp.specs())
@@ -426,6 +448,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             handle.cancel()
 
     def _client_revoked(self, client_id):
+        self.product.revoked(client_id)
         self._media_client_revoked(client_id)
         self._telegram_client_revoked(client_id)
         self.mcp_product.client_revoked(client_id)
@@ -450,6 +473,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 handle.cancel()
 
     def _assert_run_client(self, run_id):
+        self.product.guard_run(run_id)
         guard = self._automation_run_guards.get(run_id)
         if guard is not None:
             guard()
@@ -525,6 +549,10 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
 
     @profile_callback("run.event")
     def _event(self, context: RunContext, kind: str, payload: dict) -> None:
+        if kind in {"usage.final", "usage.update"}:
+            tokens = payload.get("run_total_tokens")
+            if type(tokens) is int and 0 <= tokens <= 2**53 - 1:
+                self.product.observe_usage(context.run_id, tokens, final=kind == "usage.final")
         if kind in {"answer.delta", "tool.requested"}:
             self.provider_choice.assert_current(self._provider_epochs[context.run_id])
         self.store.append_event(self._refs[context.run_id], context.run_id, kind, payload)
@@ -580,6 +608,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             json.dumps(
                 [
                     self._catalog_fingerprint,
+                    self._workspace_id,
                     profile.fingerprint,
                     skills.fingerprint,
                     extensions["fingerprint"],
@@ -677,6 +706,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             "mcp.remove": self.remove_mcp,
         }
         methods.update(self.management_handlers())
+        methods.update(self.product_handlers())
         methods.update(self.telegram_handlers())
         methods.update(self.delegation_handlers())
         methods.update(self.automation_handlers())
@@ -689,9 +719,19 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
 
         def safe(name, callback, *, closing=False):
             async def invoke(params):
+                workspace_token = self._product_workspace_context.set(None)
                 try:
                     with self.profile_gate.admit(name, mutating=name not in READ_RPCS,
                                                  closing=closing):
+                        identity = authenticated_client.get()
+                        if (self.product.enabled and identity is not None
+                                and "session_id" in params and not name.startswith("product.")):
+                            ref = self._ref(params)
+                            self.product.check_access(identity, ref,
+                                                       write=name not in READ_RPCS)
+                            workspace = self.bind_product_workspace(identity, ref)
+                            if workspace:
+                                self._product_workspace_context.set(workspace)
                         return await callback(params)
                 except (HostProfileError, ProviderChoiceError) as error:
                     raise RpcError(-32037, error.code) from None
@@ -713,6 +753,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                     raise RpcError(-32038, message) from None
                 except StateError as error:
                     raise RpcError(-32010, error.code) from None
+                except (ProductInteractionError, CoordinationError, ProjectError) as error:
+                    raise RpcError(-32041, error.code) from None
                 except CodexError as error:
                     raise RpcError(-32020, str(error)) from None
                 except TelegramError as error:
@@ -737,6 +779,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                         else "No se pudo consultar la memoria local de esta carpeta."
                     )
                     raise RpcError(-32031, message) from None
+                finally:
+                    self._product_workspace_context.reset(workspace_token)
 
             return invoke
 
@@ -837,23 +881,45 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         }
 
     def _workspace_value(self) -> dict:
+        selected = self._current_product_workspace()
         return {
             "path": str(self._workspace_path),
             "available": self.workspace_tools is not None,
-            "private_default": self._configured_workspace is None,
+            "private_default": (selected.path == self.directory / "workspace" if selected
+                                else self._configured_workspace is None),
             "error": (
                 "La carpeta no está disponible o cambió de identidad. Selecciónala de nuevo."
-                if self._workspace_error
+                if self._workspace_error and selected is None
                 else None
             ),
         }
 
     async def get_workspace(self, params: dict) -> dict:
-        _params(params, set())
+        _params(params, _BASE)
         return {"workspace": self._workspace_value()}
 
     async def set_workspace(self, params: dict) -> dict:
-        _params(params, {"path"}, {"path"})
+        _params(params, _BASE | {"path"}, {"path"})
+        if self.product.enabled and "session_id" in params:
+            ref, _, actor = self.product.context(params)
+            self.product._idle(ref)
+            tools = self.product_admit_workspace(params["path"])
+            from jarvis_core.product_management import workspace_key
+            workspace_id = workspace_key(tools)
+            rows = self.product.coordination.list_workspaces(actor.client_id,
+                                                             temporary=ref.temporary)
+            if not any(row["workspace_id"] == workspace_id for row in rows):
+                self.product.coordination.register_workspace(actor.client_id,
+                    workspace_id=workspace_id, name=tools.root.name, path=tools.root,
+                    temporary=ref.temporary)
+            binding = self.product.binding(actor.client_id, ref)
+            self.authority.revoke(ref.session_id)
+            self.automation_permissions.clear_session(ref.session_id)
+            self.product.coordination.bind_session(actor.client_id, ref,
+                workspace_id=workspace_id, expected_revision=binding["revision"],
+                group=binding["group"], pinned=binding["pinned"])
+            self._product_workspace_context.set(self.bind_product_workspace(actor.client_id, ref))
+            return {"workspace": self._workspace_value()}
         if (
             self._handles
             or self._maintenance
@@ -1033,6 +1099,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                     "session_id": item.session_id,
                     "run_id": item.run_id,
                     "tool_name": item.tool_name,
+                    "requester_client_id": self._run_clients.get(item.run_id),
                     "arguments": json.loads(item.arguments_json),
                     "arguments_json": item.arguments_json,
                     "digest": item.digest,
@@ -1073,7 +1140,24 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             raise RpcError(-32602, "Enviar un adjunto a Telegram exige una aprobación nueva.")
         if mode != "operation" and (context is None or (ref.temporary and mode == "always")):
             raise RpcError(-32602, "Este permiso requiere una conversación local durable.")
+        if item is not None:
+            self.store.append_event(ref, item.run_id, "approval.decision_requested", {
+                "approval_id": item.approval_id, "digest": item.digest,
+                "requester_client_id": self._run_clients.get(item.run_id),
+                "approver_client_id": authenticated_client.get(),
+                "allow": params["allow"], "remember": mode,
+                "grants_model_identity": False,
+            })
         accepted = self.authority.decide(item.approval_id, params["allow"]) if item else False
+        if item is not None:
+            try:
+                self.store.append_event(ref, item.run_id, "approval.decision_recorded", {
+                    "approval_id": item.approval_id, "accepted": accepted,
+                    "approver_client_id": authenticated_client.get(),
+                })
+            except BaseException:
+                self.authority.revoke(ref.session_id)
+                raise
         if accepted and mode != "operation":
             try:
                 self.automation_permissions.remember(**context, mode=mode)
@@ -1228,14 +1312,36 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 "error_code": None}
 
     async def create_session(self, params: dict) -> dict:
-        _params(params, {"title", "temporary", "agent_id"})
+        _params(params, {"title", "temporary", "agent_id", "workspace_id"})
         self._title(params.get("title", "Nueva conversación"))
         profile = self.agent_profiles.get(params.get("agent_id", "jarvis"))
+        temporary = params.get("temporary", False)
+        if type(temporary) is not bool:
+            raise RpcError(-32602, "El tipo de conversación no es válido.")
+        identity = authenticated_client.get()
+        selected_workspace = None
+        if self.product.enabled and identity is not None:
+            selected_workspace = params.get("workspace_id") or self.product._default_workspace(
+                identity, temporary=temporary)
+            rows = self.product.coordination.list_workspaces(identity, temporary=temporary)
+            if selected_workspace not in {row["workspace_id"] for row in rows}:
+                raise RpcError(-32003, "Esta carpeta no está admitida para el cliente.")
+        elif "workspace_id" in params:
+            raise RpcError(-32602, "Inicializa el producto antes de elegir una carpeta.")
         record = self.store.create_session(
             params.get("title", "Nueva conversación"),
-            temporary=params.get("temporary", False),
+            temporary=temporary,
             agent_id=profile.agent_id,
         )
+        if selected_workspace is not None:
+            ref = record.ref
+            try:
+                self.product.coordination.bind_session(identity, ref,
+                                                       workspace_id=selected_workspace)
+            except BaseException:
+                # No run or external effect exists yet; do not leave a hidden session.
+                self.store.delete_session(ref)
+                raise
         return {"session": _session(record)}
 
     async def list_sessions(self, params: dict) -> dict:
@@ -1257,7 +1363,8 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             )
         ]
         return {
-            "sessions": records,
+            "sessions": [row for row in records if self.product.can_read(
+                authenticated_client.get(), SessionRef(row["session_id"], row["temporary"]))],
             "next_offset": offset + 100,
             "has_more": any(
                 len([r for r in records if r["temporary"] == mode]) == 100 for mode in (False, True)
@@ -1290,14 +1397,23 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             raise RpcError(-32011, "Cancela y espera al cierre de la ejecución antes de borrar.")
         if self.telegram_uses_session(ref):
             raise RpcError(-32036, "Quita la ruta de Telegram antes de borrar esta conversación.")
+        if self.product.enabled and authenticated_client.get() is not None:
+            owner = authenticated_client.get()
+            binding = self.product.binding(owner, ref, claim=True)
+            self.product.coordination.delete_session(owner, ref,
+                expected_revision=binding["revision"], check_only=True)
         self.authority.revoke(ref.session_id)
         self.native_broker.assert_settled(ref.session_id)
         self.automation_permissions.clear_session(ref.session_id)
         self._retiring_sessions.add(ref)
         cleanup_uncertain = False
         try:
-            if self.process_tools:
-                await self.process_tools.close_scope(ref.session_id)
+            managers = {id(item.processes): item.processes
+                        for item in self._product_workspaces.values()}
+            if self._default_process_tools:
+                managers[id(self._default_process_tools)] = self._default_process_tools
+            for manager in managers.values():
+                await manager.close_scope(ref.session_id)
             if ref.temporary:
                 for media in self._media_stores.values():
                     media.clear_temporary(AttachmentScope(ref.session_id, media.workspace_id, True))
@@ -1309,11 +1425,28 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 self._volatile_bindings.pop(ref.session_id, None)
             else:
                 self.config.forget(ref.session_id)
-            self.store.delete_session(ref)
+            if self.product.enabled and authenticated_client.get() is not None:
+                owner = authenticated_client.get()
+                binding = self.product.binding(owner, ref, claim=True)
+                # Delete the authoritative session first. If this commit fails,
+                # its workspace and ACL remain intact in coordination. A failure
+                # of the later metadata cut retains an inert orphan, never an
+                # existing session silently rebound to the default workspace.
+                self.store.delete_session(ref)
+                # Metadata cleanup is synchronous. Its idle check must not
+                # mistake this already-custodied deletion for a competing writer.
+                self._retiring_sessions.discard(ref)
+                try:
+                    self.product.coordination.delete_session(owner, ref,
+                        expected_revision=binding["revision"], state_deleted=True)
+                finally:
+                    self._retiring_sessions.add(ref)
+            else:
+                self.store.delete_session(ref)
         except BaseException as error:
             code = getattr(error, "code", "")
             cleanup_uncertain = (
-                isinstance(error, asyncio.CancelledError)
+                isinstance(error, (asyncio.CancelledError, StateError, CoordinationError))
                 or (isinstance(code, str) and ("cleanup" in code or "unknown" in code))
                 or getattr(error, "owner", None) is not None
             )
@@ -1352,7 +1485,9 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
         }
 
     async def start_run(self, params: dict) -> dict:
-        _params(params, _BASE | {"message", "request_id", "attachment_ids"},
+        _params(params, _BASE | {"message", "request_id", "attachment_ids",
+                               "reservation_tokens", "reservation_cost", "expected_workspace_id",
+                               "expected_security_generation"},
                 {"session_id", "message"})
         if self._closing:
             raise RpcError(-32011, "Jarvis está cerrando el servicio.")
@@ -1367,6 +1502,18 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 )
             self._refresh_mcp_catalog()
         ref = self._ref(params)
+        if {"expected_workspace_id", "expected_security_generation"} & set(params):
+            expected = params.get("expected_workspace_id")
+            generation = params.get("expected_security_generation")
+            if (not self.product.enabled or authenticated_client.get() is None
+                    or not isinstance(expected, str) or re.fullmatch(r"[a-f0-9]{32}", expected)
+                    is None or type(generation) is not int or not 0 <= generation < 2**52):
+                raise RpcError(-32602, "La precondición de carpeta no es válida.")
+            binding = self.product.binding(authenticated_client.get(), ref)
+            if (binding["workspace_id"] != expected
+                    or binding["security_generation"] != generation):
+                raise RpcError(-32012,
+                               "La carpeta o sus permisos cambiaron. Carga la sesión de nuevo.")
         if ref in self._retiring_sessions:
             raise RpcError(-32011, "session_cleanup_pending")
         message = params["message"]
@@ -1400,6 +1547,14 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             raise RpcError(-32011, "Espera a que termine la ejecución de esta conversación.")
         self.provider_choice.assert_current()
         provider_epoch = self.provider_choice.epoch()
+        if self.product.enabled and authenticated_client.get() is not None:
+            identity = authenticated_client.get()
+            self.product.binding(identity, ref, claim=True)
+            self.product.check_access(identity, ref, write=True)
+            selected_workspace = self.bind_product_workspace(identity, ref)
+            self._product_workspace_context.set(selected_workspace)
+            request_id = request_id or uuid4().hex
+            self.product.reserve_run(identity, ref, request_id, params)
         writer = self.profile_gate.hold("run.owner", mutating=True, closing=True)
         try:
             record = self.store.create_run(
@@ -1411,6 +1566,9 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             raise
         self._run_writers[record.run_id] = writer
         self._run_clients[record.run_id] = authenticated_client.get()
+        workspace = self._current_product_workspace()
+        if workspace is not None:
+            self._run_workspaces[record.run_id] = workspace
         self._refs[record.run_id] = ref
         self._provider_epochs[record.run_id] = provider_epoch
         self.host_tools.attach(record.run_id)
@@ -1466,6 +1624,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 "error": error,
                 "error_type": result.error_type,
                 "action_receipts": [self._receipt(item) for item in result.action_receipts],
+                "cleanup_confirmed": result.cleanup_confirmed,
             }
             known_denial = (
                 not error_overridden and result.known_approval_denial
@@ -1480,6 +1639,13 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                 clear_provider_thread=result.status != "completed",
                 outcome="known" if result.status == "completed" or known_denial else "unknown",
             )
+            try:
+                self.product.settle_run(ref, result)
+            except (CoordinationError, ProductInteractionError, ClientIdentityError) as failure:
+                # A revoked accounting owner cannot settle a reservation. Keep
+                # its conservative durable custody rather than inventing usage.
+                self.store.append_event(ref, result.run_id, "product.accounting.unconfirmed",
+                                        {"code": getattr(failure, "code", "owner_revoked")})
             if handle.run_id not in self._automation_origins and not ref.temporary:
                 try:
                     self._emit_automation_event(
@@ -1506,6 +1672,9 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             self._run_fingerprints.pop(handle.run_id, None)
             self._provider_epochs.pop(handle.run_id, None)
             self._run_clients.pop(handle.run_id, None)
+            self._run_workspaces.pop(handle.run_id, None)
+            self.product.ephemeral = {key: row for key, row in self.product.ephemeral.items()
+                                      if row[0] != handle.run_id}
             self._memory_leases.pop(handle.run_id, None)
             self._memory_epochs.pop(handle.run_id, None)
             writer = self._run_writers.pop(handle.run_id, None)
@@ -1524,6 +1693,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             "error_type": receipt.get("error_type"),
             "answer_source": receipt.get("answer_source"),
             "action_receipts": receipt.get("action_receipts", []),
+            "cleanup_confirmed": receipt.get("cleanup_confirmed") is True,
         }
 
     async def get_run(self, params: dict) -> dict:
@@ -1664,6 +1834,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
             self.close_mcp_network,
             self._close_extensions,
             self.close_automation_events,
+            self.close_product_workspaces,
         ):
             if closer is not None:
                 try:
@@ -1672,6 +1843,7 @@ class JarvisService(TelegramManagementAPI, ManagementAPI, DelegationAPI, Automat
                     resource_errors.append(error)
         if resource_errors:
             raise resource_errors[0]
+        await self.product.close()
         self.close_media()
         self.schedule_store.close()
         self.memory.close()

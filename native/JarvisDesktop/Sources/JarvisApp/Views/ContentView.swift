@@ -1,4 +1,5 @@
 import AppKit
+import DesktopCore
 import SwiftUI
 
 @MainActor struct ContentView: View {
@@ -27,7 +28,9 @@ import SwiftUI
 
     private var navigation: some View {
         NavigationSplitView {
-            SidebarView(store: store)
+            SidebarView(store: store, onManage: {
+                inspector.selection = "coordination"; inspector.isPresented = true
+            })
                 .navigationSplitViewColumnWidth(min: 200, ideal: 245, max: 320)
         } detail: {
             VStack(spacing: 0) {
@@ -63,11 +66,25 @@ import SwiftUI
                 MessageListView(messages: store.messages, temporary: store.selected?.temporary ?? false,
                                 streamingText: store.streamingText, canRead: store.canUseVoice && !store.voice.canStopDictation,
                                 onRead: store.readMessage)
+                if store.productInteractions.scope == store.selected?.scope,
+                   !store.productInteractions.pendingQuestions.isEmpty {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Jarvis necesita una decisión").font(.headline)
+                            ForEach(store.productInteractions.pendingQuestions) { question in
+                                ProductInteractionQuestionView(store: store.productInteractions, interaction: question)
+                                    .id("\(store.productInteractions.viewIdentity):\(question.id):\(question.revision)")
+                            }
+                        }.padding(.horizontal, 20).padding(.vertical, 12)
+                    }.frame(maxHeight: 300)
+                }
                 if store.ready {
                     ApprovalListView(access: store.access)
-                    DelegatedApprovalsView(coordination: store.delegation)
+                    if store.delegation.scope == store.selected?.scope {
+                        DelegatedApprovalsView(coordination: store.delegation)
+                    }
                 }
-                if let goal = store.delegation.goal, !goal.settled {
+                if let goal = store.delegation.goal, goal.scope == store.selected?.scope, !goal.settled {
                     HStack {
                         Text("Objetivo: \(goal.objective)").lineLimit(1).font(.caption)
                         Spacer()
@@ -124,6 +141,9 @@ import SwiftUI
                     }.disabled(!store.ready || store.selected == nil)
                     Menu("Gestionar", systemImage: "slider.horizontal.3") {
                         Button("Mac y navegador") { inspector.selection = "automation"; inspector.isPresented = true }
+                        Button("Actividad y panel") { inspector.selection = "product"; inspector.isPresented = true }
+                        Button("Conversaciones y colaboración") { inspector.selection = "coordination"; inspector.isPresented = true }
+                        Button("Proyectos y GitHub") { inspector.selection = "projects"; inspector.isPresented = true }
                         Button("Contexto y ramas") { inspector.selection = "sessionCore"; inspector.isPresented = true }
                         Button("Clientes locales") { inspector.selection = "clients"; inspector.isPresented = true }
                         Button("Delegación y objetivos") { inspector.selection = "delegation"; inspector.isPresented = true }
@@ -169,6 +189,9 @@ import SwiftUI
                 HStack {
                     Picker("Panel", selection: $inspector.selection) {
                         Text("Mac y navegador").tag("automation")
+                        Text("Actividad y panel").tag("product")
+                        Text("Conversaciones y colaboración").tag("coordination")
+                        Text("Proyectos y GitHub").tag("projects")
                         Text("Contexto y ramas").tag("sessionCore")
                         Text("Clientes locales").tag("clients")
                         Text("Delegación y objetivos").tag("delegation")
@@ -188,6 +211,37 @@ import SwiftUI
                 }.padding()
                 Divider()
                 if inspector.selection == "automation" { AutomationControlView(store: store) }
+                else if inspector.selection == "product" {
+                    VStack(spacing: 0) {
+                        HStack {
+                            if store.productNotifications.permissionGranted {
+                                Label("Avisos de macOS permitidos", systemImage: "bell").font(.caption).foregroundStyle(.secondary)
+                            } else {
+                                Button("Permitir avisos de macOS…") {
+                                    Task { await store.productNotifications.requestPermission() }
+                                }.disabled(!store.ready || store.productCoordination.snapshot?.isOwner != true
+                                    || store.productNotifications.isRequestingPermission)
+                            }
+                            Spacer()
+                        }.padding(.horizontal, 20).padding(.top, 12)
+                        if let error = store.productNotifications.errorMessage {
+                            Text(error).font(.caption).foregroundStyle(.orange).padding(.horizontal, 20)
+                        }
+                        ProductInteractionPanel(store: store.productInteractions,
+                            onDraft: store.appendProductDraft,
+                            onNavigate: { navigation in Task { await store.navigateProductNotification(navigation) } })
+                    }
+                }
+                else if inspector.selection == "coordination" {
+                    ProductCoordinationView(store: store.productCoordination,
+                        onCreateSession: { id in Task { await store.createProductSession(workspaceID: id) } },
+                        onSelectSession: { scope in Task { await store.selectSession(scope.sessionID) } },
+                        onRunStarted: store.observeProductRun, canManage: store.canChangeSession)
+                }
+                else if inspector.selection == "projects" {
+                    ProductProjectsView(store: store.productProjects,
+                        onRunStarted: store.observeProductRun, canManage: store.canChangeSession)
+                }
                 else if inspector.selection == "mcp" { MCPView(store: store) }
                 else if inspector.selection == "sessionCore" { SessionCoreView(store: store) }
                 else if inspector.selection == "clients" { ClientIdentityView(store: store) }
@@ -202,6 +256,9 @@ import SwiftUI
                 else if inspector.selection == "telegram" { TelegramView(store: store) }
                 else { CapabilitiesView(store: store) }
             }
+        }
+        .onChange(of: store.productCoordination.snapshot?.binding) {
+            Task { await store.refreshProductWorkspace() }
         }
     }
 

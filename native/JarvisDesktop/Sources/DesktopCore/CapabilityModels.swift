@@ -43,6 +43,7 @@ public struct ApprovalOperation: Identifiable, Equatable, Sendable {
     public let argumentsJSON: String
     public let digest: String
     public let expiresAt: Date
+    public let requesterClientID: String?
 
     public init(_ value: RPCValue, expectedScope: SessionScope, expectedRunID: String?) throws {
         guard let id = value["approval_id"].string, Self.hex(id, count: 32),
@@ -67,6 +68,12 @@ public struct ApprovalOperation: Identifiable, Equatable, Sendable {
         argumentsJSON = arguments
         self.digest = digest
         expiresAt = Date(timeIntervalSince1970: expiry)
+        if value["requester_client_id"] == .null { requesterClientID = nil }
+        else {
+            guard let requester = value["requester_client_id"].string,
+                  Self.hex(requester, count: 64) else { throw RPCFailure.invalidResponse }
+            requesterClientID = requester
+        }
     }
 
     public func isExpired(at now: Date) -> Bool { now >= expiresAt }

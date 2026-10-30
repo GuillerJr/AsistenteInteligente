@@ -17,7 +17,7 @@ import sqlite3
 import stat
 import threading
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
 from uuid import uuid4
@@ -424,6 +424,60 @@ class _JsonState:
     fingerprint: tuple
 
 
+def _product_stores(service):
+    product = getattr(service, "product", None)
+    if product is None:
+        return ()
+    rows = []
+    if getattr(product, "coordination", None) is not None:
+        rows.append(("coordination", product.coordination, product.coordination._check_disk))
+    interactions = getattr(product, "interactions", None)
+    if interactions is not None:
+        rows.append(("interactions", interactions._state,
+                     interactions._state._assert_disk_identity))
+    return tuple(rows)
+
+
+def _product_connection_state(service):
+    values = []
+    for role, store, checker in _product_stores(service):
+        with store._mutex:
+            connection = store._disk
+            if connection is None:
+                values.append((role, None))
+            else:
+                checker()
+                values.append((role, id(connection), connection.total_changes,
+                               connection.execute("PRAGMA data_version").fetchone()[0]))
+    return tuple(values)
+
+
+def _product_state(service):
+    from jarvis_core.product_recovery import (
+        ProductSqliteSource,
+        export_product_state,
+        product_source_fingerprint,
+    )
+    with ExitStack() as locks:
+        sources = {}
+        for role, store, checker in _product_stores(service):
+            locks.enter_context(store._mutex)
+            if store._disk is not None:
+                sources[role] = ProductSqliteSource(store._disk, checker)
+        before = product_source_fingerprint(service.directory)
+        connections = _product_connection_state(service)
+        data = export_product_state(
+            service.directory, sqlite_sources=sources,
+            checkpoint=lambda _stage: service.profile_lease.assert_current())
+        after = product_source_fingerprint(service.directory)
+        if before != after or connections != _product_connection_state(service):
+            raise HostProfileError("profile_sources_changed")
+        fingerprint = ("present" if data is not None else "absent", after, connections,
+                       hashlib.sha256(data or b"").hexdigest())
+        # Generated JSON has no writable registry document or staging exemption.
+        return _JsonState("product", None, data, fingerprint)
+
+
 def _sqlite_state(role, store):
     connection = store._connection if role == "schedules" else store._disk
     path = store.path
@@ -540,12 +594,14 @@ def _inventory(service, *, full_admission=True, staging=None):
     root_allowed = {"profile.lock", "configuration.json", "configuration.lock",
                     "maintenance.json", "maintenance.json.lock", "transport.token", "service.sock",
                     "provider", "mcp", "workspace", "profiles", "telegram", "auth.json",
-                    "restore_record.json", "restore_admission.json", "provider_choice.json"}
+                    "restore_record.json", "restore_admission.json", "provider_choice.json",
+                    "product-recovery.json", "projects"}
     if getattr(service, "automation_flows", None) is not None:
         root_allowed.update({"automation.json", "automation.json.lock", "automation.runner.lock"})
         if staged is not None and staged[0].directory == service.profile_lease.root:
             root_allowed.add(staged[1])
-    for name in ("jarvis.sqlite3", "memory.sqlite3", "schedules.sqlite3"):
+    for name in ("jarvis.sqlite3", "memory.sqlite3", "schedules.sqlite3",
+                 "session-coordination.sqlite3", "product-interactions.sqlite3"):
         root_allowed.update(name + suffix for suffix in (
             "", ".lock", ".init.lock", ".runner.lock", "-journal", "-wal", "-shm",
         ))
@@ -586,7 +642,7 @@ def _states(service, *, staging=None):
         documents += (("plugins", service.plugins.document),)
     if getattr(service, "automation_flows", None) is not None:
         documents += (("automations", service.automation_flows.document),)
-    docs = tuple(_json_state(role, document) for role, document in documents)
+    docs = (*(_json_state(role, document) for role, document in documents), _product_state(service))
     return sql, docs
 
 
@@ -688,6 +744,12 @@ class FrozenSources:
                     if current.fingerprint != row.fingerprint:
                         raise HostProfileError("profile_sources_changed")
             for row in self._json:
+                if row.role == "product":
+                    from jarvis_core.product_recovery import product_source_fingerprint
+                    if (product_source_fingerprint(self.service.directory) != row.fingerprint[1]
+                            or _product_connection_state(self.service) != row.fingerprint[2]):
+                        raise HostProfileError("profile_sources_changed")
+                    continue
                 directory = row.document.directory.lstat()
                 parent_id = row.fingerprint[1]
                 if (not stat.S_ISDIR(directory.st_mode)
@@ -870,7 +932,7 @@ def freeze_sources(service, cut: ProfileCut) -> FrozenSources:
     # or suitable destinations nested under a host's private runtime state.
     memory_roots = tuple(service.directory.with_name(service.directory.name + suffix)
                          for suffix in (".memory-control", ".memory-cache", ".memory-jobs",
-                                        ".memory-model"))
+                                        ".memory-model", ".project-worktrees"))
     intelligence = getattr(service, "memory_intelligence", None)
     if intelligence is not None:
         memory_roots += (intelligence.model_directory,)
@@ -964,6 +1026,23 @@ def service_blockers(service):
     product = getattr(service, "mcp_product", None)
     if product is not None:
         codes.update(product.blockers)
+    owned_product = getattr(service, "product", None)
+    if owned_product is not None:
+        projects = getattr(owned_product, "projects", None)
+        if projects is not None:
+            codes.update(code for code in projects.blockers
+                         if code != "project_effect_unconfirmed")
+        for entry in getattr(owned_product, "github", {}).values():
+            backend = entry.get("backend")
+            if backend is not None:
+                codes.update(code for code in backend.blockers
+                             if code != "github_publication_unconfirmed")
+                if backend._lock.locked():
+                    codes.add("github_publication_active")
+        for _role, store, _checker in _product_stores(service):
+            with store._mutex:
+                if store._disk is not None and store._disk.in_transaction:
+                    codes.add("product_transaction_active")
     flows = getattr(service, "automation_flows", None)
     runner = getattr(service, "automation_runner", None)
     inbox = getattr(service, "automation_webhook", None)
@@ -976,6 +1055,9 @@ def service_blockers(service):
         codes.add("scheduler_active_or_cleanup")
     if service.process_tools and service.process_tools.has_running:
         codes.add("processes_active_or_cleanup")
+    if any(item.processes.has_running
+           for item in getattr(service, "_product_workspaces", {}).values()):
+        codes.add("workspace_processes_active_or_cleanup")
     if getattr(service, "native_broker", None) is not None and service.native_broker.blockers:
         codes.add("native_automation_active_or_cleanup")
     channel = service._telegram_channel
@@ -1004,6 +1086,7 @@ def service_blockers(service):
 # Reads may initialize SQLite or provider/pairing state, so ALL handlers are
 # admitted. This set only avoids false generation bumps for unchanged polling.
 READ_RPCS = frozenset({
+    "product.snapshot", "product.tool.result",
     "telegram.group.discover.review", "telegram.group.discover.status",
     "media.list", "media.read", "media.playback.read", "media.upload.status", "media.worker.read",
     "telegram.group.pairing.review", "telegram.group.pairing.status", "telegram.destination",

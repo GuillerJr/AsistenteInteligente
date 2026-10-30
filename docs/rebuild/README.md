@@ -1,5 +1,13 @@
 # Variante propia inspirada en OpenClaw — base limpia
 
+El incremento de [producto y coordinación avanzada](PHASE_A_PRODUCT_COORDINATION.md)
+está implementado y conectado en una revisión nueva pendiente de CI y
+cualificación nativa. Incluye proyectos/GitHub, workspaces por sesión,
+colaboración local, preguntas/paneles/avisos, presupuestos inclusivos y
+clientes propios CLI/TUI/ACP. La [revisión OC-28](REA_OC28_PRODUCT_COORDINATION.md)
+conserva tres particiones y sus límites. No se presenta como paridad acreditada
+por haber escrito código o pruebas.
+
 El incremento de [distribución autocontenida y servicio residente](PHASE_A_DISTRIBUTION_RESIDENT.md)
 incorpora el runtime base completo, verificación del manifiesto cuyo pin está en
 Info.plist firmado, preparación offline del modelo y arranque optativo de la app

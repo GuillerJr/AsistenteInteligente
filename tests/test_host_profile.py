@@ -252,7 +252,7 @@ async def test_absent_sources_and_exclusions_are_never_created_or_opened(service
     with service.profile_gate.exclusive() as cut:
         frozen = freeze_sources(service, cut)
         bundle = frozen.bind(cut)
-        expected = {"state", "memory", "schedules", "skills", "telegram"}
+        expected = {"state", "memory", "schedules", "skills", "telegram", "product"}
         if getattr(service, "plugins", None) is not None:
             expected.add("plugins")
         if getattr(service, "automation_flows", None) is not None:

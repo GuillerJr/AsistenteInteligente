@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SidebarView: View {
     @Bindable var store: ChatStore
+    var onManage: () -> Void = {}
     @State private var showArchived = false
     @State private var renaming: ChatSession?
     @State private var deleting: ChatSession?
@@ -16,16 +17,21 @@ struct SidebarView: View {
                 } label: { Image(systemName: "square.and.pencil") }
                 .help("Nueva conversación (⌘N)")
                 .accessibilityLabel("Nueva conversación")
-                .disabled(!store.canChangeSession)
+                .disabled(!store.canNavigateSession)
             }.padding(16)
             Picker("Agente para chats nuevos", selection: $store.newAgentID) {
                 ForEach(store.management.agents) { agent in Text(agent.name).tag(agent.id) }
-            }.padding(.horizontal, 14).padding(.bottom, 10).disabled(!store.canChangeSession)
+            }.padding(.horizontal, 14).padding(.bottom, 10).disabled(!store.canNavigateSession)
             List(selection: Binding(get: { store.selectedID }, set: { id in
                 if let id { Task { await store.selectSession(id) } }
             })) {
-                Section("Conversaciones") {
-                    ForEach(store.sessions.filter { !$0.archived }) { session in row(session) }
+                if !pinnedSessions.isEmpty {
+                    Section("Fijadas") { ForEach(pinnedSessions) { session in row(session) } }
+                }
+                ForEach(Array(groupedSessions.keys).sorted(), id: \.self) { group in
+                    Section(groupTitle(group)) {
+                        ForEach(groupedSessions[group] ?? []) { session in row(session) }
+                    }
                 }
                 if showArchived {
                     Section("Archivadas") {
@@ -34,7 +40,7 @@ struct SidebarView: View {
                 }
             }
             .listStyle(.sidebar)
-            .disabled(!store.canChangeSession)
+            .disabled(!store.canNavigateSession)
             Divider()
             if store.sessions.contains(where: \.archived) {
                 Toggle("Mostrar archivadas", isOn: $showArchived)
@@ -43,8 +49,10 @@ struct SidebarView: View {
             Button("Chat temporal", systemImage: "clock.badge.questionmark") {
                 Task { await store.createSession(temporary: true) }
             }
-            .disabled(!store.canChangeSession)
+            .disabled(!store.canNavigateSession)
             .padding(14)
+            Button("Carpetas y colaboración", systemImage: "folder") { onManage() }
+                .disabled(!store.ready).font(.callout).padding(.bottom, 12)
             Text("Base independiente · Fase A")
                 .font(.caption).foregroundStyle(.secondary).padding(.bottom, 12)
         }
@@ -65,17 +73,45 @@ struct SidebarView: View {
     }
 
     private func row(_ session: ChatSession) -> some View {
-        Label(session.title, systemImage: session.archived ? "archivebox" : session.parentSessionID != nil ? "arrowshape.turn.up.right" : session.temporary ? "clock.badge.questionmark" : "bubble.left")
-            .lineLimit(1).tag(session.id)
+        VStack(alignment: .leading, spacing: 3) {
+            Label(session.title, systemImage: session.archived ? "archivebox" : session.parentSessionID != nil ? "arrowshape.turn.up.right" : session.temporary ? "clock.badge.questionmark" : "bubble.left")
+                .lineLimit(1)
+            if store.isSessionRunning(session.scope) {
+                Text(store.runTracker.observations[session.scope]?.phase == "waiting_approval"
+                     ? "Aprobación pendiente" : "En curso")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }.tag(session.id)
             .contextMenu {
-                Button("Renombrar…") { renaming = session }
-                Button("Ramificar conversación…") { Task { await store.forkSession(session) } }
+                Button("Abrir organización…") { Task { await store.selectSession(session.id); onManage() } }
+                    .disabled(!store.canNavigateSession)
+                Button("Renombrar…") { renaming = session }.disabled(!mayMutate(session))
+                Button("Ramificar conversación…") { Task { await store.forkSession(session) } }.disabled(!mayMutate(session))
                 Button(session.archived ? "Restaurar" : "Archivar") {
                     if !session.archived { showArchived = true }
                     Task { await store.setArchived(session, archived: !session.archived) }
-                }
+                }.disabled(!mayMutate(session))
                 Divider()
-                Button("Borrar…", role: .destructive) { deleting = session }
+                Button("Borrar…", role: .destructive) { deleting = session }.disabled(!mayMutate(session))
             }
+    }
+
+    private var pinnedSessions: [ChatSession] {
+        store.sessions.filter { !$0.archived && store.sidebarBindings[$0.scope]?.pinned == true }
+    }
+    private var groupedSessions: [String: [ChatSession]] {
+        Dictionary(grouping: store.sessions.filter { !$0.archived && store.sidebarBindings[$0.scope]?.pinned != true }) { session in
+            guard let binding = store.sidebarBindings[session.scope] else { return "unbound" }
+            return binding.workspaceID + "\u{0}" + (binding.group ?? "")
+        }
+    }
+    private func groupTitle(_ key: String) -> String {
+        let parts = key.split(separator: "\u{0}", omittingEmptySubsequences: false)
+        guard parts.count == 2 else { return "Conversaciones" }
+        let workspace = store.sidebarWorkspaces[String(parts[0])] ?? "Carpeta de trabajo"
+        return parts[1].isEmpty ? workspace : workspace + " · " + String(parts[1])
+    }
+    private func mayMutate(_ session: ChatSession) -> Bool {
+        store.canChangeSession && !store.isSessionRunning(session.scope)
     }
 }

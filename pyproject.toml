@@ -14,6 +14,10 @@ dependencies = [
     "tokenizers==0.22.1",
 ]
 
+[project.scripts]
+jarvis = "jarvis_core.product_client:main"
+jarvis-acp = "jarvis_core.product_acp:main"
+
 [dependency-groups]
 dev = [
   "pytest>=8.4,<9",

@@ -48,6 +48,7 @@ final class AccessStore {
     @ObservationIgnored private var context: SessionScope?
     @ObservationIgnored private var documentOffset = 0
     @ObservationIgnored private var memoryGeneration = 0
+    @ObservationIgnored private var contextGeneration = 0
 
     init(request: MaintenanceClient.Request? = nil) { self.request = request }
     func configure(client: LocalRPCClient) { self.client = client }
@@ -55,11 +56,13 @@ final class AccessStore {
 
     func setContext(_ scope: SessionScope?) {
         if scope != context {
+            contextGeneration += 1
             context = scope
             approvals = []; mediaApprovalDetails = [:]; documents = []; matches = []; verifiedCitations = []
             documentOffset = 0; memoryGeneration += 1
             isLoadingMemory = false
             memoryQuery = ""; memoryQueryMode = .lexical; memorySearchHasMore = false; memorySearchHasResponse = false; errorMessage = nil
+            workspacePath = nil; workspaceAvailable = false; workspaceError = nil
         }
     }
 
@@ -75,12 +78,12 @@ final class AccessStore {
     }
 
     func refreshCatalog() async throws {
+        let generation = contextGeneration, selected = context
         let result = try await rpc("tools.list")
         guard let values = result["tools"].array else { throw RPCFailure.invalidResponse }
         let descriptions = try values.map(ToolDescriptor.init)
         guard Set(descriptions.map(\.name)).count == descriptions.count else { throw RPCFailure.invalidResponse }
-        tools = descriptions
-        let workspace = try await rpc("workspace.get")
+        let workspace = try await rpc("workspace.get", selected?.params ?? [:])
         guard workspace["workspace"].object != nil else { throw RPCFailure.invalidResponse }
         let path: String?
         if case .null = workspace["workspace"]["path"] { path = nil }
@@ -88,6 +91,8 @@ final class AccessStore {
         else { throw RPCFailure.invalidResponse }
         guard let available = workspace["workspace"]["available"].bool,
               let privateDefault = workspace["workspace"]["private_default"].bool else { throw RPCFailure.invalidResponse }
+        guard generation == contextGeneration, context == selected, !Task.isCancelled else { return }
+        tools = descriptions
         workspaceAvailable = available; workspacePrivateDefault = privateDefault
         workspaceError = workspace["workspace"]["error"].string
         if path != workspacePath {
@@ -100,6 +105,7 @@ final class AccessStore {
 
     func refreshApprovals(runID: String?) async throws {
         guard let scope = context, toolsEnabled else { approvals = []; return }
+        let generation = contextGeneration
         var parameters = scope.params
         if let runID { parameters["run_id"] = .string(runID) }
         let result = try await rpc("approvals.list", parameters)
@@ -110,7 +116,9 @@ final class AccessStore {
         for operation in operations where ["media_inspect", "telegram_send_attachment"].contains(operation.toolName) {
             if let detail = try? await attachmentApprovalDetail(operation) { details[operation.id] = detail }
         }
-        if context == scope { approvals = operations; mediaApprovalDetails = details }
+        if context == scope, generation == contextGeneration, !Task.isCancelled {
+            approvals = operations; mediaApprovalDetails = details
+        }
     }
 
     func mayApprove(_ operation: ApprovalOperation) -> Bool {
@@ -211,6 +219,7 @@ final class AccessStore {
 
     func chooseWorkspace() async {
         guard client?.isActive == true, !isChangingWorkspace else { return }
+        let selected = context, generation = contextGeneration
         isChangingWorkspace = true
         defer { isChangingWorkspace = false }
         let panel = NSOpenPanel()
@@ -224,8 +233,10 @@ final class AccessStore {
             // The chooser is the owner's explicit selection. Send its physical
             // directory so macOS aliases such as /tmp do not become a second root.
             let chosenPath = url.resolvingSymlinksInPath().path
-            let result = try await rpc("workspace.set", ["path": .string(chosenPath)])
+            var parameters = selected?.params ?? [:]; parameters["path"] = .string(chosenPath)
+            let result = try await rpc("workspace.set", parameters)
             guard let path = result["workspace"]["path"].string, path.hasPrefix("/") else { throw RPCFailure.invalidResponse }
+            guard generation == contextGeneration, selected == context else { return }
             workspacePath = path; documents = []; matches = []; verifiedCitations = []
             memoryQueryMode = .lexical; memorySearchHasMore = false; memorySearchHasResponse = false
             documentOffset = 0; memoryGeneration += 1

@@ -28,6 +28,13 @@ private struct ApprovalCard: View {
                 Label("Tu aprobación es necesaria", systemImage: "hand.raised")
                     .font(.headline)
                 Text(operation.toolName).font(.callout.weight(.semibold))
+                if let requester = operation.requesterClientID {
+                    Text("Cliente solicitante: \(requester.prefix(12))…")
+                        .font(.caption.monospaced()).foregroundStyle(.secondary)
+                        .help(requester).accessibilityLabel("Cliente solicitante: \(requester)")
+                } else {
+                    Text("Cliente solicitante no informado").font(.caption).foregroundStyle(.secondary)
+                }
                 if let detail = access.mediaApprovalDetails[operation.id] {
                     Text(detail).font(.caption).textSelection(.enabled)
                 } else if !access.mayApprove(operation) {

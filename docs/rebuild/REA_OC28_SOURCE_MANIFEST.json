@@ -1,0 +1,87 @@
+{
+  "reference_commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "executed": false,
+  "partitions": {
+    "product": [
+      {
+        "path": "src/gateway/server-methods/projects.ts",
+        "bytes": 18989,
+        "sha256": "e8d1be12c6b01f42326824da060e90a998e3305bf58a5459e3faaf9aeaea20a8"
+      },
+      {
+        "path": "src/gateway/server-methods/worktrees.ts",
+        "bytes": 11523,
+        "sha256": "facad1c81c1c094758942e9d8374a10f560e09845d5ec46bc25d71fdc80b6526"
+      },
+      {
+        "path": "src/gateway/server-methods/question.ts",
+        "bytes": 24993,
+        "sha256": "2862a579c940f24b2d2c4fb1aa631a95740387bb5f46edad6a7c48c984fe9d1a"
+      },
+      {
+        "path": "src/gateway/server-methods/presence.ts",
+        "bytes": 14412,
+        "sha256": "72476cb7ac7e106f5b011a3e1788e0ef1fe83a60bd45581c7d743ac57abfdc6b"
+      },
+      {
+        "path": "src/agents/embedded-agent-runner/runs.question-answer.ts",
+        "bytes": 2513,
+        "sha256": "8705027c9c4051fa01cf6ff1d92df7ce948dececde7ba6f84c43de1cef9e216b"
+      }
+    ],
+    "coordination": [
+      {
+        "path": "src/gateway/server-methods/projects-session-store.ts",
+        "bytes": 8270,
+        "sha256": "3a16d5400899f9728a4db809c62d4ffea0532a01aa45665a73ca426692ed0919"
+      },
+      {
+        "path": "src/gateway/server-methods/session-create-project.ts",
+        "bytes": 23758,
+        "sha256": "48ea818fe10cdff05317e672f33269391f1f69a1aea8227c5f232c503d50e535"
+      },
+      {
+        "path": "src/agents/tools/sessions-send-tool.a2a.ts",
+        "bytes": 9485,
+        "sha256": "b5b0c15d4f5defc2e796cedd400c11d9b69adecbff9a0355d0a0c7fbe2bead95"
+      },
+      {
+        "path": "src/agents/tools/sessions-send-tool.delivery.ts",
+        "bytes": 22652,
+        "sha256": "67e53ca02ccaadeb7cbaa00bbd75148dead6cc5a92689a0747abf949268bd17f"
+      },
+      {
+        "path": "src/agents/tools/sessions-send-communication-endpoint.ts",
+        "bytes": 3820,
+        "sha256": "3f3653fd5b6dbd99533ebb9b0d2564125a425e352869d438a901bb61bb762f6c"
+      }
+    ],
+    "worktrees": [
+      {
+        "path": "src/agents/worktrees/owner-protection.ts",
+        "bytes": 11012,
+        "sha256": "c612644a5e13190ae0de1648428495ffebb332e85abbada67a64e3e8cfb43383"
+      },
+      {
+        "path": "src/agents/worktrees/checkout-policy.ts",
+        "bytes": 2712,
+        "sha256": "d09a5f045f69384dfb31be20c6205b5b502a3f7ed510ce4bd550cbd8545877ab"
+      },
+      {
+        "path": "src/agents/worktrees/registry-publication.ts",
+        "bytes": 6162,
+        "sha256": "5ee601562b1cf42878cd9649a7267f143c2b80b257f63614c048a2558f3d96af"
+      },
+      {
+        "path": "src/agents/worktrees/snapshot-exact-state-contract.ts",
+        "bytes": 666,
+        "sha256": "75ff231532a9b6805694b50dce49c634144da574e0414d3064822520e0e0d363"
+      },
+      {
+        "path": "src/agents/worktrees/removal-recovery.ts",
+        "bytes": 21949,
+        "sha256": "4b5516060b82a6259deb83243298389186dd244708cd6e490d87e62fc442da01"
+      }
+    ]
+  }
+}

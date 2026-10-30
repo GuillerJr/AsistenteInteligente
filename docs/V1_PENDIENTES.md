@@ -501,6 +501,23 @@ Este incremento local no instala un daemon OS, despierta físicamente el Mac o
 publica un webhook de Internet. No acredita push, iPhone ni distribución; esos
 bloques siguen separados. La fase A global continúa abierta.
 
+## Producto y sesiones avanzadas — entrega en validación
+
+El [contrato del incremento](rebuild/PHASE_A_PRODUCT_COORDINATION.md) conserva el
+alcance solicitado y la revisión [REA OC-28](rebuild/REA_OC28_PRODUCT_COORDINATION.md).
+Hay implementación propia y pruebas nuevas escritas; no se han ejecutado suites
+ni compilaciones completas en el Mac.
+
+- [x] Conectar proyectos/worktrees/GitHub, preguntas/paneles, organización,
+  colaboración y workspaces por conversación al servicio y SwiftUI.
+- [x] Incorporar reservas inclusivas, medición correlacionada y cancelación del
+  árbol, sin inventar uso/costes ausentes ni prometer topes de facturación.
+- [x] Incorporar clientes CLI/TUI/ACP firmados y conservación desarmada de los
+  metadatos nuevos en respaldos.
+- [ ] Aprobar la CI completa del commit exacto y corregir sus fallos.
+- [ ] Cualificar los recorridos nativos con datos sintéticos y GitHub elegido
+  `GuillerJr/ecommerce`, credencial introducida por el dueño.
+
 ## Fase B — después de acreditar A
 
 - [ ] Mejoras propias y herramientas adicionales del

@@ -14,7 +14,7 @@ import re
 import time
 from collections.abc import Mapping
 from contextvars import ContextVar
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from uuid import uuid4
 
 from jarvis_core.host_profile import profile_background
@@ -287,6 +287,14 @@ class DelegationAPI:
         spec = self._validate_goal_spec({key: value[key] for key in _SPEC})
         self.provider_choice.assert_current()
         epoch = self.provider_choice.epoch()
+        if self.product.enabled and authenticated_client.get() is not None:
+            owner = authenticated_client.get()
+            self.product.binding(owner, ref, claim=True)
+            self.product.check_access(owner, ref, write=True)
+            workspace = self.bind_product_workspace(owner, ref)
+            self._product_workspace_context.set(workspace)
+            self.product.reserve_run(owner, ref, identity, {})
+            self.product.non_model_runs.add(identity)
         writer = self.profile_gate.hold("coordination.owner", mutating=True, closing=True)
         created = False
         try:
@@ -306,6 +314,9 @@ class DelegationAPI:
         self._refs[identity] = ref
         self._provider_epochs[identity] = epoch
         self._run_clients[identity] = authenticated_client.get()
+        workspace = self._current_product_workspace()
+        if workspace is not None:
+            self._run_workspaces[identity] = workspace
         self._handles[identity] = handle
         handle._task = asyncio.create_task(self._run_goal_handle(goal, handle))
         goal.worker = handle._task
@@ -329,6 +340,15 @@ class DelegationAPI:
         except Exception:
             result = RunResult(handle.run_id, "failed", None, (), "coordination_failed")
         finally:
+            confirmed = True
+            for child in goal.children:
+                try:
+                    receipt = self._run_value(
+                        SessionRef(child["session_id"], goal.ref.temporary), child["run_id"])
+                    confirmed = confirmed and receipt["cleanup_confirmed"]
+                except StateError:
+                    confirmed = False
+            result = replace(result, cleanup_confirmed=confirmed)
             self._active_goals.pop(goal.goal_id, None)
             handle._phase = RunPhase.SETTLED
             handle._settled.set_result(result)

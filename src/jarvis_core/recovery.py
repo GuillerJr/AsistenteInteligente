@@ -46,13 +46,15 @@ FORMAT = "jarvis-backup/1"
 _LEGACY_ROLES = ("state", "memory", "schedules", "agents", "skills", "telegram",
                  "configuration_portable")
 _EXTENSION_ROLES = (*_LEGACY_ROLES, "plugins")
-_ROLES = (*_EXTENSION_ROLES, "automations")
+_AUTOMATION_ROLES = (*_EXTENSION_ROLES, "automations")
+_ROLES = (*_AUTOMATION_ROLES, "product")
 _SQL = frozenset({"state", "memory", "schedules"})
 _JSON_LIMITS = {
     "agents": 524_288,
     "skills": 4_194_304,
     "plugins": 4_194_304,
     "automations": 4_194_304,
+    "product": 96 * 1024 * 1024,
     "telegram": 1_048_576,
     "configuration_portable": 1024,
 }
@@ -65,6 +67,7 @@ _PROFILE_NAMES = {
     "skills": ("profiles", "skills.json"),
     "plugins": ("profiles", "plugins.json"),
     "automations": (".", "automation.json"),
+    "product": (".", "product-recovery.json"),
     "telegram": ("telegram", "telegram.json"),
     "configuration_portable": (".", "configuration.json"),
 }
@@ -267,7 +270,7 @@ def canonical(value):
         raise RecoveryError("recovery_json_invalid") from None
 
 
-def _decode(data, limit):
+def _decode(data, limit, *, max_items=10_000):
     if type(data) is not bytes or len(data) > limit:
         raise RecoveryError("recovery_json_limit")
 
@@ -292,7 +295,7 @@ def _decode(data, limit):
             if type(item) is float and not math.isfinite(item):
                 raise RecoveryError("recovery_json_invalid")
             if isinstance(item, (dict, list)):
-                if len(item) > 10_000:
+                if len(item) > max_items:
                     raise RecoveryError("recovery_json_limit")
                 for child in item.values() if isinstance(item, dict) else item:
                     bounded(child, depth + 1)
@@ -304,7 +307,7 @@ def _decode(data, limit):
 
 
 def _json(role, data):
-    value = _decode(data, _JSON_LIMITS[role])
+    value = _decode(data, _JSON_LIMITS[role], max_items=100_000 if role == "product" else 10_000)
     try:
         if role == "agents":
             profiles._validate(value)
@@ -314,6 +317,9 @@ def _json(role, data):
             plugins._validate(value)
         elif role == "automations":
             validate_automation_document(value)
+        elif role == "product":
+            from jarvis_core.product_recovery import validate_product_document
+            validate_product_document(value)
         elif role == "telegram":
             telegram._journal_validate(value)
             if value["version"] != 2:
@@ -626,7 +632,8 @@ def _validate_manifest(value):
         any(not isinstance(role, str) or role not in _ROLES for role in absent)
         or len(set(absent)) != len(absent)
         or set(absent) & seen
-        or (set(absent) | seen not in (set(_ROLES), set(_EXTENSION_ROLES), set(_LEGACY_ROLES)))
+        or (set(absent) | seen not in (set(_ROLES), set(_AUTOMATION_ROLES),
+                                       set(_EXTENSION_ROLES), set(_LEGACY_ROLES)))
         or not {"agents", "configuration_portable"} <= seen
     ):
         raise RecoveryError("recovery_manifest_inventory_invalid")
@@ -831,13 +838,15 @@ def create_backup(bundle, target, context, *, limits=None, publish=no_replace):
                 len(source_roles) != len(set(source_roles))
                 or any(role not in _SQL for role in [s.role for s in bundle.sqlite])
                 or any(
-                    role not in {"agents", "skills", "telegram", "plugins", "automations"}
+                    role not in {"agents", "skills", "telegram", "plugins", "automations",
+                                 "product"}
                     for role in [s.role for s in bundle.json]
                 )
                 or len(set(bundle.absent)) != len(bundle.absent)
                 or set(source_roles) & set(bundle.absent)
                 or (set(source_roles) | set(bundle.absent)) not in (
                     set(_ROLES) - {"configuration_portable"},
+                    set(_AUTOMATION_ROLES) - {"configuration_portable"},
                     set(_EXTENSION_ROLES) - {"configuration_portable"},
                     set(_LEGACY_ROLES) - {"configuration_portable"})
                 or "agents" not in source_roles
@@ -969,6 +978,9 @@ def _restore_json(role, data):
     elif role == "automations":
         from jarvis_core.automation_flows import disarm_automation_document
         value = disarm_automation_document(value)
+    elif role == "product":
+        from jarvis_core.product_recovery import disarm_product_document
+        value = disarm_product_document(value)
     elif role == "configuration_portable":
         value = dict(PORTABLE_CONFIG)
     encoded = canonical(value)

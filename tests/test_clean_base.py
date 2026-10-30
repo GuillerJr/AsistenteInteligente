@@ -111,6 +111,19 @@ def test_product_dependencies_and_fake_entrypoints_are_rejected(tmp_path):
         guard.check_tree(root)
 
 
+def test_wheel_cli_metadata_rejects_unreviewed_or_extra_entrypoints(tmp_path):
+    for index, text in enumerate([
+        "[console_scripts]\njarvis = jarvis_core.cli:main\n",
+        "[console_scripts]\njarvis = jarvis_core.product_client:main\n"
+        "jarvis-acp = jarvis_core.product_acp:main\nextra = os:system\n",
+        "[gui_scripts]\njarvis = jarvis_core.product_client:main\n",
+    ]):
+        path = wheel(tmp_path / f"cli-{index}.whl", extra={
+            "jarvis_core-1.0.0.dist-info/entry_points.txt": text})
+        with pytest.raises(guard.CleanBaseError, match="CLI"):
+            guard.check_wheel(path)
+
+
 def test_clean_wheel_matches_the_qualified_source(tmp_path):
     root = fixture_tree(tmp_path / "project")
     path = wheel(tmp_path / "own.whl")
