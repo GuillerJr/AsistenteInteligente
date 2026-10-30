@@ -56,6 +56,31 @@ private final class SyntheticRuntime {
 }
 
 final class BundledRuntimeTests: XCTestCase {
+    func testPhysicalPrivateTmpPrefixAndSpacesRemainExactAcrossRuntimeProfileAndLaunch() throws {
+        let fixture = try SyntheticRuntime(suffix: " con espacios")
+        let runtime = try fixture.resolve()
+        let support = URL(fileURLWithPath: "/private/tmp/jarvis-support con espacios-" + UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: support, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        defer { try? FileManager.default.removeItem(at: support) }
+        let profile = try LaunchOptions.principalProfile(applicationSupport: support)
+        let options = LaunchOptions(python: runtime.python, source: runtime.source, dependencies: runtime.dependencies,
+                                    state: profile.state, codex: runtime.codex, providerState: profile.provider,
+                                    bundledRuntime: runtime, distributionMode: .selfContained)
+        let plan = try ServiceLaunchPlan(options, inheritedEnvironment: [:])
+        XCTAssertEqual(runtime.root.path, fixture.root.path)
+        XCTAssertEqual(plan.executable.path, fixture.root.path + "/python/bin/python3.11")
+        XCTAssertEqual(profile.state, support.path + "/Jarvis Desktop/Perfiles/Principal")
+        XCTAssertEqual(plan.environment["HOME"], profile.state + "/runtime-home")
+        let sourceFlag = try XCTUnwrap(plan.arguments.firstIndex(of: "--bundled-runtime-root"))
+        XCTAssertEqual(plan.arguments[sourceFlag + 1], fixture.root.path)
+        for bad in [fixture.root.path + "/.", fixture.root.path + "/../", fixture.root.path + "//python"] {
+            XCTAssertThrowsError(try BundledRuntimePath.validateDirectory(bad))
+        }
+        let alias = support.appendingPathComponent("alias-runtime", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: fixture.root)
+        XCTAssertThrowsError(try BundledRuntimePath.validateDirectory(alias.path), "No path-normalization fallback follows aliases")
+    }
+
     func testClosedInventoryResolvesExactSlotsAndRevalidates() throws {
         let fixture = try SyntheticRuntime(suffix: " con espacios")
         let runtime = try fixture.resolve()

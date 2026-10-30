@@ -60,11 +60,8 @@ extension LaunchOptions {
     }
 
     static func principalProfile(applicationSupport: URL) throws -> (state: String, provider: String?) {
-        guard applicationSupport.isFileURL,
-              applicationSupport.standardizedFileURL.path == applicationSupport.path,
-              applicationSupport.resolvingSymlinksInPath().path == applicationSupport.path else {
-            throw BundledRuntimeFailure.insecureTree
-        }
+        guard applicationSupport.isFileURL else { throw BundledRuntimeFailure.insecureTree }
+        try BundledRuntimePath.validateDirectory(applicationSupport.path)
         let app = applicationSupport.appendingPathComponent("Jarvis Desktop", isDirectory: true)
         let profiles = app.appendingPathComponent("Perfiles", isDirectory: true)
         let principal = profiles.appendingPathComponent("Principal", isDirectory: true)
@@ -75,8 +72,7 @@ extension LaunchOptions {
 
     static func runtimeDirectories(state: String) throws -> (home: String, temporary: String) {
         let root = URL(fileURLWithPath: state, isDirectory: true)
-        guard MaintenanceValidation.path(state), root.standardizedFileURL.path == state,
-              root.resolvingSymlinksInPath().path == state else { throw BundledRuntimeFailure.insecureTree }
+        try BundledRuntimePath.validateDirectory(state)
         var info = stat()
         guard lstat(state, &info) == 0, info.st_mode & S_IFMT == S_IFDIR,
               info.st_uid == getuid(), info.st_mode & 0o077 == 0 else { throw BundledRuntimeFailure.insecureTree }
@@ -92,7 +88,7 @@ extension LaunchOptions {
               let expected = context.qualificationPin,
               BundledRuntimeManifest.hex(expected, count: 64) else { throw BundledRuntimeFailure.invalidManifest }
         let path = resources.appendingPathComponent("JarvisQualification.json")
-        guard path.resolvingSymlinksInPath().path == path.path else { throw BundledRuntimeFailure.insecureTree }
+        try BundledRuntimePath.validateFile(path.path)
         let fd = Darwin.open(path.path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
         guard fd >= 0 else { throw BundledRuntimeFailure.missing }
         defer { Darwin.close(fd) }
@@ -131,10 +127,10 @@ extension LaunchOptions {
     private static func qualificationDirectory(_ path: String) throws {
         guard path.hasPrefix("/private/tmp/"), path.utf8.count <= 4096,
               !path.hasSuffix("/"), !path.contains("\0"), !path.contains("//"),
-              !path.split(separator: "/").contains(where: { $0 == "." || $0 == ".." }),
-              URL(fileURLWithPath: path).resolvingSymlinksInPath().path == path else {
+              !path.split(separator: "/").contains(where: { $0 == "." || $0 == ".." }) else {
             throw BundledRuntimeFailure.insecureTree
         }
+        try BundledRuntimePath.validateDirectory(path)
         var current = path
         while current != "/private/tmp" {
             var info = stat()
@@ -147,11 +143,12 @@ extension LaunchOptions {
     }
 
     private static func preparePrivateDirectory(_ url: URL) throws {
+        try BundledRuntimePath.validateDirectory(url.deletingLastPathComponent().path)
         if mkdir(url.path, 0o700) != 0, errno != EEXIST { throw BundledRuntimeFailure.insecureTree }
         var info = stat()
         guard lstat(url.path, &info) == 0, info.st_mode & S_IFMT == S_IFDIR,
-              info.st_uid == getuid(), info.st_mode & 0o077 == 0,
-              url.resolvingSymlinksInPath().path == url.path else { throw BundledRuntimeFailure.insecureTree }
+              info.st_uid == getuid(), info.st_mode & 0o077 == 0 else { throw BundledRuntimeFailure.insecureTree }
+        try BundledRuntimePath.validateDirectory(url.path)
     }
 }
 

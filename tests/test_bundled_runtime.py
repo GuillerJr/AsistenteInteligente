@@ -135,7 +135,11 @@ def test_links_and_special_files_cannot_escape_or_join_the_runtime(tmp_path, kin
 def test_manifest_paths_are_literal_bounded_relative_names(tmp_path, name):
     value, _, _ = fixture(tmp_path.resolve() / "runtime")
     value["files"][0]["path"] = name
-    raw, pin = encode(value)
+    # JSON can spell a lone surrogate as an ASCII escape. The parser must
+    # reject that decoded name, rather than the fixture failing to encode it.
+    raw = json.dumps(value, ensure_ascii=True, sort_keys=True,
+                     separators=(",", ":")).encode()
+    pin = hashlib.sha256(raw).hexdigest()
     with pytest.raises(BundledRuntimeError):
         parse_manifest(raw, expected_sha256=pin)
 

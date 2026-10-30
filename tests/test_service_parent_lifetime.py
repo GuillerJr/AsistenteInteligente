@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import signal
 from pathlib import Path
 
 import pytest
@@ -151,3 +152,69 @@ async def test_watch_is_closed_even_if_bundle_admission_raises(tmp_path, monkeyp
                                      bundled_runtime_sha256="0" * 64))
     assert observed == ["closed"]
     assert not (tmp_path / "absent").exists()
+
+
+async def test_parent_loss_between_lease_and_constructor_releases_lease(tmp_path, monkeypatch):
+    observed = []
+
+    class Ending:
+        ended = False
+        checks = 0
+
+        def attach(self, *_):
+            pass
+
+        def check(self):
+            self.checks += 1
+            return self.checks == 1
+
+        def close(self):
+            observed.append("watch_closed")
+
+    class Lease:
+        def close(self):
+            observed.append("lease_closed")
+
+    def forbidden(*_args, **_kw):
+        pytest.fail("EOF after lease must not construct stores or a provider")
+
+    monkeypatch.setattr(module, "ParentLifetime", Ending)
+    monkeypatch.setattr(module.ProfileLease, "acquire", lambda *_args, **_kw: Lease())
+    monkeypatch.setattr(module, "CodexClient", forbidden)
+    monkeypatch.setattr(module, "JarvisService", forbidden)
+    await module._serve(arguments(tmp_path, parent_watch_stdin=True))
+    assert observed == ["lease_closed", "watch_closed"]
+
+
+async def test_signal_registration_failure_still_closes_constructed_service(tmp_path, monkeypatch):
+    observed = []
+
+    class Lease:
+        admission = None
+
+    class Service:
+        def __init__(self, *_args, **_kw):
+            observed.append("constructed")
+
+        async def start(self):
+            pytest.fail("start after failed signal admission")
+
+        async def aclose(self):
+            observed.append("closed")
+
+    class Loop:
+        def add_signal_handler(self, number, _callback):
+            if number == signal.SIGTERM:
+                raise RuntimeError("synthetic signal registration failure")
+            observed.append("installed")
+
+        def remove_signal_handler(self, number):
+            assert number == signal.SIGINT
+            observed.append("removed")
+
+    monkeypatch.setattr(module.ProfileLease, "acquire", lambda *_args, **_kw: Lease())
+    monkeypatch.setattr(module, "CodexClient", lambda *_args, **_kw: object())
+    monkeypatch.setattr(module, "JarvisService", Service)
+    with pytest.raises(RuntimeError, match="synthetic signal registration"):
+        await module._serve_owned(arguments(tmp_path), asyncio.Event(), Loop())
+    assert observed == ["constructed", "installed", "closed", "removed"]

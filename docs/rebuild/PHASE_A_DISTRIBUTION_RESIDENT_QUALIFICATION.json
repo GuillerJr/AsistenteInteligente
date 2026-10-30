@@ -31,7 +31,27 @@
     "Signed IPC, SQLite and parent EOF close with lease free",
     "Wheel/sdist source equivalence and isolated installation smoke"
   ],
-  "ci": [],
+  "ci": [
+    {
+      "commit": "53a47dbd90077d7994e35934cc18aec8240b8196",
+      "run_id": 41065467185,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41065467185",
+      "status": "failed_preserved",
+      "macos": {
+        "app_and_qa_helper_compilation": "passed",
+        "runtime_assembly": "blocked_missing_flatbuffers_wheel_license",
+        "full_suite": "not_run"
+      },
+      "ubuntu": {
+        "passed": 3662,
+        "skipped": 47,
+        "failed": 1,
+        "seconds": 291.8,
+        "failure": "Negative surrogate fixture failed during JSON encoding before the parser; fixture corrected to valid escaped JSON."
+      },
+      "follow_up": "Pinned official legal sources; separate bounded product export; physical path verification without Foundation private-prefix normalization."
+    }
+  ],
   "native_qualification": [],
   "known_limits": [
     "Ad hoc CI signature is not Developer ID or public notarization",

@@ -84,11 +84,12 @@ def test_link_materialization_counts_each_copy_towards_quota(tmp_path):
     assert output.total == len(MACHO)
 
 
-def wheel(tmp_path, entries=None):
+def wheel(tmp_path, entries=None, *, with_license=True):
     path = tmp_path / "fixture.whl"
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr("fixture-1.0.dist-info/METADATA", b"Name: fixture\nVersion: 1.0\n")
-        archive.writestr("fixture-1.0.dist-info/licenses/LICENSE", b"synthetic fixture license")
+        if with_license:
+            archive.writestr("fixture-1.0.dist-info/licenses/LICENSE", b"synthetic fixture license")
         archive.writestr("fixture/__init__.py", b"raise AssertionError('must not execute')")
         for name, payload in entries or []:
             archive.writestr(name, payload)
@@ -102,6 +103,51 @@ def test_wheel_installation_is_data_extraction_and_keeps_license(tmp_path):
     assert licenses == ["site-packages/fixture-1.0.dist-info/licenses/LICENSE"]
     assert (output.root / "site-packages/namespace/member.py").read_bytes() == b"# inert"
     assert not list(output.root.rglob("__pycache__"))
+
+
+def test_missing_wheel_license_requires_reviewed_nonempty_physical_fallback(tmp_path):
+    archive = wheel(tmp_path, with_license=False)
+    output = writer(tmp_path)
+    with pytest.raises(package.PackageError, match="wheel_license_missing:fixture"):
+        package.extract_wheel(archive, output, name="fixture", version="1.0")
+    path = "licenses/wheels/fixture/LICENSE"
+    with pytest.raises(package.PackageError, match="wheel_license_fallback_unavailable"):
+        package.extract_wheel(archive, output, name="fixture", version="1.0",
+                              license_fallbacks=[path])
+    output.bytes(path, b"exact separately pinned source license fixture")
+    assert package.extract_wheel(archive, output, name="fixture", version="1.0",
+                                  license_fallbacks=[path]) == [path]
+
+
+def test_license_pins_match_only_reviewed_package_and_exact_version():
+    pins = json.loads((Path(__file__).parents[1] / "script/runtime_artifacts.json").read_bytes())
+    flatbuffers = package.reviewed_license_fallbacks(pins, name="flatbuffers", version="25.12.19")
+    assert [row["name"] for row in flatbuffers] == ["LICENSE"]
+    assert flatbuffers[0]["url"].endswith("/google/flatbuffers/v25.12.19/LICENSE")
+    assert package.reviewed_license_fallbacks(pins, name="flatbuffers", version="25.12.20") == []
+    assert package.reviewed_license_fallbacks(pins, name="unreviewed", version="25.12.19") == []
+    tokenizers = package.reviewed_license_fallbacks(pins, name="tokenizers", version="0.22.1")
+    assert tokenizers[0]["url"].endswith("/huggingface/tokenizers/v0.22.1/LICENSE")
+    assert package.reviewed_embedded_licenses(pins, name="onnxruntime", version="1.31.1") == [
+        "onnxruntime/LICENSE", "onnxruntime/ThirdPartyNotices.txt"]
+    assert package.reviewed_embedded_licenses(pins, name="onnxruntime", version="1.31.2") == []
+
+
+def test_reviewed_embedded_legal_and_british_licence_spelling_are_preserved(tmp_path):
+    archive = wheel(tmp_path, [("fixture/LICENSE", b"upstream license"),
+                               ("fixture/ThirdPartyNotices.txt", b"dependency notice"),
+                               ("fixture-1.0.dist-info/licenses/LICENCE", b"UK spelling")],
+                    with_license=False)
+    output = writer(tmp_path)
+    with pytest.raises(package.PackageError, match="wheel_embedded_license_missing"):
+        package.extract_wheel(archive, output, name="fixture", version="1.0",
+                              embedded_legal=["fixture/missing.txt"])
+    licenses = package.extract_wheel(archive, output, name="fixture", version="1.0",
+                                     embedded_legal=["fixture/LICENSE",
+                                                     "fixture/ThirdPartyNotices.txt"])
+    assert licenses == ["site-packages/fixture-1.0.dist-info/licenses/LICENCE",
+                        "site-packages/fixture/LICENSE",
+                        "site-packages/fixture/ThirdPartyNotices.txt"]
 
 
 @pytest.mark.parametrize("kind", ["traversal", "scripts", "symlink", "identity", "collision"])

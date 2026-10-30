@@ -16,6 +16,39 @@
     "bytes": 133412281,
     "sha256": "b0344fc2e41f15e0071147e5869008047b8ff4bf2c4a8897975d3bae3f103b34"
   },
+  "wheel_legal": [
+    {
+      "package": "flatbuffers",
+      "version": "25.12.19",
+      "files": [
+        {
+          "name": "LICENSE",
+          "url": "https://raw.githubusercontent.com/google/flatbuffers/v25.12.19/LICENSE",
+          "bytes": 11358,
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        }
+      ]
+    },
+    {
+      "package": "tokenizers",
+      "version": "0.22.1",
+      "files": [
+        {
+          "name": "LICENSE",
+          "url": "https://raw.githubusercontent.com/huggingface/tokenizers/v0.22.1/LICENSE",
+          "bytes": 11357,
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        }
+      ]
+    }
+  ],
+  "wheel_embedded_legal": [
+    {
+      "package": "onnxruntime",
+      "version": "1.31.1",
+      "paths": ["onnxruntime/LICENSE", "onnxruntime/ThirdPartyNotices.txt"]
+    }
+  ],
   "codex_legal": [
     {
       "name": "LICENSE",

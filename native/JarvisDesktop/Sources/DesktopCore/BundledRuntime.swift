@@ -89,10 +89,7 @@ private final class RuntimeFileTree {
     init(_ root: URL) throws {
         try Task.checkCancellation()
         let path = root.path
-        guard path.hasPrefix("/"), root.standardizedFileURL.path == path,
-              root.resolvingSymlinksInPath().path == path else { throw BundledRuntimeFailure.insecureTree }
-        let fd = Darwin.open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
-        guard fd >= 0 else { throw BundledRuntimeFailure.missing }
+        let fd = try BundledRuntimePath.openDirectory(path)
         var info = stat()
         guard fstat(fd, &info) == 0, info.st_mode & S_IFMT == S_IFDIR, info.st_mode & 0o022 == 0 else {
             Darwin.close(fd); throw BundledRuntimeFailure.insecureTree

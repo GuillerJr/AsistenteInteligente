@@ -245,6 +245,12 @@ def main() -> None:
     if info.get("JarvisDistributionChannel") != "self-contained":
         parser.error("El bundle no es autocontenido.")
     pin = info["JarvisRuntimeManifestSHA256"]
+    native = json.loads((moved / "Contents/Resources/JarvisNativeRuntimeCheck.json").read_bytes())
+    if (native.get("schema") != "jarvis.bundled-runtime-check.v1"
+            or native.get("status") != "passed"
+            or native.get("source_commit") != args.source_commit
+            or native.get("manifest_sha256") != pin):
+        parser.error("El parser Swift no acreditó el manifiesto real del paquete.")
     root = moved / "Contents/Resources/JarvisRuntime"
     environment = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "LANG": "en_US.UTF-8"}
     for name in ("home", "tmp", "smoke"):
@@ -262,6 +268,7 @@ def main() -> None:
         sys.stderr.buffer.write(errors[-16384:])
         raise RuntimeError("packaged_runtime_qualification_failed")
     receipt = json.loads(output)
+    receipt["swift_manifest_admitted"] = True
     receipt["seconds"] = round(time.monotonic() - started, 3)
     receipt["harness_sha256"] = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     args.receipt.write_text(json.dumps(receipt, sort_keys=True) + "\n")

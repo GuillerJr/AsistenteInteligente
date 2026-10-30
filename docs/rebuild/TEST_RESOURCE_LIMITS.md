@@ -66,6 +66,14 @@ espacio libre del runner: es un presupuesto de vigilancia, no una cuota física.
 
 No se reinstala la app del dueño para comprobar estos controles operativos.
 
+La distribución autocontenida dispone de una exportación separada, exclusiva del
+build remoto de CI: hasta 2.304 MiB y 65.536 entradas, con el manifiesto del runtime
+y el SHA del checkout verificados antes y después de copiar. La exportación de
+desarrollo/local conserva 256 MiB y 10.000 entradas. El flag productivo se rechaza
+en perfiles locales, tipos distintos de build o rutas distintas de `output/Jarvis.app`.
+Esto no amplía cuotas, plazos ni permisos locales. El ensamblado y smoke de
+traslado del producto comparten su presupuesto remoto explícito de 8 GiB/1.200 s.
+
 ## Comprobación local del incremento
 
 Pasaron **65 casos focales en 4,647 s**, con pico de temporales asignados de

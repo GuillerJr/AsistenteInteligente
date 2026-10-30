@@ -345,7 +345,8 @@ os._exit(0)
 """
 
 
-@pytest.mark.skipif(os.environ.get("CI") != "true", reason="real parent death is CI-only")
+@pytest.mark.skipif(os.environ.get("GITHUB_ACTIONS") != "true",
+                    reason="real parent death is CI-only")
 async def test_real_parent_death_closes_the_only_writer_and_child_exits(tmp_path):
     control_read, control_write = os.pipe()
     source = str(Path(module.__file__).resolve().parents[1])

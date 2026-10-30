@@ -49,6 +49,8 @@ SDIST_REQUIRED = {
     "script/check_clean_base.py", "script/research_inventory.py", "script/setup_git_gates.sh",
     "script/test_resource_guard.py",
     "script/prepare_memory_model.py",
+    "script/package_desktop_runtime.py", "script/qualify_bundled_runtime.py",
+    "script/runtime_artifacts.json",
     ".githooks/pre-commit", ".githooks/pre-push",
 }
 NATIVE_ROOT = PurePosixPath("native/JarvisDesktop")

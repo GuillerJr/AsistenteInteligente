@@ -41,6 +41,9 @@ if [[ "${1:-}" != --guard-child ]]; then
   JARVIS_EXPORT_ARGUMENTS=()
   if [[ -n "$JARVIS_OUTPUT_DIR" ]]; then
     JARVIS_EXPORT_ARGUMENTS=(--export-relative output/Jarvis.app --export-destination "$JARVIS_OUTPUT_DIR")
+    if [[ ${#JARVIS_PRODUCT_ARGUMENTS[@]} -gt 0 ]]; then
+      JARVIS_EXPORT_ARGUMENTS+=(--self-contained-export)
+    fi
   fi
   exec "$JARVIS_PYTHON" -B "$JARVIS_REPO_DIR/script/test_resource_guard.py" run \
     --repo-root "$JARVIS_REPO_DIR" --profile "$JARVIS_PROFILE" --kind build --selection Jarvis \
@@ -76,6 +79,12 @@ if [[ "${JARVIS_BUILD_QA_LAUNCHER:-0}" == 1 ]]; then
     --config-path "$JARVIS_BUILD_DIR/config" --security-path "$JARVIS_BUILD_DIR/security" \
     --arch arm64 --product JarvisQALauncher
 fi
+if [[ "${2:-}" == --self-contained ]]; then
+  swift build --build-system native --disable-sandbox ${JARVIS_SDK_ARGUMENTS[@]+"${JARVIS_SDK_ARGUMENTS[@]}"} --package-path "$JARVIS_REPO_DIR/native/JarvisDesktop" \
+    --scratch-path "$JARVIS_BUILD_DIR/swift" --cache-path "$JARVIS_BUILD_DIR/cache" \
+    --config-path "$JARVIS_BUILD_DIR/config" --security-path "$JARVIS_BUILD_DIR/security" \
+    --arch arm64 --product JarvisRuntimeCheck
+fi
 JARVIS_BIN_DIR="$(swift build --build-system native --disable-sandbox ${JARVIS_SDK_ARGUMENTS[@]+"${JARVIS_SDK_ARGUMENTS[@]}"} --package-path "$JARVIS_REPO_DIR/native/JarvisDesktop" \
   --scratch-path "$JARVIS_BUILD_DIR/swift" --cache-path "$JARVIS_BUILD_DIR/cache" \
   --config-path "$JARVIS_BUILD_DIR/config" --security-path "$JARVIS_BUILD_DIR/security" \
@@ -108,6 +117,11 @@ if [[ "${2:-}" == --self-contained ]]; then
   "$JARVIS_PYTHON" -B "$JARVIS_REPO_DIR/script/package_desktop_runtime.py" \
     --app "$JARVIS_APP_PATH" --scratch "$JARVIS_BUILD_DIR/runtime-acquisition" \
     --source-commit "$GITHUB_SHA" --model-assets "$JARVIS_MINILM_TEST_ASSETS" --identity -
+  JARVIS_RUNTIME_PIN="$("$JARVIS_PYTHON" -B -c 'import plistlib,sys; print(plistlib.load(open(sys.argv[1],"rb"))["JarvisRuntimeManifestSHA256"])' "$JARVIS_APP_PATH/Contents/Info.plist")"
+  "$JARVIS_BIN_DIR/JarvisRuntimeCheck" \
+    --root "$JARVIS_APP_PATH/Contents/Resources/JarvisRuntime" \
+    --manifest-sha256 "$JARVIS_RUNTIME_PIN" --source-commit "$GITHUB_SHA" \
+    > "$JARVIS_APP_PATH/Contents/Resources/JarvisNativeRuntimeCheck.json"
   "$JARVIS_PYTHON" -B "$JARVIS_REPO_DIR/script/qualify_bundled_runtime.py" \
     --app "$JARVIS_APP_PATH" --work "$JARVIS_BUILD_DIR/relocation-qualification" \
     --source-commit "$GITHUB_SHA" \

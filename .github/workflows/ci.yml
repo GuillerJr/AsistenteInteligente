@@ -65,6 +65,7 @@ jobs:
           assert info["JarvisDistributionChannel"] == "self-contained"
           assert report["source_commit"] == os.environ["GITHUB_SHA"]
           assert report["parent_eof_clean_shutdown"] and report["official_codex_empty_account"]
+          assert report["swift_manifest_admitted"]
           with package.open("rb") as stream:
               archive_hash = hashlib.file_digest(stream, "sha256").hexdigest()
           value = {"format": "jarvis-desktop-ci/2", "commit": os.environ["GITHUB_SHA"],

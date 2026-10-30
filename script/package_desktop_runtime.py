@@ -263,7 +263,43 @@ def target_wheels(lock):
     return sorted(result, key=lambda row: row["name"])
 
 
-def extract_wheel(path, writer, *, name, version):
+def reviewed_license_fallbacks(pins, *, name, version):
+    """An explicit source-reviewed exception for one exact upstream version."""
+    rows = pins.get("wheel_legal", [])
+    require(type(rows) is list and len(rows) <= 32, "wheel_legal_pin_shape")
+    matches = [row for row in rows if row.get("package") == name and row.get("version") == version]
+    require(len(matches) <= 1, "wheel_legal_pin_duplicate")
+    if not matches:
+        return []
+    row = matches[0]
+    require(set(row) == {"package", "version", "files"} and type(row["files"]) is list
+            and 1 <= len(row["files"]) <= 8, "wheel_legal_pin_shape")
+    names = set()
+    for pin in row["files"]:
+        require(type(pin) is dict and set(pin) == {"name", "url", "bytes", "sha256"}
+                and pin["name"] in {"LICENSE", "NOTICE", "COPYING"}
+                and pin["name"] not in names and 0 < pin["bytes"] <= 128 * 1024,
+                "wheel_legal_pin_shape")
+        names.add(pin["name"])
+        validate_download_url(pin["url"])
+    return row["files"]
+
+
+def reviewed_embedded_licenses(pins, *, name, version):
+    rows = pins.get("wheel_embedded_legal", [])
+    require(type(rows) is list and len(rows) <= 32, "wheel_legal_pin_shape")
+    matches = [row for row in rows if row.get("package") == name and row.get("version") == version]
+    require(len(matches) <= 1, "wheel_legal_pin_duplicate")
+    if not matches:
+        return []
+    row = matches[0]
+    require(set(row) == {"package", "version", "paths"} and type(row["paths"]) is list
+            and 1 <= len(row["paths"]) <= 8
+            and len(set(row["paths"])) == len(row["paths"]), "wheel_legal_pin_shape")
+    return [relative_path(path) for path in row["paths"]]
+
+
+def extract_wheel(path, writer, *, name, version, license_fallbacks=(), embedded_legal=()):
     with zipfile.ZipFile(path) as archive:
         entries, folded, licenses = [], set(), []
         for item in archive.infolist():
@@ -287,7 +323,8 @@ def extract_wheel(path, writer, *, name, version):
                 relative = original
             destination = "site-packages/" + relative
             if any(p.endswith(".dist-info") for p in parts) and any(
-                    token in parts[-1].upper() for token in ("LICENSE", "COPYING", "NOTICE")):
+                    token in parts[-1].upper()
+                    for token in ("LICENSE", "LICENCE", "COPYING", "NOTICE")):
                 licenses.append(destination)
             entries.append((item, destination))
         metadata = [i for i, _ in entries if i.filename.endswith(".dist-info/METADATA")]
@@ -299,6 +336,17 @@ def extract_wheel(path, writer, *, name, version):
         message = BytesParser().parsebytes(raw, headersonly=True)
         require(canonicalize_name(message.get("Name", "")) == name
                 and message.get("Version") == version, "wheel_metadata_identity")
+        destinations = {destination: item for item, destination in entries}
+        for relative in embedded_legal:
+            member = "site-packages/" + relative_path(relative)
+            require(member in destinations and destinations[member].file_size > 0,
+                    "wheel_embedded_license_missing")
+            licenses.append(member)
+        for relative in license_fallbacks:
+            require(relative_path(relative) in writer.names
+                    and (writer.root / relative).stat().st_size > 0,
+                    "wheel_license_fallback_unavailable")
+        licenses.extend(license_fallbacks)
         require(bool(licenses), "wheel_license_missing:" + name)
         for item, destination in entries:
             with archive.open(item) as stream:
@@ -352,7 +400,7 @@ def _run(arguments, *, timeout=60, cwd=None):
 def _license_paths(writer, prefix, *, required=True):
     names = sorted(name for name in writer.names if name.startswith(prefix + "/")
                    and any(token in PurePosixPath(name).name.upper()
-                           for token in ("LICENSE", "COPYING", "NOTICE")))
+                           for token in ("LICENSE", "LICENCE", "COPYING", "NOTICE")))
     require(bool(names) or not required, "component_license_missing:" + prefix)
     return names
 
@@ -487,7 +535,20 @@ def assemble(app, scratch, commit, model_assets, *, identity="-", deadline_secon
     lock = tomllib.loads((REPO / "uv.lock").read_text())
     for wheel in target_wheels(lock):
         path = download(wheel, scratch / wheel["filename"], budget)
-        licenses = extract_wheel(path, writer, name=wheel["name"], version=wheel["version"])
+        fallbacks = []
+        for pin in reviewed_license_fallbacks(pins, name=wheel["name"], version=wheel["version"]):
+            legal = download(pin, scratch / (wheel["name"] + "-" + pin["name"]), budget)
+            relative = "licenses/wheels/" + wheel["name"] + "/" + pin["name"]
+            with legal.open("rb") as stream:
+                writer.write(relative, stream, pin["bytes"])
+            fallbacks.append(relative)
+            components.append({"id": wheel["name"] + "-" + pin["name"].lower(),
+                               "version": wheel["version"], "origin": pin["url"],
+                               "archive_sha256": pin["sha256"], "license_paths": [relative]})
+        licenses = extract_wheel(path, writer, name=wheel["name"], version=wheel["version"],
+                                 license_fallbacks=fallbacks,
+                                 embedded_legal=reviewed_embedded_licenses(
+                                     pins, name=wheel["name"], version=wheel["version"]))
         components.append({"id": wheel["name"], "version": wheel["version"],
                            "origin": wheel["url"], "archive_sha256": wheel["sha256"],
                            "license_paths": licenses})

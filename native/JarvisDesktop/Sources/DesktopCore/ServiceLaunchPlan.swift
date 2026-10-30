@@ -28,7 +28,8 @@ public struct ServiceLaunchPlan: Sendable {
         } else if options.distributionMode != .development { throw BundledRuntimeFailure.missing }
         // Resolve the chosen interpreter itself, without discovering another one.
         // CPython otherwise probes a venv's pyvenv.cfg before the first Python frame.
-        let selected = URL(fileURLWithPath: options.python).resolvingSymlinksInPath()
+        let chosen = URL(fileURLWithPath: options.python)
+        let selected = options.bundledRuntime == nil ? chosen.resolvingSymlinksInPath() : chosen
         guard selected.path.hasPrefix("/"), FileManager.default.isExecutableFile(atPath: selected.path) else { throw RPCFailure.configuration }
         executable = selected
         let serviceArguments = Array(options.serviceArguments.dropFirst(2))

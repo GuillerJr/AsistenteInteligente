@@ -204,6 +204,10 @@ def validate_options(options, environment, identity, root):
     if not 1 <= options.budget_mib <= budget or not 0 < options.deadline <= maximum:
         raise GuardError("El presupuesto o plazo supera el máximo del perfil.")
     destination = getattr(options, "export_destination", None)
+    if getattr(options, "self_contained_export", False) and (
+            options.profile != "ci" or options.kind != "build" or destination is None
+            or getattr(options, "export_relative", None) != "output/Jarvis.app"):
+        raise GuardError("La exportación autocontenida sólo admite el bundle explícito de CI.")
     if destination is not None:
         validate_export_destination(destination)
 
@@ -640,6 +644,47 @@ def validate_export_destination(destination: Path):
 
 
 def export_artifact(source: Path, destination: Path):
+    return _copy_export(source, destination, maximum_bytes=256 * MIB, maximum_entries=10_000)
+
+
+def export_bundled_artifact(source: Path, destination: Path, *, source_commit: str):
+    """Separate remote product contract; legacy/local export limits stay fixed."""
+    import plistlib
+
+    from jarvis_core.bundled_runtime import BundledRuntimeError, verify_runtime_tree
+
+    def check(app):
+        info_path = app / "Contents/Info.plist"
+        if (not app.is_absolute() or app.resolve(strict=True) != app
+                or info_path.resolve(strict=True) != info_path):
+            raise GuardError("El bundle exportado exige rutas físicas sin enlaces.")
+        descriptor = os.open(info_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        try:
+            info = os.fstat(descriptor)
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or not 0 < info.st_size <= 65536):
+                raise GuardError("El bundle exportado no tiene metadatos acotados.")
+            value = plistlib.loads(os.read(descriptor, 65537))
+        finally:
+            os.close(descriptor)
+        if (value.get("JarvisDistributionChannel") != "self-contained"
+                or value.get("CFBundleExecutable") != "Jarvis"):
+            raise GuardError("Sólo se exporta el runtime productivo fijado de Jarvis.")
+        try:
+            verify_runtime_tree(app / "Contents/Resources/JarvisRuntime",
+                                expected_manifest_sha256=value.get("JarvisRuntimeManifestSHA256"),
+                                expected_source_commit=source_commit)
+        except BundledRuntimeError as error:
+            raise GuardError("El runtime exportado no coincide con el SHA cualificado.") from error
+
+    check(source)
+    result = _copy_export(source, destination, maximum_bytes=2304 * MIB,
+                          maximum_entries=65_536)
+    check(Path(result))
+    return result
+
+
+def _copy_export(source: Path, destination: Path, *, maximum_bytes, maximum_entries):
     validate_export_destination(destination)
     total, entries = 0, []
     pending = [source]
@@ -649,13 +694,13 @@ def export_artifact(source: Path, destination: Path):
         if not stat.S_ISDIR(info.st_mode) and not stat.S_ISREG(info.st_mode):
             raise GuardError("El artefacto contiene una entrada especial.")
         total += info.st_size if stat.S_ISREG(info.st_mode) else 0
-        if total > 256 * MIB or len(entries) > 10_000:
+        if total > maximum_bytes or len(entries) > maximum_entries:
             raise GuardError("El artefacto supera su límite de exportación.")
         entries.append(path)
         if stat.S_ISDIR(info.st_mode):
             with os.scandir(path) as children:
                 for child in children:
-                    if len(entries) + len(pending) >= 10_000:
+                    if len(entries) + len(pending) >= maximum_entries:
                         raise GuardError("El artefacto supera su límite de entradas.")
                     pending.append(Path(child.path))
     destination.mkdir(mode=0o700)
@@ -878,8 +923,13 @@ def run(options):
                 relative = Path(options.export_relative)
                 if relative.is_absolute() or ".." in relative.parts:
                     raise GuardError("La exportación no admite rutas relativas ascendentes.")
-                result["exported_artifact"] = export_artifact(
-                    run_root / relative, options.export_destination)
+                if getattr(options, "self_contained_export", False):
+                    result["exported_artifact"] = export_bundled_artifact(
+                        run_root / relative, options.export_destination,
+                        source_commit=before["head"])
+                else:
+                    result["exported_artifact"] = export_artifact(
+                        run_root / relative, options.export_destination)
         except BaseException as error:
             if not dispatched and (not isinstance(error, PreparationError) or not error.pending):
                 closed = True
@@ -1005,6 +1055,7 @@ def parser():
     execute.add_argument("--full", action="store_true")
     execute.add_argument("--export-relative")
     execute.add_argument("--export-destination", type=Path)
+    execute.add_argument("--self-contained-export", action="store_true")
     execute.add_argument("--minilm-test-assets", type=Path)
     execute.add_argument("command", nargs=argparse.REMAINDER)
     return result
