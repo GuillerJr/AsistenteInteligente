@@ -131,6 +131,23 @@ private actor CoordinationWire {
 }
 
 final class ProductCoordinationTests: XCTestCase {
+    func testFreshSecurityGenerationZeroIsValidAndStillBoundToContext() throws {
+        let binding = CoordinationFixture.replacing(CoordinationFixture.binding(),
+            ["security_generation": .number(0)])
+        let value = CoordinationFixture.snapshot()
+        let context = CoordinationFixture.replacing(value["scope"], ["generation": .number(0)])
+        let fresh = CoordinationFixture.replacing(value, ["scope": context, "binding": binding,
+            "sessions": .array([binding])])
+        let snapshot = try ProductCoordinationSnapshot(fresh, expectedScope: CoordinationFixture.scope)
+        XCTAssertEqual(snapshot.binding.securityGeneration, 0)
+        XCTAssertTrue(snapshot.isOwner)
+        let negative = CoordinationFixture.replacing(binding, ["security_generation": .number(-1)])
+        XCTAssertThrowsError(try ProductSessionBinding(negative))
+        let stale = CoordinationFixture.replacing(fresh, ["scope": value["scope"]])
+        XCTAssertThrowsError(try ProductCoordinationSnapshot(stale,
+            expectedScope: CoordinationFixture.scope))
+    }
+
     func testDTOsKeepUnknownCostAndRejectNumericMoneyAuthorityAndMixedScopes() throws {
         let value = try ProductCoordinationSnapshot(CoordinationFixture.snapshot(budget: CoordinationFixture.budget(),
             messages: [CoordinationFixture.message()]), expectedScope: CoordinationFixture.scope)

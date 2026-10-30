@@ -107,6 +107,13 @@
     },
     "failures_preserved": [
       {
+        "scope": "native_coordination_initial_state",
+        "error": "invalid_native_response",
+        "observed_effect": "Groups and pinned sessions were not rendered; macOS notification permission button stayed disabled.",
+        "cause": "Backend starts security_generation at zero; native ProductSessionBinding required a positive revision.",
+        "correction": "Accept nonnegative security generations, preserve exact context matching, and add an actual Swift-to-signed-service integration regression."
+      },
+      {
         "scope": "project_register",
         "run_id": "b2f6e57a6a9249d29e38ac3e64994b17",
         "status": "completed",

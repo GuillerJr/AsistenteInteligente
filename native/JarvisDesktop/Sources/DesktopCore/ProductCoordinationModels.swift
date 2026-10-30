@@ -112,7 +112,7 @@ public struct ProductSessionBinding: Identifiable, Equatable, Sendable {
         }
         revision = try ProductCoordinationValidation.revision(value["revision"])
         securityGeneration = value["security_generation"] == .null ? revision
-            : try ProductCoordinationValidation.revision(value["security_generation"])
+            : try ProductCoordinationValidation.revision(value["security_generation"], zero: true)
         members = try ManagementValidation.rows(value["members"], limit: 32,
                                                  parse: ProductSessionMember.init)
         guard Set(members.map(\.id)).count == members.count,
