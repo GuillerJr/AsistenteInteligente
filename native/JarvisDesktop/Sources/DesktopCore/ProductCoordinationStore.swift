@@ -18,6 +18,7 @@ import Observation
     private var initialWorkspaces: [ProductWorkspaceDescriptor] = []
     @ObservationIgnored private var uncertain: Set<Submission> = []
     @ObservationIgnored private var pending: [SessionScope: String] = [:]
+    @ObservationIgnored private var observedSettled: [SessionScope: String] = [:]
     private struct Submission: Hashable {
         let scope: SessionScope
         let kind: String
@@ -30,6 +31,12 @@ import Observation
     public var viewIdentity: String { "\(version):\(scope?.sessionID ?? "none"):\(runID ?? "host")" }
     public var isOwner: Bool { snapshot?.isOwner == true }
     public var mayWrite: Bool { snapshot?.mayWrite == true }
+    public var unsettledRequests: [SessionScope: String] {
+        pending.filter { observedSettled[$0.key] != $0.value }
+    }
+    public func observeRunReceipt(_ receipt: ConversationRun, scope: SessionScope) {
+        if pending[scope] == receipt.id, !receipt.active { observedSettled[scope] = receipt.id }
+    }
 
     public func configure(_ transport: LocalRPCClient) {
         configure(request: { try await transport.call($0, params: $1) })
@@ -37,7 +44,7 @@ import Observation
     public func configure(request: @escaping MaintenanceClient.Request) {
         version += 1; mutationVersion += 1; self.request = request
         scope = nil; runID = nil; snapshot = nil; initialWorkspaces = []
-        pending = [:]; uncertain = []; pendingRunID = nil; pendingRequestID = nil
+        pending = [:]; observedSettled = [:]; uncertain = []; pendingRunID = nil; pendingRequestID = nil
         isRequesting = false; isChanging = false; responseUnconfirmed = false
         errorMessage = nil; notice = nil
     }

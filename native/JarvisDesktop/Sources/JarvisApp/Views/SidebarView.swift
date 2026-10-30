@@ -77,7 +77,8 @@ struct SidebarView: View {
             Label(session.title, systemImage: session.archived ? "archivebox" : session.parentSessionID != nil ? "arrowshape.turn.up.right" : session.temporary ? "clock.badge.questionmark" : "bubble.left")
                 .lineLimit(1)
             if store.isSessionRunning(session.scope) {
-                Text(store.runTracker.observations[session.scope]?.phase == "waiting_approval"
+                Text(store.runTracker.observations[session.scope]?.acceptanceUnconfirmed == true ? "Envío sin confirmar"
+                     : store.runTracker.observations[session.scope]?.phase == "waiting_approval"
                      ? "Aprobación pendiente" : "En curso")
                     .font(.caption).foregroundStyle(.secondary)
             }

@@ -7,6 +7,7 @@ public struct SessionRunObservation: Equatable, Sendable {
     public var phase: String
     public var lastSequence: Int
     public var streamingText: String
+    public var acceptanceUnconfirmed = false
     public var isActive: Bool {
         ["queued", "running", "waiting_approval", "cancelling", "cleaning", "checking", "disconnected"].contains(phase)
     }
@@ -25,7 +26,7 @@ public struct SessionRunObservation: Equatable, Sendable {
         if selectedScope != scope { generation += 1; selectedScope = scope }
         return generation
     }
-    public func record(scope: SessionScope, runID: String, phase: String) {
+    public func record(scope: SessionScope, runID: String, phase: String, acceptanceConfirmed: Bool = true) {
         guard ManagementValidation.identifier(scope.sessionID), ManagementValidation.identifier(runID),
               ["queued", "running", "waiting_approval", "cancelling", "cleaning", "checking", "disconnected",
                "completed", "failed", "cancelled", "interrupted"].contains(phase) else { return }
@@ -33,11 +34,36 @@ public struct SessionRunObservation: Equatable, Sendable {
             // A late pre-settlement read cannot reopen an already settled run.
             if !existing.isActive && SessionRunObservation(scope: scope, runID: runID,
                 phase: phase, lastSequence: 0, streamingText: "").isActive { return }
-            existing.phase = phase; observations[scope] = existing
+            existing.phase = phase
+            if acceptanceConfirmed { existing.acceptanceUnconfirmed = false }
+            observations[scope] = existing
         } else {
             observations[scope] = SessionRunObservation(scope: scope, runID: runID,
                 phase: phase, lastSequence: 0, streamingText: "")
         }
+    }
+    public func retainUnconfirmed(scope: SessionScope, requestID: String) {
+        // Existing server evidence, including terminal receipts, outranks a
+        // still-pending volatile tool-result lookup for the same identity.
+        if observations[scope]?.runID == requestID { return }
+        record(scope: scope, runID: requestID, phase: "disconnected", acceptanceConfirmed: false)
+        if var value = observations[scope], value.runID == requestID {
+            value.acceptanceUnconfirmed = true; observations[scope] = value
+        }
+    }
+    /// Read only by the original identity. Absence/404 may race an in-flight
+    /// start and never proves rejection or releases uncertain custody.
+    public func refresh(scope: SessionScope, runID: String,
+                        request: MaintenanceClient.Request) async -> ConversationRun? {
+        guard observations[scope]?.runID == runID, !Task.isCancelled else { return nil }
+        do {
+            var params = scope.params; params["run_id"] = .string(runID)
+            let response = try await request("runs.get", params)
+            let receipt = try ConversationRun(response["run"], expectedID: runID)
+            guard observations[scope]?.runID == runID, !Task.isCancelled else { return nil }
+            record(scope: scope, runID: runID, phase: receipt.status)
+            return receipt
+        } catch { return nil }
     }
     public func append(scope: SessionScope, runID: String, sequence: Int, delta: String?) throws {
         guard var value = observations[scope], value.runID == runID, value.isActive,

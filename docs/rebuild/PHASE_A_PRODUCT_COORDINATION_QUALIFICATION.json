@@ -26,6 +26,36 @@
         "Counter protocol fixture supplied str instead of required executable Path.",
         "MCP exact catalogue expectations omitted the new product tools; cost split expectation ignored explicit downward rounding."
       ]
+    },
+    {
+      "commit": "e5a4278ce58301ac555def9dafd7a94af70198c9",
+      "ci_run_id": 41089075206,
+      "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41089075206",
+      "ubuntu": {
+        "conclusion": "failure",
+        "passed": 3859,
+        "failed": 1,
+        "skipped": 50,
+        "seconds": 312.96,
+        "log_sha256": "590c6c47981a570b543ba30a01046704c462a6d1eaba5adf982a8677041fbed1"
+      },
+      "macos": {
+        "conclusion": "failure",
+        "python_passed": 3906,
+        "python_failed": 1,
+        "python_skipped": 3,
+        "python_seconds": 381.98,
+        "swift_executed": 691,
+        "swift_failed": 2,
+        "swift_skipped": 1,
+        "swift_seconds": 191.501,
+        "self_contained_bundle": "success"
+      },
+      "qualified": false,
+      "causal_groups": [
+        "Remaining test confused late cancellation of the run with cancellation of its completed finalizer. Regression now independently observes finalizer completion and includes a genuinely self-cancelled finalizer.",
+        "Two native maintenance fixtures asserted a fully initialized diagnostic while omitting the new product module. The shared fixture now initializes it through signed RPC; absence remains partial and regressions prohibit opening the cold conversation database."
+      ]
     }
   ],
   "native_qualification": {

@@ -15,6 +15,12 @@ public enum ProductProjectValidation {
             && !value.hasSuffix(".") && !value.hasSuffix(".lock")
             && !value.split(separator: "/").contains { $0.hasPrefix(".") }
     }
+    public static func reviewReference(_ value: String) -> Bool {
+        if value.count == 40, oid(value) { return true }
+        if value.hasPrefix("refs/heads/") { return branch(String(value.dropFirst(11))) }
+        if value.hasPrefix("heads/") { return branch(String(value.dropFirst(6))) }
+        return !value.hasPrefix("refs/") && !value.hasPrefix("tags/") && branch(value)
+    }
     static func text(_ value: RPCValue, limit: Int, empty: Bool = false) throws -> String {
         try ProductInteractionValidation.text(value, limit: limit, empty: empty)
     }
@@ -191,5 +197,76 @@ public struct ProductGitHubReview: Equatable, Sendable {
             return "\(name): \(status) · \(conclusion)"
         }
         guard Set(files.map(\.id)).count == files.count else { throw RPCFailure.invalidResponse }
+    }
+}
+
+/// A bounded receipt for one repository reference. The digest identifies the
+/// backend read; neither its presence nor passing checks verifies a code audit.
+public struct ProductGitHubRepositoryReview: Equatable, Sendable {
+    public let owner: String
+    public let repository: String
+    public let repositoryID: Int
+    public let defaultBranch: String
+    public let referenceKind: String
+    public let referenceName: String
+    public let headSHA: String
+    public let reviewDigest: String
+    public let title: String
+    public let body: String
+    public let checks: [String]
+    public let files: [ProductGitHubFile]
+    public let filesComplete: Bool
+    public let checksComplete: Bool
+    public let patchesComplete: Bool
+    public let viewTruncated: Bool
+    public let readOnly: Bool
+    public let verified: Bool
+    public let url: URL
+    public init(_ value: RPCValue) throws {
+        try ProductInteractionValidation.bounded(value)
+        owner = try ProductProjectValidation.text(value["owner"], limit: 39)
+        repository = try ProductProjectValidation.text(value["repository"], limit: 100)
+        defaultBranch = try ProductProjectValidation.text(value["default_branch"], limit: 255)
+        referenceKind = try ProductProjectValidation.text(value["ref"]["kind"], limit: 16)
+        referenceName = try ProductProjectValidation.text(value["ref"]["name"], limit: 266)
+        headSHA = try ProductProjectValidation.text(value["head_sha"], limit: 40)
+        reviewDigest = try ProductProjectValidation.text(value["review_digest"], limit: 64)
+        guard let repositoryID = value["repository_id"].integer, repositoryID > 0,
+              ProductProjectValidation.repository(owner: owner, name: repository),
+              ProductProjectValidation.branch(defaultBranch),
+              headSHA.count == 40, ProductProjectValidation.oid(headSHA),
+              ManagementValidation.hash(reviewDigest),
+              (referenceKind == "commit" && referenceName == headSHA)
+                || (referenceKind == "branch" && referenceName.hasPrefix("refs/heads/")
+                    && ProductProjectValidation.branch(String(referenceName.dropFirst(11)))),
+              let filesComplete = value["files_complete"].bool,
+              let checksComplete = value["checks_complete"].bool,
+              let patchesComplete = value["patches_complete"].bool,
+              let truncated = value["view_truncated"].bool,
+              value["read_only"].bool == true, value["verified"].bool == false,
+              value["content_trust"].string == "github_data" else { throw RPCFailure.invalidResponse }
+        self.repositoryID = repositoryID
+        self.filesComplete = filesComplete; self.checksComplete = checksComplete
+        self.patchesComplete = patchesComplete; viewTruncated = truncated
+        readOnly = true; verified = false
+        title = try ProductProjectValidation.text(value["title"], limit: 512, empty: true)
+        body = try ProductProjectValidation.text(value["body"], limit: 2048, empty: true)
+        checks = try ManagementValidation.rows(value["checks"], limit: 20) { check in
+            let name = try ProductProjectValidation.text(check["name"], limit: 160)
+            let status = try ProductProjectValidation.text(check["status"], limit: 160)
+            let conclusion = check["conclusion"] == .null ? "sin conclusión"
+                : try ProductProjectValidation.text(check["conclusion"], limit: 160, empty: true)
+            return "\(name): \(status) · \(conclusion)"
+        }
+        files = try ManagementValidation.rows(value["files"], limit: 6) { file in
+            _ = try ProductProjectValidation.text(file["filename"], limit: 512)
+            if file["patch"] != .null { _ = try ProductProjectValidation.text(file["patch"], limit: 1024, empty: true) }
+            return try ProductGitHubFile(file)
+        }
+        guard Set(files.map(\.id)).count == files.count,
+              let url = URL(string: "https://github.com/\(owner)/\(repository)/commit/\(headSHA)") else {
+            throw RPCFailure.invalidResponse
+        }
+        self.url = url
     }
 }

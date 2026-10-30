@@ -37,6 +37,18 @@ def workspace_key(tools):
     return hashlib.sha256(json.dumps([str(tools.root), *tools.identity]).encode()).hexdigest()[:32]
 
 
+def admit_workspace(product, identity, tools, name, *, temporary=False):
+    key = workspace_key(tools)
+    for row in product.coordination.list_workspaces(identity, temporary=temporary):
+        if row["workspace_id"] == key:
+            if row["path"] != str(tools.root) or tuple(row["identity"]) != tools.identity:
+                raise CoordinationError("coordination_workspace_identity_changed")
+            return row  # Reuse an admission; never rename or transfer its owner implicitly.
+    return product.coordination.register_workspace(
+        identity, workspace_id=key, name=name, path=tools.root, temporary=temporary
+    )
+
+
 class ProductService:
     CoordinationError = CoordinationError
 
@@ -513,12 +525,8 @@ class ProductManagementAPI:
                 {"workspace_path", "workspace_name"},
             )
             tools = self.product_admit_workspace(value["workspace_path"])
-            self.product.coordination.register_workspace(
-                identity,
-                workspace_id=workspace_key(tools),
-                name=value["workspace_name"],
-                path=tools.root,
-                temporary=temporary,
+            admit_workspace(
+                self.product, identity, tools, value["workspace_name"], temporary=temporary
             )
         elif identity == self.product.primary_owner:
             self.product._default_workspace(identity, temporary=temporary)
@@ -730,12 +738,8 @@ class ProductManagementAPI:
         if kind == "workspace.register":
             params(arguments, {"path", "name"}, {"path", "name"})
             tools = self.product_admit_workspace(arguments["path"])
-            result = api.register_workspace(
-                identity,
-                workspace_id=workspace_key(tools),
-                name=arguments["name"],
-                path=tools.root,
-                temporary=ref.temporary,
+            result = admit_workspace(
+                self.product, identity, tools, arguments["name"], temporary=ref.temporary
             )
         elif kind == "session.bind":
             params(
@@ -804,7 +808,7 @@ class ProductManagementAPI:
         if value["tool"] not in allowed:
             raise RpcError(-32602, "Esta herramienta no pertenece al producto.")
         arguments = value["arguments"]
-        if value["tool"] in {"github_pull_request", "github_publish"}:
+        if value["tool"] in {"github_pull_request", "github_publish", "github_repository_review"}:
             entry = self.product.github.get(actor.client_id)
             if entry is None:
                 raise ProjectError("github_credential_required")

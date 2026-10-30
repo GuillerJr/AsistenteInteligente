@@ -11,6 +11,7 @@ import Observation
     public private(set) var worktreeText: String?
     public private(set) var github: ProductGitHubConnection?
     public private(set) var githubReview: ProductGitHubReview?
+    public private(set) var repositoryReview: ProductGitHubRepositoryReview?
     public private(set) var isRequesting = false
     public private(set) var isChanging = false
     public private(set) var responseUnconfirmed = false
@@ -25,19 +26,26 @@ import Observation
     @ObservationIgnored private var selectionVersion = 0
     @ObservationIgnored private var mutationVersion = 0
     @ObservationIgnored private var pending: [SessionScope: Pending] = [:]
+    @ObservationIgnored private var observedSettled: [SessionScope: String] = [:]
     @ObservationIgnored private var uncertain: Set<SessionScope> = []
     private struct Pending { let id: String; let tool: String }
     public init() {}
     public var selected: ProductProjectDescriptor? { rows.first { $0.id == selectedID } }
     public var blocksInteraction: Bool { isChanging || responseUnconfirmed || scope == nil }
     public var viewIdentity: String { "\(version):\(scope?.sessionID ?? "none"):\(runID ?? "host")" }
+    public var unsettledRequests: [SessionScope: String] {
+        pending.filter { observedSettled[$0.key] != $0.value.id }.mapValues(\.id)
+    }
+    public func observeRunReceipt(_ receipt: ConversationRun, scope: SessionScope) {
+        if pending[scope]?.id == receipt.id, !receipt.active { observedSettled[scope] = receipt.id }
+    }
 
     public func configure(_ transport: LocalRPCClient) {
         configure(request: { try await transport.call($0, params: $1) })
     }
     public func configure(request: @escaping MaintenanceClient.Request) {
         version += 1; self.request = request; scope = nil; runID = nil
-        pending = [:]; uncertain = []; clearScope()
+        pending = [:]; observedSettled = [:]; uncertain = []; clearScope()
     }
     public func setScope(_ scope: SessionScope?, runID: String? = nil) {
         guard self.scope != scope || self.runID != runID else { return }
@@ -47,7 +55,7 @@ import Observation
     }
     private func clearScope() {
         rows = []; selectedID = nil; inspect = nil; logText = nil; worktreeText = nil
-        github = nil; githubReview = nil; isRequesting = false; isChanging = false
+        github = nil; githubReview = nil; repositoryReview = nil; isRequesting = false; isChanging = false
         responseUnconfirmed = false; errorMessage = nil; notice = nil
         pendingRunID = nil; pendingRequestID = nil; lastSnapshotID = nil; resultSummary = nil
         selectionVersion += 1; mutationVersion += 1
@@ -175,7 +183,7 @@ import Observation
               !token.isEmpty, token.utf8.count <= 4096,
               ProductProjectValidation.repository(owner: owner, name: repository) else { return false }
         let current = version
-        mutationVersion += 1; isChanging = true; errorMessage = nil; githubReview = nil
+        mutationVersion += 1; isChanging = true; errorMessage = nil; githubReview = nil; repositoryReview = nil
         defer { if current == version { isChanging = false } }
         do {
             let response = try await request("product.projects", parameters(scope, kind: "github.connect",
@@ -203,7 +211,7 @@ import Observation
             let result = try ProductGitHubConnection(response["result"])
             guard !result.configured else { throw RPCFailure.invalidResponse }
             guard current == version, !Task.isCancelled else { return }
-            github = result; githubReview = nil; errorMessage = nil; notice = "Credencial de GitHub retirada."
+            github = result; githubReview = nil; repositoryReview = nil; errorMessage = nil; notice = "Credencial de GitHub retirada."
         } catch {
             if current == version { errorMessage = "No se pudo confirmar la retirada de GitHub. Consulta su estado antes de continuar." }
         }
@@ -222,6 +230,11 @@ import Observation
     public func readPullRequest(number: Int) async -> String? {
         guard github?.configured == true, (1..<2_147_483_648).contains(number) else { return nil }
         return await start("github_pull_request", arguments: ["number": .number(Double(number))])
+    }
+    public func readRepository(ref: String? = nil) async -> String? {
+        guard github?.configured == true,
+              ref == nil || ProductProjectValidation.reviewReference(ref!) else { return nil }
+        return await start("github_repository_review", arguments: ref.map { ["ref": .string($0)] } ?? [:])
     }
     public func publish(title: String, body: String, head: String, base: String,
                         expectedHeadSHA: String) async -> String? {
@@ -265,7 +278,10 @@ import Observation
     private func consume(_ payload: RPCValue, tool: String) throws {
         guard payload != .null else { notice = "La ejecución terminó sin un resultado disponible. Consulta su recibo."; return }
         try ProductInteractionValidation.bounded(payload)
-        if tool == "github_pull_request" {
+        if tool == "github_repository_review" {
+            repositoryReview = try ProductGitHubRepositoryReview(payload)
+            resultSummary = "Referencia del repositorio consultada en modo de sólo lectura. Revisa su alcance y su commit exacto."
+        } else if tool == "github_pull_request" {
             githubReview = try ProductGitHubReview(payload)
             resultSummary = "Pull request consultado para una revisión concreta de su head."
         } else if tool == "project_register" {

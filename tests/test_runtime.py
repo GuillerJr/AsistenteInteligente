@@ -556,9 +556,9 @@ async def test_typed_denial_stays_known_only_after_joined_cleanup(prior_known_re
     assert all(item.effect_status == "known" for item in result.action_receipts)
 
 
-@pytest.mark.parametrize("cleanup_failure", ["raise", "cancel"])
-async def test_denial_does_not_hide_failed_or_cancelled_cleanup(cleanup_failure):
-    cleaning, release = asyncio.Event(), asyncio.Event()
+@pytest.mark.parametrize("cleanup_failure", ["raise", "cancel", "self_cancel"])
+async def test_denial_distinguishes_failed_cleanup_from_late_run_cancellation(cleanup_failure):
+    cleaning, release, completed = asyncio.Event(), asyncio.Event(), asyncio.Event()
 
     class Gate:
         async def request(self, operation, cancellation):
@@ -572,6 +572,9 @@ async def test_denial_does_not_hide_failed_or_cancelled_cleanup(cleanup_failure)
         await release.wait()
         if cleanup_failure == "raise":
             raise RuntimeError("synthetic cleanup failure")
+        if cleanup_failure == "self_cancel":
+            raise asyncio.CancelledError()
+        completed.set()
 
     runtime = AgentRuntime(ToolThenAnswer(), [
         ToolDefinition("fixture_read", validate_text, forbidden, True),
@@ -580,13 +583,15 @@ async def test_denial_does_not_hide_failed_or_cancelled_cleanup(cleanup_failure)
     await observed(cleaning)
     if cleanup_failure == "cancel":
         assert handle.cancel().accepted
+    assert not completed.is_set() and handle.phase is RunPhase.CLEANING
     release.set()
     result = await settled(handle)
-    if cleanup_failure == "raise":
+    if cleanup_failure in {"raise", "self_cancel"}:
         assert result.error == "cleanup_failed"
     else:
         assert result.status == "cancelled"
-    assert not result.known_approval_denial and not result.cleanup_confirmed
+    assert not result.known_approval_denial
+    assert result.cleanup_confirmed is completed.is_set()
 
 
 async def test_error_string_without_gate_provenance_is_not_known_denial():

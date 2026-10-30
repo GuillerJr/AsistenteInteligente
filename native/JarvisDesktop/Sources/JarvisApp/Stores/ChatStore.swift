@@ -126,6 +126,9 @@ final class ChatStore {
             && !voice.canStopDictation && !selectedProductBlocks
     }
     var hasBackgroundRuns: Bool { runTracker.active.contains { $0.scope != selected?.scope } }
+    var hasUnsettledProductRequests: Bool {
+        !productCoordination.unsettledRequests.isEmpty || !productProjects.unsettledRequests.isEmpty
+    }
     func isSessionRunning(_ scope: SessionScope) -> Bool {
         (selected?.scope == scope && activeRunID != nil) || runTracker.observations[scope]?.isActive == true
     }
@@ -156,7 +159,7 @@ final class ChatStore {
     var isRecoveryOnly: Bool { (options ?? suppliedOptions)?.recoveryOnly == true }
     var serviceOwner: ServiceOwnerIdentity? { service.ownedIdentity }
     var durableDraftSnapshot: SessionDrafts { drafts.durableOnly }
-    var mayHandoff: Bool { !talk.isActive && !lifecycleBlocksInteraction && !isRecoveryOnly && ready && !handoffPreparing && !busy && activeRunID == nil && !runTracker.hasActiveRuns && !voice.canStopDictation && !access.isChangingWorkspace && !mcp.blocksContextChanges && !plugins.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !selectedDelegationBlocks && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.isRequesting && !restored.responseUnconfirmed && restored.operation?.workerPending != true && restored.operation?.cleanupOwnerPending != true }
+    var mayHandoff: Bool { !talk.isActive && !lifecycleBlocksInteraction && !isRecoveryOnly && ready && !handoffPreparing && !busy && activeRunID == nil && !runTracker.hasActiveRuns && !hasUnsettledProductRequests && !voice.canStopDictation && !access.isChangingWorkspace && !mcp.blocksContextChanges && !plugins.isChanging && !management.isChanging && !sessionCore.blocksInteraction && !clientIdentities.blocksInteraction && !selectedDelegationBlocks && !hasUnconfirmedQueue && !telegram.isChanging && !maintenance.blocksInteraction && !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction && !restored.isRequesting && !restored.responseUnconfirmed && restored.operation?.workerPending != true && restored.operation?.cleanupOwnerPending != true }
     var shutdownWarning: String? { service.lastStopReport?.warning }
     var latestConversationRunID: String? { observedConversationRunID }
     var mcpSelectionKey: String {
@@ -768,14 +771,24 @@ final class ChatStore {
     }
 
     private func parkSelectedRun() {
+        retainProductRequestCustody()
         if let session = activeSession ?? selected, let id = activeRunID {
             runTracker.record(scope: session.scope, runID: id,
-                              phase: runPhase.isEmpty ? "disconnected" : runPhase)
+                              phase: runPhase.isEmpty ? "disconnected" : runPhase, acceptanceConfirmed: false)
             if let pendingSubmission { parkedSubmissions[session.scope] = pendingSubmission }
         }
         runWatchID = UUID(); polling?.cancel(); runTracker.select(nil)
         activeRunID = nil; activeSession = nil; pendingSubmission = nil
         runPhase = ""; streamingText = ""; observedConversationRunID = nil
+    }
+
+    func retainProductRequestCustody() {
+        for (scope, id) in productCoordination.unsettledRequests {
+            runTracker.retainUnconfirmed(scope: scope, requestID: id)
+        }
+        for (scope, id) in productProjects.unsettledRequests {
+            runTracker.retainUnconfirmed(scope: scope, requestID: id)
+        }
     }
 
     private func restoreTrackedSelection() {
@@ -802,6 +815,7 @@ final class ChatStore {
         guard let selected, ManagementValidation.identifier(id), !stopping,
               activeRunID == nil || activeRunID == id else { return }
         activeRunID = id; activeSession = selected; observedConversationRunID = id
+        runTracker.record(scope: selected.scope, runID: id, phase: "queued")
         runPhase = "queued"; watchRun(id, session: selected); synchronizeProductContext()
     }
 
@@ -998,7 +1012,7 @@ final class ChatStore {
         let watchID = UUID(); runWatchID = watchID
         runTracker.select(session.scope)
         runTracker.record(scope: session.scope, runID: runID,
-                          phase: runPhase.isEmpty ? "queued" : runPhase)
+                          phase: runPhase.isEmpty ? "queued" : runPhase, acceptanceConfirmed: false)
         synchronizeProductContext()
         polling = Task { [weak self] in
             guard let self else { return }
@@ -1033,6 +1047,8 @@ final class ChatStore {
                     guard self.runViewIsCurrent(watchID, runID: runID, scope: session.scope) else { return }
                     self.runPhase = receipt.status
                     self.runTracker.record(scope: session.scope, runID: runID, phase: receipt.status)
+                    self.productCoordination.observeRunReceipt(receipt, scope: session.scope)
+                    self.productProjects.observeRunReceipt(receipt, scope: session.scope)
                     if receipt.status == "waiting_approval" || !self.access.approvals.isEmpty { self.talk.approvalBecamePending() }
                     try self.applyReceipts(result["run"])
                     if !receipt.active {
@@ -1050,7 +1066,7 @@ final class ChatStore {
                 catch {
                     guard self.runViewIsCurrent(watchID, runID: runID, scope: session.scope) else { return }
                     self.report(error); self.runPhase = "disconnected"
-                    self.runTracker.record(scope: session.scope, runID: runID, phase: "disconnected")
+                    self.runTracker.record(scope: session.scope, runID: runID, phase: "disconnected", acceptanceConfirmed: false)
                     return
                 }
             }
@@ -1064,6 +1080,7 @@ final class ChatStore {
 
     private func refreshProductState() async {
         guard !isRecoveryOnly, ready, !stopping, !handoffPreparing else { return }
+        retainProductRequestCustody()
         synchronizeProductContext()
         await productNotifications.reconcileOwnNotifications()
         await productCoordination.refresh()
@@ -1071,16 +1088,17 @@ final class ChatStore {
         await productInteractions.refresh()
         if let scope = selected?.scope { registerNotificationReader(scope, runID: activeRunID ?? observedConversationRunID ?? "host") }
         for observation in runTracker.active where observation.scope != selected?.scope {
-            do {
-                var params = observation.scope.params; params["run_id"] = .string(observation.runID)
-                let result = try await rpc("runs.get", params)
-                guard !stopping, observation.scope != selected?.scope,
-                      runTracker.observations[observation.scope]?.runID == observation.runID else { continue }
-                let receipt = try ConversationRun(result["run"], expectedID: observation.runID)
-                runTracker.record(scope: observation.scope, runID: observation.runID, phase: receipt.status)
-                if !receipt.active { parkedSubmissions.removeValue(forKey: observation.scope) }
-                registerNotificationReader(observation.scope, runID: observation.runID)
-            } catch { /* A failed read retains the identity; it never cancels or repeats work. */ }
+            guard let receipt = await runTracker.refresh(scope: observation.scope, runID: observation.runID,
+                request: { [weak self] method, params in
+                    guard let self else { throw RPCFailure.disconnected }
+                    return try await self.rpc(method, params)
+                }) else { continue }
+            guard !stopping, observation.scope != selected?.scope,
+                  runTracker.observations[observation.scope]?.runID == observation.runID else { continue }
+            productCoordination.observeRunReceipt(receipt, scope: observation.scope)
+            productProjects.observeRunReceipt(receipt, scope: observation.scope)
+            if !receipt.active { parkedSubmissions.removeValue(forKey: observation.scope) }
+            registerNotificationReader(observation.scope, runID: observation.runID)
         }
         for key in Array(notificationStores.keys) {
             guard let store = notificationStores[key] else { continue }

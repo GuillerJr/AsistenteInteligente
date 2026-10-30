@@ -35,6 +35,7 @@ BASE_TOOL_NAMES = {
     "publish_panel", "agent_directory", "agent_inbox", "agent_message_send",
     "project_list", "project_register", "project_inspect", "project_log", "project_worktrees",
     "project_operation", "github_connection", "github_pull_request", "github_publish",
+    "github_repository_review",
 }
 
 SERVER = r"""

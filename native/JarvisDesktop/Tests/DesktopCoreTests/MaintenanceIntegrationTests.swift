@@ -75,7 +75,8 @@ final class MaintenanceIntegrationTests: XCTestCase {
           names=tuple(name+suffix for name in ('jarvis.sqlite3','memory.sqlite3','schedules.sqlite3')
                       for suffix in ('','-wal','-shm','-journal'))+('profiles/agents.json',
                  'profiles/skills.json','profiles/plugins.json','telegram/telegram.json',
-                 'automation.json')
+                 'automation.json','session-coordination.sqlite3','product-interactions.sqlite3',
+                 'product-recovery.json','projects/projects.json')
           def fingerprint():
             value=[]
             for name in names:
@@ -175,6 +176,11 @@ final class MaintenanceIntegrationTests: XCTestCase {
         let client = MaintenanceClient(transport: transport)
         do {
             try await ServiceBootstrap.waitForHealth(stateDirectory: profile) { child.isRunning }
+            // The fixture claims a fully initialized diagnostic. Initialize
+            // the optional product through its actual signed owner API too;
+            // this does not open the cold conversation store or call a model.
+            let product = try await transport.call("product.initialize")
+            XCTAssertFalse(product["workspaces"].array?.isEmpty ?? true)
             try await operation(client, transport, directory)
             await client.close()
         } catch {
@@ -237,6 +243,7 @@ final class MaintenanceIntegrationTests: XCTestCase {
             XCTAssertTrue(diagnostic.success)
             let report = try DoctorSummary(diagnostic.result)
             XCTAssertEqual(report.status, "ok")
+            XCTAssertTrue(report.checks.contains(where: { $0.role == "product" && $0.status == "ok" }))
             XCTAssertTrue(report.checks.contains(where: { $0.role == "memory" && $0.integrity == "ok" }))
             let afterDoctor = try await transport.call("fixture.maintenance.trace")
             XCTAssertEqual(afterDoctor["sources_sha256"], before["sources_sha256"])
@@ -398,6 +405,7 @@ final class MaintenanceIntegrationTests: XCTestCase {
             XCTAssertTrue(diagnostic.success)
             let report = try DoctorSummary(diagnostic.result)
             XCTAssertEqual(report.status, "ok")
+            XCTAssertTrue(report.checks.contains(where: { $0.role == "product" && $0.status == "ok" }))
             let review = try await client.reviewBackup(parent: directory, name: "backup-cold-state")
             let state = try XCTUnwrap(review.sources.first(where: { $0.role == "state" }))
             XCTAssertEqual(state.disposition, "present")

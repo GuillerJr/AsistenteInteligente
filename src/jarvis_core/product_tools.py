@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from jsonschema import Draft202012Validator, ValidationError
 
 from jarvis_core.product_interactions import ProductInteractionError
-from jarvis_core.product_management import workspace_key
+from jarvis_core.product_management import admit_workspace
 from jarvis_core.product_projects import ProjectError
 from jarvis_core.runtime import ToolDefinition, ToolResult, current_dispatch_operation
 from jarvis_core.session_coordination_types import CoordinationError
@@ -96,6 +96,18 @@ CONTRACTS = {
         True,
     ),
     "github_connection": ({}, [], False),
+    "github_repository_review": (
+        {
+            "ref": S,
+            "owner": S,
+            "repository": S,
+            "login": S,
+            "connection_id": ID,
+            "account_id": {"type": "integer", "minimum": 1},
+        },
+        ["owner", "repository", "login", "connection_id", "account_id"],
+        True,
+    ),
     "github_pull_request": (
         {
             "number": {"type": "integer", "minimum": 1},
@@ -137,6 +149,10 @@ CONTRACTS = {
     ),
 }
 DESCRIPTIONS = {
+    "github_repository_review": (
+        "Revisar identidad, commit, checks y diff acotado del repositorio GitHub elegido, "
+        "aunque no tenga PRs. ref opcional elige su rama principal; no publica ni hace push."
+    ),
     "report_presence": "Actualizar presencia de esta ejecución con revisión exacta, sin permisos.",
     "request_user_input": (
         "Pedir de una a tres decisiones al dueño. Cada pregunta lleva id, header, prompt y "
@@ -357,20 +373,14 @@ class ProductTools:
                     tools.root, value["name"], temporary=ref.temporary
                 )
                 guard()
-                product.coordination.register_workspace(
-                    identity,
-                    workspace_id=workspace_key(tools),
-                    name=value["name"],
-                    path=tools.root,
-                    temporary=ref.temporary,
-                )
+                admit_workspace(product, identity, tools, value["name"], temporary=ref.temporary)
             elif name == "github_connection":
                 entry = product.github.get(identity)
                 if entry is None:
                     raise ProjectError("github_credential_required")
                 result = {key: entry[key] for key in ("owner", "repository", "login", "account_id")}
                 result["connection_id"] = entry["backend"].credentials.current().credential_id
-            elif name in {"github_pull_request", "github_publish"}:
+            elif name in {"github_pull_request", "github_publish", "github_repository_review"}:
                 entry = product.github.get(identity)
                 if entry is None:
                     raise ProjectError("github_credential_required")
@@ -383,7 +393,60 @@ class ProductTools:
                     or value["connection_id"] != backend.credentials.current().credential_id
                 ):
                     raise ProjectError("github_connection_changed")
-                if name == "github_pull_request":
+                if name == "github_repository_review":
+                    raw = await backend.repository_review(
+                        entry["owner"], entry["repository"], value.get("ref")
+                    )
+
+                    def clip(text, maximum):
+                        return str(text or "").encode()[:maximum].decode("utf-8", "ignore")
+
+                    files, checks = raw["files"], raw["checks"]["check_runs"]
+                    message = raw["commit"].get("message", "")
+                    result = {
+                        key: raw[key]
+                        for key in (
+                            "owner",
+                            "repository",
+                            "repository_id",
+                            "default_branch",
+                            "ref",
+                            "head_sha",
+                            "review_digest",
+                            "content_trust",
+                        )
+                    }
+                    result.update(
+                        title=clip(message.split("\n")[0], 512),
+                        body=clip(message, 2048),
+                        checks=[
+                            {
+                                key: None if check.get(key) is None else clip(check.get(key), 160)
+                                for key in ("name", "status", "conclusion")
+                            }
+                            for check in checks[:20]
+                        ],
+                        files=[
+                            {
+                                "filename": clip(item.get("filename"), 512),
+                                "patch": clip(item.get("patch"), 1024),
+                            }
+                            for item in files[:6]
+                        ],
+                        files_complete=raw["files_complete"] and len(files) <= 6,
+                        checks_complete=raw["checks_complete"] and len(checks) <= 20,
+                        patches_complete=raw["patches_complete"]
+                        and len(files) <= 6
+                        and all(
+                            len((item.get("patch") or "").encode()) <= 1024
+                            and len(item.get("filename", "").encode()) <= 512
+                            for item in files
+                        ),
+                        view_truncated=True,
+                        read_only=True,
+                        verified=False,
+                    )
+                elif name == "github_pull_request":
                     result = await backend.pull_request(
                         entry["owner"], entry["repository"], value["number"]
                     )
@@ -476,24 +539,32 @@ class ProductTools:
                     project = result.get("project")
                     if project and value["kind"] in {"worktree.create", "worktree.restore"}:
                         tools = service.product_admit_workspace(project["pin"]["root"])
-                        product.coordination.register_workspace(
-                            identity,
-                            workspace_id=workspace_key(tools),
-                            name=project["name"],
-                            path=tools.root,
-                            temporary=ref.temporary,
+                        admit_workspace(
+                            product, identity, tools, project["name"], temporary=ref.temporary
                         )
             output = json.dumps(result, ensure_ascii=False)
             if len(output.encode()) > 24000:
                 raise ToolError("product_output_limit")
             if isinstance(result, dict) and result.get("succeeded") is False:
-                return ToolResult(name, False, False, output=output,
+                return ToolResult(
+                    name,
+                    False,
+                    False,
+                    output=output,
                     error=result.get("error", "product_operation_unconfirmed"),
-                    effect_status=result.get("effect_status", "unknown"))
+                    effect_status=result.get("effect_status", "unknown"),
+                )
             return ToolResult(
                 name,
                 True,
-                name not in {"project_log", "agent_inbox", "github_pull_request", "github_publish"},
+                name
+                not in {
+                    "project_log",
+                    "agent_inbox",
+                    "github_pull_request",
+                    "github_publish",
+                    "github_repository_review",
+                },
                 output,
             )
         except (ProductInteractionError, CoordinationError, ProjectError) as error:

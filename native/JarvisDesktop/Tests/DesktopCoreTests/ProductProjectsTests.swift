@@ -42,6 +42,19 @@ private enum ProjectsFixture {
             "files_complete": .bool(true), "checks_complete": .bool(true), "view_truncated": .bool(true),
             "content_trust": .string("github_data")])
     }
+    static func repositoryReview() -> RPCValue {
+        .object(["owner": .string("synthetic"), "repository": .string("jarvis-test"),
+            "repository_id": .number(42), "default_branch": .string("main"),
+            "ref": .object(["kind": .string("branch"), "name": .string("refs/heads/main")]),
+            "head_sha": .string(String(repeating: "a", count: 40)),
+            "review_digest": .string(String(repeating: "b", count: 64)),
+            "title": .string("Commit sintético"), "body": .string("Datos externos; no son permisos."),
+            "checks": .array([.object(["name": .string("CI"), "status": .string("completed"), "conclusion": .null])]),
+            "files": .array([.object(["filename": .string("source.swift"), "patch": .string("+value")])]),
+            "files_complete": .bool(true), "checks_complete": .bool(true), "patches_complete": .bool(false),
+            "view_truncated": .bool(true), "read_only": .bool(true), "verified": .bool(false),
+            "content_trust": .string("github_data")])
+    }
     static func replacing(_ value: RPCValue, _ changes: [String: RPCValue]) -> RPCValue {
         var object = value.object!; object.merge(changes) { _, next in next }; return .object(object)
     }
@@ -57,10 +70,24 @@ private actor ProjectsWire {
     private var held: CheckedContinuation<RPCValue, Error>?
     private var heldProject = ProjectsFixture.project
     private var lastRequestID: String?
+    private var lastTool = ""
+    private var lastArguments: [String: RPCValue] = [:]
+    private var settleRepository = false
+    private var holdResult = false
+    private var heldResult: CheckedContinuation<RPCValue, Error>?
     func rejectConnection() { leakCredentialError = true }
     func loseStartResponse() { loseStart = true }
     func changeState() { changeDigest = true }
     func holdNextInspection() { holdInspect = true }
+    func finishRepositoryRead() { settleRepository = true }
+    func holdNextResult() { holdResult = true }
+    var isHoldingResult: Bool { heldResult != nil }
+    var start: (String, [String: RPCValue]) { (lastTool, lastArguments) }
+    private var repositoryResult: RPCValue {
+        .object(["settled": .bool(true), "payload": ProjectsFixture.repositoryReview(),
+                 "error": .null, "provenance": .string("external_unverified")])
+    }
+    func releaseResult() { heldResult?.resume(returning: repositoryResult); heldResult = nil }
     var isHolding: Bool { held != nil }
     func release() { held?.resume(returning: .object(["result": ProjectsFixture.inspection(id: heldProject)])); held = nil }
     func count(_ method: String, kind: String? = nil) -> Int {
@@ -72,11 +99,18 @@ private actor ProjectsWire {
         calls.append((method, kind))
         if method == "product.tool.start" {
             lastRequestID = params["request_id"]?.string
+            lastTool = params["tool"]?.string ?? ""
+            lastArguments = params["arguments"]?.object ?? [:]
             if loseStart { throw RPCFailure.disconnected }
             return .object(["run_id": .string(lastRequestID!), "status": .string("queued")])
         }
         if method == "product.tool.result" {
             XCTAssertEqual(params["run_id"]?.string, lastRequestID)
+            if holdResult {
+                holdResult = false
+                return try await withCheckedThrowingContinuation { heldResult = $0 }
+            }
+            if settleRepository, lastTool == "github_repository_review" { return repositoryResult }
             return .object(["settled": .bool(false), "payload": .null, "error": .null,
                 "provenance": .string("external_unverified")])
         }
@@ -113,6 +147,66 @@ final class ProductProjectsTests: XCTestCase {
         XCTAssertEqual(review.url.absoluteString, "https://github.com/synthetic/jarvis-test/pull/7")
         XCTAssertThrowsError(try ProductGitHubReview(ProjectsFixture.replacing(ProjectsFixture.pull(), ["owner": .string("malicious/redirect")])))
         XCTAssertThrowsError(try ProductGitHubConnection(ProjectsFixture.replacing(ProjectsFixture.connection(), ["token": .string("synthetic-secret")])))
+    }
+
+    func testRepositoryReceiptPreservesBoundedReadOnlyUnverifiedScope() throws {
+        let value = ProjectsFixture.repositoryReview(), review = try ProductGitHubRepositoryReview(value)
+        XCTAssertEqual(review.referenceName, "refs/heads/main"); XCTAssertEqual(review.repositoryID, 42)
+        XCTAssertTrue(review.readOnly); XCTAssertFalse(review.verified); XCTAssertTrue(review.viewTruncated)
+        XCTAssertTrue(review.filesComplete); XCTAssertFalse(review.patchesComplete)
+        XCTAssertEqual(review.checks, ["CI: completed · sin conclusión"])
+        XCTAssertEqual(review.url.absoluteString, "https://github.com/synthetic/jarvis-test/commit/" + String(repeating: "a", count: 40))
+        XCTAssertThrowsError(try ProductGitHubRepositoryReview(ProjectsFixture.replacing(value, ["verified": .bool(true)])))
+        XCTAssertThrowsError(try ProductGitHubRepositoryReview(ProjectsFixture.replacing(value, ["read_only": .bool(false)])))
+        XCTAssertThrowsError(try ProductGitHubRepositoryReview(ProjectsFixture.replacing(value, ["patches_complete": .null])))
+        XCTAssertThrowsError(try ProductGitHubRepositoryReview(ProjectsFixture.replacing(value, ["ref": .object([
+            "kind": .string("commit"), "name": .string(String(repeating: "c", count: 40))]) ])))
+        let excessiveFiles: [RPCValue] = (0..<7).map {
+            .object(["filename": .string("\($0).swift"), "patch": .string("+")])
+        }
+        XCTAssertThrowsError(try ProductGitHubRepositoryReview(ProjectsFixture.replacing(value, ["files": .array(excessiveFiles)])))
+        XCTAssertTrue(ProductProjectValidation.reviewReference("refs/heads/main"))
+        XCTAssertTrue(ProductProjectValidation.reviewReference(String(repeating: "a", count: 40)))
+        XCTAssertFalse(ProductProjectValidation.reviewReference("tags/release"))
+        XCTAssertFalse(ProductProjectValidation.reviewReference("main..other"))
+    }
+
+    @MainActor func testRepositoryReadUsesOriginalRunReceiptWithoutPublicationOrReplay() async throws {
+        let wire = ProjectsWire(), store = ProductProjectsStore()
+        store.configure(request: { try await wire.request($0, $1) }); store.setScope(ProjectsFixture.scope)
+        await store.refresh()
+        let connected = await store.connectGithub(token: "synthetic-memory-only", owner: "synthetic", repository: "jarvis-test")
+        XCTAssertTrue(connected)
+        let id = await store.readRepository()
+        XCTAssertNotNil(id)
+        let start = await wire.start
+        XCTAssertEqual(start.0, "github_repository_review"); XCTAssertTrue(start.1.isEmpty)
+        await wire.finishRepositoryRead(); await store.refresh()
+        XCTAssertEqual(store.repositoryReview?.headSHA, String(repeating: "a", count: 40))
+        XCTAssertFalse(store.repositoryReview?.verified ?? true); XCTAssertFalse(store.responseUnconfirmed)
+        let calls = await wire.count("product.tool.start"); XCTAssertEqual(calls, 1)
+        XCTAssertNil(store.pendingRequestID)
+        let explicit = await store.readRepository(ref: "heads/feature/test")
+        XCTAssertNotNil(explicit)
+        let nextStart = await wire.start
+        XCTAssertEqual(nextStart.0, "github_repository_review")
+        XCTAssertEqual(nextStart.1, ["ref": .string("heads/feature/test")])
+    }
+
+    @MainActor func testRepositoryReceiptCannotCrossConversationAfterAwait() async {
+        let wire = ProjectsWire(), store = ProductProjectsStore()
+        store.configure(request: { try await wire.request($0, $1) }); store.setScope(ProjectsFixture.scope)
+        await store.refresh()
+        _ = await store.connectGithub(token: "synthetic-memory-only", owner: "synthetic", repository: "jarvis-test")
+        _ = await store.readRepository(); await wire.holdNextResult()
+        let refresh = Task { await store.refresh() }
+        for _ in 0..<1000 { if await wire.isHoldingResult { break }; await Task.yield() }
+        let holding = await wire.isHoldingResult; XCTAssertTrue(holding)
+        let other = SessionScope(sessionID: String(repeating: "f", count: 32), temporary: true)
+        store.setScope(other); await wire.releaseResult(); await refresh.value
+        XCTAssertNil(store.repositoryReview); XCTAssertNil(store.github)
+        XCTAssertEqual(store.unsettledRequests.count, 1)
+        let starts = await wire.count("product.tool.start"); XCTAssertEqual(starts, 1)
     }
 
     @MainActor func testCredentialFailureNeverEchoesTokenAndDisconnectIsExplicit() async {

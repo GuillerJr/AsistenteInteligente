@@ -7,15 +7,21 @@ import UserNotifications
 @MainActor final class MacProductNotificationCenter: NSObject, ProductNotificationCenter, UNUserNotificationCenterDelegate {
     var onActivation: (@MainActor (String) async -> Void)?
     private lazy var center = UNUserNotificationCenter.current()
+    private var hasApplicationBundle: Bool {
+        Bundle.main.bundleURL.pathExtension.lowercased() == "app" && Bundle.main.bundleIdentifier != nil
+    }
     private func configuredCenter() -> UNUserNotificationCenter { center.delegate = self; return center }
     func requestPermission() async throws -> Bool {
-        try await configuredCenter().requestAuthorization(options: [.alert])
+        guard hasApplicationBundle else { return false }
+        return try await configuredCenter().requestAuthorization(options: [.alert])
     }
     func canDeliver() async -> Bool {
+        guard hasApplicationBundle else { return false }
         let settings = await configuredCenter().notificationSettings()
         return settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional
     }
     func existingIdentifiers(namespace: String) async -> [String] {
+        guard hasApplicationBundle else { return [] }
         let pending = await configuredCenter().pendingNotificationRequests()
         let delivered = await configuredCenter().deliveredNotifications()
         let own = (pending + delivered.map(\.request)).filter {
@@ -25,13 +31,14 @@ import UserNotifications
         return Array(Set(own.map(\.identifier)))
     }
     func add(identifier: String, title: String, body: String, namespace: String) async throws {
+        guard hasApplicationBundle else { throw RPCFailure.unavailable }
         let content = UNMutableNotificationContent()
         content.title = title; content.body = body
         content.userInfo = ["jarvis_notification_id": identifier, "jarvis_profile_namespace": namespace]
         try await configuredCenter().add(UNNotificationRequest(identifier: identifier, content: content, trigger: nil))
     }
     func remove(identifiers: [String]) {
-        guard !identifiers.isEmpty else { return }
+        guard hasApplicationBundle, !identifiers.isEmpty else { return }
         configuredCenter().removePendingNotificationRequests(withIdentifiers: identifiers)
         configuredCenter().removeDeliveredNotifications(withIdentifiers: identifiers)
     }

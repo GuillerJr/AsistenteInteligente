@@ -220,6 +220,42 @@ def _branch(value):
     return value
 
 
+def _review_ref(value):
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ProjectError("github_ref_invalid")
+    if re.fullmatch(r"[a-f0-9]{40}", value):
+        return {"kind": "commit", "name": value}
+    if value.startswith("refs/heads/"):
+        value = value[len("refs/heads/"):]
+    elif value.startswith("heads/"):
+        value = value[len("heads/"):]
+    elif value.startswith(("refs/", "tags/")):
+        raise ProjectError("github_ref_invalid")
+    return {"kind": "branch", "name": "refs/heads/" + _branch(value)}
+
+
+def _repository_identity(value, owner, repository):
+    if (not isinstance(value, dict) or type(value.get("id")) is not int or value["id"] < 1
+            or not isinstance(value.get("full_name"), str)
+            or value["full_name"].casefold() != (owner + "/" + repository).casefold()
+            or not isinstance(value.get("default_branch"), str)):
+        raise ProjectError("github_destination_changed")
+    _branch(value["default_branch"])
+    return value["id"], value["full_name"].casefold(), value["default_branch"]
+
+
+def _reference_head(value, reference):
+    item = value.get("object") if isinstance(value, dict) else None
+    if (not isinstance(item, dict) or item.get("type") != "commit"
+            or not isinstance(item.get("sha"), str)
+            or not re.fullmatch(r"[a-f0-9]{40}", item["sha"])
+            or value.get("ref") != reference):
+        raise ProjectError("github_review_changed")
+    return item["sha"]
+
+
 class GitHubProjects:
     """Identity, PR/check/diff inspection and one exact reviewed PR creation.
 
@@ -312,6 +348,150 @@ class GitHubProjects:
                 and row["changed_files"] <= len(files),
                 "checks_complete": checks.get("total_count") == len(checks["check_runs"]),
                 "content_trust": "github_data"}
+
+    async def repository_review(self, owner, repository, ref=None):
+        """Read one branch head or immutable commit, including checks and diff.
+
+        ``None`` selects the repository's default branch. Strings accept a short
+        branch, heads/branch, refs/heads/branch, or a full lower-case commit SHA.
+        At most the first 100 files/checks are inspected; completeness refers to
+        those finite API pages and supplied patches, never a verified code audit.
+        References and repository identity are read again before returning. No
+        POST, branch creation, push, local Git or publication journal is involved.
+        """
+        prefix = _repository(owner, repository)
+        selection = _review_ref(ref)
+        try:
+            async with asyncio.timeout(60):
+                return await self._repository_review(owner, repository, prefix, selection)
+        except TimeoutError:
+            raise ProjectError("github_review_timeout") from None
+
+    async def _repository_review(self, owner, repository, prefix, selection):
+        credential = self.credentials.current()
+        repo = await self._request("GET", prefix, credential)
+        repo_identity = _repository_identity(repo, owner, repository)
+        account = await self._request("GET", "/user", credential)
+        if (not isinstance(account, dict) or type(account.get("id")) is not int
+                or account["id"] < 1 or not isinstance(account.get("login"), str)):
+            raise ProjectError("github_identity_invalid")
+        account_identity = {"id": account["id"], "login": _text(account["login"], 128)}
+        selection = selection or {"kind": "branch", "name": "refs/heads/" + repo_identity[2]}
+        reference_path = None
+        if selection["kind"] == "branch":
+            reference_path = prefix + "/git/ref/" + quote(selection["name"][len("refs/"):],
+                                                         safe="/")
+            head = _reference_head(await self._request("GET", reference_path, credential),
+                                   selection["name"])
+        else:
+            head = selection["name"]
+        commit_path = prefix + "/commits/" + head
+        commit = await self._request("GET", commit_path + "?per_page=100&page=1", credential)
+        metadata = commit.get("commit") if isinstance(commit, dict) else None
+        if (not isinstance(metadata, dict) or commit.get("sha") != head
+                or not isinstance(metadata.get("message"), str)
+                or not isinstance(commit.get("files"), list)):
+            raise ProjectError("github_commit_invalid")
+        checks = await self._request("GET", prefix + f"/commits/{head}/check-runs?per_page=100",
+                                     credential)
+        if (not isinstance(checks, dict) or type(checks.get("total_count")) is not int
+                or checks["total_count"] < 0 or not isinstance(checks.get("check_runs"), list)):
+            raise ProjectError("github_checks_invalid")
+        if reference_path is not None:
+            after_head = _reference_head(
+                await self._request("GET", reference_path, credential), selection["name"])
+        else:
+            after_commit = await self._request(
+                "GET", commit_path + "?per_page=1&page=1", credential)
+            after_head = after_commit.get("sha") if isinstance(after_commit, dict) else None
+        after_repo = await self._request("GET", prefix, credential)
+        if (after_head != head
+                or _repository_identity(after_repo, owner, repository) != repo_identity):
+            raise ProjectError("github_review_changed")
+        self.credentials.assert_current(credential)
+        files, patch_budget, patches_complete = [], 65536, True
+        for item in commit["files"][:100]:
+            if not isinstance(item, dict):
+                raise ProjectError("github_commit_invalid")
+            filename = _text(item.get("filename"), 2048)
+            patch = item.get("patch")
+            if patch is not None and not isinstance(patch, str):
+                raise ProjectError("github_commit_invalid")
+            try:
+                raw = b"" if patch is None else patch.encode()
+            except UnicodeError:
+                raise ProjectError("github_commit_invalid") from None
+            selected = raw[:min(8192, patch_budget)].decode("utf-8", errors="ignore")
+            patch_budget -= len(selected.encode())
+            truncated = patch is not None and selected != patch
+            complete = patch is not None and not truncated
+            row = {"filename": filename, "patch": selected if patch is not None else None,
+                   "patch_available": patch is not None, "patch_truncated": truncated}
+            if "status" in item:
+                row["status"] = _text(item["status"], 64)
+            if "previous_filename" in item:
+                row["previous_filename"] = _text(item["previous_filename"], 2048)
+            for name in ("additions", "deletions", "changes"):
+                count = item.get(name)
+                if type(count) is not int or not 0 <= count <= 2**53 - 1:
+                    raise ProjectError("github_commit_invalid")
+                row[name] = count
+            if complete:
+                lines = selected.splitlines()
+                complete = (sum(line.startswith("+") for line in lines) == row["additions"]
+                            and sum(line.startswith("-") for line in lines) == row["deletions"])
+            row["patch_complete"] = complete
+            patches_complete = patches_complete and complete
+            files.append(row)
+        selected_checks = []
+        for item in checks["check_runs"][:100]:
+            if (not isinstance(item, dict) or type(item.get("id")) is not int
+                    or item["id"] < 1 or item.get("head_sha") != head):
+                raise ProjectError("github_checks_invalid")
+            conclusion = item.get("conclusion")
+            if conclusion is not None:
+                _text(conclusion, 64)
+            selected_checks.append({"id": item["id"], "name": _text(item.get("name"), 512),
+                                    "status": _text(item.get("status"), 64),
+                                    "conclusion": conclusion, "head_sha": head})
+        message = metadata["message"]
+        try:
+            message_raw = message.encode()
+        except UnicodeError:
+            raise ProjectError("github_commit_invalid") from None
+        message = message_raw[:8192].decode("utf-8", errors="ignore")
+        result = {"owner": owner, "repository": repository, "repository_id": repo_identity[0],
+                  "identity": account_identity, "default_branch": repo_identity[2],
+                  "ref": selection, "head_sha": head,
+                  "repository_metadata": {"id": repo_identity[0], "full_name": repo["full_name"],
+                      "default_branch": repo_identity[2],
+                      "html_url": f"https://github.com/{owner}/{repository}"},
+                  "commit": {"sha": head, "message": message,
+                      "message_truncated": len(message_raw) > 8192,
+                      "html_url": f"https://github.com/{owner}/{repository}/commit/{head}"},
+                  "checks": {"total_count": checks["total_count"], "check_runs": selected_checks},
+                  "files": files, "files_api_count": len(commit["files"]),
+                  "files_complete": len(commit["files"]) < 100,
+                  "patches_complete": patches_complete and len(commit["files"]) < 100,
+                  "checks_complete": checks["total_count"] == len(selected_checks),
+                  "view_truncated": len(commit["files"]) >= 100 or len(checks["check_runs"]) > 100
+                  or checks["total_count"] != len(selected_checks)
+                  or len(message_raw) > 8192 or any(row["patch_truncated"] for row in files),
+                  "content_trust": "github_data", "verified": False, "read_only": True,
+                  "reference_rechecked": True, "repository_identity_rechecked": True,
+                  "pagination": {"page": 1, "per_page": 100, "automatic_follow": False}}
+        while len(_json(result).encode()) > 196480:
+            result["view_truncated"] = True
+            if result["files"]:
+                result["files"].pop()
+                result["files_complete"] = result["patches_complete"] = False
+            elif result["checks"]["check_runs"]:
+                result["checks"]["check_runs"].pop()
+                result["checks_complete"] = False
+            else:
+                raise ProjectError("github_response_limit")
+        result["review_digest"] = _hash(result)
+        return result
 
     async def _publication_state(self, args, credential):
         prefix = _repository(args["owner"], args["repository"])

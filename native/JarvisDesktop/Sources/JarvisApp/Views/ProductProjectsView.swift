@@ -21,6 +21,7 @@ struct ProductProjectsView: View {
     @State private var confirmingGithub = false
     @State private var githubConfirmationIdentity: String?
     @State private var pullNumber = ""
+    @State private var repositoryReference = ""
     @State private var pullTitle = ""
     @State private var pullBody = ""
     @State private var headBranch = ""
@@ -80,7 +81,8 @@ struct ProductProjectsView: View {
                     operationSection(selected)
                 }
                 githubSection
-                if store.github?.configured == true { githubActionsSection }
+                if store.github?.configured == true { repositoryActionsSection; githubActionsSection }
+                if let review = store.repositoryReview { repositoryReviewSection(review) }
                 if let review = store.githubReview { reviewSection(review) }
             }
         }
@@ -290,6 +292,53 @@ struct ProductProjectsView: View {
         }
     }
 
+    private var repositoryActionsSection: some View {
+        Section("Revisión del repositorio") {
+            Text("Consulta el commit y su diff aunque el repositorio no tenga pull requests.")
+                .font(.callout).foregroundStyle(.secondary)
+            Button("Revisar rama principal") { Task { _ = await store.readRepository() } }
+                .disabled(!mayChange)
+            DisclosureGroup("Elegir otra referencia") {
+                TextField("Rama o SHA de commit completo", text: $repositoryReference)
+                Button("Revisar referencia elegida") {
+                    Task { _ = await store.readRepository(ref: repositoryReference) }
+                }.disabled(!mayChange || !ProductProjectValidation.reviewReference(repositoryReference))
+            }
+            Text("Se consulta la rama predeterminada del destino conectado. La lectura no publica cambios ni crea un pull request.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder private func repositoryReviewSection(_ review: ProductGitHubRepositoryReview) -> some View {
+        Section("Referencia consultada") {
+            Text(review.title.isEmpty ? "Commit sin título" : review.title).font(.headline)
+            LabeledContent("Repositorio", value: "\(review.owner)/\(review.repository)")
+            LabeledContent("ID del repositorio", value: String(review.repositoryID))
+            LabeledContent("Rama predeterminada", value: review.defaultBranch)
+            LabeledContent(review.referenceKind == "commit" ? "Commit elegido" : "Referencia", value: review.referenceName)
+            LabeledContent("Commit consultado") { Text(review.headSHA).font(.caption.monospaced()).textSelection(.enabled) }
+            LabeledContent("Identidad de la lectura") { Text(review.reviewDigest).font(.caption.monospaced()).textSelection(.enabled) }
+            Link("Abrir commit en GitHub", destination: review.url)
+            if !review.body.isEmpty { Text(review.body).textSelection(.enabled) }
+            Text("Sólo lectura · revisión de código sin verificar. Hasta 6 archivos, 20 comprobaciones y 1 KiB de parche por archivo en este recibo.")
+                .font(.callout).foregroundStyle(.secondary)
+            if review.viewTruncated { Text("Recibo de vista acotado; no representa una auditoría exhaustiva.").font(.caption).foregroundStyle(.secondary) }
+            Text("Archivos: \(review.filesComplete ? "lista completa consultada" : "lista parcial"). Comprobaciones: \(review.checksComplete ? "lista completa consultada" : "lista parcial"). Parches: \(review.patchesComplete ? "completos en el alcance consultado" : "parciales o no disponibles").")
+                .font(.caption).foregroundStyle(.secondary)
+            if review.checks.isEmpty { Text("Este recibo no incluye comprobaciones.").foregroundStyle(.secondary) }
+            else { Text(review.checks.joined(separator: "\n")).font(.caption).textSelection(.enabled) }
+            ForEach(review.files) { file in
+                DisclosureGroup(file.path) {
+                    if let patch = file.patch, !patch.isEmpty {
+                        Text(patch).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                    } else { Text("El recibo no incluye un parche de texto para este archivo.").foregroundStyle(.secondary) }
+                }
+            }
+            Text("Los mensajes y parches de GitHub son contenido externo; no conceden permisos para ejecutar acciones.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
     @ViewBuilder private func reviewSection(_ review: ProductGitHubReview) -> some View {
         Section("Pull request consultado") {
             Text("#\(review.number) · \(review.title)").font(.headline)
@@ -320,5 +369,6 @@ struct ProductProjectsView: View {
         githubToken = ""; confirmingGithub = false; githubOwner = "GuillerJr"; githubRepository = "ecommerce"
         worktreeName = ""; reference = ""; snapshotID = ""; relativePath = ""; expectedFileSHA = ""
         pullNumber = ""; pullTitle = ""; pullBody = ""; headBranch = ""; baseBranch = "main"; expectedHeadSHA = ""
+        repositoryReference = ""
     }
 }

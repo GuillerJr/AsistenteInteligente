@@ -9,6 +9,7 @@ from dataclasses import asdict, replace
 
 import pytest
 from test_host_profile import service as service
+from test_product_service import product_connection as product_connection
 from test_recovery import bundle as bundle
 from test_recovery import ctx, target
 
@@ -449,3 +450,57 @@ def test_doctor_product_ram_hash_and_global_quota_are_checked_before_validation(
                             limits=DoctorLimits(total_bytes=100))
     report = inspect_report(selected, context, sqlite_images=bundle)
     assert report.status == "blocked" and report.checks[0].code == "doctor_byte_budget"
+
+
+def test_doctor_absent_selected_product_stays_partial_until_valid_history_exists(tmp_path):
+    from jarvis_core.doctor import DoctorContext, DoctorInventory, inspect_report
+    from jarvis_core.profiles import ProfilesStore
+
+    root = private_profile(tmp_path)
+    ProfilesStore(root / "profiles").create("Agente sintético")
+    info = root.stat()
+    selected = DoctorInventory("product_fixture", 1, root, (info.st_dev, info.st_ino),
+                               "offline_quiescent", roles=("agents", "product"))
+
+    def inspect():
+        return inspect_report(selected, DoctorContext(lambda _stage, write=False: None,
+                                                      threading.Event()))
+    before = inspect()
+    assert before.status == "partial"
+    assert next(check for check in before.checks if check.role == "product").status == "absent"
+    source = private_profile(tmp_path, "source")
+    populate_coordination(source)
+    import_product_state(export_product_state(source), root, authorize=lambda: None)
+    initialized = inspect()
+    assert initialized.status == "ok"
+    assert next(check for check in initialized.checks if check.role == "product").status == "ok"
+
+
+@pytest.mark.asyncio
+async def test_signed_product_initialization_keeps_cold_conversation_store_and_provider_untouched(
+        product_connection, monkeypatch):
+    from jarvis_core.host_profile import freeze_sources
+
+    service, client, peer, _, _, _ = product_connection
+    path = service.directory / "jarvis.sqlite3"
+    assert service.store._disk is None
+    with state.StateStore(path) as cold:
+        cold.create_session("Conversación fría sintética")
+    before, metadata = path.read_bytes(), path.stat()
+    monkeypatch.setattr(state.StateStore, "_open_disk", lambda *_args: pytest.fail(
+        "Inicializar producto no debe abrir el store de conversaciones frío."))
+    initialized = await client.call("product.initialize", {})
+    assert initialized["workspaces"] and service.product.enabled
+    assert service.store._disk is None and service.product.interactions._state._disk is None
+    assert peer.calls == [] and service.product.projects.runner.active_children == 0
+    with service.profile_gate.exclusive() as cut:
+        frozen = freeze_sources(service, cut)
+        product = next(row for row in frozen._json if row.role == "product")
+        assert product.data is not None
+        document = decode_product_document(product.data)
+        assert len(document["archives"][0]["source"]["coordination"]["workspaces"]) == 1
+    assert path.read_bytes() == before
+    after = path.stat()
+    assert (after.st_dev, after.st_ino, after.st_mtime_ns, after.st_ctime_ns) == (
+        metadata.st_dev, metadata.st_ino, metadata.st_mtime_ns, metadata.st_ctime_ns)
+    assert service.store._disk is None and peer.calls == []
