@@ -1,6 +1,6 @@
 {
   "schema": "jarvis.product-coordination-qualification/1",
-  "status": "ci_passed_native_qualification_pending",
+  "status": "native_defects_corrected_requalification_pending",
   "phase_a_complete": false,
   "phase_b_started": false,
   "remote_ci_queue_incident": {
@@ -14,6 +14,21 @@
   },
   "reference": "REA_OC28_PRODUCT_COORDINATION.md",
   "checkpoints": [
+    {
+      "commit": "64fbc48ac1b1b3d77d74f0d0576a02ada3be65e8",
+      "ci_run_id": 41103606527,
+      "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41103606527",
+      "conclusion": "success",
+      "ubuntu": {"passed": 3903, "skipped": 47, "failed": 0, "seconds": 319.84,
+        "saved_log_sha256": "cb636810c45b66d7031916e73afbf17cf34a258b596eb1522a5f0ecc04658503"},
+      "macos": {"python_passed": 3950, "python_skipped": 0, "python_failed": 0,
+        "python_seconds": 446.47, "swift_executed": 698, "swift_skipped": 1,
+        "swift_failed": 0, "swift_seconds": 204.531,
+        "saved_log_sha256": "330725a864d336ce93f4296389e1f92ff4f6c0b2a7779dc7147b2ed907d0fb99"},
+      "wheel_sdist_isolated_installation": "success_both_platforms",
+      "self_contained_bundle_and_parent_eof": "success",
+      "qualified": false
+    },
     {
       "commit": "38e227384f257c43fa332f845586dc44cfe5841b",
       "ci_run_id": 41086476829,
@@ -114,7 +129,58 @@
       "read_only": true,
       "independently_verified": false
     },
+    "second_native_attempt": {
+      "artifact_commit": "57f3a631ea5ae46a7353e484af1d15f58d115225",
+      "code_equal_to_ci_commit": "64fbc48ac1b1b3d77d74f0d0576a02ada3be65e8",
+      "difference": "Test-only assertion corrected from empty list to actual empty tuple; product sources unchanged.",
+      "prepared_sha256": "6fb23fe9ed34cc81dd6b008db292b3b5d03d2403fd7b214c2fc1961e1876161d",
+      "initially_provisional": true,
+      "local_builds_or_full_suites": false,
+      "quota_mib": 2048,
+      "deadline_seconds": 1800,
+      "git_ten_plans": {"status": "passed", "seconds": 98.086,
+        "receipt_sha256": "c37bb45cb6326fc44473f132590549a2db4fe54026bcc4175128041b7222c45f",
+        "originals_preserved": true, "output_bytes": 26502},
+      "two_real_questions": {"status": "consumed", "answers_available": false,
+        "runs": ["b03f4d83d12a4182bb0c9f41a175f9cc", "c010823f40a64fa39636bbdf7b31d703"],
+        "final_sums": [7115, 8442], "cleanup_confirmed_both": true,
+        "negative_scope_run_revision_and_shape_checks": 6,
+        "no_answers_or_digests_in_observed_public_data": true,
+        "provider_internal_retention_claimed": false},
+      "groups_pins_generation_zero_rendered": true,
+      "panel_editor_checklist_source_and_chat_isolation_observed": true,
+      "new_corrections_still_require_ci_and_native_retest": true
+    },
     "failures_preserved": [
+      {
+        "scope": "real_codex_suggestions",
+        "runs": ["b03f4d83d12a4182bb0c9f41a175f9cc", "c010823f40a64fa39636bbdf7b31d703"],
+        "failed_tool_calls": 5,
+        "error": "product_suggestions_invalid",
+        "cause": "Advertised array items were bare objects and the descriptor omitted required id/label/text. The real domain rejected the generated shapes.",
+        "correction": "Advertise self-contained closed nested schemas for suggestions, questions and panels. Preserve domain checks and add schema/domain regressions."
+      },
+      {
+        "scope": "native_panel_dark_in_light_app",
+        "observed": "Panel text invisible on the light app surface; progress bar remained visible. Light theme rendered correctly after native editor save.",
+        "cause": "The local color scheme changed foregrounds but the panel painted no corresponding background.",
+        "correction": "Local semantic surface under the same scheme; pixel-render regression for cross-theme and system composition."
+      },
+      {
+        "scope": "native_os_notification_permission",
+        "status": "not_qualified",
+        "observed": "UserNotifications request returned didGrant=0, hasError=1; no permission sheet or banner observed.",
+        "environment": "Unique ad-hoc CI QA app mounted under private temporary directory.",
+        "cause": "Not established. No claim of owner denial, TCC approval or successful OS delivery.",
+        "next_evidence": "Log only allowlisted NSError domain and integer code, then retest the exact bundle without weakening OS permissions."
+      },
+      {
+        "scope": "ci_57f3a63",
+        "ci_run_id": 41102416225,
+        "ubuntu_passed": 3902, "ubuntu_skipped": 47, "ubuntu_failed": 1,
+        "failure": "New test expected [] while the project store returns (). Corrected in 64fbc48; no product behavior changed.",
+        "macos": "Bundle compiled/uploaded; Swift run cancelled by the subsequent push, not credited as passed."
+      },
       {
         "scope": "ci_06ce9b3",
         "ci_run_id": 41098533224,
@@ -134,7 +200,7 @@
         "status": "completed",
         "progress_and_presence_calls": 2,
         "question_created": false,
-        "cause": "Codex selected its built-in request_user_input, unavailable in Default mode, instead of the colliding dynamic name.",
+        "cause": "Inference from the colliding name, model report of the unavailable built-in in Default mode and absence of a host question callback. The built-in dispatch itself was not traced.",
         "correction": "Offer jarvis_request_user_input on the official wire and map only that admitted call to canonical request_user_input inside Jarvis. No authority or receipt rename; reject collisions before provider dispatch."
       },
       {

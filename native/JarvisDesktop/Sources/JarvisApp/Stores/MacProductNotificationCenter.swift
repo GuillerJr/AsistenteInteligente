@@ -1,5 +1,6 @@
 import DesktopCore
 import Foundation
+import OSLog
 import UserNotifications
 
 /// No permission request at construction or during polling. The center is lazy
@@ -7,13 +8,23 @@ import UserNotifications
 @MainActor final class MacProductNotificationCenter: NSObject, ProductNotificationCenter, UNUserNotificationCenterDelegate {
     var onActivation: (@MainActor (String) async -> Void)?
     private lazy var center = UNUserNotificationCenter.current()
+    private let logger = Logger(subsystem: "local.jarvis", category: "ProductNotifications")
     private var hasApplicationBundle: Bool {
         Bundle.main.bundleURL.pathExtension.lowercased() == "app" && Bundle.main.bundleIdentifier != nil
     }
     private func configuredCenter() -> UNUserNotificationCenter { center.delegate = self; return center }
     func requestPermission() async throws -> Bool {
         guard hasApplicationBundle else { return false }
-        return try await configuredCenter().requestAuthorization(options: [.alert])
+        do {
+            return try await configuredCenter().requestAuthorization(options: [.alert])
+        } catch {
+            let failure = error as NSError
+            let domain = [UNErrorDomain, NSCocoaErrorDomain, NSPOSIXErrorDomain].contains(failure.domain)
+                ? failure.domain : "other"
+            // No descriptions, userInfo, paths, notification bodies or account data.
+            logger.error("Notification authorization failed domain=\(domain, privacy: .public) code=\(failure.code, privacy: .public)")
+            throw error
+        }
     }
     func canDeliver() async -> Bool {
         guard hasApplicationBundle else { return false }

@@ -21,6 +21,8 @@ struct ProductInteractionWidgets: View {
                         .font(.callout).foregroundStyle(.secondary)
                 }
             }
+            .padding(14)
+            .background(.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .environment(\.colorScheme, panel.appearance == "light" ? .light
                 : panel.appearance == "dark" ? .dark : scheme)
             .tint(ProductWidgetStyle.color(panel.accent))

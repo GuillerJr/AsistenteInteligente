@@ -8,7 +8,7 @@ from collections.abc import Mapping
 
 from jsonschema import Draft202012Validator, ValidationError
 
-from jarvis_core.product_interactions import ProductInteractionError
+from jarvis_core.product_interactions import _COLORS, _SYMBOLS, ProductInteractionError
 from jarvis_core.product_management import admit_workspace
 from jarvis_core.product_projects import ProjectError
 from jarvis_core.runtime import ToolDefinition, ToolResult, current_dispatch_operation
@@ -26,9 +26,115 @@ S = {"type": "string", "minLength": 1, "maxLength": 4096}
 ID = {"type": "string", "minLength": 1, "maxLength": 128}
 OBJECT = {"type": "object"}
 REV = {"type": "integer", "minimum": 0}
+
+
+# Wire guidance is structural. The domain still enforces UTF-8 byte limits,
+# distinct identities/normalized labels, current sources, ACLs and revisions.
+def _interaction_text(maximum, description, *, empty=False):
+    return {
+        "type": "string", "minLength": 0 if empty else 1, "maxLength": maximum,
+        "pattern": r"^[^\u0000]*$" if empty else r"^[^\u0000]*[^\s\u0000][^\u0000]*$",
+        "description": description + f" Máximo {maximum} bytes UTF-8; sin NUL.",
+    }
+
+
+def _interaction_object(properties, required, description):
+    return {"type": "object", "properties": properties, "required": required,
+            "additionalProperties": False, "description": description}
+
+
+INTERACTION_ID = {
+    "type": "string", "pattern": r"^[A-Za-z0-9_-]{1,128}(?![\s\S])",
+    "minLength": 1, "maxLength": 128,
+    "description": "Identificador propio único en esta lista: letras ASCII, cifras, _ o -.",
+}
+QUESTION_OPTION = _interaction_object({
+    "id": {**INTERACTION_ID, "not": {"const": "freeform"},
+           "description": "Identificador de la opción; no usar el reservado freeform."},
+    "label": _interaction_text(160, "Etiqueta breve y distinta de las otras opciones."),
+    "description": _interaction_text(512, "Una frase que explique qué implica elegirla."),
+}, ["id", "label", "description"],
+    "Opción mutuamente exclusiva. Incluye exactamente id, label y description.")
+QUESTION = _interaction_object({
+    "id": INTERACTION_ID,
+    "header": _interaction_text(48, "Título corto del grupo de opciones."),
+    "prompt": _interaction_text(2048, "Pregunta completa que verá el dueño."),
+    "options": {"type": "array", "minItems": 2, "maxItems": 3,
+                "items": QUESTION_OPTION, "uniqueItems": True,
+                "description": "Dos o tres opciones exclusivas, con ids y etiquetas distintos."},
+    "sensitive": {"type": "boolean", "const": False,
+                  "description": "Sólo false u omitir. No pedir contraseñas ni credenciales."},
+}, ["id", "header", "prompt", "options"],
+    "Pregunta estructurada. Otra respuesta con texto libre se añade automáticamente; "
+    "no enviar allow_freeform ni añadir una opción freeform.")
+SUGGESTION = _interaction_object({
+    "id": INTERACTION_ID,
+    "label": _interaction_text(160, "Texto breve del botón que verá el dueño."),
+    "text": _interaction_text(2048, "Borrador completo que se añadirá al compositor al elegirlo."),
+}, ["id", "label", "text"],
+    "Sugerencia de continuación con exactamente id, label y text; nunca inicia un run.")
+
+
+def _panel_widget(kind):
+    properties = {
+        "id": INTERACTION_ID,
+        "type": {"type": "string", "const": kind,
+                 "description": "Tipo semántico del widget nativo."},
+        "title": _interaction_text(256, "Título visible del widget."),
+        "symbol": {"type": "string", "enum": sorted(_SYMBOLS),
+                   "description": "SF Symbol permitido; por defecto circle."},
+        "color": {"type": "string", "enum": sorted(_COLORS),
+                  "description": "Color semántico permitido; por defecto primary."},
+        "text": _interaction_text(4096, "Contenido literal, sin ejecutar HTML ni JavaScript.",
+                                  empty=True),
+        "source_id": {"type": "string",
+                      "enum": ["session", "runs", "goals", "usage", "inbox", "projects"],
+                      "description": "Fuente interna seleccionada y accesible en este scope; "
+                                     "session muestra este chat. Nunca URLs o rutas."},
+        "value": ({"type": "number", "minimum": 0, "maximum": 100,
+                   "description": "Porcentaje numérico entre 0 y 100."} if kind == "progress"
+                  else _interaction_text(256, "Valor visible como texto; no número JSON.",
+                                         empty=True)),
+    }
+    if kind in {"list", "checklist"}:
+        item = (_interaction_text(512, "Texto de un elemento de la lista.") if kind == "list"
+                else _interaction_object({
+                    "text": _interaction_text(512, "Texto de la tarea."),
+                    "checked": {"type": "boolean", "description": "Marca inicial de la tarea."},
+                }, ["text", "checked"], "Tarea con exactamente text y checked."))
+        properties["items"] = {
+            "type": "array", "maxItems": 50, "items": item,
+            "description": ("Lista de textos." if kind == "list"
+                            else "Lista de objetos text/checked; no cadenas sueltas."),
+        }
+    return _interaction_object(properties, ["id", "type", "title"],
+                               f"Widget {kind}; value, text, source_id e items son opcionales "
+                               "sólo cuando este esquema los declara.")
+
+
+PANEL = _interaction_object({
+    "title": _interaction_text(256, "Nombre visible del panel."),
+    "layout": {"type": "string", "enum": ["stack", "grid", "columns"],
+               "description": "Distribución nativa: columna, cuadrícula o columnas."},
+    "theme": _interaction_object({
+        "appearance": {"type": "string", "enum": ["system", "light", "dark", "high_contrast"],
+                       "description": "Apariencia del panel."},
+        "accent": {"type": "string", "enum": sorted(_COLORS),
+                   "description": "Acento semántico; nunca un valor CSS o hexadecimal."},
+    }, ["appearance", "accent"], "Tema con exactamente appearance y accent."),
+    "widgets": {"type": "array", "maxItems": 24, "uniqueItems": True,
+                "items": {"oneOf": [_panel_widget(kind) for kind in (
+                    "text", "stat", "list", "checklist", "progress", "notice")]},
+                "description": "Hasta 24 widgets con ids únicos. list usa cadenas; checklist "
+                               "usa objetos text/checked; progress usa value numérico 0..100."},
+}, ["title", "layout", "theme", "widgets"],
+    "Panel declarativo nativo. Incluye title, layout, theme y widgets; no HTML, JS ni URLs.")
+
 CONTRACTS = {
     "request_user_input": (
-        {"questions": {"type": "array", "minItems": 1, "maxItems": 3, "items": OBJECT}},
+        {"questions": {"type": "array", "minItems": 1, "maxItems": 3, "items": QUESTION,
+                       "uniqueItems": True,
+                       "description": "De una a tres preguntas con ids únicos."}},
         ["questions"],
         False,
     ),
@@ -49,14 +155,19 @@ CONTRACTS = {
     ),
     "suggest_next_actions": (
         {
-            "suggestions": {"type": "array", "maxItems": 3, "items": OBJECT},
-            "expected_revision": REV,
+            "suggestions": {"type": "array", "maxItems": 3, "items": SUGGESTION,
+                            "uniqueItems": True,
+                            "description": "De cero a tres borradores con ids únicos. "
+                                           "Cada objeto lleva id, label y text."},
+            "expected_revision": {**REV, "description": "0 para la primera publicación de "
+                                  "este run; después, revisión actual del snapshot."},
         },
         ["suggestions", "expected_revision"],
         False,
     ),
     "publish_panel": (
-        {"panel": OBJECT, "expected_revision": REV},
+        {"panel": PANEL, "expected_revision": {**REV,
+            "description": "0 para el primer panel de este run; después, su revisión actual."}},
         ["panel", "expected_revision"],
         True,
     ),
@@ -157,18 +268,27 @@ DESCRIPTIONS = {
     "request_user_input": (
         "Pedir de una a tres decisiones al dueño. Cada pregunta lleva id, header, prompt y "
         "2-3 options con id/label/description; permite texto libre. No pedir contraseñas. "
-        "La respuesta es efímera y nunca concede autorización de herramienta."
+        "Usa ids únicos y opciones mutuamente exclusivas. Otra respuesta se añade sola; "
+        "no envíes allow_freeform ni la opción reservada freeform. La respuesta es efímera "
+        "y nunca concede autorización de herramienta."
         " Codex ofrece esta pregunta propia con el nombre jarvis_request_user_input."
     ),
     "report_progress": (
         "Actualizar progreso de esta ejecución mediante revisión exacta; no ejecuta acciones."
     ),
     "suggest_next_actions": (
-        "Proponer borradores de continuación, nunca enviarlos ni ejecutarlos automáticamente."
+        "Proponer hasta tres borradores de continuación. Envía suggestions como objetos con "
+        "exactamente id, label y text: id único, label para el botón y text como borrador "
+        "completo del compositor. expected_revision=0 al publicar por primera vez en este "
+        "run; para actualizar, usa la revisión del snapshot. Elegir una sugerencia sólo añade "
+        "un borrador; nunca envía mensajes ni ejecuta acciones automáticamente."
     ),
     "publish_panel": (
-        "Publicar un panel declarativo propio, sin HTML/JS, con widgets y fuentes internas "
-        "explícitas."
+        "Publicar un panel nativo con exactamente title, layout, theme y widgets. theme lleva "
+        "appearance/accent; cada widget requiere id/type/title. list.items contiene textos; "
+        "checklist.items contiene objetos text/checked; progress.value es un porcentaje "
+        "numérico 0..100. Usa sólo las fuentes internas source_id del esquema, sin HTML/JS "
+        "ni URLs. expected_revision=0 inicialmente, o la revisión actual para actualizar."
     ),
     "agent_directory": (
         "Consultar sólo sesiones/agentes compartidos con este cliente y sus destinos exactos."
