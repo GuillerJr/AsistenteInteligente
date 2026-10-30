@@ -1,8 +1,9 @@
 # Distribución autocontenida y servicio residente
 
-Incremento solicitado el 30-10-2026, dentro de la fase A. El código está en
-cualificación; las pruebas y el bundle completos se ejecutan exclusivamente en
-CI remota. No se sustituye la app instalada ni se abre el perfil anterior.
+Incremento solicitado el 30-10-2026, dentro de la fase A. Su alcance elegido está
+cualificado con CI completa y un recorrido nativo sintético del artefacto
+`29b730c`. Las pruebas y el bundle completos se ejecutan exclusivamente en CI
+remota. No se sustituye la app instalada ni se abre el perfil anterior.
 
 ## Qué se distribuye
 
@@ -94,16 +95,50 @@ firma exterior se aplica después. La procedencia de CI identifica el commit,
 archivo, hash del manifiesto y límites de esa prueba.
 
 La cualificación nativa posterior usa una copia con identidad `local.jarvis.qa.*`
-y un perfil sintético en `/private/tmp`, fijado en un JSON firmado y con hash en
-Info.plist. Tampoco admite argumentos de runtime. Ese modo deshabilita el registro
+y un perfil sintético en `/private/tmp`, fijado en un JSON cuyo hash está en el
+Info.plist firmado. Tampoco admite argumentos de runtime. Ese modo deshabilita el registro
 real de Login Items: una aprobación de datos de prueba no cambia preferencias
-persistentes del Mac. No se reutilizan credenciales del dueño ni se leen tokens.
+persistentes del Mac. Sólo el cliente oficial usa el proveedor sintético ya
+autorizado; el agente no lee ni copia credenciales, `auth.json` o historial ajeno.
+
+La [CI exacta de `29b730c`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41069453178)
+pasó 3.682 pruebas Python en Ubuntu —46 omisiones de plataforma—, 3.728 en macOS
+y 660 Swift —una omisión, cero fallos—, además del build, traslado, paquetes y
+smoke de instalación. El runtime contiene 4.528 archivos y 713.071.726 bytes.
+El [registro de cualificación](PHASE_A_DISTRIBUTION_RESIDENT_QUALIFICATION.json)
+conserva manifiesto, archivo adquirido, recibos, límites y los tres fallos de CI
+corregidos antes de ese resultado; no presenta los intentos fallidos como éxitos.
+
+En macOS 27.2 (26B123), la copia de ese artefacto abrió un perfil nuevo con cero
+argumentos y respondió «4» mediante Codex con ChatGPT real. Se observaron Python
+y Codex dentro del bundle, bajo las identidades de proceso esperadas. Ajustes
+mostró «En ejecución». Después de cerrar la última ventana, el mismo proceso
+conservó el lease y respondió a una consulta IPC firmada. El atajo ⌘⇧J volvió a
+mostrar la conversación y otra consulta confirmó la misma identidad. Al salir
+con ⌘Q desaparecieron las cuatro identidades conocidas, quedó libre el mismo
+lease y se desmontó la cuota sin fuerza, señales ni problemas. No se infiere de
+esto un código numérico de salida que NSWorkspace no entregó.
+
+El primer intento local se detuvo porque el contador del harness rechazó dos
+enlaces propios de la caché del CLI. Se comprobó el cierre por EOF y se conservó
+el diagnóstico. Una nueva admisión explícita reutilizó la misma imagen de cuota,
+contando sólo metadatos de enlaces sin seguirlos y conservando el perfil anterior.
+No descargó ni copió otro bundle. El segundo recorrido tuvo cuota física de
+2 GiB, plazo de 1.200 segundos y suelo de 25 GiB libres: el pico dentro de la
+cuota fue 1.060.270.080 bytes; el proveedor sintético externo creció 1.536.000
+bytes. La variación residual observada del volumen Data quedó dentro de 1 GiB,
+sin atribuirla a un proceso concreto. La imagen y los perfiles de prueba se
+conservan desmontados; no se borra custodia incierta para liberar espacio.
 
 La firma ad hoc de CI acredita integridad de esta copia y ejecución de desarrollo;
 no es Developer ID ni notarización. El dueño indicó que no tiene membresía Apple
 Developer. La distribución pública notarizada y su aceptación por Gatekeeper en
 un Mac ajeno siguen requiriendo esa decisión y credenciales. Tampoco se presenta
 una prueba en macOS 27 como prueba de todas las versiones desde macOS 14.
+El registro real en Ítems de inicio no se ejercitó: sus contratos, revocación y
+estados se probaron en CI, y la app sintética mantuvo deshabilitados sus controles.
+Los programas de servidores MCP externos pueden necesitar sus propios runtimes;
+la distribución incluye la base de Jarvis, no todo software configurable.
 
 Este incremento no completa la matriz amplia de fase A ni inicia la fase B.
 Actualización pública, instalador firmado, todos los canales/nodos y plataformas

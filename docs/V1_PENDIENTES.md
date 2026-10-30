@@ -8,11 +8,16 @@ producto anterior sigue en Git y sus inventarios están congelados.
 Alcance inicial elegido: macOS Apple Silicon y Telegram como primer canal externo.
 El dueño aplazó expresamente la app de iPhone; ver [decisiones](rebuild/PHASE_A_TARGETS.md).
 
-En curso: [distribución autocontenida y servicio residente](rebuild/PHASE_A_DISTRIBUTION_RESIDENT.md).
+Alcance elegido cualificado: [distribución autocontenida y servicio residente](rebuild/PHASE_A_DISTRIBUTION_RESIDENT.md).
 La app incorpora Python, dependencias, Codex y MiniLM; el registro de inicio en
-macOS es optativo. La CI debe acreditar el paquete y su traslado para el commit
-exacto. La firma de distribución pública y notarización siguen sujetas a la
-membresía y credenciales del dueño, y no se confunden con la firma ad hoc de CI.
+macOS es optativo. La [CI exacta de `29b730c`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41069453178)
+acreditó el paquete, su traslado y cierre por EOF; el pin del manifiesto está en
+Info.plist firmado. El [registro](rebuild/PHASE_A_DISTRIBUTION_RESIDENT_QUALIFICATION.json)
+conserva también el recorrido nativo aprobado: respuesta real, residencia, reapertura y salida sin procesos retenidos. No se registró un
+Login Item real ni se probó macOS 14. Los servidores MCP externos pueden requerir
+programas/runtimes propios. La firma pública, notarización y actualización pública
+siguen pendientes; la membresía y credenciales del dueño no se sustituyen por la
+firma ad hoc de CI.
 
 El incremento de [MCP, plugins y skills](rebuild/PHASE_A_MCP_EXTENSIONS.md) está
 cualificado en el alcance elegido; sus [oráculos y CI](rebuild/PHASE_A_MCP_EXTENSIONS_QUALIFICATION.json)
@@ -260,8 +265,11 @@ Las casillas siguientes separan implementación de comprobación nativa final.
   repiten los controles sobre el árbol congelado antes de publicar; la CI de cada
   commit se comprueba por separado.
 - [ ] Completar distribución cualificada. El canal `development` mantiene Python
-  y Codex externos; faltan autenticidad del paquete, distribución autocontenida,
-  Developer ID/notarización y actualización remota firmada.
+  y Codex externos como opción de desarrollo. El runtime autocontenido y su
+  traslado pasaron CI en `29b730c`, con el recorrido nativo registrado por separado
+  y aprobado. Siguen pendientes autenticidad pública, Developer ID/notarización
+  y actualización remota firmada; no se presenta el checkpoint histórico como
+  prueba del nuevo paquete.
 
 A-71 y la fase A siguen abiertos; la fase B no ha comenzado.
 

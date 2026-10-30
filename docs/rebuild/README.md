@@ -1,9 +1,15 @@
 # Variante propia inspirada en OpenClaw — base limpia
 
 El incremento de [distribución autocontenida y servicio residente](PHASE_A_DISTRIBUTION_RESIDENT.md)
-incorpora el runtime completo, verificación por manifiesto firmado, preparación
-offline del modelo y arranque optativo de la app en la sesión del usuario.
-Su cualificación se registra por commit; no completa la fase A ni adelanta B.
+incorpora el runtime base completo, verificación del manifiesto cuyo pin está en
+Info.plist firmado, preparación offline del modelo y arranque optativo de la app
+en la sesión del usuario. La [CI exacta de `29b730c`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41069453178)
+aprobó suites, paquete, traslado y cierre por EOF; el
+[registro detallado](PHASE_A_DISTRIBUTION_RESIDENT_QUALIFICATION.json) conserva la
+cualificación nativa aprobada con ChatGPT real, residencia al cerrar ventanas y salida sin procesos retenidos. No se registró un Login Item real ni se probó
+macOS 14. Developer ID/notarización y actualización pública siguen pendientes;
+los servidores MCP externos pueden necesitar sus propios programas y runtimes.
+Este avance no completa la fase A ni adelanta B.
 
 El [incremento de automatización](PHASE_A_AUTOMATION.md) está cualificado en
 su alcance elegido: cron/heartbeat/wake, eventos, webhook HMAC loopback y flujos
@@ -178,7 +184,7 @@ No declaran completa la fase A ni sustituyen la instalación anterior.
 El [bloque de recuperación y diagnóstico](PHASE_A_RECOVERY.md) añade revisiones
 del host, respaldo portátil, preparación de un perfil restaurado desarmado e
 inspección sin reparación. Distingue los contratos y pruebas de la cualificación
-en la app y de la distribución todavía pendiente.
+en la app y de la distribución todavía pendiente en aquel checkpoint.
 La [partición OC-18](REA_PART18_SUMMARY.json) continúa la lectura de adquisición
 SQLite privada y limpieza retenida. Su [contrato propio WAL](PHASE_A_COLD_WAL_CONTRACT.md)
 tiene un [primer incremento implementado](PHASE_A_WAL_RECOVERY.md) para respaldo y
@@ -300,7 +306,8 @@ propuesta/validación/autorización, resultado explícito, cancelación y asenta
 Sus límites históricos no se atribuyen a los incrementos cualificados de arriba:
 la identidad de clave local firmada ya no depende sólo del token. Esa identidad
 no es atestación del binario por Apple ni aislamiento contra malware del mismo
-usuario. El producto actual continúa siendo una distribución de desarrollo.
+usuario. El canal de desarrollo conserva sus rutas externas; el paquete
+autocontenido posterior tiene su cierre y límites al inicio de este documento.
 
 El Runtime actual incorpora límites de pasos/tiempo y conserva el propietario
 mientras su limpieza o persistencia no se asientan. Un callback de confianza que

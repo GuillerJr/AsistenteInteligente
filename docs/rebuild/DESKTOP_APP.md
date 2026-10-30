@@ -3,7 +3,11 @@
 Requisito del dueño, 24-10-2026. Pertenece a la **fase A**, antes de integrar las
 mejoras adicionales de Jarvis. Este documento define el cliente. Ya existe una
 implementación de desarrollo en `native/JarvisDesktop`, con scripts propios y
-pruebas de IPC. Su distribución autocontenida y cualificación completa siguen abiertas.
+pruebas de IPC. La distribución autocontenida posterior pasó la
+[CI exacta de `29b730c`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41069453178);
+su recorrido nativo aprobado se conserva en el
+[registro separado](PHASE_A_DISTRIBUTION_RESIDENT_QUALIFICATION.json). La fase A
+global continúa abierta y la fase B aplazada.
 
 ## Experiencia elegida
 
@@ -28,9 +32,14 @@ siguen correspondiendo al dueño.
 
 El núcleo propio contiene sesiones, ejecuciones, política, eventos y persistencia.
 La app consume una API propia tipada mediante transporte local autenticado. Ese
-transporte y el arranque supervisado tienen una primera implementación real, con
-autenticación por token privado. Falta cualificar identidad de cliente firmada,
-distribución y recuperación completa de la app; el token no acredita esas garantías.
+transporte y el arranque supervisado comenzaron con autenticación por token
+privado. La identidad firmada y la recuperación acotada tienen después su
+[cierre propio](PHASE_A_CORE_CLOSEOUT.md); un token no acredita atestación Apple.
+La distribución actual incluye el runtime base y verifica el pin del manifiesto
+desde Info.plist firmado, sin buscar Python/Codex externos. Los programas de MCP
+configurados pueden requerir runtimes propios. Su CI y el recorrido nativo se
+registran separados: no se ha registrado un Login Item real ni cualificado macOS
+14, Developer ID/notarización, actualización pública o recuperación universal.
 
 La interfaz representa estado confirmado por el núcleo:
 

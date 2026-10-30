@@ -45,7 +45,7 @@
       "Contratos declarados y rutas UI no acreditan disponibilidad ni funcionamiento real.",
       "No se ejecutó OpenClaw ni se leyó configuración/cuenta del dueño."
     ],
-    "current_jarvis_state": "Desarrollo propio con incrementos previos cualificados en sus alcances. Telegram/voz/documentos/multimedia integrados y en cualificación. 54 familias parciales y 26 sin implementación; ninguna familia amplia completa. Fase B pendiente."
+    "current_jarvis_state": "Desarrollo propio con incrementos de Telegram, voz, documentos y multimedia cualificados en sus alcances finitos. Runtime autocontenido y residencia de app implementados: CI exacta 29b730c aprobada; recorrido nativo de distribución aprobado en su registro. 54 familias parciales y 26 sin implementación; ninguna familia amplia completa. Fase A abierta y fase B aplazada."
   },
   "status_vocabulary": {
     "no_implementado": "Sin evidencia productiva propia de cierre.",
@@ -100,7 +100,7 @@
         },
         {
           "progress_id": "P-DISTRIBUTION-RESIDENT",
-          "scope": "Runtime autocontenido y residencia de app implementados; CI exacta y recorrido nativo pendientes en PHASE_A_DISTRIBUTION_RESIDENT.md. No cierra la familia."
+          "scope": "Runtime autocontenido y residencia de app cualificados: CI exacta 29b730c y recorrido nativo sintético aprobados en PHASE_A_DISTRIBUTION_RESIDENT_QUALIFICATION.json. No cierra la familia."
         }
       ],
       "acceptance": {
@@ -259,7 +259,7 @@
         },
         {
           "progress_id": "P-DISTRIBUTION-RESIDENT",
-          "scope": "Runtime autocontenido y residencia de app implementados; CI exacta y recorrido nativo pendientes en PHASE_A_DISTRIBUTION_RESIDENT.md. No cierra la familia."
+          "scope": "Runtime autocontenido y residencia de app cualificados: CI exacta 29b730c y recorrido nativo sintético aprobados en PHASE_A_DISTRIBUTION_RESIDENT_QUALIFICATION.json. No cierra la familia."
         }
       ],
       "acceptance": {
@@ -2209,7 +2209,7 @@
         },
         {
           "progress_id": "P-DISTRIBUTION-RESIDENT",
-          "scope": "Runtime autocontenido y residencia de app implementados; CI exacta y recorrido nativo pendientes en PHASE_A_DISTRIBUTION_RESIDENT.md. No cierra la familia."
+          "scope": "Runtime autocontenido y residencia de app cualificados: CI exacta 29b730c y recorrido nativo sintético aprobados en PHASE_A_DISTRIBUTION_RESIDENT_QUALIFICATION.json. No cierra la familia."
         }
       ],
       "acceptance": {
@@ -2337,7 +2337,7 @@
         },
         {
           "progress_id": "P-DISTRIBUTION-RESIDENT",
-          "scope": "Runtime autocontenido y residencia de app implementados; CI exacta y recorrido nativo pendientes en PHASE_A_DISTRIBUTION_RESIDENT.md. No cierra la familia."
+          "scope": "Runtime autocontenido y residencia de app cualificados: CI exacta 29b730c y recorrido nativo sintético aprobados en PHASE_A_DISTRIBUTION_RESIDENT_QUALIFICATION.json. No cierra la familia."
         }
       ],
       "acceptance": {
@@ -14264,7 +14264,7 @@
           "A-72"
         ],
         "verified_scope": "Ventana/Dock/menú/atajo y conversación oficial reales del recorrido inicial. Nuevos paneles de herramientas, aprobación por operación, memoria/citas, MCP, sesiones, borradores y recibos con contratos de socket/DTO probados.",
-        "remaining": "No todas las vistas/funciones de referencia ni paquete autocontenido. Firma ad hoc y Python/Codex externos no sustituyen instalación anterior ni Developer ID/notarización."
+        "remaining": "No todas las vistas/funciones de referencia. El checkpoint inicial conservaba Python/Codex externos; el runtime autocontenido pasó después CI en 29b730c y se registra en P-DISTRIBUTION-RESIDENT, con recorrido nativo aprobado y trazable. No sustituye la app instalada ni acredita Developer ID/notarización pública."
       },
       {
         "id": "P-MCP",
@@ -14722,7 +14722,7 @@
           "A-71"
         ],
         "verified_scope": "Checkpoint b8ce4bc con 1585 Python / 162 Swift y CI aprobados; respaldo, verificación y staging sintéticos desde la app con decisiones reales del dueño. Captura/diagnóstico frío DELETE y rechazo de bootstrap restaurado; los tres SQLite de otro recorrido nativo no vacío conservaron bytes/metadatos. Alcances y demora inicial no atribuida registrados por separado. Ampliación local integrada: 1754 Python/175 Swift, admisión contextual y handoff explícito sin SDK inicial; revisión GUI descartada conservando borrador. Checkpoint 1d378a6 con CI macOS/Linux aprobado y activación/apertura reales del perfil sintético elegidas por el dueño. Estado local sin cuenta, diagnóstico y revisión de copia observados; límites y pruebas independientes en PHASE_A_ACTIVATION.md. Copia explícita de memoria conservada integrada con autoridad/corte, límites de perfil y panel nativo; 85 casos nuevos del host, 154 regresiones anteriores y 23 casos Swift focalizados, incluidas dos conexiones IPC reales con SQLite y decisiones sintéticas. Núcleo/compatibilidad f8e5a67 con CI macOS/Linux aprobada; contrato, fallo de custodia corregido y límites en PHASE_A_MEMORY_RECONCILIATION.md. Una incidencia real posterior acabó caducada sin efecto. Se reprodujo y corrigió el descarte de decisiones durante sondeo; 32 casos focalizados y comparación GUI sintética, más prueba de cola IPC serial real. Detalle en PHASE_A_OWNER_CLICK_REGRESSION.json; la copia corregida quedó completada y asentada en la app (2 notas sintéticas, 175 bytes), con originales intactos, IDs nuevos, revisión 1, un recibo y dos mapas verificados independientemente. Consulta nativa coincidente sin replay; identidad y límites en PHASE_A_MEMORY_COPY_LIVE.json. Producto 985b72a con 1914 Python, 207 Swift, gates y CI aprobados; no cierra la familia. OC-18 estudia adquisición privada SQLite y custodia de staging (cinco TS, sin runtime). El contrato PHASE_A_COLD_WAL_CONTRACT.md fija requisitos; la investigación por sí sola no acredita implementación. Primer incremento WAL implementado en código propio: backup/doctor sobre copias privadas, estado confirmado y fuentes intactas, propietario/mismo corte retenidos ante cleanup incierto; 45 casos núcleo y 21 host nuevos, 14 Swift de custodia y dos IPC WAL nuevos. Suites integradas: 1980 Python y 223 Swift aprobadas. Identidad, política estricta y límites en PHASE_A_WAL_RECOVERY_QUALIFICATION.json. Producto 8c7e7bc con 1982 Python, 225 Swift, paquetes, bundle y CI macOS/Linux aprobados. Diagnóstico y respaldo WAL desde la app sobre un perfil sintético (memoria WAL; estado/tareas DELETE), con aprobación real del dueño, publicación y recibo durable. Verificación independiente del último commit, hashes de recursos y los cinco originales intactos; verificación nativa coincidente. Se corrigió y comprobó visualmente la identidad del aviso WAL. Evidencia y límites en PHASE_A_WAL_RECOVERY_LIVE.json; no cierra A-71. Continuación 26-10: restauración del respaldo WAL por la app con aprobación real del dueño a otro perfil sintético desarmado. Verificador independiente conserva datos lógicos, nota del último commit, IDs/ámbitos, cinco originales y seis archivos del respaldo. La revisión muestra origen/hash y distingue las cifras del host activo. El caso IPC WAL existente ahora comprueba los tres destinos restaurados; 225 Swift aprobadas, sin aumentar el número de casos. Evidencia y límites en PHASE_A_WAL_RESTORE_LIVE.json; no activa el destino ni cierra la familia. Continuación de implementación 26-10: seis bloques propios conectados al host: WAL ausente/vacío/cabecera, journals compatibles recuperados en privado, archivo portátil independiente de workspace, reparación FTS y prefijo WAL hacia respaldo nuevo, actualizaciones y rollback locales de una pareja app/Python coherente. Autoridad central, copia actual verificada, pin de perfil/esquemas y custodia ante ACK incierto; lanzamiento explícito comprueba familias frías y mismo CURRENT. Los tests de motor/host y launcher propio son sintéticos; cualificación real del nuevo panel y controles finales se registran aparte. Canal development con Python/Codex externos, sin migración inversa ni activación implícita. Alcance en PHASE_A_RECOVERY_COMPLETION.md; no cierra A-71. Cualificación final del incremento: 2297 pruebas Python, 249 Swift, Ruff, paquetes/smoke y bundle aprobados. Copia/restauración nativas de dos archivos (283 bytes), respaldo con journal caliente (65 notas), reparación FTS/restauración de una nota e instalación v1, actualización v2 y rollback v1 con decisiones del dueño. Todos los recibos durables y hashes verificados independientemente; originales conservados. La v1 seleccionada arrancó realmente con app/Python coherentes y cerró correctamente, sin cuenta. Las dos versiones positivas sólo difieren en marcadores de prueba del código final. Snapshot propio antiguo incompatible rechazado sin ejecutarlo. Registro PHASE_A_RECOVERY_COMPLETION_QUALIFICATION.json. Cierre posterior de los puntos 1 y 2:16 revisiones GUI (siete modos en tres roles y nueve prefijos), tres rechazos GUI y16 publicaciones nativas IPC con oráculos. Memoria/tareas recuperadas y restauradas con decisiones del dueño y delegación expresa posterior; originales intactos. Caducidad, denegación, cancelación e interrupción conservan identidad/recibos sin replay. Recovery-only evita abrir las bases por consultas automáticas; avisos persistentes y tickets retirados tras desconexión. Detalle y límites en PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md y PHASE_A_STARTUP_ISOLATION.md. La continuación de reconciliación mantiene el núcleo de activación y añade regresiones adversariales del host y validación nativa del plazo de revisión. Amplía copia de memoria sobre familias frías íntegras y reconciliación local de rutas conservadas, sin restaurar autoridad externa. Detalle de contratos en PHASE_A_ACTIVATION.md/PHASE_A_MEMORY_RECONCILIATION.md y evidencia final del incremento en PHASE_A_RECONCILIATION_CLOSEOUT.md; el cierre local añade 14 casos nativos observados, reinicio de ambos perfiles, 2402 pruebas Python y 305 Swift aprobadas. El registro conserva los fallos previos y sus correcciones; la CI se verifica al publicar.",
-        "remaining": "Distribución autocontenida, autenticidad completa, Developer ID/notarización y actualización remota firmada siguen sin acreditar. La recuperación acotada de un socket muerto bajo lease y la supervisión nativa se acreditan ahora en P-CORE-SERVICE; no certifican procesos arbitrarios. El cierre local previo de activación, copia de memoria y reconciliación de rutas se conserva sin reabrirlo. A-71 global y fase A siguen abiertas; B no iniciada.",
+        "remaining": "Autenticidad pública, Developer ID/notarización y actualización remota firmada siguen pendientes. El runtime autocontenido pasó después CI en 29b730c y tiene su recorrido nativo aprobado en P-DISTRIBUTION-RESIDENT; no se atribuye ese resultado al incremento histórico de recuperación. La recuperación acotada de un socket muerto bajo lease y la supervisión nativa se acreditan en P-CORE-SERVICE; no certifican procesos arbitrarios. El cierre local previo de activación, copia de memoria y reconciliación de rutas se conserva sin reabrirlo. A-71 global y fase A siguen abiertas; B no iniciada.",
         "detail_file": "PHASE_A_RECOVERY.md",
         "qualification_file": "PHASE_A_RECOVERY_QUALIFICATION.json",
         "wal_qualification_file": "PHASE_A_WAL_RECOVERY_QUALIFICATION.json",
@@ -14993,7 +14993,7 @@
           "A-26"
         ],
         "verified_scope": "MiniLM fijado CPU con pesos reales, notas aprobadas SQLite/temporales RAM, índice derivado sin texto, citas actuales, caché atómica acotada, autoindex por generación, cápsulas nuevas por turno, abstención antes de RRF, revocación, reconstrucción/verificación y cierre retenido. App sintética: guardado/corrección/olvido con ChatGPT real y aprobaciones delegadas; nuevos chats recuperan el valor vigente y se abstienen después del olvido o la revocación. Ver PHASE_A_MEMORY_QUALIFICATION.json para SHA, casos y fallos conservados.",
-        "remaining": "La paridad amplia de referencia sigue abierta: wiki/motores opcionales A-27, captura/flush conversacional automático, cifrado integral, corpus personales o migración anterior y distribución autocontenida no se declaran acreditados. No se habilita ninguna de esas entradas por silencio.",
+        "remaining": "La paridad amplia de referencia sigue abierta: wiki/motores opcionales A-27, captura/flush conversacional automático, cifrado integral, corpus personales o migración anterior no se declaran acreditados. La distribución autocontenida posterior pasó CI en 29b730c, con recorrido nativo aprobado y trazable en P-DISTRIBUTION-RESIDENT; no forma parte del cierre histórico de memoria. No se habilita ninguna entrada por silencio.",
         "record": "PHASE_A_MEMORY_QUALIFICATION.json"
       },
       {
@@ -15055,7 +15055,7 @@
         ],
         "implemented_scope": "Versiones explícitas de stdio, Streamable HTTP 2025-06-18/2025-11-25/2026-07-28 y SSE 2024-11-05; OAuth PKCE y credenciales RAM, recursos/prompts/plantillas con autoridad única, Apps WebKit opacas y contenido privado separado del modelo. Relay loopback autenticado por exportaciones revisadas. Paquetes declarativos propios con CAS, activación/actualización/reversión/retiro y skills con argumentos, recursos congelados y versiones. Retiro de renderer/capacidad antes de cambiar fuente; lecturas tardías y cierres inciertos conservan ámbito, identidad y bloqueo. Enlace OAuth pendiente sólo RAM, sin iniciar otra concesión al reabrirlo.",
         "qualification_scope": "El incremento elegido MCP/extensiones está cualificado con CI remota y recorridos nativos trazables; OAuth, SSE, Microsoft Learn, Apps/relay y ciclos de plugins/skills con oráculos independientes. Checkpoints fallidos conservados; ninguna familia amplia completa.",
-        "remaining": "Compatibilidad universal de servidores/plugins, capacidades no anunciadas de Apps, ejecución de paquetes OpenClaw, relay OAuth de Internet y distribución autocontenida permanecen fuera del cierre elegido. La fase A sigue abierta.",
+        "remaining": "Compatibilidad universal de servidores/plugins, capacidades no anunciadas de Apps, ejecución de paquetes OpenClaw y relay OAuth de Internet permanecen fuera del cierre elegido. La distribución autocontenida posterior pasó CI en 29b730c, con recorrido nativo aprobado y trazable en P-DISTRIBUTION-RESIDENT. Los programas de servidores MCP externos pueden requerir sus propios runtimes; no se incluyen automáticamente. La fase A sigue abierta.",
         "detail_file": "PHASE_A_MCP_EXTENSIONS.md",
         "qualification_file": "PHASE_A_MCP_EXTENSIONS_QUALIFICATION.json",
         "source_commit": "d935bfc208e298828ed40445bf46b17073c9c3cc",
@@ -15158,7 +15158,7 @@
       {
         "id": "P-DISTRIBUTION-RESIDENT",
         "component": "Distribución autocontenida y servicio residente de sesión",
-        "status": "implemented_pending_qualification",
+        "status": "qualified_selected_increment",
         "code": [
           "src/jarvis_core/bundled_runtime.py",
           "src/jarvis_core/parent_lifetime.py",
@@ -15180,8 +15180,9 @@
           "A-69",
           "A-72"
         ],
-        "verified_scope": "Implementación y contratos pendientes de CI exacta y cualificación nativa; ver PHASE_A_DISTRIBUTION_RESIDENT_QUALIFICATION.json.",
-        "remaining": "Developer ID/notarización pública requieren decisión y credenciales del dueño. Inicio optativo de sesión no relanza tras Salir o caída del host; no cierra la fase A global."
+        "verified_scope": "CI exacta 29b730c28b1a9afed23a6cfc58634ebd055ef32c, run 41069453178, aprobada: 3682 Python en Ubuntu y 46 omisiones de plataforma, 3728 Python en macOS, 660 Swift con una omisión y cero fallos; bundle/helper/runtime-check, paquetes y smoke. Runtime de 713071726 bytes y 4528 archivos, con traslado, dependencias nativas reales, MiniLM CPU, Codex oficial sin cuenta e IPC/SQLite y cierre por EOF. Pin del manifiesto en Info.plist firmado. El artefacto de CI, con perfil sintético nuevo, respondió 4 mediante ChatGPT real, conservó la misma identidad/lease/IPC al cerrar ventanas y reabrir, y cerró normalmente por GUI con cuatro identidades ausentes, lease libre y desmontaje sin fuerza ni señales; recibos en PHASE_A_DISTRIBUTION_RESIDENT_QUALIFICATION.json.",
+        "remaining": "El modo de cualificación no registra un Login Item real; macOS 14 no fue probado. Developer ID/notarización pública y actualización pública siguen pendientes y requieren las decisiones/credenciales que correspondan. El runtime base incluido no aporta automáticamente los programas/runtimes de servidores MCP externos. Inicio optativo de sesión no relanza tras Salir o caída del host; no cierra la fase A global ni inicia B.",
+        "qualification_file": "PHASE_A_DISTRIBUTION_RESIDENT_QUALIFICATION.json"
       }
     ],
     "detail_file": "PHASE_A_AUTOMATION_CLOSEOUT.md",
@@ -15309,7 +15310,9 @@
       "production_trees_identical": true,
       "native_cases": "AUT-N01..AUT-N09",
       "remaining_in_selected_increment": []
-    }
+    },
+    "distribution_resident_status": "qualified_selected_increment",
+    "distribution_resident_qualification_file": "PHASE_A_DISTRIBUTION_RESIDENT_QUALIFICATION.json"
   },
   "target_decisions": {
     "date": "2026-10-24",

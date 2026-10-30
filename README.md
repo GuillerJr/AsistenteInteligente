@@ -58,10 +58,16 @@ sesión se solicita desde la app; el dueño lo completa en la página oficial.
 El paquete Python no incluye el ejecutable oficial Codex ni un intérprete embebido.
 
 La [distribución autocontenida y residencia](docs/rebuild/PHASE_A_DISTRIBUTION_RESIDENT.md)
-se cualifican por separado. CI ensambla una app con Python, dependencias, Codex y
-MiniLM incluidos, prueba su traslado y cierra el servicio por pérdida del host.
-El modo de desarrollo anterior conserva sus rutas explícitas. La firma local de
-CI no equivale a Developer ID ni notarización pública.
+se cualifican por separado. La [CI exacta de `29b730c`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41069453178)
+aprobó la app con Python, dependencias, Codex y MiniLM incluidos, su traslado y el
+cierre del servicio por pérdida del host. El pin del manifiesto queda en el
+Info.plist firmado. El [registro](docs/rebuild/PHASE_A_DISTRIBUTION_RESIDENT_QUALIFICATION.json)
+conserva también el recorrido nativo aprobado: respuesta real, cierre de ventanas, reapertura y salida sin procesos retenidos. El modo de desarrollo
+anterior conserva sus rutas explícitas. Los programas de servidores MCP externos
+pueden requerir su propio runtime; no se incluyen por estar configurados.
+La firma ad hoc no equivale a Developer ID ni notarización pública. No se ha
+registrado un Login Item real ni probado macOS 14; la actualización pública y el
+cierre global de fase A siguen pendientes, y B continúa aplazada.
 
 ## Registros
 

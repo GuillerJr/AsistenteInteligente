@@ -1,7 +1,7 @@
 {
   "schema": "jarvis.distribution-resident-qualification.v1",
   "date": "2026-10-30",
-  "status": "implemented_pending_exact_ci_and_native_qualification",
+  "status": "qualified_selected_increment",
   "scope": "macOS arm64: runtime incluido, traslado, cierre por EOF y residencia de app con inicio optativo",
   "complete_phase_a": false,
   "phase_b_started": false,
@@ -104,15 +104,201 @@
         "cleanup_confirmed": true
       },
       "follow_up": "Wire-string path sorting and a real parser regression; existing native argv oracle updated to the owned pipe contract without removing provider-state isolation."
+    },
+    {
+      "commit": "29b730c28b1a9afed23a6cfc58634ebd055ef32c",
+      "run_id": 41069453178,
+      "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41069453178",
+      "status": "success",
+      "ubuntu": {
+        "passed": 3682,
+        "skipped": 46,
+        "seconds": 295.25,
+        "python_packages_and_isolated_smoke": "passed",
+        "cleanup_confirmed": true
+      },
+      "macos": {
+        "python_passed": 3728,
+        "python_seconds": 296.14,
+        "swift": {
+          "executed": 660,
+          "skipped": 1,
+          "failed": 0,
+          "seconds": 183.182
+        },
+        "python_packages_and_isolated_smoke": "passed",
+        "app_qa_and_runtime_check_compilation": "passed",
+        "runtime_assembly": "passed",
+        "relocation_real_swift_and_python_manifest_parsers": "passed",
+        "cpu_model_opus_ca_official_codex_empty_account": "passed",
+        "signed_ipc_sqlite_parent_eof_and_free_lease": "passed",
+        "cleanup_confirmed": true
+      },
+      "artifact": {
+        "id": 12984612319,
+        "name": "jarvis-desktop-29b730c28b1a9afed23a6cfc58634ebd055ef32c",
+        "zip_bytes": 298302215,
+        "zip_sha256": "fa3182a733da13fc26cc43e13c20ec8105c3ec2941db0c5811cdacc285388c2f",
+        "runtime_bytes": 713071726,
+        "runtime_files": 4528,
+        "runtime_manifest_sha256": "0e081f0ba634a6961415d4d9af7b1410936e3c584904cee210facef6a6c61a30",
+        "signature": "ad_hoc",
+        "notarized": false
+      },
+      "remote_build_and_smoke": {
+        "seconds": 169.62,
+        "peak_allocated_bytes": 2346143744,
+        "budget_mib": 8192,
+        "deadline_seconds": 1200
+      }
     }
   ],
-  "native_qualification": [],
+  "native_qualification": [
+    {
+      "attempt": "r1",
+      "status": "failed_preserved_and_reconciled",
+      "cause": "Harness allocation rejected two owned CLI cache symlinks; metadata audit found no foreign UID or special files. Not a proven product defect.",
+      "receipt": {
+        "path": "/private/tmp/jarvis-distribution-resident-live-20261030/unknown-preserved.json",
+        "sha256": "8ad775c693fc77cbfa5b0df5264c88cd59c302b153070949e4ef8c20fa15d9b2"
+      },
+      "independent_reconciliation": {
+        "path": "/private/tmp/jarvis-distribution-resident-live-20261030/first-attempt-reconciled.json",
+        "sha256": "1a7e1a385d2b27b2e3efa2008bef16739491f76438acb12f6988e0f805cd92b3"
+      },
+      "known_processes_closed": true,
+      "quota_unmounted": true,
+      "fallback_signals": [
+        {
+          "cause": "failure_cleanup",
+          "identity_rechecked": true,
+          "pid": 14665,
+          "signal": "SIGTERM"
+        }
+      ],
+      "normal_gui_quit_claimed": false,
+      "automatic_retry": false,
+      "profile_or_originals_deleted": false
+    },
+    {
+      "attempt": "r2",
+      "status": "qualified_selected_native_oracles",
+      "commit": "29b730c28b1a9afed23a6cfc58634ebd055ef32c",
+      "ci_run_id": 41069453178,
+      "os": {
+        "version": "27.2",
+        "build": "26B123",
+        "architecture": "arm64"
+      },
+      "new_explicit_admission_after_reconciliation": true,
+      "same_image_reused": true,
+      "extra_download_or_bundle_copy": false,
+      "quota_capacity_bytes": 2147483648,
+      "preparation_seconds": 13.33,
+      "native_deadline_seconds": 1200,
+      "free_floor_bytes": 26843545600,
+      "application_launch": "Exact CI JarvisQALauncher and NSWorkspace, zero application arguments",
+      "native_code_text_sections_unchanged": true,
+      "only_outer_qa_metadata_resigned": true,
+      "runtime_manifest_sha256": "0e081f0ba634a6961415d4d9af7b1410936e3c584904cee210facef6a6c61a30",
+      "synthetic_account": "Previously authorized synthetic provider, used only by official client; no auth.json or credentials read/copied by agent",
+      "oracles": [
+        "Actual bundled Python and Codex paths observed under pinned parent identities",
+        "ChatGPT connected; synthetic 2+2 returned 4 and Completado without tools",
+        "Settings showed En ejecución and the actual child PID",
+        "Real Login Item enable/disable controls unavailable in QA; no OS registration",
+        "Closing the last window preserved same native incarnation, lease and signed IPC health",
+        "Command-Shift-J showed the same synthetic conversation; signed health and identity remained",
+        "Command-Q followed by all four known identities absent, same lease free, nonforced detach; zero signals and no issues"
+      ],
+      "prepared": {
+        "path": "/private/tmp/jarvis-distribution-resident-live-20261030-r2/prepared.json",
+        "sha256": "8cebc9250ca65bc0cf087ad971575f7aff0f6a4bed313c7302cd14821ad7b3c5"
+      },
+      "ui_oracles": {
+        "path": "/private/tmp/jarvis-distribution-resident-live-20261030-r2/ui-oracles.json",
+        "sha256": "a9ad6e6003b59dd192f10f19fcbbe4c83b0da4bd8df44e7b7c12b10624b28ca9"
+      },
+      "closed": {
+        "path": "/private/tmp/jarvis-distribution-resident-live-20261030-r2/closed.json",
+        "sha256": "79aa66ef8638ccaaa3d7816606ef44b26517736a7c174ba5793d1af1e0f6faab"
+      },
+      "independent_final_recheck": {
+        "path": "/private/tmp/jarvis-distribution-resident-live-20261030-r2/final-recheck.json",
+        "sha256": "0c010c2f68c4a5fb49408b08da46ae9cee02aa5381c28eac6c1aad8ae31f3a24"
+      },
+      "health_receipts": [
+        {
+          "path": "/private/tmp/jarvis-distribution-resident-live-20261030-r2/initial-health.json",
+          "sha256": "182b7e8e270df38a9c75caa0b373bcebe6bb8981da3b51287df8f54218046096"
+        },
+        {
+          "path": "/private/tmp/jarvis-distribution-resident-live-20261030-r2/windows-closed-health.json",
+          "sha256": "13b1bcbea0978640dddb1995a3ee324317e1e97603590614398168952b0401bd"
+        },
+        {
+          "path": "/private/tmp/jarvis-distribution-resident-live-20261030-r2/reopened-health.json",
+          "sha256": "210ffd22ade57fda5daceada55d0f8e2dac33d0f3adc403eb77c357aad6de241"
+        }
+      ],
+      "source_harness_pins": {
+        "common.py": "572038b9a7ce43a6a84f897cf2dd83fc1bad6078450e823a9ff41e479b71044a",
+        "rearm-executed-7ae.py": "7ae5f565f5fe5d07b9f4e6c65207cee2d0a8d0991c975a8885d4849065269d0e",
+        "supervise.py": "dbc6665416282cbbe6858d723bf31d8089b172acc5c08bd860a6a04102158252",
+        "probe.py": "67be5cd806c79ca03f06e6156cb2aa0ca80b45a051c73dc20608bb8d5d2b2756"
+      },
+      "later_unexecuted_harness_edit_attributed_to_run": false,
+      "peak_quota_used_bytes": 1060270080,
+      "resource_accounting": {
+        "anchor": {
+          "data_available_bytes": 205032919040,
+          "external_provider_observed": true,
+          "provider_growth_bytes": 0,
+          "quota_observed": true,
+          "quota_used_bytes": 1060139008,
+          "unix": 1793371066.62138
+        },
+        "anchor_scope": "this_process_first_checkpoint",
+        "attribution_claimed": false,
+        "data_volume": "/System/Volumes/Data",
+        "external_provider_growth_limit_bytes": 134217728,
+        "free_floor_bytes": 26843545600,
+        "last": {
+          "data_available_bytes": 205011255296,
+          "data_drop_from_anchor_bytes": 21663744,
+          "external_provider_observed": true,
+          "provider_growth_bytes": 1536000,
+          "provider_growth_from_anchor_bytes": 1536000,
+          "quota_growth_from_anchor_bytes": 118784,
+          "quota_observed": true,
+          "quota_used_bytes": 1060257792,
+          "unaccounted_data_drop_bytes": 20008960,
+          "unix": 1793371177.4690611
+        },
+        "peak_unaccounted_data_drop_bytes": 38780928,
+        "process_id": 15306,
+        "quota_capacity_bytes": 2147483648,
+        "samples": 286,
+        "schema": "jarvis.native-resource-observation.v1",
+        "small_metadata_variation_accepted_within_limit": true,
+        "status": "observing",
+        "unaccounted_data_drop_limit_bytes": 1073741824
+      },
+      "native_exit_code_claimed": false,
+      "normal_gui_close_and_custody_observed": true,
+      "image_and_synthetic_profiles_preserved": true,
+      "owner_installed_app_modified": false,
+      "owner_legacy_profiles_opened": false
+    }
+  ],
   "known_limits": [
     "Ad hoc CI signature is not Developer ID or public notarization",
     "Apple Developer membership not owned; no credentials requested or inferred",
     "Login Item registration changes the real OS; disabled in synthetic qualification mode",
     "No claim of automatic restart after explicit Quit or native host crash",
     "No claim of macOS14 runtime qualification from a newer runner",
-    "No owner installed app replacement, account migration, automatic update or phase A global closure"
-  ]
+    "No owner installed app replacement, account migration, automatic update or phase A global closure",
+    "Configured external MCP servers may require their own programs/runtimes; including the Jarvis base does not package every connector"
+  ],
+  "code_identity_for_documentation_closeout": "Native artifact and full CI above bind to 29b730c; subsequent documentation-only closeout must receive its own exact-commit CI. No claim that its rebuilt binary is byte-identical."
 }
