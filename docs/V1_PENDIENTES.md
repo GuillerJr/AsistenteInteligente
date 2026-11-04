@@ -1,5 +1,11 @@
 # Pendientes de Jarvis
 
+Seguimiento: `4d5c3e1` compiló y ejecutó 715 pruebas Swift. Pasaron las cinco
+regresiones nuevas de CPU y custodia, pero siguen fallando los dos casos originales
+de OCR y vídeo. Se añade un diagnóstico focal remoto por fase y código del error
+de Apple, sin contenido, imágenes ni rutas. No sustituye la CI completa ni habilita
+el caso nativo G. La causa sigue pendiente de ese diagnóstico.
+
 La CI de `e61c912` ya recibió el runner estándar ARM64 `xcode-27`: el recibo
 remoto acredita macOS 27.0.1, SDK 27.0, Xcode 27.1 (27A9275) y Swift 6.4.
 Ubuntu aprobó 4002 pruebas (47 omitidas) y macOS 4049 Python. Swift ejecutó

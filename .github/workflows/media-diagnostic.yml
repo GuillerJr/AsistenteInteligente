@@ -1,0 +1,48 @@
+name: Diagnóstico focal de medios de Jarvis
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jarvis-media-diagnostic-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  media:
+    name: OCR y vídeo reales, diagnóstico focal
+    runs-on: xcode-27
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+      - name: Preparar dependencias del checkout exacto
+        run: uv sync --locked --group dev --python 3.11
+      - name: Acreditar el entorno macOS remoto
+        run: >-
+          .venv/bin/python -B script/check_macos_ci_environment.py
+          --output "${{ runner.temp }}/Jarvis-media-probe-environment.json"
+      - name: Diagnóstico focal supervisado, no cualificación completa
+        shell: bash
+        run: |
+          set -o pipefail
+          # --full admits the remote profile; selection and Swift filter remain focal.
+          # The main workflow still performs every suite, build and installation smoke.
+          .venv/bin/python -B script/test_resource_guard.py run \
+            --profile ci --kind swift --full \
+            --selection 'NativeMedia(Executor|Diagnostics)Tests' \
+            --budget-mib 6144 --deadline 600 -- \
+            .venv/bin/python -B script/test_resource_guard.py admitted-exec --kind swift -- \
+            /bin/bash script/test_desktop.sh --guard-child \
+            --filter 'NativeMedia(Executor|Diagnostics)Tests' \
+            2>&1 | tee "$RUNNER_TEMP/jarvis-swift-diagnostic.log"
+      - name: Conservar sólo el diagnóstico focal acotado
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-media-probe-${{ github.sha }}
+          path: ${{ runner.temp }}/jarvis-swift-diagnostic.log
+          if-no-files-found: error
+          retention-days: 3

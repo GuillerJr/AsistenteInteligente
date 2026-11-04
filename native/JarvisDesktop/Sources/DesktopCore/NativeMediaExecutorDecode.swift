@@ -24,7 +24,10 @@ enum NativeMediaDecoder {
                       cancellation: NativeMediaCancellation) throws -> NativeMediaObservation {
         guard let source = CGImageSourceCreateWithData(data as CFData,
                 [kCGImageSourceShouldCache: false] as CFDictionary),
-              let type = CGImageSourceGetType(source) else { throw NativeMediaIssue.decoderFailed }
+              let type = CGImageSourceGetType(source) else {
+            NativeMediaDiagnostics.emit(.imageSource, error: NativeMediaIssue.decoderFailed)
+            throw NativeMediaIssue.decoderFailed
+        }
         let actualMIME = UTType(type as String)?.preferredMIMEType
         guard actualMIME == request.mime || (request.mime == "image/heic" && actualMIME == "image/heif") else {
             throw NativeMediaIssue.unsupported
@@ -42,7 +45,10 @@ enum NativeMediaDecoder {
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceThumbnailMaxPixelSize: 1600,
             kCGImageSourceShouldCacheImmediately: true,
-        ] as CFDictionary) else { throw NativeMediaIssue.decoderFailed }
+        ] as CFDictionary) else {
+            NativeMediaDiagnostics.emit(.imageThumbnail, error: NativeMediaIssue.decoderFailed)
+            throw NativeMediaIssue.decoderFailed
+        }
         try cancellation.check()
         var result = NativeMediaObservation()
         try result.add("image:1", recognize(picture, locale: request.locale, cancellation: cancellation))
@@ -58,6 +64,7 @@ enum NativeMediaDecoder {
     static func pdf(_ request: NativeMediaRequest, data: Data,
                     cancellation: NativeMediaCancellation) throws -> NativeMediaObservation {
         guard data.starts(with: Data("%PDF-".utf8)), let document = PDFDocument(data: data) else {
+            NativeMediaDiagnostics.emit(.pdfSource, error: NativeMediaIssue.decoderFailed)
             throw NativeMediaIssue.decoderFailed
         }
         guard !document.isEncrypted, !document.isLocked else { throw NativeMediaIssue.encryptedPDF }
@@ -69,7 +76,10 @@ enum NativeMediaDecoder {
         var scanned = 0
         for index in request.pageStart...final {
             try cancellation.check()
-            guard let page = document.page(at: index - 1) else { throw NativeMediaIssue.decoderFailed }
+            guard let page = document.page(at: index - 1) else {
+                NativeMediaDiagnostics.emit(.pdfPage, error: NativeMediaIssue.decoderFailed)
+                throw NativeMediaIssue.decoderFailed
+            }
             let picture = try render(page, maximum: 1400)
             pictures.append(picture); processed.append(.number(Double(index)))
             try cancellation.check()
@@ -123,8 +133,12 @@ enum NativeMediaDecoder {
         request.usesLanguageCorrection = false
         let languages: [String]
         do { languages = try request.supportedRecognitionLanguages() }
-        catch { throw NativeMediaIssue.localeUnavailable }
+        catch {
+            NativeMediaDiagnostics.emit(.visionLanguages, error: error)
+            throw NativeMediaIssue.localeUnavailable
+        }
         guard let selected = languages.first(where: { LocalSpeechPolicy.canonicalLocale($0) == locale }) else {
+            NativeMediaDiagnostics.emit(.visionLocale, error: NativeMediaIssue.localeUnavailable)
             throw NativeMediaIssue.localeUnavailable
         }
         request.recognitionLanguages = [selected]
@@ -133,7 +147,10 @@ enum NativeMediaDecoder {
         defer { cancellation.remove(registration) }
         try cancellation.check()
         do { try VNImageRequestHandler(cgImage: image, options: [:]).perform([request]) }
-        catch { try cancellation.check(); throw NativeMediaIssue.decoderFailed }
+        catch {
+            NativeMediaDiagnostics.emit(.visionPerform, error: error)
+            try cancellation.check(); throw NativeMediaIssue.decoderFailed
+        }
         try cancellation.check()
         // Reject an oversized OCR result rather than presenting a hidden prefix
         // as complete observation of the selected image or page.
@@ -164,9 +181,18 @@ enum NativeMediaDecoder {
     }
 
     static func configureCPU(_ request: VNRecognizeTextRequest) throws {
+        let supported: [VNComputeStage: [MLComputeDevice]]
+        do { supported = try request.supportedComputeStageDevices }
+        catch {
+            NativeMediaDiagnostics.emit(.visionComputeDevices, error: error)
+            throw NativeMediaIssue.decoderFailed
+        }
         let selected: [VNComputeStage: MLComputeDevice]
-        do { selected = try cpuAssignments(request.supportedComputeStageDevices) }
-        catch { throw NativeMediaIssue.decoderFailed }
+        do { selected = try cpuAssignments(supported) }
+        catch {
+            NativeMediaDiagnostics.emit(.visionCPUAssignments, error: error)
+            throw NativeMediaIssue.decoderFailed
+        }
         // Select every stage before mutating the request. A missing CPU never
         // leaves an unassigned stage free to choose a VM accelerator silently.
         for (stage, device) in selected { request.setComputeDevice(device, for: stage) }
@@ -179,11 +205,17 @@ enum NativeMediaDecoder {
               box.width * box.height <= 40000000 else { throw NativeMediaIssue.limit }
         let scale = min(Double(maximum) / box.width, Double(maximum) / box.height)
         let width = max(1, Int(ceil(box.width * scale))), height = max(1, Int(ceil(box.height * scale)))
-        guard let context = bitmap(width: width, height: height) else { throw NativeMediaIssue.decoderFailed }
+        guard let context = bitmap(width: width, height: height) else {
+            NativeMediaDiagnostics.emit(.pdfRaster, error: NativeMediaIssue.decoderFailed)
+            throw NativeMediaIssue.decoderFailed
+        }
         context.setFillColor(CGColor(gray: 1, alpha: 1)); context.fill(CGRect(x: 0, y: 0, width: width, height: height))
         context.scaleBy(x: scale, y: scale); context.translateBy(x: -box.minX, y: -box.minY)
         page.draw(with: .cropBox, to: context)
-        guard let image = context.makeImage() else { throw NativeMediaIssue.decoderFailed }
+        guard let image = context.makeImage() else {
+            NativeMediaDiagnostics.emit(.pdfRasterImage, error: NativeMediaIssue.decoderFailed)
+            throw NativeMediaIssue.decoderFailed
+        }
         return image
     }
 
@@ -211,7 +243,10 @@ enum NativeMediaDecoder {
             let y = Double((rows - 1 - index / columns) * cellHeight) + (Double(cellHeight) - height) / 2
             context.draw(picture, in: CGRect(x: x, y: y, width: width, height: height))
         }
-        guard let result = context.makeImage() else { throw NativeMediaIssue.decoderFailed }
+        guard let result = context.makeImage() else {
+            NativeMediaDiagnostics.emit(.previewContactSheet, error: NativeMediaIssue.decoderFailed)
+            throw NativeMediaIssue.decoderFailed
+        }
         return result
     }
 
@@ -223,17 +258,26 @@ enum NativeMediaDecoder {
                 let width = max(1, image.width * 2 / 3), height = max(1, image.height * 2 / 3)
                 guard let context = bitmap(width: width, height: height) else { throw NativeMediaIssue.limit }
                 context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-                guard let reduced = context.makeImage() else { throw NativeMediaIssue.decoderFailed }
+                guard let reduced = context.makeImage() else {
+                    NativeMediaDiagnostics.emit(.previewBitmap, error: NativeMediaIssue.decoderFailed)
+                    throw NativeMediaIssue.decoderFailed
+                }
                 image = reduced
             }
             for quality in [0.65, 0.4, 0.2] {
                 try cancellation.check()
                 let target = NSMutableData()
                 guard let destination = CGImageDestinationCreateWithData(target as CFMutableData,
-                        UTType.jpeg.identifier as CFString, 1, nil) else { throw NativeMediaIssue.decoderFailed }
+                        UTType.jpeg.identifier as CFString, 1, nil) else {
+                    NativeMediaDiagnostics.emit(.previewJPEGDestination, error: NativeMediaIssue.decoderFailed)
+                    throw NativeMediaIssue.decoderFailed
+                }
                 CGImageDestinationAddImage(destination, image,
                     [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
-                guard CGImageDestinationFinalize(destination) else { throw NativeMediaIssue.decoderFailed }
+                guard CGImageDestinationFinalize(destination) else {
+                    NativeMediaDiagnostics.emit(.previewJPEGFinalize, error: NativeMediaIssue.decoderFailed)
+                    throw NativeMediaIssue.decoderFailed
+                }
                 let bytes = target as Data
                 if bytes.count <= 49152 {
                     let digest = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()

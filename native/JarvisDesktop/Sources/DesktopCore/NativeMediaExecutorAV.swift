@@ -16,7 +16,10 @@ extension NativeMediaDecoder {
             duration = try await source.asset.load(.duration).seconds
             videoTracks = try await source.asset.loadTracks(withMediaType: .video)
             audioTracks = try await source.asset.loadTracks(withMediaType: .audio)
-        } catch { try cancellation.check(); throw NativeMediaIssue.decoderFailed }
+        } catch {
+            NativeMediaDiagnostics.emit(.videoAssetMetadata, error: error)
+            try cancellation.check(); throw NativeMediaIssue.decoderFailed
+        }
         try cancellation.check()
         guard duration.isFinite, duration > 0, duration <= 120,
               videoTracks.count <= 8, audioTracks.count <= 8 else { throw NativeMediaIssue.limit }
@@ -37,7 +40,10 @@ extension NativeMediaDecoder {
             transform = try await track.load(.preferredTransform)
             minimumPeriod = try await track.load(.minFrameDuration).seconds
             nominalRate = Double(try await track.load(.nominalFrameRate))
-        } catch { try cancellation.check(); throw NativeMediaIssue.decoderFailed }
+        } catch {
+            NativeMediaDiagnostics.emit(.videoTrackMetadata, error: error)
+            try cancellation.check(); throw NativeMediaIssue.decoderFailed
+        }
         try cancellation.check()
         let dimensions = try checkedVideoDimensions(size, transform: transform)
         let width = dimensions.width, height = dimensions.height
@@ -58,9 +64,16 @@ extension NativeMediaDecoder {
             try cancellation.check()
             let sample: (image: CGImage, actualTime: CMTime)
             do { sample = try await generator.image(at: CMTime(seconds: seconds, preferredTimescale: 600)) }
-            catch { try cancellation.check(); throw NativeMediaIssue.decoderFailed }
+            catch {
+                NativeMediaDiagnostics.emit(.videoSample, error: error)
+                try cancellation.check(); throw NativeMediaIssue.decoderFailed
+            }
             let actual = sample.actualTime.seconds
-            try checkedSampleTime(actual, requested: seconds, duration: duration, framePeriod: framePeriod)
+            do { try checkedSampleTime(actual, requested: seconds, duration: duration, framePeriod: framePeriod) }
+            catch {
+                NativeMediaDiagnostics.emit(.videoSampleTime, error: error)
+                throw error
+            }
             try cancellation.check()
             let text = try recognize(sample.image, locale: request.locale, cancellation: cancellation)
             let locator = "frame:\(index + 1)@" + String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), actual)

@@ -3640,12 +3640,36 @@
     "full_remote_ci_passed": false
   },
   "native_media_macos27_follow_up_20261104": {
-    "status": "test_continuation_annotation_corrected_pending_new_exact_remote_CI",
+    "status": "five_regressions_passed_original_media_failures_remain_safe_diagnostics_pending_remote_probe",
     "failed_checkpoint_commit": "e61c912adb62be384cd736d9f08f2d8e3abe580d",
     "failed_checkpoint_ci_run_id": 41862674611,
     "correction_commit": "e8bb0332cf9d69300d7ae057635a62b0e31a85a0",
     "new_exact_ci_run_id": 41867194251,
     "validation_attempts": [
+      {
+        "commit": "4d5c3e1a1e2328db2847113f5a27863ab000d6bc",
+        "ci_run_id": 41868818781,
+        "macos_job_id": 126710744539,
+        "ubuntu_job_id": 126710743892,
+        "ubuntu_job_status": "completed_success",
+        "ubuntu_python_passed": 4002,
+        "ubuntu_python_skipped": 47,
+        "ubuntu_python_seconds": 319.45,
+        "ubuntu_log_sha256": "f88d35d910eb796e59dfc3f37e8bf567af548d1592e7add0c35b36af352d0877",
+        "swift_executed": 715,
+        "swift_skipped": 1,
+        "swift_failures": 2,
+        "swift_seconds": 225.577,
+        "new_CPU_and_timer_regressions_passed": 5,
+        "original_OCR_and_video_tests_still_failed": true,
+        "diagnostic_artifact_id": 13344871235,
+        "diagnostic_archive_bytes": 33495,
+        "diagnostic_archive_sha256": "90bb499a072fd090fa1d6aa555af364e749ed22ee9b2e1e9c66734064d57ccf1",
+        "diagnostic_log_sha256": "ffa819103a480e5c9385c47b9c98d8bf3608f5ee5c569e625fbc214f615ac9bc",
+        "conclusion": "Explicit CPU selection was insufficient; both original tests still returned decoderFailed. No further functional change is justified until the precise framework phase and error are observed.",
+        "full_remote_ci_passed": false,
+        "native_G_executed": false
+      },
       {
         "commit": "e8bb0332cf9d69300d7ae057635a62b0e31a85a0",
         "ci_run_id": 41867194251,
@@ -3688,6 +3712,19 @@
     },
     "tests_or_builds_executed_locally": false,
     "new_runtime_validation_claimed": false,
+    "safe_diagnostic_follow_up": {
+      "workflow": ".github/workflows/media-diagnostic.yml",
+      "scope": "Manual remote focal diagnostic only; the main workflow retains every full suite, build and installation smoke.",
+      "selection": "NativeMedia(Executor|Diagnostics)Tests",
+      "remote_profile_admission_requires_full_flag": true,
+      "selection_is_full_suite": false,
+      "budget_mib": 6144,
+      "deadline_seconds": 600,
+      "payload": "DEBUG and GitHub Actions only; closed phase, whitelisted domain or other, numeric error code, principal and at most two underlying errors, maximum 1024 bytes.",
+      "messages_images_text_paths_or_arbitrary_userInfo_logged": false,
+      "functional_assertions_or_main_CI_reduced": false,
+      "qualification_claimed": false
+    },
     "native_G_still_NOEXEC": true,
     "scope_limit": "Prepared source and regression cases are not passing test evidence. Preserve D/E/F, macOS26 capacity failures, broad phase A open and phase B deferred."
   },

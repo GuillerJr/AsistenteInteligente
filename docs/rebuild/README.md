@@ -1,5 +1,11 @@
 # Variante propia inspirada en OpenClaw — base limpia
 
+Seguimiento `4d5c3e1`: Swift ejecutó 715 casos; las cinco regresiones nuevas
+pasaron, pero OCR y vídeo siguen devolviendo `decoderFailed`. El siguiente paso
+es un diagnóstico focal remoto con fase y códigos de Apple, sin imágenes, texto
+ni rutas. Ese workflow manual no sustituye la cualificación completa ni autoriza
+ejecutar G; los antecedentes de CI siguientes se conservan.
+
 La [CI de `e61c912`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41862674611)
 ya recibió el runner estándar ARM64 `xcode-27`. El recibo remoto acredita
 macOS 27.0.1, SDK 27.0, Xcode 27.1 (27A9275) y Swift 6.4. Ubuntu aprobó
