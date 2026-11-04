@@ -83,5 +83,16 @@ aprobado. Compilación Swift, suites completas, paquetes y smoke se ejecutan
 en CI remota para el SHA publicado. Su cualificación y el recorrido nativo
 con una imagen sintética y Codex real siguen pendientes en este checkpoint.
 
+El primer diagnóstico remoto de la implementación, `0f1ec51`, ejecutó 25 casos:
+seis de diagnóstico y 18 de 19 del ejecutor pasaron. Sólo fallaron dos
+afirmaciones nuevas del oráculo RGB del mosaico: canales secundarios 39 y 51
+frente a cero con tolerancia 35. PNG/PDF escaneado y vídeo ya funcionaron sin
+OCR. El oráculo se corrigió para comprobar clases de color distinguibles y
+orden de regiones: primario dominante >180, contraste >100; el amarillo exige
+rojo/verde >180 y azul <100. Blanco, regiones intercambiadas o un color primario
+equivocado siguen fallando. No cambia píxeles, compresión ni calidad del producto.
+Se conserva el [diagnóstico fallido](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41905078639);
+no se presenta ese primer intento como aprobado.
+
 Este cambio aborda el punto de documentos/visión elegido; no completa todas
 las familias de fase A ni inicia la fase B.

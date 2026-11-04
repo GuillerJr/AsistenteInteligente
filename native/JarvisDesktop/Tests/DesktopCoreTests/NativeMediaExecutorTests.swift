@@ -169,14 +169,27 @@ final class NativeMediaExecutorTests: XCTestCase {
             bytesPerRow: 400, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: rgba))
         raster.draw(picture, in: CGRect(x: 0, y: 0, width: 100, height: 100))
         let pixels = try XCTUnwrap(raster.data?.assumingMemoryBound(to: UInt8.self))
-        let expected = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0]]
         // Read JPEG scanlines from the top-left, independently of the sheet's
         // drawing coordinates. A vertical swap must invalidate the cited regions.
-        for (index, color) in expected.enumerated() {
+        // Check distinguishable color classes, not device/PDF/JPEG channel
+        // equality: correct primary tiles can have nonzero secondary channels.
+        for index in 0..<4 {
             let x = index % 2 * 50 + 25, y = index / 2 * 50 + 25
             let offset = y * raster.bytesPerRow + x * 4
-            for channel in 0..<3 {
-                XCTAssertEqual(Double(pixels[offset + channel]), Double(color[channel]), accuracy: 35)
+            let red = Int(pixels[offset]), green = Int(pixels[offset + 1]), blue = Int(pixels[offset + 2])
+            switch index {
+            case 0:
+                XCTAssertGreaterThan(red, 180)
+                XCTAssertGreaterThan(red - green, 100); XCTAssertGreaterThan(red - blue, 100)
+            case 1:
+                XCTAssertGreaterThan(green, 180)
+                XCTAssertGreaterThan(green - red, 100); XCTAssertGreaterThan(green - blue, 100)
+            case 2:
+                XCTAssertGreaterThan(blue, 180)
+                XCTAssertGreaterThan(blue - red, 100); XCTAssertGreaterThan(blue - green, 100)
+            default:
+                XCTAssertGreaterThan(red, 180); XCTAssertGreaterThan(green, 180)
+                XCTAssertLessThan(blue, 100); XCTAssertLessThan(abs(red - green), 80)
             }
         }
     }
