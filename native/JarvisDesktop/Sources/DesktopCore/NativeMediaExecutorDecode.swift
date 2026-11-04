@@ -1,23 +1,34 @@
 import AppKit
-import CoreML
 import CryptoKit
 import Foundation
 import ImageIO
 import PDFKit
 import UniformTypeIdentifiers
-import Vision
 
 enum NativeMediaDecoder {
     static func inspect(_ request: NativeMediaRequest, data: Data,
                         cancellation: NativeMediaCancellation) async throws -> NativeMediaObservation {
         try cancellation.check(); try request.validate(data)
+        var result: NativeMediaObservation
         switch request.kind {
-        case "pdf": return try pdf(request, data: data, cancellation: cancellation)
-        case "image": return try image(request, data: data, cancellation: cancellation)
-        case "document": return try rtf(request, data: data, cancellation: cancellation)
-        case "audio", "video": return try await audiovisual(request, data: data, cancellation: cancellation)
+        case "pdf": result = try pdf(request, data: data, cancellation: cancellation)
+        case "image": result = try image(request, data: data, cancellation: cancellation)
+        case "document": result = try rtf(request, data: data, cancellation: cancellation)
+        case "audio", "video": result = try await audiovisual(request, data: data, cancellation: cancellation)
         default: throw NativeMediaIssue.unsupported
         }
+        result.metadata["extraction_policy"] = .string(NativeMediaRequest.extractionPolicy)
+        result.metadata["ocr_performed"] = .bool(false)
+        if result.metadata["local_text_extraction"] == nil {
+            result.metadata["local_text_extraction"] = .string("none")
+        }
+        if !request.requiresVisual {
+            result.metadata["visual_required"] = .bool(false)
+            result.metadata["visual_analysis"] = .string("none")
+            result.metadata["visual_locators"] = .array([])
+        }
+        try cancellation.check()
+        return result
     }
 
     static func image(_ request: NativeMediaRequest, data: Data,
@@ -51,11 +62,12 @@ enum NativeMediaDecoder {
         }
         try cancellation.check()
         var result = NativeMediaObservation()
-        try result.add("image:1", recognize(picture, locale: request.locale, cancellation: cancellation))
+        try result.add("image:1", "")
         result.metadata = ["dimensions": .object(["width": .number(Double(width)), "height": .number(Double(height))]),
                            "frame_count": .number(Double(count)), "observed_frame": .number(1),
-                           "image_type": .string(type as String), "ocr_on_device": .bool(true),
+                           "image_type": .string(type as String),
                            "visual_sampling": .string("first_image_frame_thumbnail")]
+        try result.requireVisual(columns: 1, localTextExtraction: "none")
         result.truncated = result.truncated || count > 1
         result.frame = try frame(picture, cancellation: cancellation)
         return result
@@ -73,7 +85,7 @@ enum NativeMediaDecoder {
         }
         let final = min(document.pageCount, request.pageStart + request.pageCount - 1)
         var result = NativeMediaObservation(), pictures: [CGImage] = [], processed: [RPCValue] = []
-        var scanned = 0
+        var withoutEmbeddedText: [RPCValue] = []
         for index in request.pageStart...final {
             try cancellation.check()
             guard let page = document.page(at: index - 1) else {
@@ -83,19 +95,19 @@ enum NativeMediaDecoder {
             let picture = try render(page, maximum: 1400)
             pictures.append(picture); processed.append(.number(Double(index)))
             try cancellation.check()
-            var text = page.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if text.isEmpty {
-                scanned += 1
-                text = try recognize(picture, locale: request.locale, cancellation: cancellation)
-            }
+            let text = page.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if text.isEmpty { withoutEmbeddedText.append(.number(Double(index))) }
             try result.add("page:\(index)", text)
         }
         try cancellation.check()
         result.metadata = ["page_count": .number(Double(document.pageCount)),
                            "processed_pages": .array(processed), "page_selection": .string("explicit"),
-                           "ocr_page_count": .number(Double(scanned)), "ocr_on_device": .bool(true),
+                           "embedded_text_page_count": .number(Double(pictures.count - withoutEmbeddedText.count)),
+                           "pages_without_embedded_text": .array(withoutEmbeddedText),
                            "visual_sampling": .string("contact_sheet_of_selected_pages"),
                            "external_links_opened": .bool(false)]
+        try result.requireVisual(columns: pictures.count == 1 ? 1 : 2,
+                                 localTextExtraction: "pdf_embedded_text")
         result.truncated = result.truncated || pictures.count < document.pageCount
         result.frame = try frame(contactSheet(pictures, columns: pictures.count == 1 ? 1 : 2),
                                  cancellation: cancellation)
@@ -121,81 +133,9 @@ enum NativeMediaDecoder {
         var result = NativeMediaObservation()
         try result.add("page:1", text)
         result.metadata = ["page_numbering": .string("logical_plain_text_document"),
+                           "local_text_extraction": .string("rtf_plain_text"),
                            "external_links_opened": .bool(false), "embedded_objects_executed": .bool(false)]
         return result
-    }
-
-    static func recognize(_ image: CGImage, locale: String,
-                          cancellation: NativeMediaCancellation) throws -> String {
-        try cancellation.check()
-        let request = VNRecognizeTextRequest()
-        request.recognitionLevel = .accurate
-        request.usesLanguageCorrection = false
-        let languages: [String]
-        do { languages = try request.supportedRecognitionLanguages() }
-        catch {
-            NativeMediaDiagnostics.emit(.visionLanguages, error: error)
-            throw NativeMediaIssue.localeUnavailable
-        }
-        guard let selected = languages.first(where: { LocalSpeechPolicy.canonicalLocale($0) == locale }) else {
-            NativeMediaDiagnostics.emit(.visionLocale, error: NativeMediaIssue.localeUnavailable)
-            throw NativeMediaIssue.localeUnavailable
-        }
-        request.recognitionLanguages = [selected]
-        try configureCPU(request)
-        let registration = cancellation.register { request.cancel() }
-        defer { cancellation.remove(registration) }
-        try cancellation.check()
-        do { try VNImageRequestHandler(cgImage: image, options: [:]).perform([request]) }
-        catch {
-            NativeMediaDiagnostics.emit(.visionPerform, error: error)
-            try cancellation.check(); throw NativeMediaIssue.decoderFailed
-        }
-        try cancellation.check()
-        // Reject an oversized OCR result rather than presenting a hidden prefix
-        // as complete observation of the selected image or page.
-        var text = "", bytes = 0
-        for observation in request.results ?? [] {
-            try cancellation.check()
-            guard let candidate = observation.topCandidates(1).first else { continue }
-            let line = candidate.string
-            guard line.utf8.count <= 49152 else { throw NativeMediaIssue.limit }
-            bytes += line.utf8.count + 1
-            guard bytes <= 49152 else { throw NativeMediaIssue.limit }
-            if !text.isEmpty { text += "\n" }
-            text += line
-        }
-        return text
-    }
-
-    static func cpuAssignments(_ supported: [VNComputeStage: [MLComputeDevice]]) throws -> [VNComputeStage: MLComputeDevice] {
-        guard !supported.isEmpty else { throw NativeMediaIssue.decoderFailed }
-        var selected: [VNComputeStage: MLComputeDevice] = [:]
-        for (stage, devices) in supported {
-            guard let cpu = devices.first(where: { if case .cpu = $0 { return true }; return false }) else {
-                throw NativeMediaIssue.decoderFailed
-            }
-            selected[stage] = cpu
-        }
-        return selected
-    }
-
-    static func configureCPU(_ request: VNRecognizeTextRequest) throws {
-        let supported: [VNComputeStage: [MLComputeDevice]]
-        do { supported = try request.supportedComputeStageDevices }
-        catch {
-            NativeMediaDiagnostics.emit(.visionComputeDevices, error: error)
-            throw NativeMediaIssue.decoderFailed
-        }
-        let selected: [VNComputeStage: MLComputeDevice]
-        do { selected = try cpuAssignments(supported) }
-        catch {
-            NativeMediaDiagnostics.emit(.visionCPUAssignments, error: error)
-            throw NativeMediaIssue.decoderFailed
-        }
-        // Select every stage before mutating the request. A missing CPU never
-        // leaves an unassigned stage free to choose a VM accelerator silently.
-        for (stage, device) in selected { request.setComputeDevice(device, for: stage) }
     }
 
     static func render(_ page: PDFPage, maximum: Int) throws -> CGImage {

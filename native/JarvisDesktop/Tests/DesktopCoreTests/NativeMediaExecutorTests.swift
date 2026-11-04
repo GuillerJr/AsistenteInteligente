@@ -1,8 +1,8 @@
 @preconcurrency import AVFoundation
-import CoreML
+import CoreGraphics
 import CryptoKit
 import Foundation
-import Vision
+import ImageIO
 import XCTest
 @testable import DesktopCore
 
@@ -36,7 +36,8 @@ final class NativeMediaExecutorTests: XCTestCase {
         do { _ = try await operation(); XCTFail("Se esperaba un rechazo local"); return nil }
         catch { return error as? NativeMediaIssue }
     }
-    private func assertFrame(_ result: RPCValue, file: StaticString = #filePath, line: UInt = #line) throws {
+    @discardableResult
+    private func assertFrame(_ result: RPCValue, file: StaticString = #filePath, line: UInt = #line) throws -> CGImage {
         let frame = result["frame"]
         XCTAssertEqual(frame["storage"], .string("memory_only"), file: file, line: line)
         let url = try XCTUnwrap(frame["data_url"].string, file: file, line: line)
@@ -46,6 +47,44 @@ final class NativeMediaExecutorTests: XCTestCase {
         XCTAssertEqual(frame["bytes"].integer, bytes.count, file: file, line: line)
         XCTAssertEqual(frame["sha256"].string, NativeMediaFixtures.digest(bytes), file: file, line: line)
         XCTAssertNil(result["metadata"]["data_url"].string, file: file, line: line)
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(bytes as CFData, nil), file: file, line: line)
+        let picture = try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil), file: file, line: line)
+        XCTAssertGreaterThan(picture.width, 0, file: file, line: line)
+        XCTAssertGreaterThan(picture.height, 0, file: file, line: line)
+        return picture
+    }
+    private func assertRenderedInk(_ picture: CGImage) throws {
+        let context = try XCTUnwrap(NativeMediaDecoder.bitmap(width: 64, height: 64))
+        context.draw(picture, in: CGRect(x: 0, y: 0, width: 64, height: 64))
+        let pixels = try XCTUnwrap(context.data?.assumingMemoryBound(to: UInt8.self))
+        let samples = stride(from: 0, to: 64 * 64 * 4, by: 4).map { Int(pixels[$0]) }
+        XCTAssertLessThan(try XCTUnwrap(samples.min()), 235, "El frame debe contener los píxeles dibujados")
+        XCTAssertGreaterThan(try XCTUnwrap(samples.max()), 245)
+    }
+    private func assertVisual(_ result: RPCValue, locators: [String], columns: Int,
+                              localTextExtraction: String) throws {
+        let metadata = result["metadata"], rows = (locators.count + columns - 1) / columns
+        XCTAssertEqual(metadata["extraction_policy"], .string("embedded_text_and_visual_v1"))
+        XCTAssertEqual(metadata["local_text_extraction"], .string(localTextExtraction))
+        XCTAssertEqual(metadata["ocr_performed"], .bool(false))
+        XCTAssertEqual(metadata["visual_analysis"], .string("model_required"))
+        XCTAssertEqual(metadata["visual_required"], .bool(true))
+        XCTAssertEqual(metadata["visual_locators"], .array(locators.map(RPCValue.string)))
+        XCTAssertEqual(metadata["visual_layout"], .string("row_major_top_left"))
+        XCTAssertEqual(metadata["visual_columns"], .number(Double(columns)))
+        XCTAssertEqual(metadata["visual_rows"], .number(Double(rows)))
+        let regions = try XCTUnwrap(metadata["visual_regions"].array)
+        XCTAssertEqual(regions.count, locators.count)
+        for (index, region) in regions.enumerated() {
+            let row = index / columns, column = index % columns
+            XCTAssertEqual(region["locator"], .string(locators[index]))
+            XCTAssertEqual(region["row"], .number(Double(row)))
+            XCTAssertEqual(region["column"], .number(Double(column)))
+            XCTAssertEqual(region["x"], .number(Double(column) / Double(columns)))
+            XCTAssertEqual(region["y"], .number(Double(row) / Double(rows)))
+            XCTAssertEqual(region["width"], .number(1 / Double(columns)))
+            XCTAssertEqual(region["height"], .number(1 / Double(rows)))
+        }
     }
 
     @MainActor func testPDFExactPageSelectionHasCitationsAndExplicitPartialObservation() async throws {
@@ -61,57 +100,104 @@ final class NativeMediaExecutorTests: XCTestCase {
         XCTAssertEqual(result["truncated"], .bool(true))
         XCTAssertEqual(result["metadata"]["processed_pages"], .array([.number(2)]))
         XCTAssertEqual(result["metadata"]["external_links_opened"], .bool(false))
+        XCTAssertEqual(result["metadata"]["pages_without_embedded_text"], .array([]))
+        XCTAssertEqual(result["metadata"]["embedded_text_page_count"], .number(1))
+        try assertVisual(result, locators: ["page:2"], columns: 1, localTextExtraction: "pdf_embedded_text")
         try assertFrame(result)
     }
-    @MainActor func testScannedPDFAndPNGRunRealOfflineVisionWithSourceCitations() async throws {
+    @MainActor func testScannedPDFAndPNGPrepareRealFramesWithoutClaimingOCR() async throws {
         for (payload, kind, mime, name, locator) in [
             (try NativeMediaFixtures.png(), "image", "image/png", "prueba.png", "image:1"),
             (try NativeMediaFixtures.pdf(["JARVIS LOCAL IMAGE 4826"], scanned: true), "pdf", "application/pdf", "scan.pdf", "page:1"),
         ] {
             let host = executor(payload)
             let result = try await host.execute("media.inspect", arguments: NativeMediaFixtures.args(payload, kind: kind, mime: mime, name: name))
-            XCTAssertEqual(result["on_device"], .bool(true)); XCTAssertEqual(result["metadata"]["ocr_on_device"], .bool(true))
+            XCTAssertEqual(result["on_device"], .bool(true))
+            XCTAssertEqual(result["source_sha256"].string, NativeMediaFixtures.digest(payload))
             XCTAssertEqual(result["segments"].array?.first?["locator"], .string(locator))
-            XCTAssertTrue(result["segments"].array?.first?["text"].string?.contains("4826") == true)
-            try assertFrame(result)
-        }
-    }
-    func testOCRAssignsRealCPUToEverySupportedStageWithoutChangingRecognition() throws {
-        let request = VNRecognizeTextRequest()
-        request.recognitionLevel = .accurate
-        request.usesLanguageCorrection = false
-        request.recognitionLanguages = ["en-US"]
-        let revision = request.revision
-        let supported = try request.supportedComputeStageDevices
-        XCTAssertFalse(supported.isEmpty, "Vision debe acreditar etapas reales de OCR")
-        for (stage, devices) in supported {
-            XCTAssertTrue(devices.contains(where: { if case .cpu = $0 { return true }; return false }),
-                          "La etapa \(stage.rawValue) debe admitir CPU real")
-        }
-        try NativeMediaDecoder.configureCPU(request)
-        for stage in supported.keys {
-            let assigned = try XCTUnwrap(request.computeDevice(for: stage))
-            guard case .cpu = assigned else { return XCTFail("Cada etapa debe usar CPU explícita") }
-        }
-        XCTAssertEqual(request.recognitionLevel, .accurate)
-        XCTAssertFalse(request.usesLanguageCorrection)
-        XCTAssertEqual(request.recognitionLanguages, ["en-US"])
-        XCTAssertEqual(request.revision, revision)
-    }
-    func testOCRRejectsMissingOrNonCPUStageInsteadOfLeavingAutomaticCompute() throws {
-        let cpu = try XCTUnwrap(MLComputeDevice.allComputeDevices.first(where: {
-            if case .cpu = $0 { return true }; return false
-        }))
-        let nonCPU = MLComputeDevice.allComputeDevices.filter {
-            if case .cpu = $0 { return false }; return true
-        }
-        let unsupported: [[VNComputeStage: [MLComputeDevice]]] = [
-            [:], [.main: []], [.main: nonCPU], [.main: [cpu], .postProcessing: []],
-        ]
-        for stages in unsupported {
-            XCTAssertThrowsError(try NativeMediaDecoder.cpuAssignments(stages)) {
-                XCTAssertEqual($0 as? NativeMediaIssue, .decoderFailed)
+            XCTAssertEqual(result["segments"].array?.first?["text"], .string(""))
+            XCTAssertEqual(result["metadata"]["ocr_on_device"], .null)
+            try assertVisual(result, locators: [locator], columns: 1,
+                             localTextExtraction: kind == "pdf" ? "pdf_embedded_text" : "none")
+            if kind == "pdf" {
+                XCTAssertEqual(result["metadata"]["pages_without_embedded_text"], .array([.number(1)]))
+                XCTAssertEqual(result["metadata"]["embedded_text_page_count"], .number(0))
             }
+            try assertRenderedInk(assertFrame(result))
+        }
+    }
+    @MainActor func testPDFContactSheetMapsEveryEmbeddedPageInRowMajorOrder() async throws {
+        let payload = try NativeMediaFixtures.pdf(["PAGE ONE", "PAGE TWO", "PAGE THREE"])
+        let result = try await executor(payload).execute("media.inspect", arguments: NativeMediaFixtures.args(payload))
+        XCTAssertEqual(result["segments"].array?.map { $0["locator"] }, [
+            .string("page:1"), .string("page:2"), .string("page:3")])
+        for (index, segment) in (result["segments"].array ?? []).enumerated() {
+            XCTAssertTrue(segment["text"].string?.contains(["ONE", "TWO", "THREE"][index]) == true)
+        }
+        XCTAssertEqual(result["truncated"], .bool(false))
+        try assertVisual(result, locators: ["page:1", "page:2", "page:3"], columns: 2,
+                         localTextExtraction: "pdf_embedded_text")
+        try assertRenderedInk(assertFrame(result))
+    }
+    @MainActor func testExtractionPolicyIsRequiredBeforeAuthorityOrLoading() async throws {
+        let payload = Data("{\\rtf1 POLICY}".utf8), host = NativeMediaExecutor()
+        var checks = 0, loads = 0
+        host.beforeEffect = { _ in checks += 1 }
+        host.loadPayload = { _ in loads += 1; return payload }
+        let policies: [RPCValue?] = [nil, .string("legacy_ocr"), .bool(true)]
+        for policy in policies {
+            var args = NativeMediaFixtures.args(payload, kind: "document", mime: "application/rtf", name: "policy.rtf")
+            args["extraction_policy"] = policy
+            let error = await issue { try await host.execute("media.inspect", arguments: args) }
+            XCTAssertEqual(error, .invalidArguments)
+        }
+        XCTAssertEqual(checks, 0); XCTAssertEqual(loads, 0)
+    }
+    @MainActor func testDecodedJPEGContactSheetColorsMatchTopLeftRowMajorCitations() async throws {
+        let colors = [CGColor(red: 1, green: 0, blue: 0, alpha: 1),
+                      CGColor(red: 0, green: 1, blue: 0, alpha: 1),
+                      CGColor(red: 0, green: 0, blue: 1, alpha: 1),
+                      CGColor(red: 1, green: 1, blue: 0, alpha: 1)]
+        let payload = try NativeMediaFixtures.colorPDF(colors)
+        let result = try await executor(payload).execute("media.inspect", arguments: NativeMediaFixtures.args(payload))
+        try assertVisual(result, locators: ["page:1", "page:2", "page:3", "page:4"], columns: 2,
+                         localTextExtraction: "pdf_embedded_text")
+        XCTAssertTrue(result["segments"].array?.allSatisfy { $0["text"] == .string("") } == true)
+        let picture = try assertFrame(result)
+        let rgba = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+        let raster = try XCTUnwrap(CGContext(data: nil, width: 100, height: 100, bitsPerComponent: 8,
+            bytesPerRow: 400, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: rgba))
+        raster.draw(picture, in: CGRect(x: 0, y: 0, width: 100, height: 100))
+        let pixels = try XCTUnwrap(raster.data?.assumingMemoryBound(to: UInt8.self))
+        let expected = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0]]
+        // Read JPEG scanlines from the top-left, independently of the sheet's
+        // drawing coordinates. A vertical swap must invalidate the cited regions.
+        for (index, color) in expected.enumerated() {
+            let x = index % 2 * 50 + 25, y = index / 2 * 50 + 25
+            let offset = y * raster.bytesPerRow + x * 4
+            for channel in 0..<3 {
+                XCTAssertEqual(Double(pixels[offset + channel]), Double(color[channel]), accuracy: 35)
+            }
+        }
+    }
+    func testRequiredVisualFrameCannotBeDroppedToFitTheEnvelope() throws {
+        let payload = try NativeMediaFixtures.pdf(["FRAME REQUIRED"])
+        let request = try NativeMediaRequest(NativeMediaFixtures.args(payload))
+        var observation = try NativeMediaDecoder.pdf(request, data: payload,
+                                                     cancellation: NativeMediaCancellation(seconds: 10))
+        let complete = try observation.value(request)
+        let encoded = try JSONEncoder().encode(complete).count
+        XCTAssertLessThan(encoded, 131072)
+        guard encoded < 131072 else { return }
+        // The text/metadata still fit alone. Adding a required frame exceeds
+        // the envelope, so silently removing that evidence would be a false success.
+        observation.metadata["padding"] = .string(String(repeating: "x", count: 131072 - encoded))
+        XCTAssertThrowsError(try observation.value(request)) {
+            XCTAssertEqual($0 as? NativeMediaIssue, .limit)
+        }
+        observation.metadata.removeValue(forKey: "padding"); observation.frame = nil
+        XCTAssertThrowsError(try observation.value(request)) {
+            XCTAssertEqual($0 as? NativeMediaIssue, .limit)
         }
     }
     @MainActor func testEncryptedOrTooManyPDFPagesAreRejectedRatherThanMisreportedComplete() async throws {
@@ -130,6 +216,10 @@ final class NativeMediaExecutorTests: XCTestCase {
         let result = try await host.execute("media.inspect", arguments: NativeMediaFixtures.args(plain, kind: "document", mime: "application/rtf", name: "prueba.rtf"))
         XCTAssertEqual(result["segments"].array?.first?["text"], .string("PRUEBA RTF 6421"))
         XCTAssertEqual(result["frame"], .null)
+        XCTAssertEqual(result["metadata"]["extraction_policy"], .string("embedded_text_and_visual_v1"))
+        XCTAssertEqual(result["metadata"]["ocr_performed"], .bool(false))
+        XCTAssertEqual(result["metadata"]["visual_required"], .bool(false))
+        XCTAssertEqual(result["metadata"]["local_text_extraction"], .string("rtf_plain_text"))
         for control in ["\\field", "\\object", "\\pict", "\\filetbl", "\\bin"] {
             let payload = Data(("{\\rtf1\\ansi " + control + " PRIVATE EXTERNAL CONTENT}").utf8)
             let denied = executor(payload)
@@ -175,6 +265,10 @@ final class NativeMediaExecutorTests: XCTestCase {
         XCTAssertEqual(transcriptions, 1); XCTAssertEqual(transcript["segments"].array?.first?["text"], .string("PRUEBA AUDIO LOCAL"))
         XCTAssertEqual(transcript["segments"].array?.first?["locator"], .string("time:0-1.000"))
         XCTAssertEqual(transcript["metadata"]["transcript_source_sha256"].string, NativeMediaFixtures.digest(payload))
+        XCTAssertEqual(transcript["metadata"]["extraction_policy"], .string("embedded_text_and_visual_v1"))
+        XCTAssertEqual(transcript["metadata"]["ocr_performed"], .bool(false))
+        XCTAssertEqual(transcript["metadata"]["visual_required"], .bool(false))
+        XCTAssertEqual(transcript["metadata"]["local_text_extraction"], .string("local_transcript"))
     }
     @MainActor func testVideoIsSampledLocallyAndCannotClaimFullObservation() async throws {
         let payload = try await NativeMediaFixtures.video(), host = executor(payload)
@@ -189,8 +283,39 @@ final class NativeMediaExecutorTests: XCTestCase {
         XCTAssertEqual(Set(times).count, 3, "Tres objetivos no pueden observar sólo el keyframe inicial")
         XCTAssertGreaterThan(times[1], 0.3); XCTAssertGreaterThan(times[2], 0.9)
         XCTAssertEqual(result["metadata"]["generator_tolerance_seconds"], .number(0))
-        for segment in result["segments"].array ?? [] { XCTAssertTrue(segment["locator"].string?.hasPrefix("frame:") == true) }
+        let segments = try XCTUnwrap(result["segments"].array)
+        for segment in segments {
+            XCTAssertTrue(segment["locator"].string?.hasPrefix("frame:") == true)
+            XCTAssertEqual(segment["text"], .string(""))
+        }
+        let locators = try segments.map { try XCTUnwrap($0["locator"].string) }
+        try assertVisual(result, locators: locators, columns: 3, localTextExtraction: "none")
         try assertFrame(result)
+    }
+    @MainActor func testVideoTranscriptionDoesNotPrepareVisualFramesOrRecognizeText() async throws {
+        let payload = try await NativeMediaFixtures.video(), host = executor(payload)
+        var transcriptions = 0
+        host.transcribe = { data, name, mime, digest, locale in
+            transcriptions += 1
+            XCTAssertEqual(data, payload); XCTAssertEqual(name, "prueba.mp4"); XCTAssertEqual(mime, "video/mp4")
+            return try LocalAudioTranscript(text: "TRANSCRIPCIÓN SINTÉTICA", localeIdentifier: locale,
+                                            durationSeconds: 1.5, sourceSHA256: digest)
+        }
+        let result = try await host.execute("media.inspect", arguments: NativeMediaFixtures.args(payload,
+            kind: "video", mime: "video/mp4", name: "prueba.mp4", action: "transcribe"))
+        XCTAssertEqual(transcriptions, 1)
+        XCTAssertEqual(result["segments"], .array([
+            .object(["locator": .string("time:0-1.500"), "text": .string("TRANSCRIPCIÓN SINTÉTICA")])]))
+        XCTAssertEqual(result["frame"], .null)
+        XCTAssertEqual(result["metadata"]["extraction_policy"], .string("embedded_text_and_visual_v1"))
+        XCTAssertEqual(result["metadata"]["ocr_performed"], .bool(false))
+        XCTAssertEqual(result["metadata"]["visual_required"], .bool(false))
+        XCTAssertEqual(result["metadata"]["visual_analysis"], .string("none"))
+        XCTAssertEqual(result["metadata"]["visual_locators"], .array([]))
+        XCTAssertEqual(result["metadata"]["local_text_extraction"], .string("local_transcript"))
+        XCTAssertEqual(result["metadata"]["sampled_times"], .null)
+        XCTAssertEqual(result["metadata"]["visual_regions"], .null)
+        XCTAssertEqual(result["metadata"]["dimensions"], .null)
     }
     func testDistantKeyframeCannotMasqueradeAsMiddleOrEndObservation() throws {
         XCTAssertNoThrow(try NativeMediaDecoder.checkedSampleTime(0, requested: 0, duration: 2, framePeriod: 0.5))
@@ -246,7 +371,7 @@ final class NativeMediaExecutorTests: XCTestCase {
         held?.resume(returning: payload); held = nil
         let error = await running.value; XCTAssertEqual(error, .deadline)
     }
-    func testReplacingOCRSegmentsResetsTextBudgetAndUTF8ClippingIsExplicit() throws {
+    func testReplacingSegmentsResetsTextBudgetAndUTF8ClippingIsExplicit() throws {
         var observation = NativeMediaObservation()
         try observation.add("image:1", String(repeating: "Ω", count: 30000))
         XCTAssertTrue(observation.truncated)

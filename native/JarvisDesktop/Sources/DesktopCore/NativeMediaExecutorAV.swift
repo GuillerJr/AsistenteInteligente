@@ -32,7 +32,10 @@ extension NativeMediaDecoder {
                            "video_track_count": .number(Double(videoTracks.count)),
                            "external_references_opened": .bool(false),
                            "transcription_requested": .bool(request.action == "transcribe")]
-        guard request.kind == "video", let track = videoTracks.first else { return result }
+        // Transcription only needs the bounded container/audio metadata above.
+        // It must not depend on video rendering or local visual recognition.
+        guard request.kind == "video", request.action == "extract",
+              let track = videoTracks.first else { return result }
         let size: CGSize, transform: CGAffineTransform
         let minimumPeriod: Double, nominalRate: Double
         do {
@@ -75,9 +78,8 @@ extension NativeMediaDecoder {
                 throw error
             }
             try cancellation.check()
-            let text = try recognize(sample.image, locale: request.locale, cancellation: cancellation)
             let locator = "frame:\(index + 1)@" + String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), actual)
-            try result.add(locator, text)
+            try result.add(locator, "")
             pictures.append(sample.image); actualTimes.append(.number(actual))
         }
         result.metadata["dimensions"] = .object(["width": .number(width.rounded()), "height": .number(height.rounded())])
@@ -86,7 +88,7 @@ extension NativeMediaDecoder {
         result.metadata["frame_period_seconds"] = .number(framePeriod)
         result.metadata["generator_tolerance_seconds"] = .number(0)
         result.metadata["sampling"] = .string("start_middle_end_nearest_frame")
-        result.metadata["ocr_on_device"] = .bool(true)
+        try result.requireVisual(columns: 3, localTextExtraction: "none")
         result.truncated = true // Three samples never assert observation of an entire video.
         result.frame = try frame(contactSheet(pictures, columns: 3), cancellation: cancellation)
         return result

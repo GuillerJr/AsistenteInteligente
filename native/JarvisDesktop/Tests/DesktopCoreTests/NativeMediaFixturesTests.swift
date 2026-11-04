@@ -23,6 +23,7 @@ enum NativeMediaFixtures {
          "attachment_sha256": .string(digest(data)), "source_sha256": .string(digest(data)),
          "payload_sha256": .string(digest(data)), "byte_length": .number(Double(data.count)),
          "name": .string(name), "mime": .string(mime), "kind": .string(kind), "action": .string(action),
+         "extraction_policy": .string("embedded_text_and_visual_v1"),
          "page_start": .number(Double(start)), "page_count": .number(Double(count)), "locale": .string(locale)]
     }
     static func picture(_ marker: String) throws -> CGImage {
@@ -59,6 +60,17 @@ enum NativeMediaFixtures {
             context.beginPDFPage(nil)
             if scanned { context.draw(try picture(marker), in: box) }
             else { draw(marker, in: context, position: CGPoint(x: 20, y: 140)) }
+            context.endPDFPage()
+        }
+        context.closePDF(); return data as Data
+    }
+    static func colorPDF(_ colors: [CGColor]) throws -> Data {
+        let data = NSMutableData(), consumer = try XCTUnwrap(CGDataConsumer(data: data as CFMutableData))
+        var box = CGRect(x: 0, y: 0, width: 300, height: 300)
+        let context = try XCTUnwrap(CGContext(consumer: consumer, mediaBox: &box, nil))
+        for color in colors {
+            context.beginPDFPage(nil)
+            context.setFillColor(color); context.fill(box)
             context.endPDFPage()
         }
         context.closePDF(); return data as Data

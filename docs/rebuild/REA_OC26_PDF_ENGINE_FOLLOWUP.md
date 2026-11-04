@@ -69,10 +69,11 @@ no acredita por sí sola consumo por el modelo.
 Por tanto, la capacidad PDF/imagen de OpenClaw existe, pero no demuestra que
 su camino ejecute ni resuelva la llamada Apple que falla aquí. La separación
 entre extracción local, OCR local y análisis visual es una mejora de diseño
-fundada en la referencia. **Todavía no se ha implementado** esa separación:
-deberá conservar resultados y errores separados, límites, citas, permisos y
-cancelación; no convertir un fallo OCR en texto verificado ni activar otro
-proveedor o transmitir imágenes sin la autorización correspondiente.
+fundada en la referencia. El dueño eligió después adoptar ese reparto. La
+[implementación propia](PHASE_A_MEDIA_VISUAL.md) retira el OCR de la ruta
+principal, conserva texto embebido y previsualizaciones aprobadas y separa la
+interpretación del modelo. Su cualificación se registra aparte; esta lectura
+estática no la acredita.
 
 Las 26 pruebas de medios pasaron en el Mac físico 27.2 sin el aislamiento
 Seatbelt agregado. Con las mismas fuentes, el control Seatbelt falló ocho

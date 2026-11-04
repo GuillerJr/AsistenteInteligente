@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import hashlib
+import os
 import shutil
 import sys
 import tempfile
@@ -22,7 +23,11 @@ from jarvis_core.state import SessionRef
 
 @pytest.fixture
 async def media_service():
-    parent = "/private/tmp" if sys.platform == "darwin" else tempfile.gettempdir()
+    # Keep Darwin's socket path short without escaping the supervised APFS
+    # temporary directory. CI's unconfined temporary root remains unchanged.
+    supervised = os.environ.get("JARVIS_TEST_GUARD_PROFILE") == "local"
+    parent = (tempfile.gettempdir() if supervised or sys.platform != "darwin"
+              else "/private/tmp")
     root = Path(tempfile.mkdtemp(prefix="jr-media-", dir=parent)).resolve()
     peer = TelegramPeer()
     service = JarvisService(root / "profile", peer)

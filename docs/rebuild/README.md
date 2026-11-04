@@ -4,8 +4,11 @@ El [seguimiento del motor PDF de OpenClaw](REA_OC26_PDF_ENGINE_FOLLOWUP.md)
 completa con REA la parte del plugin extractor que faltaba en OC-26: el código
 extrae texto y renderiza páginas para un modelo con visión; no ejecuta el OCR
 Apple de Jarvis en ese recorrido. En Jarvis el fallo OCR bloquea también la
-imagen aprobada. La separación de esas capacidades sigue por implementar;
-no se presenta el análisis estático como una corrección ni como paridad completa.
+imagen aprobada en el contrato anterior. Por decisión posterior del dueño,
+la [ruta nueva](PHASE_A_MEDIA_VISUAL.md) ya separa texto embebido y vistas
+aprobadas sin OCR Apple. Pasaron 78 casos focales; faltan su CI completa y
+su comprobación con Codex real. No se presenta esta implementación como
+paridad completa de fase A.
 
 Seguimiento del 4 de noviembre: la [CI completa de `46c10a1`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41890910372)
 terminó **fallida**, con Swift como único paso fallido. Ubuntu aprobó 4062

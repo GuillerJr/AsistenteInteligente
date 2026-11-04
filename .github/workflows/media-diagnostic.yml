@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
   media:
-    name: OCR y vídeo reales, diagnóstico focal
+    name: Texto PDF e imágenes y vídeo reales, diagnóstico focal
     runs-on: ${{ inputs.runner == 'macos-26' && 'macos-26' || 'xcode-27' }}
     timeout-minutes: 15
     steps:

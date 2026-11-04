@@ -162,7 +162,7 @@ final class AccessStore {
             detail += caption.isEmpty ? "\nTexto adjunto: sin texto." : "\nTexto adjunto literal: «\(caption)»"
             detail += "\nDestino fijado: Telegram \(kind), chat \(chat), tema \(thread), respuesta al mensaje \(message).\nSe enviarán los bytes de este archivo; una respuesta de Telegram no acredita su lectura por el destinatario."
         } else {
-            detail += "\nAnálisis local; el texto extraído y la observación visual podrán enviarse a Codex. No ejecuta macros o enlaces y no verifica la veracidad del contenido."
+            detail += "\nJarvis prepara el archivo en este Mac. El texto embebido y las vistas de páginas, imágenes o fotogramas podrán enviarse a Codex para su interpretación. No usa OCR local ni envía audio para transcribir. No ejecuta macros o enlaces ni verifica la veracidad del contenido."
         }
         return detail
     }

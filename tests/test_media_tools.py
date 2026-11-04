@@ -15,7 +15,7 @@ from test_service_media import media_service as media_service
 from test_service_telegram import approval
 
 from jarvis_core.client_identity import ClientIdentity
-from jarvis_core.media_documents import extract_document
+from jarvis_core.media_documents import VISUAL_EXTRACTION_POLICY, extract_document
 from jarvis_core.protocol import LocalRpcClient, RpcError
 from jarvis_core.tools import ToolError
 
@@ -143,8 +143,14 @@ def native_result(work, **extra):
         "effect_status": "known",
         "source_sha256": work["arguments"]["source_sha256"],
         "kind": work["arguments"]["kind"],
-        "segments": [{"locator": "image:1", "text": "OBSERVACION SINTETICA 6492"}],
-        "metadata": {"width": 1, "height": 1},
+        "segments": [{"locator": "image:1", "text": ""}],
+        "metadata": {"width": 1, "height": 1, "extraction_policy": VISUAL_EXTRACTION_POLICY,
+                     "ocr_performed": False, "visual_required": True,
+                     "visual_analysis": "model_required", "visual_locators": ["image:1"],
+                     "visual_layout": "row_major_top_left", "visual_columns": 1, "visual_rows": 1,
+                     "local_text_extraction": "none",
+                     "visual_regions": [{"locator": "image:1", "row": 0, "column": 0,
+                                         "x": 0, "y": 0, "width": 1, "height": 1}]},
         "truncated": False,
         "on_device": True,
         **extra,
@@ -199,7 +205,7 @@ async def test_signed_native_chunks_bind_host_operation_nonce_hash_and_keep_fram
     with pytest.raises(RpcError):
         await client.call("media.worker.read", {**read, "offset": len(source)})
     # Synthetic worker pixels test the host envelope. They do not qualify an
-    # actual Vision/PDF decoder or claim the model observed a real desktop.
+    # actual image/PDF decoder or claim the model observed a real desktop.
     frame = b"\xff\xd8\xffSYNTHETIC_EPHEMERAL_FRAME_6492\xff\xd9"
     image = "data:image/jpeg;base64," + base64.b64encode(frame).decode()
     result = native_result(
@@ -225,6 +231,98 @@ async def test_signed_native_chunks_bind_host_operation_nonce_hash_and_keep_fram
     )
     with pytest.raises(RpcError):
         await client.call("media.worker.read", read)
+    await client.call("automation.detach", {"host_id": host, "cleanup_confirmed": True})
+
+
+@pytest.mark.parametrize("failure", [
+    "missing_frame", "legacy_ocr", "invented_text", "wrong_policy",
+])
+async def test_visual_extraction_rejects_missing_pixels_or_a_legacy_ocr_worker(
+    media_service, failure,
+):
+    service, client, peer, _root = media_service
+    ref = await session(client)
+    row = await imported(client, ref, synthetic_png(), "imagen.png")
+    host, run, work = await inspected_work(client, peer, ref, row)
+    assert work["arguments"]["extraction_policy"] == VISUAL_EXTRACTION_POLICY
+    request = native_request(host, work)
+    await client.call("automation.claim", request)
+    reply = native_result(work)
+    if failure == "legacy_ocr":
+        reply["metadata"] = {"ocr_on_device": True}
+    elif failure == "invented_text":
+        reply["segments"][0]["text"] = "TEXTO OCR QUE ESTE CONTRATO NO PRODUCE"
+    elif failure == "wrong_policy":
+        reply["metadata"]["extraction_policy"] = "other_policy"
+    await client.call("automation.complete", {**request, "result": reply})
+    result = await settled(client, ref, run["run_id"])
+    receipt = result["action_receipts"][0]
+    assert not receipt["succeeded"] and receipt["effect_status"] == "known"
+    assert receipt["error"] == (
+        "media_frame_required" if failure == "missing_frame" else "media_native_result_invalid"
+    )
+    assert not service.media_tools.frames and not service._media_native_payloads
+    assert all(item["type"] != "inputImage" for item in peer.replies[0]["contentItems"])
+    await client.call("automation.detach", {"host_id": host, "cleanup_confirmed": True})
+
+
+@pytest.mark.parametrize("failure", ["base64", "digest", "oversize"])
+async def test_required_visual_frame_fails_known_without_handoff_on_invalid_bytes(
+    media_service, failure,
+):
+    service, client, peer, _root = media_service
+    ref = await session(client)
+    row = await imported(client, ref, synthetic_png(), "imagen.png")
+    host, run, work = await inspected_work(client, peer, ref, row)
+    request = native_request(host, work)
+    await client.call("automation.claim", request)
+    pixels = b"\xff\xd8\xffSYNTHETIC\xff\xd9"
+    encoded = base64.b64encode(pixels).decode()
+    if failure == "base64":
+        encoded = "not valid base64!"
+    elif failure == "oversize":
+        encoded = "A" * 65540
+    frame = {"data_url": "data:image/jpeg;base64," + encoded, "storage": "memory_only",
+             "sha256": "0" * 64 if failure == "digest" else hashlib.sha256(pixels).hexdigest(),
+             "bytes": len(pixels)}
+    await client.call("automation.complete", {
+        **request, "result": native_result(work, frame=frame),
+    })
+    result = await settled(client, ref, run["run_id"])
+    action = result["action_receipts"][0]
+    assert not action["succeeded"] and action["error"] == "media_frame_invalid"
+    assert action["effect_status"] == "known"
+    assert not service.media_tools.frames and not service._media_native_payloads
+    assert all(item["type"] != "inputImage" for item in peer.replies[0]["contentItems"])
+    await client.call("automation.detach", {"host_id": host, "cleanup_confirmed": True})
+
+
+async def test_cancelled_visual_tool_cannot_release_a_late_worker_preview(media_service):
+    service, client, peer, _root = media_service
+    ref = await session(client)
+    row = await imported(client, ref, synthetic_png(), "imagen.png")
+    host, run, work = await inspected_work(client, peer, ref, row)
+    request = native_request(host, work)
+    await client.call("automation.claim", request)
+    assert (await client.call("runs.cancel", {**ref, "run_id": run["run_id"]}))["accepted"]
+    async with asyncio.timeout(4):
+        while True:
+            poll = await client.call("automation.poll", {"host_id": host})
+            if work["operation_id"] in poll["cancelled"]:
+                break
+            await asyncio.sleep(0.002)
+    pixels = b"\xff\xd8\xffLATE_SYNTHETIC_PREVIEW\xff\xd9"
+    frame = {"data_url": "data:image/jpeg;base64," + base64.b64encode(pixels).decode(),
+             "storage": "memory_only", "sha256": hashlib.sha256(pixels).hexdigest(),
+             "bytes": len(pixels)}
+    await client.call("automation.complete", {
+        **request, "result": native_result(work, frame=frame),
+    })
+    result = await settled(client, ref, run["run_id"])
+    assert result["status"] == "cancelled"
+    assert not service.media_tools.frames and not service._media_native_payloads
+    assert all(item["type"] != "inputImage"
+               for reply in peer.replies for item in reply["contentItems"])
     await client.call("automation.detach", {"host_id": host, "cleanup_confirmed": True})
 
 

@@ -278,7 +278,14 @@ def native_reply(document, **changes):
         "source_sha256": document.sha256,
         "kind": document.media_type.kind,
         "segments": [{"locator": "page:1", "text": "MARCADOR PDF OBSERVADO 6241"}],
-        "metadata": {"page_count": 1},
+        "metadata": {"page_count": 1, "extraction_policy": "embedded_text_and_visual_v1",
+                     "ocr_performed": False, "visual_required": True,
+                     "visual_analysis": "model_required", "visual_locators": ["page:1"],
+                     "processed_pages": [1], "visual_layout": "row_major_top_left",
+                     "visual_columns": 1, "visual_rows": 1,
+                     "local_text_extraction": "pdf_embedded_text",
+                     "visual_regions": [{"locator": "page:1", "row": 0, "column": 0,
+                                         "x": 0, "y": 0, "width": 1, "height": 1}]},
         "truncated": False,
         "on_device": True,
         **changes,
@@ -296,6 +303,48 @@ def test_signed_native_result_is_bound_to_source_but_content_truth_remains_exter
     assert completed.public()["native_operations"] == []
     with pytest.raises(MediaError, match="media_native_result_invalid"):
         complete_native_document(completed, native_reply(document))
+
+
+def test_scanned_pdf_keeps_empty_local_text_and_requires_model_interpretation():
+    document = extract_document(b"%PDF-1.7\nfixture", "scan.pdf")
+    observed = complete_native_document(document, native_reply(
+        document, segments=[{"locator": "page:1", "text": ""}],
+    ))
+    assert observed.segments[0].text == ""
+    assert observed.metadata["visual_interpretation_required"] is True
+    assert observed.metadata["native_metadata"]["ocr_performed"] is False
+    assert observed.public()["content_truth_verified"] is False
+    assert "No se realizó OCR local" in observed.as_model_text()
+
+
+@pytest.mark.parametrize("field,value", [
+    ("extraction_policy", "legacy_ocr"), ("ocr_performed", True), ("ocr_performed", 0),
+    ("visual_required", False), ("visual_required", 1), ("visual_analysis", "locally_verified"),
+    ("visual_locators", ["page:2"]), ("visual_columns", True), ("visual_rows", 2),
+    ("visual_layout", "unknown"), ("local_text_extraction", "ocr"),
+    ("processed_pages", [True]), ("processed_pages", [2]), ("page_count", True),
+    ("visual_regions", [{"locator": "page:1", "row": 0, "column": 0,
+                         "x": 0.5, "y": 0, "width": 1, "height": 1}]),
+])
+def test_visual_metadata_cannot_claim_ocr_or_misidentify_its_page_region(field, value):
+    document = extract_document(b"%PDF-1.7\nfixture", "nota.pdf")
+    reply = native_reply(document)
+    reply["metadata"][field] = value
+    with pytest.raises(MediaError, match="media_native_result_invalid"):
+        complete_native_document(document, reply)
+
+
+def test_native_pdf_citations_must_match_the_requested_page_interval():
+    document = extract_document(b"%PDF-1.7\nfixture", "nota.pdf")
+    reply = native_reply(document)
+    reply["metadata"].update({"page_count": 3, "processed_pages": [2],
+        "visual_locators": ["page:2"], "visual_regions": [{"locator": "page:2", "row": 0,
+            "column": 0, "x": 0, "y": 0, "width": 1, "height": 1}]})
+    reply["segments"] = [{"locator": "page:2", "text": "SOLO SEGUNDA PAGINA"}]
+    observed = complete_native_document(document, reply, page_start=2, page_count=1)
+    assert observed.segments[0].text == "SOLO SEGUNDA PAGINA"
+    with pytest.raises(MediaError, match="media_native_result_invalid"):
+        complete_native_document(document, reply, page_start=1, page_count=1)
 
 
 @pytest.mark.parametrize(

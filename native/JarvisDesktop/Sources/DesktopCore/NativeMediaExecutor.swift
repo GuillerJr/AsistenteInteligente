@@ -37,6 +37,7 @@ public enum NativeMediaIssue: String, Error, LocalizedError, Sendable {
 }
 
 struct NativeMediaRequest: Sendable {
+    static let extractionPolicy = "embedded_text_and_visual_v1"
     let operationID: String
     let attachmentID: String
     let attachmentSHA256: String
@@ -49,12 +50,14 @@ struct NativeMediaRequest: Sendable {
     let pageStart: Int
     let pageCount: Int
     let locale: String
+    var requiresVisual: Bool { action == "extract" && ["image", "pdf", "video"].contains(kind) }
 
     init(_ arguments: [String: RPCValue]) throws {
         let keys: Set<String> = ["operation_id", "attachment_id", "attachment_sha256", "source_sha256",
                                  "payload_sha256", "byte_length", "name", "mime", "kind", "action",
-                                 "page_start", "page_count", "locale"]
+                                 "page_start", "page_count", "locale", "extraction_policy"]
         guard Set(arguments.keys) == keys,
+              arguments["extraction_policy"]?.string == Self.extractionPolicy,
               let operation = arguments["operation_id"]?.string, ManagementValidation.identifier(operation),
               let attachment = arguments["attachment_id"]?.string, ManagementValidation.identifier(attachment),
               let attachmentDigest = arguments["attachment_sha256"]?.string, ManagementValidation.hash(attachmentDigest),
@@ -147,7 +150,44 @@ struct NativeMediaObservation: Sendable {
         textBytes += text.utf8.count; segments.append((locator, text))
     }
 
+    mutating func requireVisual(columns: Int, localTextExtraction: String) throws {
+        guard !segments.isEmpty, segments.count <= 8, (1...3).contains(columns),
+              Set(segments.map(\.locator)).count == segments.count else { throw NativeMediaIssue.limit }
+        let rows = (segments.count + columns - 1) / columns
+        let regions: [RPCValue] = segments.enumerated().map { index, segment in
+            let row = index / columns, column = index % columns
+            return .object(["locator": .string(segment.locator),
+                "row": .number(Double(row)), "column": .number(Double(column)),
+                "x": .number(Double(column) / Double(columns)), "y": .number(Double(row) / Double(rows)),
+                "width": .number(1 / Double(columns)), "height": .number(1 / Double(rows))])
+        }
+        metadata["extraction_policy"] = .string(NativeMediaRequest.extractionPolicy)
+        metadata["local_text_extraction"] = .string(localTextExtraction)
+        metadata["ocr_performed"] = .bool(false)
+        metadata["visual_required"] = .bool(true)
+        metadata["visual_analysis"] = .string("model_required")
+        metadata["visual_locators"] = .array(segments.map { .string($0.locator) })
+        metadata["visual_layout"] = .string("row_major_top_left")
+        metadata["visual_columns"] = .number(Double(columns))
+        metadata["visual_rows"] = .number(Double(rows))
+        metadata["visual_regions"] = .array(regions)
+    }
+
     func value(_ request: NativeMediaRequest) throws -> RPCValue {
+        guard metadata["extraction_policy"] == .string(NativeMediaRequest.extractionPolicy),
+              metadata["ocr_performed"] == .bool(false),
+              metadata["visual_required"] == .bool(request.requiresVisual) else {
+            throw NativeMediaIssue.decoderFailed
+        }
+        if request.requiresVisual {
+            guard metadata["visual_analysis"] == .string("model_required"),
+                  metadata["visual_locators"] == .array(segments.map { .string($0.locator) }),
+                  !segments.isEmpty, Set(segments.map(\.locator)).count == segments.count,
+                  request.kind == "pdf" || segments.allSatisfy({ $0.text.isEmpty }) else {
+                throw NativeMediaIssue.decoderFailed
+            }
+            guard let frame, case .object = frame else { throw NativeMediaIssue.limit }
+        }
         var result: [String: RPCValue] = [
             "schema": .string("jarvis.media.v1"), "succeeded": .bool(true), "verified": .bool(true),
             "effect_status": .string("known"), "source_sha256": .string(request.sourceSHA256),
@@ -157,8 +197,9 @@ struct NativeMediaObservation: Sendable {
         ]
         if let frame { result["frame"] = frame }
         if try JSONEncoder().encode(RPCValue.object(result)).count > 131072 {
-            // A RAM-only preview is optional. Keep the cited text within the
-            // signed broker envelope rather than losing its cleanup receipt.
+            // Visual extraction is incomplete without its RAM-only evidence.
+            // Never turn an oversized required frame into a text-only success.
+            guard !request.requiresVisual else { throw NativeMediaIssue.limit }
             result.removeValue(forKey: "frame")
         }
         guard try JSONEncoder().encode(RPCValue.object(result)).count <= 131072 else {
@@ -301,6 +342,7 @@ public final class NativeMediaExecutor {
             observation.metadata["duration_seconds"] = .number(transcript.durationSeconds)
             observation.metadata["locale"] = .string(transcript.localeIdentifier)
             observation.metadata["transcript_source_sha256"] = .string(transcript.sourceSHA256)
+            observation.metadata["local_text_extraction"] = .string("local_transcript")
         }
         try await checked(request, flag: flag, version: version)
         return try observation.value(request)
