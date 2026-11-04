@@ -1,0 +1,1056 @@
+{
+  "schema": "jarvis.product-background-native-diagnostic-snapshot/1",
+  "case": "H",
+  "status": "diagnostic_executed_partial_observations_normal_close_NOT_qualified",
+  "diagnostic_only": true,
+  "qualified": false,
+  "full_remote_ci_passed": false,
+  "phase_a_complete": false,
+  "phase_b_started": false,
+  "full_increment_qualification_claimed": false,
+  "G_executed": false,
+  "G_template_changed_by_this_export": false,
+  "source": {
+    "product_source_commit": "d089d16550d8c2fa56cd2d5ce20726bd3bdff0bf",
+    "CI_run_id": 41883935412,
+    "CI_run_attempt": 1,
+    "artifact_id": 13351795751,
+    "artifact_zip_sha256": "6e59afc1ad9eb2b75b8f6ec57e8b4b2132753703d20fbeba894d8a0e839bf67c",
+    "native_CI_app_byte_identical": true,
+    "local_app_resigned": false,
+    "local_builds_run": false,
+    "self_contained": false,
+    "external_Python_required": true,
+    "local_dependencies_complete": false,
+    "missing_declared_dependency": "soundfile",
+    "audio_media_requalification_claimed": false,
+    "owner_installed_app_modified": false,
+    "full_ci_passed": false,
+    "qualified": false,
+    "diagnostic_only": true,
+    "current_tree_observation": {
+      "head": "46c10a1da8ea0c8bd2ead495c3a4c507fcf183de",
+      "covers_entire_worktree": false,
+      "WIP_executed_as_product": false,
+      "runtime_source_from_immutable_Git": true,
+      "qualified": false
+    }
+  },
+  "approval_scope": "Separately reviewed synthetic H diagnostic despite the known failed media CI; this is not admission or execution of G.",
+  "read_only_probe_before": {
+    "status": "passed_selected_conditions",
+    "mode": "before",
+    "observed_at_unix": 1793818509.316997,
+    "elapsed_seconds": 1.824,
+    "received_bytes": 4609,
+    "conditions": {
+      "b_empty": true,
+      "a_exact_preferences": true,
+      "a_no_interactions": true,
+      "b_exact_preferences": true,
+      "b_no_interactions": true,
+      "a_empty": true
+    },
+    "mutations_sent": false,
+    "provider_auth_read": false,
+    "model_or_answer_values_emitted": false,
+    "ui_selection_proven_by_RPC": false,
+    "full_qualification": false,
+    "permits_effect_replay": false,
+    "diagnostic_only": true,
+    "qualified": false,
+    "full_ci_passed": false,
+    "session_a": "a9d9c9da3aaa437993997e325fdc927d",
+    "session_b": "40b68a023899441584d101dea077bdc2",
+    "inventory": [
+      {
+        "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+        "message_count": 0
+      },
+      {
+        "session_id": "40b68a023899441584d101dea077bdc2",
+        "message_count": 0
+      }
+    ],
+    "snapshots": {
+      "a": {
+        "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+        "preferences": {
+          "revision": 2,
+          "enabled": true,
+          "silenced": true
+        },
+        "interaction_count": 0
+      },
+      "b": {
+        "session_id": "40b68a023899441584d101dea077bdc2",
+        "preferences": {
+          "revision": 0,
+          "enabled": false,
+          "silenced": false
+        },
+        "interaction_count": 0
+      }
+    }
+  },
+  "read_only_probe_after": {
+    "status": "passed_selected_conditions",
+    "mode": "after",
+    "observed_at_unix": 1793818701.632798,
+    "elapsed_seconds": 2.061,
+    "received_bytes": 15483,
+    "conditions": {
+      "b_empty": true,
+      "a_exact_preferences": true,
+      "a_no_interactions": true,
+      "b_exact_preferences": true,
+      "b_no_interactions": true,
+      "no_tool_calls": true,
+      "one_A_run": true,
+      "A_completed_known_clean": true,
+      "A_two_own_messages": true
+    },
+    "mutations_sent": false,
+    "provider_auth_read": false,
+    "model_or_answer_values_emitted": false,
+    "ui_selection_proven_by_RPC": false,
+    "full_qualification": false,
+    "permits_effect_replay": false,
+    "diagnostic_only": true,
+    "qualified": false,
+    "full_ci_passed": false,
+    "session_a": "a9d9c9da3aaa437993997e325fdc927d",
+    "session_b": "40b68a023899441584d101dea077bdc2",
+    "inventory": [
+      {
+        "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+        "message_count": 2
+      },
+      {
+        "session_id": "40b68a023899441584d101dea077bdc2",
+        "message_count": 0
+      }
+    ],
+    "snapshots": {
+      "a": {
+        "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+        "preferences": {
+          "revision": 2,
+          "enabled": true,
+          "silenced": true
+        },
+        "interaction_count": 0
+      },
+      "b": {
+        "session_id": "40b68a023899441584d101dea077bdc2",
+        "preferences": {
+          "revision": 0,
+          "enabled": false,
+          "silenced": false
+        },
+        "interaction_count": 0
+      }
+    },
+    "run": {
+      "run_id": "5b7d46097a534971a103486ba2e06594",
+      "status": "completed",
+      "outcome": "known",
+      "cleanup_confirmed": true,
+      "answer_source": "model",
+      "action_receipts_count": 0,
+      "answer_bytes": 3931
+    }
+  },
+  "watch_during": {
+    "status": "failed_conditions",
+    "stop_reason": "read_only_watch_stopped",
+    "error": "aggregate_RPC_input_limit",
+    "selected_run_id": "5b7d46097a534971a103486ba2e06594",
+    "received_bytes": 263399,
+    "aggregate_input_limit_bytes": 262144,
+    "conditions": {
+      "one_A_run_observed": true,
+      "at_least_one_running_A_B_empty_sample": true,
+      "non_running_conditions_intact": true
+    },
+    "sample_count": 12,
+    "samples": [
+      {
+        "status": "passed_selected_conditions",
+        "received_bytes": 198966,
+        "conditions": {
+          "b_empty": true,
+          "a_exact_preferences": true,
+          "a_no_interactions": true,
+          "b_exact_preferences": true,
+          "b_no_interactions": true,
+          "no_tool_calls": true,
+          "one_A_run": true,
+          "A_running": true
+        },
+        "session_a": "a9d9c9da3aaa437993997e325fdc927d",
+        "session_b": "40b68a023899441584d101dea077bdc2",
+        "inventory": [
+          {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "message_count": 1
+          },
+          {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "message_count": 0
+          }
+        ],
+        "snapshots": {
+          "a": {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "preferences": {
+              "revision": 2,
+              "enabled": true,
+              "silenced": true
+            },
+            "interaction_count": 0
+          },
+          "b": {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "preferences": {
+              "revision": 0,
+              "enabled": false,
+              "silenced": false
+            },
+            "interaction_count": 0
+          }
+        },
+        "run": {
+          "run_id": "5b7d46097a534971a103486ba2e06594",
+          "status": "running",
+          "outcome": "pending",
+          "cleanup_confirmed": false,
+          "answer_source": null,
+          "action_receipts_count": 0,
+          "answer_bytes": 0
+        },
+        "sample_started_at_unix": 1793818573.476547,
+        "run_request_started_at_unix": 1793818573.533495,
+        "run_observed_at_unix": 1793818573.5421839,
+        "sample_completed_at_unix": 1793818573.54219
+      },
+      {
+        "status": "passed_selected_conditions",
+        "received_bytes": 204354,
+        "conditions": {
+          "b_empty": true,
+          "a_exact_preferences": true,
+          "a_no_interactions": true,
+          "b_exact_preferences": true,
+          "b_no_interactions": true,
+          "no_tool_calls": true,
+          "one_A_run": true,
+          "A_running": true
+        },
+        "session_a": "a9d9c9da3aaa437993997e325fdc927d",
+        "session_b": "40b68a023899441584d101dea077bdc2",
+        "inventory": [
+          {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "message_count": 1
+          },
+          {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "message_count": 0
+          }
+        ],
+        "snapshots": {
+          "a": {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "preferences": {
+              "revision": 2,
+              "enabled": true,
+              "silenced": true
+            },
+            "interaction_count": 0
+          },
+          "b": {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "preferences": {
+              "revision": 0,
+              "enabled": false,
+              "silenced": false
+            },
+            "interaction_count": 0
+          }
+        },
+        "run": {
+          "run_id": "5b7d46097a534971a103486ba2e06594",
+          "status": "running",
+          "outcome": "pending",
+          "cleanup_confirmed": false,
+          "answer_source": null,
+          "action_receipts_count": 0,
+          "answer_bytes": 0
+        },
+        "sample_started_at_unix": 1793818574.043513,
+        "run_request_started_at_unix": 1793818574.105269,
+        "run_observed_at_unix": 1793818574.1137762,
+        "sample_completed_at_unix": 1793818574.11378
+      },
+      {
+        "status": "passed_selected_conditions",
+        "received_bytes": 209742,
+        "conditions": {
+          "b_empty": true,
+          "a_exact_preferences": true,
+          "a_no_interactions": true,
+          "b_exact_preferences": true,
+          "b_no_interactions": true,
+          "no_tool_calls": true,
+          "one_A_run": true,
+          "A_running": true
+        },
+        "session_a": "a9d9c9da3aaa437993997e325fdc927d",
+        "session_b": "40b68a023899441584d101dea077bdc2",
+        "inventory": [
+          {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "message_count": 1
+          },
+          {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "message_count": 0
+          }
+        ],
+        "snapshots": {
+          "a": {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "preferences": {
+              "revision": 2,
+              "enabled": true,
+              "silenced": true
+            },
+            "interaction_count": 0
+          },
+          "b": {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "preferences": {
+              "revision": 0,
+              "enabled": false,
+              "silenced": false
+            },
+            "interaction_count": 0
+          }
+        },
+        "run": {
+          "run_id": "5b7d46097a534971a103486ba2e06594",
+          "status": "running",
+          "outcome": "pending",
+          "cleanup_confirmed": false,
+          "answer_source": null,
+          "action_receipts_count": 0,
+          "answer_bytes": 0
+        },
+        "sample_started_at_unix": 1793818574.861077,
+        "run_request_started_at_unix": 1793818574.991665,
+        "run_observed_at_unix": 1793818575.006737,
+        "sample_completed_at_unix": 1793818575.006742
+      },
+      {
+        "status": "passed_selected_conditions",
+        "received_bytes": 215130,
+        "conditions": {
+          "b_empty": true,
+          "a_exact_preferences": true,
+          "a_no_interactions": true,
+          "b_exact_preferences": true,
+          "b_no_interactions": true,
+          "no_tool_calls": true,
+          "one_A_run": true,
+          "A_running": true
+        },
+        "session_a": "a9d9c9da3aaa437993997e325fdc927d",
+        "session_b": "40b68a023899441584d101dea077bdc2",
+        "inventory": [
+          {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "message_count": 1
+          },
+          {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "message_count": 0
+          }
+        ],
+        "snapshots": {
+          "a": {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "preferences": {
+              "revision": 2,
+              "enabled": true,
+              "silenced": true
+            },
+            "interaction_count": 0
+          },
+          "b": {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "preferences": {
+              "revision": 0,
+              "enabled": false,
+              "silenced": false
+            },
+            "interaction_count": 0
+          }
+        },
+        "run": {
+          "run_id": "5b7d46097a534971a103486ba2e06594",
+          "status": "running",
+          "outcome": "pending",
+          "cleanup_confirmed": false,
+          "answer_source": null,
+          "action_receipts_count": 0,
+          "answer_bytes": 0
+        },
+        "sample_started_at_unix": 1793818575.508328,
+        "run_request_started_at_unix": 1793818575.5884411,
+        "run_observed_at_unix": 1793818575.597984,
+        "sample_completed_at_unix": 1793818575.597993
+      },
+      {
+        "status": "passed_selected_conditions",
+        "received_bytes": 220518,
+        "conditions": {
+          "b_empty": true,
+          "a_exact_preferences": true,
+          "a_no_interactions": true,
+          "b_exact_preferences": true,
+          "b_no_interactions": true,
+          "no_tool_calls": true,
+          "one_A_run": true,
+          "A_running": true
+        },
+        "session_a": "a9d9c9da3aaa437993997e325fdc927d",
+        "session_b": "40b68a023899441584d101dea077bdc2",
+        "inventory": [
+          {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "message_count": 1
+          },
+          {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "message_count": 0
+          }
+        ],
+        "snapshots": {
+          "a": {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "preferences": {
+              "revision": 2,
+              "enabled": true,
+              "silenced": true
+            },
+            "interaction_count": 0
+          },
+          "b": {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "preferences": {
+              "revision": 0,
+              "enabled": false,
+              "silenced": false
+            },
+            "interaction_count": 0
+          }
+        },
+        "run": {
+          "run_id": "5b7d46097a534971a103486ba2e06594",
+          "status": "running",
+          "outcome": "pending",
+          "cleanup_confirmed": false,
+          "answer_source": null,
+          "action_receipts_count": 0,
+          "answer_bytes": 0
+        },
+        "sample_started_at_unix": 1793818576.331031,
+        "run_request_started_at_unix": 1793818576.3940191,
+        "run_observed_at_unix": 1793818576.404015,
+        "sample_completed_at_unix": 1793818576.40402
+      },
+      {
+        "status": "passed_selected_conditions",
+        "received_bytes": 225906,
+        "conditions": {
+          "b_empty": true,
+          "a_exact_preferences": true,
+          "a_no_interactions": true,
+          "b_exact_preferences": true,
+          "b_no_interactions": true,
+          "no_tool_calls": true,
+          "one_A_run": true,
+          "A_running": true
+        },
+        "session_a": "a9d9c9da3aaa437993997e325fdc927d",
+        "session_b": "40b68a023899441584d101dea077bdc2",
+        "inventory": [
+          {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "message_count": 1
+          },
+          {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "message_count": 0
+          }
+        ],
+        "snapshots": {
+          "a": {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "preferences": {
+              "revision": 2,
+              "enabled": true,
+              "silenced": true
+            },
+            "interaction_count": 0
+          },
+          "b": {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "preferences": {
+              "revision": 0,
+              "enabled": false,
+              "silenced": false
+            },
+            "interaction_count": 0
+          }
+        },
+        "run": {
+          "run_id": "5b7d46097a534971a103486ba2e06594",
+          "status": "running",
+          "outcome": "pending",
+          "cleanup_confirmed": false,
+          "answer_source": null,
+          "action_receipts_count": 0,
+          "answer_bytes": 0
+        },
+        "sample_started_at_unix": 1793818576.905456,
+        "run_request_started_at_unix": 1793818576.962102,
+        "run_observed_at_unix": 1793818576.969822,
+        "sample_completed_at_unix": 1793818576.969826
+      },
+      {
+        "status": "passed_selected_conditions",
+        "received_bytes": 231294,
+        "conditions": {
+          "b_empty": true,
+          "a_exact_preferences": true,
+          "a_no_interactions": true,
+          "b_exact_preferences": true,
+          "b_no_interactions": true,
+          "no_tool_calls": true,
+          "one_A_run": true,
+          "A_running": true
+        },
+        "session_a": "a9d9c9da3aaa437993997e325fdc927d",
+        "session_b": "40b68a023899441584d101dea077bdc2",
+        "inventory": [
+          {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "message_count": 1
+          },
+          {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "message_count": 0
+          }
+        ],
+        "snapshots": {
+          "a": {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "preferences": {
+              "revision": 2,
+              "enabled": true,
+              "silenced": true
+            },
+            "interaction_count": 0
+          },
+          "b": {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "preferences": {
+              "revision": 0,
+              "enabled": false,
+              "silenced": false
+            },
+            "interaction_count": 0
+          }
+        },
+        "run": {
+          "run_id": "5b7d46097a534971a103486ba2e06594",
+          "status": "running",
+          "outcome": "pending",
+          "cleanup_confirmed": false,
+          "answer_source": null,
+          "action_receipts_count": 0,
+          "answer_bytes": 0
+        },
+        "sample_started_at_unix": 1793818577.702346,
+        "run_request_started_at_unix": 1793818577.7914722,
+        "run_observed_at_unix": 1793818577.800823,
+        "sample_completed_at_unix": 1793818577.8008268
+      },
+      {
+        "status": "passed_selected_conditions",
+        "received_bytes": 236682,
+        "conditions": {
+          "b_empty": true,
+          "a_exact_preferences": true,
+          "a_no_interactions": true,
+          "b_exact_preferences": true,
+          "b_no_interactions": true,
+          "no_tool_calls": true,
+          "one_A_run": true,
+          "A_running": true
+        },
+        "session_a": "a9d9c9da3aaa437993997e325fdc927d",
+        "session_b": "40b68a023899441584d101dea077bdc2",
+        "inventory": [
+          {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "message_count": 1
+          },
+          {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "message_count": 0
+          }
+        ],
+        "snapshots": {
+          "a": {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "preferences": {
+              "revision": 2,
+              "enabled": true,
+              "silenced": true
+            },
+            "interaction_count": 0
+          },
+          "b": {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "preferences": {
+              "revision": 0,
+              "enabled": false,
+              "silenced": false
+            },
+            "interaction_count": 0
+          }
+        },
+        "run": {
+          "run_id": "5b7d46097a534971a103486ba2e06594",
+          "status": "running",
+          "outcome": "pending",
+          "cleanup_confirmed": false,
+          "answer_source": null,
+          "action_receipts_count": 0,
+          "answer_bytes": 0
+        },
+        "sample_started_at_unix": 1793818578.302233,
+        "run_request_started_at_unix": 1793818578.364321,
+        "run_observed_at_unix": 1793818578.404439,
+        "sample_completed_at_unix": 1793818578.4044428
+      },
+      {
+        "status": "passed_selected_conditions",
+        "received_bytes": 242070,
+        "conditions": {
+          "b_empty": true,
+          "a_exact_preferences": true,
+          "a_no_interactions": true,
+          "b_exact_preferences": true,
+          "b_no_interactions": true,
+          "no_tool_calls": true,
+          "one_A_run": true,
+          "A_running": true
+        },
+        "session_a": "a9d9c9da3aaa437993997e325fdc927d",
+        "session_b": "40b68a023899441584d101dea077bdc2",
+        "inventory": [
+          {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "message_count": 1
+          },
+          {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "message_count": 0
+          }
+        ],
+        "snapshots": {
+          "a": {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "preferences": {
+              "revision": 2,
+              "enabled": true,
+              "silenced": true
+            },
+            "interaction_count": 0
+          },
+          "b": {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "preferences": {
+              "revision": 0,
+              "enabled": false,
+              "silenced": false
+            },
+            "interaction_count": 0
+          }
+        },
+        "run": {
+          "run_id": "5b7d46097a534971a103486ba2e06594",
+          "status": "running",
+          "outcome": "pending",
+          "cleanup_confirmed": false,
+          "answer_source": null,
+          "action_receipts_count": 0,
+          "answer_bytes": 0
+        },
+        "sample_started_at_unix": 1793818579.138567,
+        "run_request_started_at_unix": 1793818579.203676,
+        "run_observed_at_unix": 1793818579.211234,
+        "sample_completed_at_unix": 1793818579.2112389
+      },
+      {
+        "status": "passed_selected_conditions",
+        "received_bytes": 247458,
+        "conditions": {
+          "b_empty": true,
+          "a_exact_preferences": true,
+          "a_no_interactions": true,
+          "b_exact_preferences": true,
+          "b_no_interactions": true,
+          "no_tool_calls": true,
+          "one_A_run": true,
+          "A_running": true
+        },
+        "session_a": "a9d9c9da3aaa437993997e325fdc927d",
+        "session_b": "40b68a023899441584d101dea077bdc2",
+        "inventory": [
+          {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "message_count": 1
+          },
+          {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "message_count": 0
+          }
+        ],
+        "snapshots": {
+          "a": {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "preferences": {
+              "revision": 2,
+              "enabled": true,
+              "silenced": true
+            },
+            "interaction_count": 0
+          },
+          "b": {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "preferences": {
+              "revision": 0,
+              "enabled": false,
+              "silenced": false
+            },
+            "interaction_count": 0
+          }
+        },
+        "run": {
+          "run_id": "5b7d46097a534971a103486ba2e06594",
+          "status": "running",
+          "outcome": "pending",
+          "cleanup_confirmed": false,
+          "answer_source": null,
+          "action_receipts_count": 0,
+          "answer_bytes": 0
+        },
+        "sample_started_at_unix": 1793818579.712947,
+        "run_request_started_at_unix": 1793818579.7827609,
+        "run_observed_at_unix": 1793818579.789898,
+        "sample_completed_at_unix": 1793818579.789907
+      },
+      {
+        "status": "passed_selected_conditions",
+        "received_bytes": 252846,
+        "conditions": {
+          "b_empty": true,
+          "a_exact_preferences": true,
+          "a_no_interactions": true,
+          "b_exact_preferences": true,
+          "b_no_interactions": true,
+          "no_tool_calls": true,
+          "one_A_run": true,
+          "A_running": true
+        },
+        "session_a": "a9d9c9da3aaa437993997e325fdc927d",
+        "session_b": "40b68a023899441584d101dea077bdc2",
+        "inventory": [
+          {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "message_count": 1
+          },
+          {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "message_count": 0
+          }
+        ],
+        "snapshots": {
+          "a": {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "preferences": {
+              "revision": 2,
+              "enabled": true,
+              "silenced": true
+            },
+            "interaction_count": 0
+          },
+          "b": {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "preferences": {
+              "revision": 0,
+              "enabled": false,
+              "silenced": false
+            },
+            "interaction_count": 0
+          }
+        },
+        "run": {
+          "run_id": "5b7d46097a534971a103486ba2e06594",
+          "status": "running",
+          "outcome": "pending",
+          "cleanup_confirmed": false,
+          "answer_source": null,
+          "action_receipts_count": 0,
+          "answer_bytes": 0
+        },
+        "sample_started_at_unix": 1793818580.524466,
+        "run_request_started_at_unix": 1793818580.5908968,
+        "run_observed_at_unix": 1793818580.6223931,
+        "sample_completed_at_unix": 1793818580.622397
+      },
+      {
+        "status": "passed_selected_conditions",
+        "received_bytes": 258234,
+        "conditions": {
+          "b_empty": true,
+          "a_exact_preferences": true,
+          "a_no_interactions": true,
+          "b_exact_preferences": true,
+          "b_no_interactions": true,
+          "no_tool_calls": true,
+          "one_A_run": true,
+          "A_running": true
+        },
+        "session_a": "a9d9c9da3aaa437993997e325fdc927d",
+        "session_b": "40b68a023899441584d101dea077bdc2",
+        "inventory": [
+          {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "message_count": 1
+          },
+          {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "message_count": 0
+          }
+        ],
+        "snapshots": {
+          "a": {
+            "session_id": "a9d9c9da3aaa437993997e325fdc927d",
+            "preferences": {
+              "revision": 2,
+              "enabled": true,
+              "silenced": true
+            },
+            "interaction_count": 0
+          },
+          "b": {
+            "session_id": "40b68a023899441584d101dea077bdc2",
+            "preferences": {
+              "revision": 0,
+              "enabled": false,
+              "silenced": false
+            },
+            "interaction_count": 0
+          }
+        },
+        "run": {
+          "run_id": "5b7d46097a534971a103486ba2e06594",
+          "status": "running",
+          "outcome": "pending",
+          "cleanup_confirmed": false,
+          "answer_source": null,
+          "action_receipts_count": 0,
+          "answer_bytes": 0
+        },
+        "sample_started_at_unix": 1793818581.124319,
+        "run_request_started_at_unix": 1793818581.187378,
+        "run_observed_at_unix": 1793818581.1967092,
+        "sample_completed_at_unix": 1793818581.196718
+      }
+    ],
+    "whole_watch_qualified": false,
+    "budget_expanded": false,
+    "effect_replayed": false,
+    "GUI_temporal_pairing_required": true,
+    "temporal_pairing_is_overall_pass": false,
+    "scope": "Retain individual bounded samples as observations. The complete watcher failed its aggregate input budget; no passing overall watcher or selected GUI qualification is inferred."
+  },
+  "external_UI": {
+    "diagnostic_only": true,
+    "qualified": false,
+    "full_ci_passed": false,
+    "recorded_at_unix": 1793818816.397185,
+    "single_run_id": "5b7d46097a534971a103486ba2e06594",
+    "signed_before_passed": true,
+    "signed_after_same_run_completed_known_clean_A_two_messages_B_empty_no_tools": true,
+    "watch_budget_expanded": false,
+    "watch_error": "aggregate_RPC_input_limit",
+    "watch_status": "failed_conditions",
+    "effect_replayed": false,
+    "cache_observation_does_not_cover_launch": true,
+    "closure_custody_derived_from_separate_supervisor_receipt": true,
+    "two_known_cache_files_metadata_unchanged_after_launch_before_model_to_after_model": true,
+    "native_observations": {
+      "A_before_controls": [
+        1,
+        1
+      ],
+      "A_return_completed_and_controls": [
+        1,
+        1
+      ],
+      "A_return_has_finite_end_marker": true,
+      "B_after_reselected_empty_controls": [
+        0,
+        0
+      ],
+      "B_before_controls": [
+        0,
+        0
+      ],
+      "controller_invalidated_duplicate_rows": true,
+      "initial_B_AX_empty_A_sidebar_running": true,
+      "initial_B_during_AX_observed_at_unix": 1793818573.875,
+      "later_screenshot_and_AX_showed_A_selected_without_root_return_action": true,
+      "selection_change_cause": "unresolved_async_selection_or_controller_invalidation_or_external_input"
+    }
+  },
+  "selected_cache_metadata": {
+    "contents_read": false,
+    "known_file_count": 2,
+    "selected_metadata_unchanged": true,
+    "baseline_observed_unix": 1793818469.585365,
+    "after_observed_unix": 1793818700.642228,
+    "baseline_after_app_launch": true,
+    "baseline_before_model_run": true,
+    "covers_launch_or_universal_plugin_suppression": false,
+    "scope": "Two selected known files, metadata only. No cache content or account data exported."
+  },
+  "normal_close": {
+    "status": "closed_after_GUI_intent",
+    "diagnostic_only": true,
+    "qualified": false,
+    "full_ci_passed": false,
+    "elapsed_seconds": 492.207,
+    "normal_GUI_quit_intent": true,
+    "same_lease_free": true,
+    "all_known_identities_absent": true,
+    "normal_detach_attempts": [
+      {
+        "attempt": 1,
+        "command_failure_or_helper_signal_possible": false,
+        "effect_observation": "command_returned",
+        "underlying_identity_confirmed": true
+      }
+    ],
+    "quota_unmounted_without_force": true,
+    "originals_or_profiles_deleted": false,
+    "images_preserved": true,
+    "full_increment_qualification_claimed": false,
+    "native_exit_status_claimed": false,
+    "helper_signal_absence_claimed": false,
+    "process_scope": "Known child metadata only; no global absence claim",
+    "signals_sent": [],
+    "issues": [],
+    "resource_failure": null,
+    "global_storage_peak_unaccounted_bytes": 70848512,
+    "known_identity_count": 6,
+    "resource_accounting": {
+      "samples": 1823,
+      "peak_provider_growth_bytes": 2891776,
+      "peak_unaccounted_Data_drop_bytes": 118583296,
+      "peak_used_bytes": 670875648,
+      "process_metadata_samples_or_count_only": null
+    }
+  },
+  "evidence_files": {
+    "closed.json": {
+      "bytes": 4606,
+      "sha256": "802b6a1331edae866f9890530e308831522b71255f1b96ea624bde4346ce8bb2"
+    },
+    "probe-before.json": {
+      "bytes": 1327,
+      "sha256": "2f2fdec535f0ad015bc726a6962f8aaa8ce4720ee3fdd34cb9ee3cd116492eb7"
+    },
+    "probe-after.json": {
+      "bytes": 1707,
+      "sha256": "dff94a2ea443ebd97db13c2adfea652ee091df36942ed60d0259f716082c0420"
+    },
+    "probe-watch-during.json": {
+      "bytes": 16167,
+      "sha256": "5d99e0bd3085dbb92ec528fc62c1028ea09b0dfdb5e7f5c05ec96d8978f01bcf"
+    },
+    "root-ui-observations.json": {
+      "bytes": 1310,
+      "sha256": "3ef7d1b9d3f4748aa58d538ce06bcca9d8f0f4a7261e011d871f8f252180e68c"
+    },
+    "cache-before.json": {
+      "bytes": 581,
+      "sha256": "df42b95fa2c0d3137c93bff257e93791d795067053195cead1eb6401257d02fb"
+    },
+    "cache-after.json": {
+      "bytes": 616,
+      "sha256": "844370cde598c9fdb974ade7cf4d39f6a583afe1604f7b41f575fcf4b4982ad8"
+    },
+    "prepared.json": {
+      "bytes": 9068,
+      "sha256": "c56fba7a717f49a581883d12f54e7342852b5ad9e53e7193b949504d72431993"
+    },
+    "admission.json": {
+      "bytes": 17356,
+      "sha256": "4027fe3c83fd0e0b9a2e901b016f9f50abc90cd14ddeff2794ca2ab66af47322"
+    },
+    "root-review.json": {
+      "bytes": 3191,
+      "sha256": "9ed86b0d3af3015116b5d661fa8d67eeafd28067c58515cb3680a60e10a421ec"
+    },
+    "reviewer-checklist.json": {
+      "bytes": 12198,
+      "sha256": "7543ff0b8ffbef696ccc6cbefcdc0799ee44c62f622ddb6a38ae19f5d37bddba"
+    },
+    "active.json": {
+      "bytes": 644,
+      "sha256": "e9eff9d3ff7b430935bf7297d1b7f17f07406744d6c9fac3e62e3b8e5b328f80"
+    },
+    "quit-intent.json": {
+      "bytes": 520,
+      "sha256": "ede56a3460cec757e6987a126406e10134b526f93d6bebf5083ab6d4af358d67"
+    },
+    "launch-receipt.json": {
+      "bytes": 1449,
+      "sha256": "e7488a1918da87dac1cc1edf4ed62be5981bd5cb2383e9a5e0156a72046cefa0"
+    },
+    "native-intent.json": {
+      "bytes": 274,
+      "sha256": "c5550925729b6b5485cd0ab66bd0fa29dd21f24fd390b7574c89428fe40f155f"
+    }
+  },
+  "private_originals_preserved_in_control_root": true,
+  "private_original_files_copied_to_repository": false,
+  "exported_profile_provider_key_database_or_message_content": false,
+  "limitations": [
+    "H is a diagnostic; failed CI is retained and complete product qualification is false.",
+    "The overall watcher failed aggregate RPC input budget 263399 > 262144 bytes.",
+    "Initial GUI B empty/off while A active was observed, but later GUI/AX showed A selected without an intentional root return; the cause is unresolved.",
+    "Reselecting B after completion and returning A were observed separately; they do not repair the failed overall watcher or explain selection movement.",
+    "Two selected cache-file metadata records were unchanged from after launch/before model to after model; startup-wide or universal suppression is not proved.",
+    "Closure proves only known identities, same lease and the admitted quota; no global process absence or native exit status claim.",
+    "No model/effect replay, budget extension or broad phase-A completion is inferred."
+  ]
+}

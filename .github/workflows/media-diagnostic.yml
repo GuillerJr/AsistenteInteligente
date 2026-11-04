@@ -2,6 +2,15 @@ name: Diagnóstico focal de medios de Jarvis
 
 on:
   workflow_dispatch:
+    inputs:
+      xcode:
+        description: Xcode para el diagnóstico focal
+        type: choice
+        required: true
+        default: predeterminado
+        options:
+          - predeterminado
+          - '27.2'
 
 permissions:
   contents: read
@@ -17,6 +26,26 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
+      - name: Seleccionar Xcode para el diagnóstico
+        id: xcode_selection
+        shell: bash
+        env:
+          JARVIS_CI_XCODE_CHOICE: ${{ inputs.xcode }}
+        run: |
+          case "$JARVIS_CI_XCODE_CHOICE" in
+            predeterminado) ;;
+            27.2)
+              if ! test -d '/Applications/Xcode_27.2.app/Contents/Developer'; then
+                printf '%s\n' 'No está disponible el Xcode 27.2 solicitado.' >&2
+                exit 2
+              fi
+              printf '%s\n' 'DEVELOPER_DIR=/Applications/Xcode_27.2.app/Contents/Developer' >> "$GITHUB_ENV"
+              ;;
+            *)
+              printf '%s\n' 'La selección de Xcode no está admitida.' >&2
+              exit 2
+              ;;
+          esac
       - uses: astral-sh/setup-uv@v7
       - name: Preparar dependencias del checkout exacto
         run: uv sync --locked --group dev --python 3.11

@@ -1,0 +1,460 @@
+{
+  "schema": "jarvis.native-media-REA-comparison-summary/1",
+  "status": "paired_local_host_pass_seatbelt_fail_aggregate_isolation_difference",
+  "diagnostic_only": true,
+  "full_remote_ci_passed": false,
+  "qualified_complete_increment": false,
+  "phase_a_complete": false,
+  "phase_b_started": false,
+  "G_executed": false,
+  "H_qualified": false,
+  "source_before_complete_equal": true,
+  "same_source_fingerprint": "0799023ef089e760b6c16d372104e312e0fec0e15bbd1fc3bb23de8f60ccb74d",
+  "source_head": "46c10a1da8ea0c8bd2ead495c3a4c507fcf183de",
+  "source_worktree_contains_uncommitted_changes": true,
+  "local_environment": {
+    "macOS": "27.2",
+    "SDK": "27.2",
+    "Swift": "6.4.2"
+  },
+  "remote_environment_previously_observed": {
+    "macOS": "27.0.1",
+    "SDK": "27.0",
+    "Swift": "6.4"
+  },
+  "records": {
+    "uo81zgnv": {
+      "kind": "python",
+      "selection": "tests/test_test_resource_guard.py",
+      "source_before": {
+        "files": 910,
+        "fingerprint": "0799023ef089e760b6c16d372104e312e0fec0e15bbd1fc3bb23de8f60ccb74d",
+        "head": "46c10a1da8ea0c8bd2ead495c3a4c507fcf183de",
+        "index_sha256": "6209e75b33560080557e0e2797fa9683579040386f2a49b5cdb473ff5ae9ee40",
+        "source_bytes": 13524686,
+        "worktree_sha256": "5899739717878987bb520da6c7e0791f0a540754e15bac2de83869455f77c37d"
+      },
+      "source_after": {
+        "files": 910,
+        "fingerprint": "0799023ef089e760b6c16d372104e312e0fec0e15bbd1fc3bb23de8f60ccb74d",
+        "head": "46c10a1da8ea0c8bd2ead495c3a4c507fcf183de",
+        "index_sha256": "6209e75b33560080557e0e2797fa9683579040386f2a49b5cdb473ff5ae9ee40",
+        "source_bytes": 13524686,
+        "worktree_sha256": "5899739717878987bb520da6c7e0791f0a540754e15bac2de83869455f77c37d"
+      },
+      "source_unchanged": true,
+      "cleanup_status": "confirmed",
+      "result": {
+        "custody_scope": "owned_process_group_only",
+        "elapsed_seconds": 1.853,
+        "exit_code": 0,
+        "interrupted": false,
+        "measurement_mode": "apfs_volume_used",
+        "peak_temporary_bytes": 4325376,
+        "process_group_exited": true,
+        "stop_reason": null
+      },
+      "id": "uo81zgnv",
+      "archive_directory": "/private/tmp/jarvis-product-ci-20261104/local-receipts/uo81zgnv",
+      "artifact_metadata": {
+        "receipt.json": {
+          "bytes": 1438,
+          "sha256": "9711e1e1eefdb77090a384ce8c8728ebc0bae3aa8cb67c8900dc1e925d75f277"
+        },
+        "tail.log": {
+          "bytes": 194,
+          "sha256": "e0268ec4446aacae6a67e66c9b0d47e9e6a03b2f41086b51b6d271d617055225"
+        },
+        "admission.json": {
+          "bytes": 331,
+          "sha256": "a927d2b3e7d1097e4c8c72147b306fb806e1f72a2c2f141e4bb15648337da70b"
+        },
+        "quota.sb": {
+          "bytes": 2154,
+          "sha256": "3e8d0a87f6b56af61fb9a2f6716a5954f8235dfb5996a5737289b2461d1a2983"
+        }
+      },
+      "native_media_frameworks": null,
+      "quota_policy_file_present": true,
+      "pytest_passed": 89,
+      "pytest_deselected": 57,
+      "pytest_seconds": 1.01
+    },
+    "17yrwu7m": {
+      "kind": "swift",
+      "selection": "NativeMedia(Executor|Diagnostics)Tests",
+      "source_before": {
+        "files": 910,
+        "fingerprint": "0799023ef089e760b6c16d372104e312e0fec0e15bbd1fc3bb23de8f60ccb74d",
+        "head": "46c10a1da8ea0c8bd2ead495c3a4c507fcf183de",
+        "index_sha256": "6209e75b33560080557e0e2797fa9683579040386f2a49b5cdb473ff5ae9ee40",
+        "source_bytes": 13524686,
+        "worktree_sha256": "5899739717878987bb520da6c7e0791f0a540754e15bac2de83869455f77c37d"
+      },
+      "source_after": {
+        "files": 910,
+        "fingerprint": "0799023ef089e760b6c16d372104e312e0fec0e15bbd1fc3bb23de8f60ccb74d",
+        "head": "46c10a1da8ea0c8bd2ead495c3a4c507fcf183de",
+        "index_sha256": "6209e75b33560080557e0e2797fa9683579040386f2a49b5cdb473ff5ae9ee40",
+        "source_bytes": 13524686,
+        "worktree_sha256": "5899739717878987bb520da6c7e0791f0a540754e15bac2de83869455f77c37d"
+      },
+      "source_unchanged": true,
+      "cleanup_status": "confirmed",
+      "result": {
+        "custody_scope": "owned_process_group_only",
+        "elapsed_seconds": 149.76,
+        "exit_code": 0,
+        "interrupted": false,
+        "measurement_mode": "apfs_volume_used",
+        "peak_temporary_bytes": 617152512,
+        "process_group_exited": true,
+        "stop_reason": null
+      },
+      "id": "17yrwu7m",
+      "archive_directory": "/private/tmp/jarvis-product-ci-20261104/local-receipts/17yrwu7m",
+      "artifact_metadata": {
+        "receipt.json": {
+          "bytes": 2252,
+          "sha256": "e5f53215f302218129131ba294cfcd0053813b5de3c2872d9e715649d05d5cfc"
+        },
+        "tail.log": {
+          "bytes": 191038,
+          "sha256": "c29e8b06e27fc29ca28203db8ccbe16b887516fdc4c88ecff27406bab798e925"
+        },
+        "admission.json": {
+          "bytes": 1141,
+          "sha256": "4f8edb7ea9fe9f0e21563c6561aba2fecbc37e167c99f9551b63dd11b9639599"
+        }
+      },
+      "native_media_frameworks": {
+        "apfs_quota_scope": "private_test_volume_only",
+        "argv_scope": {
+          "admitted": "system_bash_repo_desktop_guard_child",
+          "exports": false,
+          "external_inputs": false,
+          "extra_arguments": false,
+          "filter": "NativeMedia(Executor|Diagnostics)Tests",
+          "parent": "repo_venv_python_B_guard_admitted_exec_swift"
+        },
+        "enabled": true,
+        "execution_mode": "host_runtime_without_seatbelt",
+        "external_os_xpc": {
+          "all_service_filesystem_effects_confined": false,
+          "cache_writes_outside_quota": "unconfirmed",
+          "cleanup_scope": "owned_process_group_and_private_quota_only",
+          "custody_scope": "outside_owned_process_group"
+        },
+        "filesystem_confinement": "not_confined",
+        "network_confinement": "not_confined",
+        "sandbox_enforced": false,
+        "scope": "fixed_native_media_test_harness_only",
+        "xpc_confinement": "not_confined"
+      },
+      "quota_policy_file_present": false,
+      "swift_executed": 26,
+      "swift_failures": 0,
+      "swift_unexpected_failures": 0,
+      "swift_seconds": 63.648,
+      "six_canonical_reference_marker_booleans": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "accurate_and_fast_same_revision3_recognized_marker": true,
+      "supported_revisions": [
+        1,
+        2,
+        3
+      ],
+      "locale": "en-US",
+      "locale_supported_both_levels": true,
+      "perform_succeeded_both_levels": true,
+      "callback_called_both_levels": true,
+      "callback_had_error_both_levels": false,
+      "callback_has_results_both_levels": true,
+      "filesystem_network_XPC_confinement": "not_confined",
+      "sandbox_enforced": false
+    },
+    "407fo4a2": {
+      "kind": "swift",
+      "selection": "NativeMedia(Executor|Diagnostics)Tests",
+      "source_before": {
+        "files": 910,
+        "fingerprint": "0799023ef089e760b6c16d372104e312e0fec0e15bbd1fc3bb23de8f60ccb74d",
+        "head": "46c10a1da8ea0c8bd2ead495c3a4c507fcf183de",
+        "index_sha256": "6209e75b33560080557e0e2797fa9683579040386f2a49b5cdb473ff5ae9ee40",
+        "source_bytes": 13524686,
+        "worktree_sha256": "5899739717878987bb520da6c7e0791f0a540754e15bac2de83869455f77c37d"
+      },
+      "source_after": {
+        "files": 910,
+        "fingerprint": "0799023ef089e760b6c16d372104e312e0fec0e15bbd1fc3bb23de8f60ccb74d",
+        "head": "46c10a1da8ea0c8bd2ead495c3a4c507fcf183de",
+        "index_sha256": "6209e75b33560080557e0e2797fa9683579040386f2a49b5cdb473ff5ae9ee40",
+        "source_bytes": 13524686,
+        "worktree_sha256": "5899739717878987bb520da6c7e0791f0a540754e15bac2de83869455f77c37d"
+      },
+      "source_unchanged": true,
+      "cleanup_status": "confirmed",
+      "result": {
+        "custody_scope": "owned_process_group_only",
+        "elapsed_seconds": 89.999,
+        "exit_code": 1,
+        "interrupted": false,
+        "measurement_mode": "apfs_volume_used",
+        "peak_temporary_bytes": 616304640,
+        "process_group_exited": true,
+        "stop_reason": null
+      },
+      "id": "407fo4a2",
+      "archive_directory": "/private/tmp/jarvis-product-ci-20261104/local-receipts/407fo4a2",
+      "artifact_metadata": {
+        "receipt.json": {
+          "bytes": 2205,
+          "sha256": "ee612838b83938b599e957aaf711d2dcbab32d5d50d1d883e0fc4f0947745a8e"
+        },
+        "tail.log": {
+          "bytes": 195746,
+          "sha256": "b9b6a256e2dbe1e228121e2871de6e4825df4984ad055706f82a183c52538669"
+        },
+        "admission.json": {
+          "bytes": 1094,
+          "sha256": "ab77b4506949696a20f265e49ed40b8ee667d5737cd31744d9cae6aa768a45de"
+        },
+        "quota.sb": {
+          "bytes": 2436,
+          "sha256": "1ab4d189686d3092dd5998693d944dce1a1f974ce96d29b20ac24d2cb1419f22"
+        }
+      },
+      "native_media_frameworks": {
+        "argv_scope": {
+          "admitted": "system_bash_repo_desktop_guard_child",
+          "exports": false,
+          "external_inputs": false,
+          "extra_arguments": false,
+          "filter": "NativeMedia(Executor|Diagnostics)Tests",
+          "parent": "repo_venv_python_B_guard_admitted_exec_swift"
+        },
+        "enabled": true,
+        "external_os_xpc": {
+          "all_service_filesystem_effects_confined": false,
+          "cache_writes_outside_quota": "unconfirmed",
+          "cleanup_scope": "owned_process_group_and_private_quota_only",
+          "custody_scope": "outside_owned_process_group"
+        },
+        "file_issue_extension": {
+          "access": "read_only",
+          "class": "com.apple.app-sandbox.read",
+          "path": "/private/tmp/jq-0r4u73ij/home/Library/Caches/com.apple.dt.xctest.tool"
+        },
+        "mach_global_names": [
+          "com.apple.lsd.mapdb"
+        ],
+        "xpc_service_names": [
+          "com.apple.coremedia.videoencoder"
+        ]
+      },
+      "quota_policy_file_present": true,
+      "swift_executed": 26,
+      "swift_failures": 8,
+      "swift_unexpected_failures": 2,
+      "swift_seconds": 25.789,
+      "six_canonical_reference_marker_booleans": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "accurate_missing_ObjC_error_code": 0,
+      "fast_Vision_perform_and_callback_code": 8,
+      "specific_causal_rule_identified": false,
+      "sandbox_enforced": true
+    }
+  },
+  "REA_evidence_whitelist": [
+    {
+      "evidence_id": "ev_843a21c27c9612b6736d853cb67cce49517c39196611a77aa3246472ece1387b",
+      "role": "guard_focal_capture",
+      "scope": "Supervised Python guard selection, 89 passed; no broad suite or application parity claim."
+    },
+    {
+      "evidence_id": "ev_3f625593a1deadcd58183fd50a29e075fc90c09ebcf96268ba81ae50da2f93f6",
+      "role": "host_media_capture",
+      "scope": "26 selected real native media tests passed without Seatbelt under the recorded quota/deadline/receipt. Filesystem, network and XPC not confined."
+    },
+    {
+      "evidence_id": "ev_0882442c63ddcda1dfe8664c7c5faa7023607a8122f16bb7c1fe5a4179a857e2",
+      "role": "Seatbelt_control_capture",
+      "scope": "Same complete source identity; 26 tests, eight failures with narrow Seatbelt mode."
+    },
+    {
+      "evidence_id": "ev_55ef36bdca3928f113d4b8b375efb38853467d878e533d57bfce946fcf0d05f7",
+      "role": "REA_behavior_comparison",
+      "terminal_and_exit_behavior": "changed",
+      "filesystem_behavior": "UNKNOWN",
+      "process_behavior": "UNKNOWN",
+      "scope": "Only terminal/exit differences are established by the comparator; not a specific deny, model resource, service rule or remote CI cause."
+    }
+  ],
+  "private_REA_bundle_metadata_from_parent": {
+    "path": "/private/tmp/rea-native-media-comparison.bundle.json",
+    "bytes": 671610,
+    "records": 9,
+    "unknowns": 5,
+    "raw_contents_exported": false,
+    "unrelated_observations_exported": false
+  },
+  "interpretation": {
+    "established": "The paired local control confirms a difference at the aggregate isolation-mode level for this synthetic focal and physical environment: all 26 pass in host mode, while the same-source Seatbelt control has eight failures.",
+    "not_established": [
+      "A specific causal Seatbelt rule or permission",
+      "Which external framework resource or service changes the behavior",
+      "Filesystem or process behavior from the REA comparison",
+      "Root cause of prior remote CI failures",
+      "A working fallback or product OCR quality/locale/revision relaxation",
+      "Complete qualification of the current final commit or broad phase A"
+    ],
+    "guard_contract": "The host mode is a fixed local synthetic focal only, with physical private test volume, deadline, source identity, bounded output and group cleanup. It has no filesystem, network or XPC confinement and must not be described as sandboxed.",
+    "CI_environment_difference": "The observed remote macOS27.0.1/SDK27.0 differ from physical macOS27.2/SDK27.2. A new explicit default/27.2 Xcode selector is implemented only for the manual focal workflow; its eleven contract tests pass, but the actual remote27.2 selection has not yet run. The main CI and product OCR policy are unchanged.",
+    "replay_or_budget_extension_claimed": false
+  },
+  "next_checkpoint_inputs_pending": [
+    "Publish the frozen checkpoint and dispatch the remote focal with explicit Xcode27.2 choice.",
+    "Verify the actual selected remote host/SDK/toolchain receipt; do not assume host OS changed with Xcode.",
+    "Read final exact CI and focal results before qualification."
+  ],
+  "export_scope": "Only whitelisted synthetic metadata, source hashes, guarded receipts and four REA evidence IDs. No provider, account credentials, keys, profiles, database content, image/audio or message content.",
+  "subsequent_guard_and_selector_regressions": {
+    "guard_passed": 146,
+    "guard_parts": [
+      {
+        "id": "uo81zgnv",
+        "passed": 89
+      },
+      {
+        "id": "xug6zje4",
+        "passed": 57
+      }
+    ],
+    "workflow_selector_passed": 11,
+    "workflow_selector_new_cases": 8,
+    "records": [
+      {
+        "id": "xug6zje4",
+        "archive_directory": "/private/tmp/jarvis-product-ci-20261104/local-receipts/xug6zje4",
+        "kind": "python",
+        "selection": "tests/test_test_resource_guard.py",
+        "source_identity": {
+          "files": 910,
+          "fingerprint": "ca09c2e8c517e8513a3b76b19623add658427e48aec48ac4b35ca8438d1e2497",
+          "head": "46c10a1da8ea0c8bd2ead495c3a4c507fcf183de",
+          "index_sha256": "6209e75b33560080557e0e2797fa9683579040386f2a49b5cdb473ff5ae9ee40",
+          "source_bytes": 13529714,
+          "worktree_sha256": "90ba87b1f612000e5ba1fd86e8daf4b913a53722aa2793289ef81b9f7e5229a5"
+        },
+        "source_unchanged": true,
+        "cleanup_status": "confirmed",
+        "result": {
+          "custody_scope": "owned_process_group_only",
+          "elapsed_seconds": 6.049,
+          "exit_code": 0,
+          "interrupted": false,
+          "measurement_mode": "apfs_volume_used",
+          "peak_temporary_bytes": 5197824,
+          "process_group_exited": true,
+          "stop_reason": null
+        },
+        "artifact_metadata": {
+          "receipt.json": {
+            "bytes": 1438,
+            "sha256": "6ce6513d4fa795785c59113155099cd999d4d8697c177d2b67213bf0ffc8098d"
+          },
+          "tail.log": {
+            "bytes": 114,
+            "sha256": "e8bbe8a04a8a436ac4bb7b0189dcd36c035a6a2b3201b3421c2ca46345b06241"
+          },
+          "admission.json": {
+            "bytes": 331,
+            "sha256": "4a8c840fba3958926562d453c0990d3fb67ab6cdd4e55dd1aa882670f737960e"
+          },
+          "quota.sb": {
+            "bytes": 2154,
+            "sha256": "122f83488dcdada70575b1ae1c64833b8d2ae16dcf7dd878794b92610b01ea73"
+          }
+        },
+        "pytest_passed": 57,
+        "pytest_deselected": 89,
+        "pytest_seconds": 5.08
+      },
+      {
+        "id": "ijgtg_ac",
+        "archive_directory": "/private/tmp/jarvis-product-ci-20261104/local-receipts/ijgtg_ac",
+        "kind": "python",
+        "selection": "tests/test_ci_swift_diagnostic.py",
+        "source_identity": {
+          "files": 910,
+          "fingerprint": "ca09c2e8c517e8513a3b76b19623add658427e48aec48ac4b35ca8438d1e2497",
+          "head": "46c10a1da8ea0c8bd2ead495c3a4c507fcf183de",
+          "index_sha256": "6209e75b33560080557e0e2797fa9683579040386f2a49b5cdb473ff5ae9ee40",
+          "source_bytes": 13529714,
+          "worktree_sha256": "90ba87b1f612000e5ba1fd86e8daf4b913a53722aa2793289ef81b9f7e5229a5"
+        },
+        "source_unchanged": true,
+        "cleanup_status": "confirmed",
+        "result": {
+          "custody_scope": "owned_process_group_only",
+          "elapsed_seconds": 1.788,
+          "exit_code": 0,
+          "interrupted": false,
+          "measurement_mode": "apfs_volume_used",
+          "peak_temporary_bytes": 3469312,
+          "process_group_exited": true,
+          "stop_reason": null
+        },
+        "artifact_metadata": {
+          "receipt.json": {
+            "bytes": 1438,
+            "sha256": "6c27c27a9cf5305aa0c12819c8814fb83e5a6be38335f5b8783c000b80977fb9"
+          },
+          "tail.log": {
+            "bytes": 99,
+            "sha256": "3f7fb946e13faf5f06af32acff02b0276cd01b296f64487a5b365004074ad938"
+          },
+          "admission.json": {
+            "bytes": 331,
+            "sha256": "e6c31d378951d6454f173667fa658489637ec7056e1fd1f5138ab0a5d5387249"
+          },
+          "quota.sb": {
+            "bytes": 2154,
+            "sha256": "f9648996aa980c27ad96047547fc7cac402b8a82f8c19541e8db45a0c58d50cb"
+          }
+        },
+        "pytest_passed": 11,
+        "pytest_seconds": 0.9,
+        "new_cases": 8,
+        "scope": "Remote diagnostic workflow selector tests only; not actual Xcode27.2 execution."
+      }
+    ],
+    "scope": "Different recorded worktree fingerprint for later selector changes; not a single combined full-suite receipt."
+  },
+  "latest_remote_CI_observation": {
+    "commit": "46c10a1da8ea0c8bd2ead495c3a4c507fcf183de",
+    "ci_run_id": 41890910372,
+    "conclusion": "failure",
+    "swift_executed": 725,
+    "swift_skipped": 1,
+    "swift_failures": 7,
+    "swift_failed_test_methods": 4,
+    "fast_revision3_reference_recognized_marker": true,
+    "accurate_revision3_reference_error_kind": "objc_missing_error",
+    "accurate_callback_had_error": false,
+    "accurate_callback_has_results": false,
+    "cause_established": false
+  }
+}

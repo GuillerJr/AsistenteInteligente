@@ -12,6 +12,17 @@ if [[ "${1:-}" == --guard-child ]]; then
   if [[ "${JARVIS_TEST_GUARD_CHILD_CHECKED:-}" != "${JARVIS_TEST_GUARD_NONCE:-missing}" ]]; then
     printf '%s\n' 'El supervisor no admitió este proceso de pruebas.' >&2; exit 2
   fi
+  if [[ -n "${JARVIS_TEST_GUARD_NATIVE_MEDIA_HOST_RUNTIME:-}" ]]; then
+    if [[ "${JARVIS_TEST_GUARD_NATIVE_MEDIA_HOST_RUNTIME:-}" != 1 ||
+          "${JARVIS_TEST_GUARD_NATIVE_MEDIA_FRAMEWORKS:-}" != 1 ||
+          "${JARVIS_TEST_GUARD_SANDBOX_ENFORCED:-}" != false ||
+          "${JARVIS_TEST_GUARD_FILESYSTEM_CONFINEMENT:-}" != not_confined ||
+          "${JARVIS_TEST_GUARD_NETWORK_CONFINEMENT:-}" != not_confined ||
+          "${JARVIS_TEST_GUARD_XPC_CONFINEMENT:-}" != not_confined ]]; then
+      printf '%s\n' 'El runtime host exige una admisión explícita sin confinamiento Seatbelt.' >&2
+      exit 2
+    fi
+  fi
   if [[ "${JARVIS_TEST_GUARD_NATIVE_MEDIA_FRAMEWORKS:-}" == 1 ]]; then
     if [[ "${JARVIS_TEST_GUARD_PROFILE:-}" != local ||
           "${JARVIS_TEST_GUARD_SELECTION:-}" != 'NativeMedia(Executor|Diagnostics)Tests' ||
@@ -52,14 +63,19 @@ JARVIS_FILTER_COUNT=0
 JARVIS_BUDGET=""
 JARVIS_DEADLINE=600
 JARVIS_NATIVE_MEDIA=0
+JARVIS_NATIVE_MEDIA_HOST=0
 JARVIS_SKIP_BUILD=0
 JARVIS_SWIFT_ARGUMENTS=()
 JARVIS_NATIVE_MEDIA_ARGUMENTS=()
+JARVIS_NATIVE_MEDIA_HOST_ARGUMENTS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --full) JARVIS_PROFILE=ci; shift ;;
     --native-media-frameworks)
       JARVIS_NATIVE_MEDIA=1; JARVIS_NATIVE_MEDIA_ARGUMENTS=(--native-media-frameworks); shift ;;
+    --native-media-host-runtime)
+      JARVIS_NATIVE_MEDIA_HOST=1
+      JARVIS_NATIVE_MEDIA_HOST_ARGUMENTS=(--native-media-host-runtime); shift ;;
     --filter|--budget-mib|--deadline)
       if [[ $# -lt 2 ]]; then printf '%s\n' 'Falta el valor de una opción.' >&2; exit 2; fi
       case "$1" in
@@ -71,9 +87,13 @@ while [[ $# -gt 0 ]]; do
       esac
       shift 2 ;;
     --skip-build) JARVIS_SKIP_BUILD=1; JARVIS_SWIFT_ARGUMENTS+=(--skip-build); shift ;;
-    *) printf '%s\n' 'Uso: test_desktop.sh --filter TEST --budget-mib N [--deadline S] [--native-media-frameworks], o --full en CI.' >&2; exit 2 ;;
+    *) printf '%s\n' 'Uso: test_desktop.sh --filter TEST --budget-mib N [--deadline S] [--native-media-frameworks [--native-media-host-runtime]], o --full en CI.' >&2; exit 2 ;;
   esac
 done
+if [[ "$JARVIS_NATIVE_MEDIA_HOST" == 1 && "$JARVIS_NATIVE_MEDIA" != 1 ]]; then
+  printf '%s\n' '--native-media-host-runtime requiere --native-media-frameworks.' >&2
+  exit 2
+fi
 if [[ "$JARVIS_NATIVE_MEDIA" == 1 ]]; then
   if [[ "$JARVIS_PROFILE" != local || "$JARVIS_FILTER_COUNT" -ne 1 ||
         "$JARVIS_SKIP_BUILD" -ne 0 ||
@@ -99,6 +119,7 @@ exec "$JARVIS_PYTHON" -B "$JARVIS_REPO_DIR/script/test_resource_guard.py" run \
   --repo-root "$JARVIS_REPO_DIR" --profile "$JARVIS_PROFILE" --kind swift \
   --selection "$JARVIS_SELECTION" --budget-mib "$JARVIS_BUDGET" --deadline "$JARVIS_DEADLINE" \
   ${JARVIS_FULL_ARGUMENTS[@]+"${JARVIS_FULL_ARGUMENTS[@]}"} \
-  ${JARVIS_NATIVE_MEDIA_ARGUMENTS[@]+"${JARVIS_NATIVE_MEDIA_ARGUMENTS[@]}"} -- "$JARVIS_PYTHON" -B \
+  ${JARVIS_NATIVE_MEDIA_ARGUMENTS[@]+"${JARVIS_NATIVE_MEDIA_ARGUMENTS[@]}"} \
+  ${JARVIS_NATIVE_MEDIA_HOST_ARGUMENTS[@]+"${JARVIS_NATIVE_MEDIA_HOST_ARGUMENTS[@]}"} -- "$JARVIS_PYTHON" -B \
   "$JARVIS_REPO_DIR/script/test_resource_guard.py" admitted-exec --kind swift -- \
   /bin/bash "$JARVIS_REPO_DIR/script/test_desktop.sh" --guard-child ${JARVIS_SWIFT_ARGUMENTS[@]+"${JARVIS_SWIFT_ARGUMENTS[@]}"}

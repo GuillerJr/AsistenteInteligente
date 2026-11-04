@@ -9,6 +9,7 @@ import pytest
 import yaml
 
 WORKFLOW = Path(__file__).resolve().parents[1] / ".github/workflows/ci.yml"
+MEDIA_WORKFLOW = WORKFLOW.with_name("media-diagnostic.yml")
 
 
 @pytest.fixture
@@ -17,6 +18,83 @@ def workflow_steps():
         pytest.skip("CI workflow belongs to the source checkout, not the runtime archive")
     workflow = yaml.safe_load(WORKFLOW.read_text())
     return workflow["jobs"]["python"]["steps"]
+
+
+@pytest.fixture
+def media_workflow(workflow_steps):
+    # Reuse the source-checkout admission; runtime archives do not carry workflows.
+    return yaml.safe_load(MEDIA_WORKFLOW.read_text())
+
+
+def test_media_workflow_xcode_choice_is_closed_and_precedes_actual_environment(media_workflow):
+    triggers = media_workflow.get("on", media_workflow.get(True))
+    assert triggers["workflow_dispatch"]["inputs"]["xcode"] == {
+        "description": "Xcode para el diagnóstico focal", "type": "choice", "required": True,
+        "default": "predeterminado", "options": ["predeterminado", "27.2"]}
+    job = media_workflow["jobs"]["media"]
+    assert job["runs-on"] == "xcode-27" and job["timeout-minutes"] == 15
+    steps = job["steps"]
+    selection = next(step for step in steps if step.get("id") == "xcode_selection")
+    environment = next(step for step in steps
+                       if "check_macos_ci_environment.py" in step.get("run", ""))
+    swift = next(step for step in steps if "test_resource_guard.py run" in step.get("run", ""))
+    assert steps.index(selection) < steps.index(environment) < steps.index(swift)
+    assert "if" not in selection and selection["shell"] == "bash"
+    assert selection["env"] == {"JARVIS_CI_XCODE_CHOICE": "${{ inputs.xcode }}"}
+    assert "${{" not in selection["run"]
+    for forbidden in ("sudo", "xcode-select", "install", "--skip-build"):
+        assert forbidden not in selection["run"]
+    assert environment["run"] == (
+        '.venv/bin/python -B script/check_macos_ci_environment.py '
+        '--output "${{ runner.temp }}/Jarvis-media-probe-environment.json"')
+    assert "--selection 'NativeMedia(Executor|Diagnostics)Tests'" in swift["run"]
+    assert "--filter 'NativeMedia(Executor|Diagnostics)Tests'" in swift["run"]
+    assert "--profile ci --kind swift --full" in swift["run"]
+    assert "--budget-mib 6144 --deadline 600" in swift["run"]
+    assert "--skip-build" not in swift["run"] and "--native-media" not in swift["run"]
+
+
+@pytest.mark.parametrize("choice,present,status", [
+    ("predeterminado", True, 0), ("27.2", True, 0), ("27.2", False, 2),
+    ("", True, 2), ("28.0", True, 2),
+    ("27.2/../../untrusted", True, 2), ("$(printf injected)", True, 2),
+])
+def test_media_xcode_selector_uses_only_fixed_path_or_fails_without_effects(
+    tmp_path, media_workflow, choice, present, status,
+):
+    selection = next(step for step in media_workflow["jobs"]["media"]["steps"]
+                     if step.get("id") == "xcode_selection")
+    developer = "/Applications/Xcode_27.2.app/Contents/Developer"
+    github_env = tmp_path / "github environment"
+    github_env.touch()
+    captured = tmp_path / "directory-arguments"
+    empty_path = tmp_path / "empty-bin"
+    empty_path.mkdir()
+    # Stub only the directory predicate. The real YAML body runs unchanged;
+    # this never creates or changes an installed Xcode or global preference.
+    predicate = '''test() {
+      printf '%s\\n' "$@" > "$JARVIS_CAPTURE_DIRECTORY_ARGS"
+      [[ "$#" == 2 && "$1" == -d &&
+         "$2" == /Applications/Xcode_27.2.app/Contents/Developer ]] || return 91
+      return "$JARVIS_DIRECTORY_STATUS"
+    }
+    '''
+    result = subprocess.run(
+        ["/bin/bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c",
+         predicate + selection["run"]],
+        cwd=tmp_path, env={"PATH": str(empty_path), "GITHUB_ENV": str(github_env),
+            "JARVIS_CI_XCODE_CHOICE": choice, "JARVIS_CAPTURE_DIRECTORY_ARGS": str(captured),
+            "JARVIS_DIRECTORY_STATUS": "0" if present else "1"},
+        capture_output=True, text=True, timeout=10, check=False,
+    )
+    assert result.returncode == status and result.stdout == ""
+    assert github_env.read_text() == (
+        "DEVELOPER_DIR=" + developer + "\n" if choice == "27.2" and present else "")
+    if choice == "27.2":
+        assert captured.read_text().splitlines() == ["-d", developer]
+    else:
+        assert not captured.exists()
+    assert (result.stderr == "") is (status == 0)
 
 
 @pytest.mark.parametrize("wrapper_status", [37, 0])

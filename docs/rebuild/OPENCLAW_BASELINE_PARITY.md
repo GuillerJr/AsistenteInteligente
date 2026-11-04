@@ -4,20 +4,49 @@ Referencia fijada: OpenClaw `1e3ff306abaff29f03e7668d53b01c07f10294ac` (`2026.10
 
 ## Cualificación actual — 4 de noviembre
 
-La [CI completa de `d089d16`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41883935412)
-terminó fallida: Ubuntu aprobó 4014 Python (47 omitidas), macOS 4061 Python y la
-compilación/paquetes, pero Swift ejecutó 722 casos con una omisión y cuatro fallos
-de referencia/OCR/vídeo. El [registro](PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json)
-separa ese resultado de los 103 casos focales del supervisor aprobados localmente
-y de los controles reales de Vision que siguen fallando. No se establece una
-causa de GPU/CPU. Las sondas nuevas sí compilaron y se ejecutaron: 26 métodos
-con ocho fallos en cuatro métodos. Preciso revisión 3: error ObjC sin NSError y
-callback sin error ni resultados. Rápido revisión 3: Vision 8 (`VNErrorNotImplemented`)
-en perform y callback; ambos admiten `en-US` y anuncian revisiones `[1,2,3]`.
-No hay reconocimiento confirmado ni fallback acreditado.
-G permanece NOEXEC; H está preparado sólo como diagnóstico independiente, sin ejecución
-ni cualificación. Se mantienen **62 familias parciales, 18 sin implementar y
-ninguna completa**; REA conserva **48 lotes y 186 rutas**. A sigue abierta y B aplazada.
+Seguimiento del 4 de noviembre: la [CI completa de `46c10a1`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41890910372)
+terminó **fallida**, con Swift como único paso fallido. Ubuntu aprobó 4062
+pruebas Python (47 omitidas) y macOS 4109. Swift ejecutó 725 casos, una omisión
+y siete fallos en cuatro métodos (213,929 s). El bundle y los restantes pasos
+no convierten esos fallos en una cualificación aprobada.
+
+La [comparación local con REA](qa/native-media-local-comparison-20261104/REA_SUMMARY.json)
+conserva exactamente la misma identidad completa de fuentes: las 26 pruebas
+reales pasaron en modo host sin Seatbelt, pero el control con Seatbelt volvió a
+fallar con ocho afirmaciones. Ambos conservaron fuentes y cerraron grupo/cuota.
+La diferencia observada es del aislamiento agregado local: no identifica una
+regla concreta ni la causa de CI. Host mantiene cuota, plazo y recibo, pero
+**no confina filesystem, red ni XPC**; no se presenta como sandbox.
+
+El rápido de revisión 3 sí reconoció el marcador en la CI nueva, con callback
+sin error y con resultados; el preciso devolvió `objc_missing_error` código 0,
+con callback sin error ni resultados. Eso difiere del control Seatbelt físico,
+donde el rápido devolvió Vision 8 (`VNErrorNotImplemented`). El Mac/SDK local
+27.2 y CI macOS 27.0.1/SDK 27.0 difieren; la causa remota sigue sin atribuirse.
+El selector optativo `predeterminado`/`27.2` del workflow focal ya tiene once
+pruebas aprobadas (ocho nuevas), pero su ejecución remota 27.2 sigue pendiente.
+La CI principal y la política OCR del producto no se han cambiado.
+
+Pasaron 146 regresiones focales del supervisor en grupos de 89 y 57; los once
+casos del selector se registran por separado, con sus propios árboles y recibos.
+Son comprobaciones focales, no una suite completa ni aprobación del SHA futuro.
+Se mantienen los fallos previos y la concesión IOSurface retirada por ineficaz.
+
+[H](qa/product-background-native-20261104-h/SNAPSHOT.json) ya se ejecutó como
+diagnóstico independiente. Un único run terminó conocido, limpio y sin
+herramientas; B quedó vacío. El watcher falló su límite agregado: 263.399 frente
+a 262.144 bytes. La UI observó inicialmente B vacío/desactivado durante A, pero
+luego mostró A seleccionado sin retorno intencional del root; la causa sigue
+sin resolver. El cierre GUI a los 492,207 s fue normal: seis identidades conocidas
+ausentes, mismo lease libre y un desmontaje sin fuerza, sin señales/incidencias.
+H **no está cualificado**. El metadato de dos cachés no cambió desde después del
+arranque y antes del run; no acredita supresión universal al iniciar.
+
+La [plantilla G](qa/product-background-native-20261104-g-template/SNAPSHOT.json)
+permanece **NOEXEC**, sin cambios. Las suites completas siguen en CI y el dueño
+autorizó el fallback local focal. Faltan la comparación remota 27.2 y la
+cualificación completa/nativa. La fase A sigue abierta y B aplazada: **62 familias
+parciales, 18 sin implementar y ninguna completa; REA 48 lotes y 186 rutas**.
 
 ## Alcance de «base completa»
 
@@ -70,7 +99,7 @@ El [bloque de recuperación](PHASE_A_RECOVERY.md) registra el checkpoint `b8ce4b
 | Observación y control propio del Mac | AX y ventana exacta ligada a PID/lanzamiento y CGWindowID, refs/snapshot, contenido/cursor/geometría y callback central. Frame de ventana JPEG en RAM con regiones protegidas tapadas; no archivo. 22 pruebas de componente/AppKit propio; no input AX entre procesos ni TCC real por ese hecho. Ambigüedad, permisos ausentes o AX incompleto retienen el efecto/frame. [Contrato](PHASE_A_MAC_AUTOMATION.md). |
 | Navegador administrado y pestaña adjunta | WebKit no persistente con proxy CONNECT autenticado y destinos/DNS filtrados; mundo aislado, snapshot/ref/origen y lease exactos. Adjunta sólo el WebSocket/target declarados, sin listar otras pestañas o cookies. Búsqueda requiere motor elegido; descargas publican sólo por el workspace guardado. Focal de 13 casos: WebKit/HTTP/proxy reales y CDP de fixture. La red del navegador adjunto conserva su propia política; no adquiere el sandbox administrado. Cualificación Chrome/servicios externos y GUI integrada se registran aparte. |
 | Distribución autocontenida y residencia de sesión | [CI exacta 29b730c](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41069453178) aprobada: runtime base completo incluido, pin del manifiesto en Info.plist firmado, traslado, MiniLM CPU, cliente Codex oficial sin cuenta y cierre por EOF. [Registro y límites](PHASE_A_DISTRIBUTION_RESIDENT_QUALIFICATION.json): recorrido nativo aprobado: respuesta real, residencia, reapertura y cierre sin procesos retenidos; no Login Item real, macOS 14, Developer ID/notarización ni actualización pública cualificados. MCP externos pueden requerir programas/runtimes propios. No cierra ninguna familia amplia. |
-| Producto, sesiones y coordinación locales | [Contrato](PHASE_A_PRODUCT_COORDINATION.md), [registro por checkpoint](PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json) y [fuentes OC28](REA_OC28_PRODUCT_COORDINATION.md). [CI exacta `2c8259de`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41842491175) aprobada: 3980 Python Ubuntu (47 omitidas), 4027 macOS y 710 Swift (1 omitida, 0 fallos), 25 casos nuevos del exportador, paquetes y bundle. Se conservan clientes, dos lecturas GitHub sin publicación, diez planes Git, preguntas simultáneas, paneles y sugerencias. La QA de octubre acredita clic OS B→A y aviso revisión 3→4, sin replay. D falló en la admisión de metadatos y cerró por recuperación GUI; E observó A=1/1 y B=0/0 antes/después, pero su único run terminó sin pregunta ni herramientas. E cerró normalmente y desmontó su cuota sin fuerza. F observó B durante A real, pero terminó por el sublímite del proveedor. La corrección c41378a conserva sus dos fallos de capacidad macOS26; la CI nueva d089d16 recibió macOS27 y falló en medios. G queda NOEXEC; H sólo se prepara como diagnóstico sin ejecución ni cualificación. Falta un recorrido completo con cierre normal; el intento original de seis etapas permanece parcial. Ninguna familia amplia se declara completa. |
+| Producto, sesiones y coordinación locales | [Contrato](PHASE_A_PRODUCT_COORDINATION.md), [registro por checkpoint](PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json) y [fuentes OC28](REA_OC28_PRODUCT_COORDINATION.md). [CI exacta `2c8259de`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41842491175) aprobada: 3980 Python Ubuntu (47 omitidas), 4027 macOS y 710 Swift (1 omitida, 0 fallos), 25 casos nuevos del exportador, paquetes y bundle. Se conservan clientes, dos lecturas GitHub sin publicación, diez planes Git, preguntas simultáneas, paneles y sugerencias. La QA de octubre acredita clic OS B→A y aviso revisión 3→4, sin replay. D falló en la admisión de metadatos y cerró por recuperación GUI; E observó A=1/1 y B=0/0 antes/después, pero su único run terminó sin pregunta ni herramientas. E cerró normalmente y desmontó su cuota sin fuerza. F observó B durante A real, pero terminó por el sublímite del proveedor. La CI actual46c10a1 falló en Swift; el host local pasó26 y el control Seatbelt falló, sin atribuir la causa remota. H cerró normalmente pero sigue diagnóstico parcial por el watcher y selección GUI no explicada. G queda NOEXEC intacto. Falta un recorrido completo con cierre normal; el intento original de seis etapas permanece parcial. Ninguna familia amplia se declara completa. |
 
 
 El incremento de producto conserva los fallos y la custodia de cada intento: 57f3a631 recurrió a fallback tras un hash malformado del harness; el probe 6cef observó Cmd-Q normal, un primer desmontaje false y un segundo normal correcto. El resultado incierto inicial se conserva. La corrección de esquemas y superficie oscura de 6cef y la excepción estricta del helper QA de `4686f25` cuentan ahora con CI exacta aprobada y los positivos nativos acotados descritos arriba. El fallo previo UNErrorDomain1 sigue conservado y su causa no está establecida. El intento de `4686f25` no acreditaba un clic OS; el dueño confirmó después el uso interno de «Ver chat». La nueva QA `1b0a7ead` sí acredita el clic físico del aviso mediante su confirmación y la UI B→A, con un recibo separado. Ese positivo no reescribe los fallos ni acredita las variantes amplias.

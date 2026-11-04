@@ -1,38 +1,49 @@
 # Variante propia inspirada en OpenClaw — base limpia
 
-Seguimiento del 4 de noviembre: la [CI completa de `d089d16`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41883935412)
-terminó **fallida**. Ubuntu aprobó 4014 pruebas Python (47 omitidas) y macOS
-4061 Python. En macOS también pasaron bundle autocontenido/helper/EOF,
-exportación nativa, paquetes e instalación aislada. Swift ejecutó 722 casos,
-con una omisión y cuatro fallos en tres métodos: referencia Apple y los dos
-casos originales de OCR/vídeo. Compilar no acredita su funcionamiento.
+Seguimiento del 4 de noviembre: la [CI completa de `46c10a1`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41890910372)
+terminó **fallida**, con Swift como único paso fallido. Ubuntu aprobó 4062
+pruebas Python (47 omitidas) y macOS 4109. Swift ejecutó 725 casos, una omisión
+y siete fallos en cuatro métodos (213,929 s). El bundle y los restantes pasos
+no convierten esos fallos en una cualificación aprobada.
 
-El diagnóstico canónico llama directamente a Vision con CGImage y PNG propios,
-sin helpers de Jarvis. Registró `objc_missing_error`, código 0, sin error
-subyacente. La selección física autorizada reprodujo el fallo con CPU explícita
-y selección automática; no establece una causa de GPU, virtualización o CPU.
-Una concesión experimental de IOSurface tampoco mejoró el resultado y se retiró.
-Pasaron 103 regresiones focales del supervisor en grupos de 47 y 56. Los recibos
-conservan identidad del árbol y cierre; no sustituyen la CI completa ni
-cualifican los medios. Las sondas completion/accurate/fast sí compilaron y se
-ejecutaron: 26 métodos, ocho fallos en cuatro métodos.
+La [comparación local con REA](qa/native-media-local-comparison-20261104/REA_SUMMARY.json)
+conserva exactamente la misma identidad completa de fuentes: las 26 pruebas
+reales pasaron en modo host sin Seatbelt, pero el control con Seatbelt volvió a
+fallar con ocho afirmaciones. Ambos conservaron fuentes y cerraron grupo/cuota.
+La diferencia observada es del aislamiento agregado local: no identifica una
+regla concreta ni la causa de CI. Host mantiene cuota, plazo y recibo, pero
+**no confina filesystem, red ni XPC**; no se presenta como sandbox.
 
-En ese focal, el nivel preciso con revisión 3 falló con `objc_missing_error`
-código 0; llamó al callback sin error ni resultados. El rápido con la misma
-revisión falló con Vision código 8 (`VNErrorNotImplemented`) en `perform` y en
-el callback. Ambos admitieron `en-US` y anunciaron revisiones `[1,2,3]`, con
-revisión solicitada, predeterminada y actual 3. No reconocieron el marcador:
-el modo rápido no es un fallback ni una solución acreditada. La causa sigue
-sin establecerse; [el recibo](PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json)
-conserva el árbol probado y su cierre normal, sin cualificar un commit posterior.
+El rápido de revisión 3 sí reconoció el marcador en la CI nueva, con callback
+sin error y con resultados; el preciso devolvió `objc_missing_error` código 0,
+con callback sin error ni resultados. Eso difiere del control Seatbelt físico,
+donde el rápido devolvió Vision 8 (`VNErrorNotImplemented`). El Mac/SDK local
+27.2 y CI macOS 27.0.1/SDK 27.0 difieren; la causa remota sigue sin atribuirse.
+El selector optativo `predeterminado`/`27.2` del workflow focal ya tiene once
+pruebas aprobadas (ocho nuevas), pero su ejecución remota 27.2 sigue pendiente.
+La CI principal y la política OCR del producto no se han cambiado.
+
+Pasaron 146 regresiones focales del supervisor en grupos de 89 y 57; los once
+casos del selector se registran por separado, con sus propios árboles y recibos.
+Son comprobaciones focales, no una suite completa ni aprobación del SHA futuro.
+Se mantienen los fallos previos y la concesión IOSurface retirada por ineficaz.
+
+[H](qa/product-background-native-20261104-h/SNAPSHOT.json) ya se ejecutó como
+diagnóstico independiente. Un único run terminó conocido, limpio y sin
+herramientas; B quedó vacío. El watcher falló su límite agregado: 263.399 frente
+a 262.144 bytes. La UI observó inicialmente B vacío/desactivado durante A, pero
+luego mostró A seleccionado sin retorno intencional del root; la causa sigue
+sin resolver. El cierre GUI a los 492,207 s fue normal: seis identidades conocidas
+ausentes, mismo lease libre y un desmontaje sin fuerza, sin señales a la app
+ni incidencias registradas.
+H **no está cualificado**. El metadato de dos cachés no cambió desde después del
+arranque y antes del run; no acredita supresión universal al iniciar.
 
 La [plantilla G](qa/product-background-native-20261104-g-template/SNAPSHOT.json)
-sigue **NOEXEC**: requiere CI completa aprobada y SHA, artefacto, entorno y pines
-actuales. H está preparado como diagnóstico independiente de la UI, sin ejecución
-ni cualificación; no habilita G ni cierra los fallos de medios. Las suites
-completas siguen remotas; el dueño autorizó la excepción local focal con cuota,
-plazo y recibo. El [registro](PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json)
-separa estos intentos de las pruebas históricas.
+permanece **NOEXEC**, sin cambios. Las suites completas siguen en CI y el dueño
+autorizó el fallback local focal. Faltan la comparación remota 27.2 y la
+cualificación completa/nativa. La fase A sigue abierta y B aplazada: **62 familias
+parciales, 18 sin implementar y ninguna completa; REA 48 lotes y 186 rutas**.
 
 Se conservan los antecedentes de `e61c912`/`4d5c3e1`, la compilación fallida
 de tests de `e8bb033` y los intentos macOS 26 sin runner de `c41378a`. No se

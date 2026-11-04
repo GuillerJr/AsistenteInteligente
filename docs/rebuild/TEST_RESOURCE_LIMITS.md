@@ -141,7 +141,7 @@ Python de `.venv`, al supervisor, al wrapper del repositorio y a su argv exacto;
 Se rechazan `--full`, filtros repetidos o distintos, `--skip-build`, argumentos
 extra, modelos, lecturas adicionales y exportaciones antes de crear la cuota.
 
-Este modo añade únicamente `mach-lookup` de `com.apple.lsd.mapdb`, el servicio
+Sin el segundo opt-in host, este modo añade únicamente `mach-lookup` de `com.apple.lsd.mapdb`, el servicio
 XPC `com.apple.coremedia.videoencoder` y emisión de extensión **de lectura**
 `com.apple.app-sandbox.read` para la caché de XCTest dentro del HOME de la cuota:
 `<cuota>/home/Library/Caches/com.apple.dt.xctest.tool`. No añade IOKit, permisos
@@ -184,3 +184,46 @@ La poda del registro conserva un conjunto acotado de ejecuciones cerradas: los
 recibos necesarios se archivan antes de nuevas pruebas. `bk3xmch4` e `iivyc0c5`
 ya no estaban disponibles al archivar; sus observaciones de herramienta se
 conservan como tales, sin afirmar que sus archivos originales persisten.
+
+
+## Control host de medios y comparación con REA
+
+El segundo opt-in `--native-media-host-runtime` exige también
+`--native-media-frameworks` y la misma admisión local exacta de argv/filtro. No
+admite suite completa, otros comandos, modelos ni exportaciones. Ejecuta sólo
+el harness sintético fijado sin Seatbelt: conserva volumen privado de hasta
+2 GiB, plazo de hasta 600 s, vigilancia de espacio, identidad, salida acotada
+y cierre del grupo, pero **no confina filesystem, red ni XPC**. Las escrituras y
+cachés de servicios Apple externos tampoco quedan encerradas por esa cuota.
+El recibo declara `host_runtime_without_seatbelt` y no genera `quota.sb`;
+no se describe como sandbox ni altera permisos del producto, TCC o el modo
+local por defecto.
+
+El par de controles de la [evidencia REA seleccionada](qa/native-media-local-comparison-20261104/REA_SUMMARY.json)
+conserva `source_before` completo idéntico, fingerprint
+`0799023ef089e760b6c16d372104e312e0fec0e15bbd1fc3bb23de8f60ccb74d`:
+host `17yrwu7m` aprobó 26 métodos en 63,648 s (149,760 s de supervisor,
+617.152.512 bytes de pico); Seatbelt `407fo4a2` volvió a tener ocho fallos en
+25,789 s (89,999 s, 616.304.640 bytes). Ambos conservaron las fuentes y cerraron
+normalmente. Recibos respectivos SHA-256
+`e5f53215f302218129131ba294cfcd0053813b5de3c2872d9e715649d05d5cfc`
+y `ee612838b83938b599e957aaf711d2dcbab32d5d50d1d883e0fc4f0947745a8e`.
+La comparación delimita una diferencia de aislamiento agregado local, sin
+identificar una regla concreta; REA conserva filesystem/procesos como UNKNOWN.
+No demuestra la causa de CI ni de otro entorno.
+
+Las regresiones del supervisor pasaron en dos selecciones: 89 casos en
+`uo81zgnv` (1,853 s, 4.325.376 bytes) y 57 en `xug6zje4` (6,049 s,
+5.197.824 bytes). Son 146 casos, sobre sus propios árboles registrados. Los
+once casos del selector del workflow, ocho nuevos, pasaron separadamente en
+`ijgtg_ac` (1,788 s, 3.469.312 bytes). No se presentan como una suite integrada
+ni como ejecución real del Xcode27.2 remoto. La opción sólo pertenece al workflow
+manual focal; la CI principal mantiene sus suites, builds y gates.
+
+El contraste remoto sigue pendiente: el host físico usa macOS/SDK27.2; la CI
+observada usa macOS27.0.1/SDK27.0. En la CI46c10a1 el rápido revisión3 sí
+reconoció el marcador, mientras el preciso devolvió nilObjC0. El positivo físico
+no modifica la política OCR del producto ni certifica una corrección por SO/SDK.
+El estado real del entorno solicitado se leerá del recibo remoto tras el dispatch.
+Los controles H y G siguen separados: H cerró normalmente pero no se cualifica
+por el watcher fallido y la selección GUI sin causa establecida; G queda NOEXEC.

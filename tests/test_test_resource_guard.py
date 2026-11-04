@@ -21,14 +21,16 @@ SPEC.loader.exec_module(guard)
 def options(**changes):
     values = dict(profile="local", kind="python", selection="tests/test_own.py", full=False,
                   budget_mib=64, deadline=2, native_media_frameworks=False,
+                  native_media_host_runtime=False,
                   command=[sys.executable, "-c", "pass"])
     return SimpleNamespace(**(values | changes))
 
 
-def native_media_admission(root, **changes):
+def native_media_admission(root, *, host=False, **changes):
     return {"profile": "local", "kind": "swift", "full": False,
         "selection": guard.NATIVE_MEDIA_SELECTION, "nonce": "synthetic",
-        "native_media_frameworks": guard.native_media_capabilities(root)} | changes
+        "native_media_frameworks": guard.native_media_capabilities(root, host=host)} | (
+        {"native_media_host_runtime": True} if host else {}) | changes
 
 
 def native_media_command_fixture(root):
@@ -160,17 +162,25 @@ def test_ci_requires_explicit_full_and_exact_workspace_and_head(tmp_path):
     {"selection": guard.NATIVE_MEDIA_SELECTION + " "},
     {"selection": "NativeMedia(Executor|Diagnostics)Tests|OtherTests"},
 ])
-def test_native_media_frameworks_reject_nonexact_or_remote_admission(tmp_path, changes):
+@pytest.mark.parametrize("host", [False, True])
+def test_native_media_frameworks_reject_nonexact_or_remote_admission(tmp_path, changes, host):
     configuration = {"kind": "swift", "selection": guard.NATIVE_MEDIA_SELECTION,
-                     "native_media_frameworks": True}
+                     "native_media_frameworks": True, "native_media_host_runtime": host}
     configuration.update(changes)
     with pytest.raises(guard.GuardError, match="native-media-frameworks"):
         guard.validate_options(options(**configuration), {}, {"head": "a" * 40}, tmp_path)
 
 
-def test_native_media_frameworks_keep_local_resource_limits(tmp_path):
+def test_native_media_host_runtime_requires_frameworks(tmp_path):
+    with pytest.raises(guard.GuardError, match="requiere --native-media-frameworks"):
+        guard.validate_options(options(native_media_host_runtime=True), {}, {}, tmp_path)
+
+
+@pytest.mark.parametrize("host", [False, True])
+def test_native_media_frameworks_keep_local_resource_limits(tmp_path, host):
     configuration = options(kind="swift", selection=guard.NATIVE_MEDIA_SELECTION,
                             native_media_frameworks=True, budget_mib=2048, deadline=600,
+                            native_media_host_runtime=host,
                             command=native_media_command_fixture(tmp_path))
     guard.validate_options(configuration, {}, {"head": "a" * 40}, tmp_path)
     for change in ({"budget_mib": 2049}, {"deadline": 601}):
@@ -194,7 +204,10 @@ def test_native_media_parent_command_accepts_only_controlled_absolute_or_relativ
     "skip_build", "hidden_parser_option", "bare_python", "same_python_outside_venv",
     "other_guard", "other_desktop", "direct_swift",
 ])
-def test_native_media_parent_command_rejects_program_or_argument_substitution(tmp_path, attack):
+@pytest.mark.parametrize("host", [False, True])
+def test_native_media_parent_command_rejects_program_or_argument_substitution(
+    tmp_path, attack, host,
+):
     command = native_media_command_fixture(tmp_path)
     if attack == "python_c":
         command = [command[0], "-c", "pass"]
@@ -224,7 +237,8 @@ def test_native_media_parent_command_rejects_program_or_argument_substitution(tm
     else:
         command = ["swift", "test", "--filter", guard.NATIVE_MEDIA_SELECTION]
     configuration = options(kind="swift", selection=guard.NATIVE_MEDIA_SELECTION,
-                            native_media_frameworks=True, command=command)
+                            native_media_frameworks=True, native_media_host_runtime=host,
+                            command=command)
     with pytest.raises(guard.GuardError, match="argv"):
         guard.validate_options(configuration, {}, {"head": "a" * 40}, tmp_path)
 
@@ -235,8 +249,9 @@ def test_native_media_parent_command_rejects_program_or_argument_substitution(tm
     {"export_destination": Path("/private/tmp/synthetic-export")},
     {"self_contained_export": True},
 ])
+@pytest.mark.parametrize("host", [False, True])
 def test_native_media_rejects_assets_and_exports_before_qualification_or_quota(
-    tmp_path, monkeypatch, extra,
+    tmp_path, monkeypatch, extra, host,
 ):
     monkeypatch.setattr(guard, "fingerprint", lambda _root: {"head": "a" * 40})
     for operation in ("qualify_minilm_assets", "registry_root", "create_volume"):
@@ -244,6 +259,7 @@ def test_native_media_rejects_assets_and_exports_before_qualification_or_quota(
                             lambda *_a, **_k: pytest.fail("prepared native inputs"))
     configuration = {"repo_root": tmp_path, "kind": "swift",
         "selection": guard.NATIVE_MEDIA_SELECTION, "native_media_frameworks": True,
+        "native_media_host_runtime": host,
         "command": native_media_command_fixture(tmp_path)} | extra
     with pytest.raises(guard.GuardError, match="modelos ni exportaciones"):
         guard.run(options(**configuration))
@@ -321,12 +337,14 @@ def test_environment_is_private_and_does_not_inherit_account_secrets(tmp_path):
          "SWIFTPM_PLATFORM_PATH_macosx": "/not/an/admitted/platform",
          "JARVIS_TEST_GUARD_TOOLCHAIN": "/not/an/admitted/toolchain",
          guard.NATIVE_MEDIA_ENV: "1",
+         **guard.NATIVE_MEDIA_HOST_ENVIRONMENT,
          "JARVIS_MINILM_TEST_ASSETS": "/not/an/admitted/input",
          "JARVIS_MINILM_REQUIRE_REAL": "1"}, tmp_path)
     assert "OPENAI_API_KEY" not in value and "GITHUB_TOKEN" not in value
     assert "SWIFTPM_PLATFORM_PATH_macosx" not in value
     assert "JARVIS_TEST_GUARD_TOOLCHAIN" not in value
     assert guard.NATIVE_MEDIA_ENV not in value
+    assert not any(name in value for name in guard.NATIVE_MEDIA_HOST_ENVIRONMENT)
     assert "JARVIS_MINILM_TEST_ASSETS" not in value and "JARVIS_MINILM_REQUIRE_REAL" not in value
     assert Path(value["HOME"]).is_relative_to(tmp_path)
     assert value["PYTHONDONTWRITEBYTECODE"] == "1"
@@ -358,13 +376,39 @@ def test_native_media_environment_is_derived_only_from_the_exact_admission(tmp_p
         guard.native_media_admitted(admission | {"native_media_frameworks": True}, tmp_path)
 
 
-@pytest.mark.parametrize("declared,flag,accepted", [
-    (True, "1", True), (True, None, False), (False, "1", False), (False, None, True),
+def test_native_media_host_environment_declares_unconfined_scope_and_rejects_tampering(
+    tmp_path,
+):
+    admission = native_media_admission(tmp_path, host=True)
+    value = guard.child_environment(tmp_path, tmp_path, admission, {}, tmp_path)
+    assert value[guard.NATIVE_MEDIA_ENV] == "1"
+    assert all(value[name] == setting
+               for name, setting in guard.NATIVE_MEDIA_HOST_ENVIRONMENT.items())
+    for metadata in ({"native_media_host_runtime": False},
+                     {"native_media_frameworks": guard.native_media_capabilities(tmp_path)}):
+        with pytest.raises(guard.GuardError):
+            guard.native_media_admitted(admission | metadata, tmp_path)
+    tampered = dict(admission["native_media_frameworks"], sandbox_enforced=True)
+    with pytest.raises(guard.GuardError):
+        guard.native_media_admitted(admission | {"native_media_frameworks": tampered}, tmp_path)
+    with pytest.raises(guard.GuardError):
+        guard.native_media_admitted({"native_media_host_runtime": True}, tmp_path)
+
+
+@pytest.mark.parametrize("declared,flag,host,host_environment,accepted", [
+    (True, "1", False, {}, True), (True, None, False, {}, False),
+    (False, "1", False, {}, False), (False, None, False, {}, True),
+    (True, "1", True, guard.NATIVE_MEDIA_HOST_ENVIRONMENT, True),
+    (True, "1", True, {}, False),
+    (True, "1", False, guard.NATIVE_MEDIA_HOST_ENVIRONMENT, False),
+    (False, None, False, guard.NATIVE_MEDIA_HOST_ENVIRONMENT, False),
+    (True, "1", True, guard.NATIVE_MEDIA_HOST_ENVIRONMENT | {
+        "JARVIS_TEST_GUARD_SANDBOX_ENFORCED": "true"}, False),
 ])
 def test_native_media_admission_binds_the_child_environment(
-    tmp_path, monkeypatch, declared, flag, accepted,
+    tmp_path, monkeypatch, declared, flag, host, host_environment, accepted,
 ):
-    admission = native_media_admission(tmp_path) | {
+    admission = native_media_admission(tmp_path, host=host) | {
         "format": guard.FORMAT, "run_root": str(tmp_path), "guard_pid": 1234,
         "source_fingerprint": "synthetic-source"}
     if not declared:
@@ -376,6 +420,7 @@ def test_native_media_admission_binds_the_child_environment(
         "JARVIS_TEST_GUARD_RUN_ROOT": str(tmp_path)}
     if flag is not None:
         environment[guard.NATIVE_MEDIA_ENV] = flag
+    environment.update(host_environment)
     monkeypatch.setattr(guard.os, "environ", environment)
     monkeypatch.setattr(guard.os, "getppid", lambda: 1234)
     monkeypatch.setattr(guard, "read_private_json", lambda _path: admission)
@@ -384,7 +429,7 @@ def test_native_media_admission_binds_the_child_environment(
     if accepted:
         assert guard.verify_admission(tmp_path, "swift") == admission
     else:
-        with pytest.raises(guard.GuardError, match="entorno de frameworks"):
+        with pytest.raises(guard.GuardError, match=r"entorno de (frameworks|runtime host)"):
             guard.verify_admission(tmp_path, "swift")
 
 
@@ -440,6 +485,28 @@ def test_native_media_policy_adds_only_named_services_and_private_read_extension
     assert "global-name-regex" not in additions and "xpc-service-name-regex" not in additions
     assert str(source) not in additions and str(control) not in additions
     assert "/Users/jarvis-fixture" not in additions
+
+
+@pytest.mark.parametrize("frameworks,host", [(False, False), (True, False), (True, True)])
+def test_native_media_host_is_the_only_local_command_without_seatbelt(tmp_path, frameworks, host):
+    control = tmp_path / "control"
+    control.mkdir()
+    command = ["SYNTHETIC_ADMITTED_COMMAND"]
+    actual = guard.local_test_command(command, tmp_path / "source", control, tmp_path / "volume",
+        native_media_frameworks=frameworks, native_media_host_runtime=host)
+    if host:
+        assert actual == command and not (control / "quota.sb").exists()
+        assert "/usr/bin/sandbox-exec" not in actual
+    else:
+        assert actual == ["/usr/bin/sandbox-exec", "-f", str(control / "quota.sb"), *command]
+        policy = (control / "quota.sb").read_text()
+        assert ("com.apple.lsd.mapdb" in policy) is frameworks
+    with pytest.raises(guard.GuardError):
+        guard.local_test_command(command, tmp_path, control, tmp_path / "volume",
+                                 native_media_host_runtime=True)
+    with pytest.raises(guard.GuardError):
+        guard.local_test_command(command, tmp_path, control, tmp_path / "volume",
+            native_media_frameworks=True, native_media_host_runtime=True, extra_reads=(tmp_path,))
 
 
 def test_policy_reads_only_the_public_xcode_license_preference_literally(tmp_path):
@@ -684,6 +751,8 @@ def wrapper_fixture(tmp_path, wrapper):
     ("test_desktop.sh", ["--full"], True),
     ("test_desktop.sh", ["--native-media-frameworks", "--filter", guard.NATIVE_MEDIA_SELECTION,
                          "--budget-mib", "32"], False),
+    ("test_desktop.sh", ["--native-media-host-runtime", "--native-media-frameworks", "--filter",
+                         guard.NATIVE_MEDIA_SELECTION, "--budget-mib", "32"], False),
     ("build_desktop.sh", ["--budget-mib", "32"], False),
     ("build_desktop.sh", ["--full"], True),
     ("build_desktop.sh", ["--full", "--self-contained"], True),
@@ -708,6 +777,12 @@ def test_wrappers_forward_empty_optional_arrays_on_system_bash(
         assert "--native-media-frameworks" not in forwarded[forwarded.index("--guard-child"):]
     else:
         assert "--native-media-frameworks" not in forwarded
+    if "--native-media-host-runtime" in arguments:
+        assert forwarded.count("--native-media-host-runtime") == 1
+        assert forwarded.index("--native-media-host-runtime") < forwarded.index("--")
+        assert "--native-media-host-runtime" not in forwarded[forwarded.index("--guard-child"):]
+    else:
+        assert "--native-media-host-runtime" not in forwarded
     if "--self-contained" in arguments:
         assert forwarded[-1] == "--self-contained"
         assert forwarded[forwarded.index("--minilm-test-assets") + 1] == str(
@@ -715,6 +790,16 @@ def test_wrappers_forward_empty_optional_arrays_on_system_bash(
 
 
 @pytest.mark.parametrize("arguments", [
+    ["--native-media-host-runtime", "--filter", guard.NATIVE_MEDIA_SELECTION,
+     "--budget-mib", "32"],
+    ["--native-media-host-runtime", "--native-media-frameworks", "--full"],
+    ["--native-media-frameworks", "--native-media-host-runtime", "--filter", "OtherTests",
+     "--budget-mib", "32"],
+    ["--native-media-frameworks", "--native-media-host-runtime", "--filter",
+     guard.NATIVE_MEDIA_SELECTION, "--skip-build", "--budget-mib", "32"],
+    ["--native-media-frameworks", "--native-media-host-runtime", "--filter",
+     guard.NATIVE_MEDIA_SELECTION, "--filter", guard.NATIVE_MEDIA_SELECTION,
+     "--budget-mib", "32"],
     ["--native-media-frameworks", "--full"],
     ["--full", "--native-media-frameworks"],
     ["--native-media-frameworks", "--budget-mib", "32"],
@@ -743,6 +828,9 @@ def test_native_media_wrapper_rejects_full_other_or_duplicate_filters(tmp_path, 
     (["--filter", guard.NATIVE_MEDIA_SELECTION], {"JARVIS_TEST_GUARD_PROFILE": "ci"}),
     (["--filter", guard.NATIVE_MEDIA_SELECTION], {"JARVIS_TEST_GUARD_SELECTION": "OtherTests"}),
     (["--filter", guard.NATIVE_MEDIA_SELECTION], {"JARVIS_TEST_GUARD_CHILD_CHECKED": "untrusted"}),
+    (["--filter", guard.NATIVE_MEDIA_SELECTION], {guard.NATIVE_MEDIA_HOST_ENV: "1"}),
+    (["--filter", guard.NATIVE_MEDIA_SELECTION], guard.NATIVE_MEDIA_HOST_ENVIRONMENT | {
+        "JARVIS_TEST_GUARD_SANDBOX_ENFORCED": "true"}),
 ])
 def test_native_media_wrapper_child_checks_scope_before_creating_keys(tmp_path, arguments, changes):
     selected = wrapper_fixture(tmp_path, "test_desktop.sh")
@@ -878,6 +966,7 @@ def test_closed_mode_zero_cleanup_has_durable_child_failure_receipt(tmp_path):
     receipt = guard.read_private_json(arguments["control"] / "receipt.json")
     assert receipt["cleanup_status"] == "confirmed" and receipt["result"]["exit_code"] == 7
     assert "native_media_frameworks" not in receipt
+    assert "native_media_host_runtime" not in receipt
     assert not arguments["pending_path"].exists() and not arguments["run_root"].exists()
 
 
@@ -889,6 +978,7 @@ def test_native_media_receipt_declares_external_service_and_cache_scope(tmp_path
     receipt = guard.read_private_json(arguments["control"] / "receipt.json")
     capability = receipt["native_media_frameworks"]
     assert capability["enabled"] is True
+    assert "native_media_host_runtime" not in receipt
     assert capability["mach_global_names"] == ["com.apple.lsd.mapdb"]
     assert capability["xpc_service_names"] == ["com.apple.coremedia.videoencoder"]
     assert capability["file_issue_extension"] == {
@@ -905,6 +995,28 @@ def test_native_media_receipt_declares_external_service_and_cache_scope(tmp_path
     assert external["cleanup_scope"] == "owned_process_group_and_private_quota_only"
     assert receipt["cleanup_status"] == "confirmed" and receipt["source_unchanged"]
     assert receipt["full_qualification"] == "pending_remote_ci"
+
+
+def test_native_media_host_receipt_does_not_claim_effective_allowlists(tmp_path):
+    arguments = outcome_fixture(tmp_path)
+    arguments["options"] = options(kind="swift", selection=guard.NATIVE_MEDIA_SELECTION,
+        native_media_frameworks=True, native_media_host_runtime=True)
+    assert guard.finalize_evidence(**arguments)
+    receipt = guard.read_private_json(arguments["control"] / "receipt.json")
+    assert receipt["native_media_host_runtime"] is True
+    capabilities = receipt["native_media_frameworks"]
+    assert capabilities["sandbox_enforced"] is False
+    assert capabilities["execution_mode"] == "host_runtime_without_seatbelt"
+    assert capabilities["scope"] == "fixed_native_media_test_harness_only"
+    for resource in ("filesystem", "network", "xpc"):
+        assert capabilities[resource + "_confinement"] == "not_confined"
+    assert capabilities["apfs_quota_scope"] == "private_test_volume_only"
+    for allowance in ("mach_global_names", "xpc_service_names", "file_issue_extension"):
+        assert allowance not in capabilities
+    assert capabilities["external_os_xpc"]["cache_writes_outside_quota"] == "unconfirmed"
+    assert capabilities["external_os_xpc"]["all_service_filesystem_effects_confined"] is False
+    assert receipt["budget_bytes"] == arguments["options"].budget_mib * guard.MIB
+    assert receipt["deadline_seconds"] == arguments["options"].deadline
 
 
 def test_receipt_io_failure_still_emits_ci_tail_and_orphan_blocks_reuse(

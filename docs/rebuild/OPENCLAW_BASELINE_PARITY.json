@@ -45,7 +45,7 @@
       "Contratos declarados y rutas UI no acreditan disponibilidad ni funcionamiento real.",
       "No se ejecutó OpenClaw ni se leyó configuración/cuenta del dueño."
     ],
-    "current_jarvis_state": "La CI completa de d089d16 (41883935412) terminó fallida: Ubuntu aprobó 4014 Python (47 omitidas) y macOS 4061 Python, bundle autocontenido/helper/EOF, exportación nativa, paquetes y smoke. Swift ejecutó 722 casos, con una omisión y cuatro fallos en tres métodos. El focal físico nuevo compiló y ejecutó 26 métodos, con ocho fallos en cuatro métodos: el preciso revisión 3 devuelve objc_missing_error código 0, callback llamado sin error ni resultados; el rápido revisión 3 devuelve Vision código 8 (VNErrorNotImplemented) tanto en perform como en callback. Ambos admiten en-US y anuncian revisiones [1,2,3], sin reconocimiento confirmado ni causa establecida. Las 103 regresiones focales del supervisor pasaron; no cualifican medios. G sigue NOEXEC y H preparado sólo como diagnóstico independiente, sin ejecución ni cualificación. La publicación real de GitHub sigue sin ejercitarse. Se mantienen 62 familias parciales, 18 sin implementar y ninguna completa; REA 48 lotes y 186 rutas. Fase A abierta y B aplazada."
+    "current_jarvis_state": "CI46c10a1/run41890910372 fallida sólo en Swift:4062 Python Ubuntu(47 omitidas),4109macOS,725Swift(1omitida,7fallos/4métodos). Fast v3 reconoce en CI; precise v3 falla nilObjC0, causa remota no atribuida. Comparación local REA: mismo source_before completo,26 casos pasan host sin Seatbelt y control26 tiene8fallos; diferencia de aislamiento agregado local, sin regla concreta ni causaCI. Host mantiene cuota/plazo/recibo pero no confina filesystem/red/XPC.146 regresiones del guard y11 del selector pasaron por separado; selección remota Xcode27.2 aún sin ejecutar. H ejecutó un run y cerró normalmente, pero watcher263399>262144 y selección GUI inesperada impiden cualificarlo. GNOEXEC intacto; GitHub publicación real pendiente.62familias parciales/18sin implementar/0completas;REA48lotes/186rutas;Aabierta/Baplazada."
   },
   "status_vocabulary": {
     "no_implementado": "Sin evidencia productiva propia de cierre.",
@@ -14510,7 +14510,7 @@
   },
   "progress_snapshot": {
     "date": "2026-11-04",
-    "revision_scope": "La CI completa de d089d16 (41883935412) terminó fallida: Ubuntu aprobó 4014 Python (47 omitidas) y macOS 4061 Python, bundle autocontenido/helper/EOF, exportación nativa, paquetes y smoke. Swift ejecutó 722 casos, con una omisión y cuatro fallos en tres métodos. El focal físico nuevo compiló y ejecutó 26 métodos, con ocho fallos en cuatro métodos: el preciso revisión 3 devuelve objc_missing_error código 0, callback llamado sin error ni resultados; el rápido revisión 3 devuelve Vision código 8 (VNErrorNotImplemented) tanto en perform como en callback. Ambos admiten en-US y anuncian revisiones [1,2,3], sin reconocimiento confirmado ni causa establecida. Las 103 regresiones focales del supervisor pasaron; no cualifican medios. G sigue NOEXEC y H preparado sólo como diagnóstico independiente, sin ejecución ni cualificación. La publicación real de GitHub sigue sin ejercitarse. Se mantienen 62 familias parciales, 18 sin implementar y ninguna completa; REA 48 lotes y 186 rutas. Fase A abierta y B aplazada.",
+    "revision_scope": "CI46c10a1/run41890910372 fallida sólo en Swift:4062 Python Ubuntu(47 omitidas),4109macOS,725Swift(1omitida,7fallos/4métodos). Fast v3 reconoce en CI; precise v3 falla nilObjC0, causa remota no atribuida. Comparación local REA: mismo source_before completo,26 casos pasan host sin Seatbelt y control26 tiene8fallos; diferencia de aislamiento agregado local, sin regla concreta ni causaCI. Host mantiene cuota/plazo/recibo pero no confina filesystem/red/XPC.146 regresiones del guard y11 del selector pasaron por separado; selección remota Xcode27.2 aún sin ejecutar. H ejecutó un run y cerró normalmente, pero watcher263399>262144 y selección GUI inesperada impiden cualificarlo. GNOEXEC intacto; GitHub publicación real pendiente.62familias parciales/18sin implementar/0completas;REA48lotes/186rutas;Aabierta/Baplazada.",
     "complete_capability_count": 0,
     "complete_reference_parity": false,
     "authenticated_inference_verified": true,
@@ -15539,7 +15539,7 @@
         "id": "P-PRODUCT-COORDINATION",
         "component": "Producto, sesiones y coordinación locales",
         "status": "contract_tested_partial",
-        "qualification_status": "partial_macOS27_media_probe_failures_G_NOEXEC_H_diagnostic_prepared",
+        "qualification_status": "partial_local_host_pass_remote_media_failure_H_partial_G_NOEXEC",
         "capability_ids": [
           "A-14",
           "A-17",
@@ -15607,7 +15607,7 @@
           "REA_OC28_COORDINATION.json",
           "REA_OC28_WORKTREES.json"
         ],
-        "verified_scope": "La CI completa de d089d16 (41883935412) terminó fallida: Ubuntu aprobó 4014 Python (47 omitidas) y macOS 4061 Python, bundle autocontenido/helper/EOF, exportación nativa, paquetes y smoke. Swift ejecutó 722 casos, con una omisión y cuatro fallos en tres métodos. El focal físico nuevo compiló y ejecutó 26 métodos, con ocho fallos en cuatro métodos: el preciso revisión 3 devuelve objc_missing_error código 0, callback llamado sin error ni resultados; el rápido revisión 3 devuelve Vision código 8 (VNErrorNotImplemented) tanto en perform como en callback. Ambos admiten en-US y anuncian revisiones [1,2,3], sin reconocimiento confirmado ni causa establecida. Las 103 regresiones focales del supervisor pasaron; no cualifican medios. G sigue NOEXEC y H preparado sólo como diagnóstico independiente, sin ejecución ni cualificación. La publicación real de GitHub sigue sin ejercitarse. Se mantienen 62 familias parciales, 18 sin implementar y ninguna completa; REA 48 lotes y 186 rutas. Fase A abierta y B aplazada.",
+        "verified_scope": "CI46c10a1/run41890910372 fallida sólo en Swift:4062 Python Ubuntu(47 omitidas),4109macOS,725Swift(1omitida,7fallos/4métodos). Fast v3 reconoce en CI; precise v3 falla nilObjC0, causa remota no atribuida. Comparación local REA: mismo source_before completo,26 casos pasan host sin Seatbelt y control26 tiene8fallos; diferencia de aislamiento agregado local, sin regla concreta ni causaCI. Host mantiene cuota/plazo/recibo pero no confina filesystem/red/XPC.146 regresiones del guard y11 del selector pasaron por separado; selección remota Xcode27.2 aún sin ejecutar. H ejecutó un run y cerró normalmente, pero watcher263399>262144 y selección GUI inesperada impiden cualificarlo. GNOEXEC intacto; GitHub publicación real pendiente.62familias parciales/18sin implementar/0completas;REA48lotes/186rutas;Aabierta/Baplazada.",
         "ci_verified_checkpoint": {
           "commit": "64fbc48ac1b1b3d77d74f0d0576a02ada3be65e8",
           "ci_run_id": 41103606527,
@@ -15635,94 +15635,53 @@
           "self_contained_bundle_and_parent_eof": "success"
         },
         "latest_ci": {
+          "commit": "46c10a1da8ea0c8bd2ead495c3a4c507fcf183de",
+          "ci_run_id": 41890910372,
+          "run_attempt": 1,
+          "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41890910372",
           "status": "completed",
           "conclusion": "failure",
           "full_remote_ci_passed": false,
+          "qualified": false,
+          "only_failed_step": "Pruebas Swift",
           "ubuntu": {
-            "job_id": 126763230307,
+            "job_id": 126787738717,
             "status": "completed",
             "conclusion": "success",
-            "passed": 4014,
+            "passed": 4062,
             "skipped": 47,
             "failed": 0,
-            "seconds": 287.64,
-            "guard_elapsed_seconds": 289.039,
-            "guard_peak_bytes": 569335808,
-            "guard_source_unchanged": true,
-            "guard_cleanup_status": "confirmed"
+            "seconds": 327.32
           },
           "macos": {
-            "job_id": 126763230303,
+            "job_id": 126787738033,
             "status": "completed",
             "conclusion": "failure",
-            "python_passed": 4061,
-            "python_seconds": 424.49,
-            "python_guard_elapsed_seconds": 426.468,
-            "python_guard_peak_bytes": 266067968,
-            "python_guard_source_unchanged": true,
-            "python_guard_cleanup_status": "confirmed",
-            "swift_executed": 722,
+            "python_passed": 4109,
+            "python_seconds": 418.41,
+            "swift_executed": 725,
             "swift_skipped": 1,
-            "swift_unexpected_failures": 2,
-            "swift_failed_test_methods": 3,
-            "swift_seconds": 244.264,
-            "other_passed": [
-              "self_contained_bundle",
-              "helper",
-              "parent_EOF",
-              "native_QA_export",
-              "wheel",
-              "sdist",
-              "installation_smoke"
-            ],
-            "provenance": "Parent preserved the decoded complete GitHub job log with hash; values above supplied after the job completed.",
-            "saved_job_log_path": "/private/tmp/jarvis-product-ci-20261104/d089-macos-job.log",
-            "saved_job_log_bytes": 572121,
-            "saved_job_log_sha256": "c71b54cd78d73ae94e96306913a26eb81efc51348b87413d1fd5fced44f76afb",
-            "swift_failures": 4,
-            "failures": [
-              {
-                "test": "NativeMediaDiagnosticsTests.testIndependentAppleVisionReferenceComparesOnlyLegacyCPUFlagOnSameBitmap",
-                "assertion_failures": 2,
-                "error_kind": "objc_missing_error",
-                "code": 0
-              },
-              {
-                "test": "NativeMediaExecutorTests.testScannedPDFAndPNGRunRealOfflineVisionWithSourceCitations",
-                "error": "decoderFailed"
-              },
-              {
-                "test": "NativeMediaExecutorTests.testVideoIsSampledLocallyAndCannotClaimFullObservation",
-                "error": "decoderFailed"
-              }
-            ]
+            "swift_failures": 7,
+            "swift_failed_test_methods": 4,
+            "swift_seconds": 213.929,
+            "fast_level_revision3_reference": {
+              "recognized_marker": true,
+              "callback_had_error": false,
+              "callback_has_results": true
+            },
+            "accurate_level_revision3_reference": {
+              "error_kind": "objc_missing_error",
+              "code": 0,
+              "callback_had_error": false,
+              "callback_has_results": false
+            },
+            "cause_established": false
           },
-          "artifacts": {
-            "environment": {
-              "id": 13351016151,
-              "archive_bytes": 394,
-              "archive_sha256": "97dd724d9269f6ca426c96e5a6b06c7c6690fbc836656140c1e0da225b8664ec"
-            },
-            "native_QA": {
-              "id": 13351795751,
-              "archive_bytes": 7935189,
-              "archive_sha256": "6e59afc1ad9eb2b75b8f6ec57e8b4b2132753703d20fbeba894d8a0e839bf67c"
-            },
-            "full_Swift_diagnostic": {
-              "id": 13350644233,
-              "archive_bytes": 33662,
-              "archive_sha256": "ada8ac35b48c6a36d45bdc2190a31d9b7235338d3fe6804904e5a7d6a7349632"
-            },
-            "scope": "Artifact metadata does not establish a green workflow; native artifact must not be consumed for G under the current gate."
-          },
-          "commit": "d089d16550d8c2fa56cd2d5ce20726bd3bdff0bf",
-          "run_attempt": 1,
-          "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41883935412",
-          "qualified": false,
-          "native_final_case_executed": false,
-          "local_full_suites_or_builds_run": false,
-          "limit": "Latest completed exact-source CI is failed; artifacts and passing Python do not qualify media or G. Physical focal receipts below bind their own worktree fingerprints.",
-          "ci_run_id": 41883935412
+          "source_of_counts": "Completed job logs reviewed by root; no remote27.2 selection result is claimed.",
+          "native_G_executed": false,
+          "native_H_qualified": false,
+          "phase_a_complete": false,
+          "limit": "The source checkpoint is a failed CI, with fast/accurate behavior different from the local Seatbelt control. Host focal success does not retroactively qualify this remote workflow or the future frozen checkpoint."
         },
         "observed_selected_cases": {
           "local_client_selections": 7,
@@ -15767,7 +15726,15 @@
           },
           "background_case_F_complete": false,
           "background_case_F_limit": "CUA B0 and signed A running observed; provider sub-budget stopped run before final stages; no normal GUI close claim.",
-          "background_case_F_snapshot": "qa/product-background-native-20261104-f/SNAPSHOT.json"
+          "background_case_F_snapshot": "qa/product-background-native-20261104-f/SNAPSHOT.json",
+          "background_native_diagnostic_H": {
+            "snapshot": "qa/product-background-native-20261104-h/SNAPSHOT.json",
+            "executed": true,
+            "qualified": false,
+            "normal_close": true,
+            "watch_failed": true,
+            "GUI_selection_cause_established": false
+          }
         },
         "failures_and_custody_preserved": [
           {
@@ -15794,11 +15761,11 @@
             "facts": "Cmd-Q normal observado; primer intento de desmontaje false y segundo desmontaje normal correcto. Conservar el resultado/unknown inicial, sin convertirlo retroactivamente en cierre íntegro al primer intento."
           }
         ],
-        "remaining": "Cerrar OCR/vídeo en macOS y cualificar el SHA final. Las sondas completion/accurate/fast compilaron y fallaron, sin causa ni solución establecidas. G sigue NOEXEC; H está preparado sólo como diagnóstico sin ejecución ni cualificación. Conserva el hueco de seis etapas, D/E/F parciales y publicación GitHub real pendiente.",
+        "remaining": "Comparación remota Xcode27.2 y cualificación del SHA final pendientes. No cambiar OCR por el positivo host local. H parcial por watcher y selección GUI sin causa establecida; G NOEXEC intacto, publicación GitHub real y variantes amplias pendientes.",
         "phase_a_complete": false,
         "phase_b_started": false,
         "qualification_file": "PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json",
-        "test_evidence_note": "Historical full green CI 2c8259de remains separate. Latest d089 CI failed in media. Local guard selections passed 103 cases; the new physical focal compiled and executed 26 tests with 8 failures. Accurate/fast are diagnostics, not fallback solutions. G NOEXEC; H prepared without execution or qualification.",
+        "test_evidence_note": "Same-source local REA host26 passes, Seatbelt control26 has8 failures. Remote46c CI fast succeeds while accurate fails. These are scoped observations, not a specific-rule or CI cause.146 guard +11 workflow tests are separate focal records. H normal closure does not repair watcher failure or unexplained selection. No broad qualification.",
         "new_corrections_ci_and_native_retest_pending": true,
         "os_notification_click_pending": false,
         "notification_follow_up_record": "PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json#/native_qualification/notification_closeout_attempt",
