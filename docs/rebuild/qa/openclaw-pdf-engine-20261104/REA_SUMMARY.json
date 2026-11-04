@@ -1,0 +1,156 @@
+{
+  "source_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "input_kind": "inert selected source partition; not a shipped runtime",
+  "parent_evidence_id": "ev_fe7be8c0f4004891b7c2345aebb30c60448bbb52566ee0c2ebbbaf69aa149d25",
+  "summary_evidence_id": "ev_df036f93a12b679b1433722f3626529872334c1d96efeecf896012c8dc010f09",
+  "trace_evidence_id": "ev_0fe17eb28c8510acc3dd704da1626c4feb0374885c5b8b5ccdcd2ad2c3b894ee",
+  "artifact_sha256": "f3bb1e07d811e154b1bda881f2484083e9f857933e80617715d953cc4e28160b",
+  "source_selection": {
+    "requested_paths": [
+      "extensions/document-extract/document-extractor.runtime.ts",
+      "extensions/document-extract/document-extractor.ts",
+      "extensions/document-extract/document-extractor.worker.ts",
+      "extensions/document-extract/document-extractor-worker-entrypoint.ts",
+      "extensions/document-extract/index.ts",
+      "extensions/document-extract/package.json",
+      "extensions/document-extract/openclaw.plugin.json",
+      "src/agents/tools/pdf-tool.ts",
+      "src/agents/tools/pdf-native-providers.ts"
+    ],
+    "unselected_files": 1
+  },
+  "statistics": {
+    "relevant_files": 10,
+    "nested_asar_containers": 0,
+    "text_bytes_read": 43460,
+    "invalid_utf8_files": 0,
+    "parsed_javascript_files": 7,
+    "skipped_javascript_files": 0,
+    "visited_ast_nodes": 4907,
+    "findings": 163,
+    "modules": 0,
+    "parse_failures": 0
+  },
+  "coverage": {
+    "application": {
+      "status": "partial",
+      "truncated": false,
+      "omitted_count": null,
+      "limits": []
+    },
+    "semantic": {
+      "status": "unknown",
+      "truncated": false,
+      "omitted_nodes": 0,
+      "omitted_relations": 0,
+      "limits": [],
+      "families": [
+        {
+          "family": "boundary",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "call-flow",
+          "status": "partial",
+          "retained_relations": 48,
+          "omitted_relations": 0,
+          "unknown_count": 249
+        },
+        {
+          "family": "child-process",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "closure",
+          "status": "partial",
+          "retained_relations": 244,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "configuration",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "data-flow",
+          "status": "partial",
+          "retained_relations": 2120,
+          "omitted_relations": 0,
+          "unknown_count": 331
+        },
+        {
+          "family": "event",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "object-flow",
+          "status": "partial",
+          "retained_relations": 293,
+          "omitted_relations": 0,
+          "unknown_count": 359
+        },
+        {
+          "family": "promise-ownership",
+          "status": "partial",
+          "retained_relations": 34,
+          "omitted_relations": 0,
+          "unknown_count": 31
+        },
+        {
+          "family": "request",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "resource-lifecycle",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        },
+        {
+          "family": "timer",
+          "status": "partial",
+          "retained_relations": 0,
+          "omitted_relations": 0,
+          "unknown_count": 0
+        }
+      ]
+    },
+    "application_unknowns": 1,
+    "semantic_unknowns": 970
+  },
+  "trace_summary": {
+    "matched_seeds": 1,
+    "traced_nodes": 129,
+    "traced_edges": 157,
+    "terminal_paths": 2,
+    "native_handoffs": 0,
+    "observed_facts": 44,
+    "inferred_facts": 268,
+    "unknown_facts": 0,
+    "unavailable_facts": 1
+  },
+  "trace_coverage": {
+    "status": "partial",
+    "source_graph_status": "partial",
+    "total_seed_matches": 1
+  },
+  "executed": false,
+  "clawpdf_internals_inspected": false,
+  "provider_call_performed": false
+}

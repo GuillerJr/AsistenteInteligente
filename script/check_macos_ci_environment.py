@@ -74,7 +74,9 @@ def version(value):
     return tuple(map(int, value.split(".")))
 
 
-def collect(environment=None, *, command_runner=capture):
+def collect(environment=None, *, command_runner=capture, minimum_major=27):
+    require(type(minimum_major) is int and minimum_major in {26, 27},
+            "minimum_major_not_admitted")
     environment = os.environ if environment is None else environment
     require(sys.platform == "darwin" and environment.get("CI") == "true"
             and environment.get("GITHUB_ACTIONS") == "true", "remote_macos_ci_required")
@@ -88,8 +90,8 @@ def collect(environment=None, *, command_runner=capture):
                 "command_output_limit")
         values[name] = value
     require(values["architecture"] == "arm64", "apple_silicon_required")
-    require(version(values["os"]) >= (27, 0), "macos_27_required")
-    require(version(values["sdk"]) >= (27, 0), "sdk_27_required")
+    require(version(values["os"]) >= (minimum_major, 0), f"macos_{minimum_major}_required")
+    require(version(values["sdk"]) >= (minimum_major, 0), f"sdk_{minimum_major}_required")
     xcode = re.fullmatch(r"Xcode ([0-9]+(?:\.[0-9]+){1,2})\nBuild version ([A-Za-z0-9.]+)",
                          values["xcode"])
     swift = re.search(r"\b(?:Apple )?Swift version ([0-9]+(?:\.[0-9]+){1,2})\b",
@@ -115,9 +117,10 @@ def write_receipt(output: Path, receipt):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Comprobar el entorno remoto Apple Silicon")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--minimum-major", type=int, choices=(26, 27), default=27)
     args = parser.parse_args(argv)
     try:
-        print(write_receipt(args.output, collect()))
+        print(write_receipt(args.output, collect(minimum_major=args.minimum_major)))
     except (EnvironmentCheckError, OSError, subprocess.SubprocessError,
             UnicodeError, ValueError) as error:
         failure = {"format": FORMAT, "status": "rejected",

@@ -28,17 +28,29 @@ def media_workflow(workflow_steps):
 
 def test_media_workflow_xcode_choice_is_closed_and_precedes_actual_environment(media_workflow):
     triggers = media_workflow.get("on", media_workflow.get(True))
+    assert triggers["workflow_dispatch"]["inputs"]["runner"] == {
+        "description": "Runner oficial para el diagnóstico focal", "type": "choice",
+        "required": True, "default": "xcode-27", "options": ["xcode-27", "macos-26"]}
     assert triggers["workflow_dispatch"]["inputs"]["xcode"] == {
         "description": "Xcode para el diagnóstico focal", "type": "choice", "required": True,
         "default": "predeterminado", "options": ["predeterminado", "27.2"]}
     job = media_workflow["jobs"]["media"]
-    assert job["runs-on"] == "xcode-27" and job["timeout-minutes"] == 15
+    assert job["runs-on"] == (
+        "${{ inputs.runner == 'macos-26' && 'macos-26' || 'xcode-27' }}")
+    assert job["timeout-minutes"] == 15
     steps = job["steps"]
+    runner = next(step for step in steps if step.get("id") == "runner_selection")
     selection = next(step for step in steps if step.get("id") == "xcode_selection")
     environment = next(step for step in steps
                        if "check_macos_ci_environment.py" in step.get("run", ""))
     swift = next(step for step in steps if "test_resource_guard.py run" in step.get("run", ""))
-    assert steps.index(selection) < steps.index(environment) < steps.index(swift)
+    dependencies = next(step for step in steps if "uv sync" in step.get("run", ""))
+    assert steps.index(runner) < steps.index(selection) < steps.index(dependencies)
+    assert steps.index(dependencies) < steps.index(environment) < steps.index(swift)
+    assert "if" not in runner and runner["shell"] == "bash"
+    assert runner["env"] == {"JARVIS_CI_RUNNER_CHOICE": "${{ inputs.runner }}",
+                             "JARVIS_CI_XCODE_CHOICE": "${{ inputs.xcode }}"}
+    assert "inputs." not in runner["run"] and "self-hosted" not in runner["run"]
     assert "if" not in selection and selection["shell"] == "bash"
     assert selection["env"] == {"JARVIS_CI_XCODE_CHOICE": "${{ inputs.xcode }}"}
     assert "${{" not in selection["run"]
@@ -46,12 +58,43 @@ def test_media_workflow_xcode_choice_is_closed_and_precedes_actual_environment(m
         assert forbidden not in selection["run"]
     assert environment["run"] == (
         '.venv/bin/python -B script/check_macos_ci_environment.py '
+        '--minimum-major "$JARVIS_CI_MINIMUM_MAJOR" '
         '--output "${{ runner.temp }}/Jarvis-media-probe-environment.json"')
     assert "--selection 'NativeMedia(Executor|Diagnostics)Tests'" in swift["run"]
     assert "--filter 'NativeMedia(Executor|Diagnostics)Tests'" in swift["run"]
     assert "--profile ci --kind swift --full" in swift["run"]
     assert "--budget-mib 6144 --deadline 600" in swift["run"]
     assert "--skip-build" not in swift["run"] and "--native-media" not in swift["run"]
+
+
+@pytest.mark.parametrize("runner,xcode,major", [
+    ("xcode-27", "predeterminado", 27), ("xcode-27", "27.2", 27),
+    ("macos-26", "predeterminado", 26), ("macos-26", "27.2", None),
+    ("self-hosted", "predeterminado", None), ("", "predeterminado", None),
+    ("macos-26/../../untrusted", "predeterminado", None),
+    ("$(printf injected)", "predeterminado", None),
+    ("xcode-27", "$(printf injected)", None),
+])
+def test_media_runner_selector_accepts_only_closed_official_combinations(
+    tmp_path, media_workflow, runner, xcode, major,
+):
+    selection = next(step for step in media_workflow["jobs"]["media"]["steps"]
+                     if step.get("id") == "runner_selection")
+    github_env = tmp_path / "github environment"
+    github_env.touch()
+    empty_path = tmp_path / "empty-bin"
+    empty_path.mkdir()
+    result = subprocess.run(
+        ["/bin/bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", selection["run"]],
+        cwd=tmp_path, env={"PATH": str(empty_path), "GITHUB_ENV": str(github_env),
+            "JARVIS_CI_RUNNER_CHOICE": runner, "JARVIS_CI_XCODE_CHOICE": xcode},
+        capture_output=True, text=True, timeout=10, check=False,
+    )
+    assert result.returncode == (0 if major is not None else 2) and result.stdout == ""
+    assert github_env.read_text() == (
+        f"JARVIS_CI_MINIMUM_MAJOR={major}\n" if major is not None else "")
+    assert (result.stderr == "") is (major is not None)
+    assert set(tmp_path.iterdir()) == {github_env, empty_path}
 
 
 @pytest.mark.parametrize("choice,present,status", [

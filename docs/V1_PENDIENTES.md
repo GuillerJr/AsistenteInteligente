@@ -1,5 +1,12 @@
 # Pendientes de Jarvis
 
+El [seguimiento del motor PDF de OpenClaw](rebuild/REA_OC26_PDF_ENGINE_FOLLOWUP.md)
+completa con REA la parte del plugin extractor que faltaba en OC-26: el código
+extrae texto y renderiza páginas para un modelo con visión; no ejecuta el OCR
+Apple de Jarvis en ese recorrido. En Jarvis el fallo OCR bloquea también la
+imagen aprobada. La separación de esas capacidades sigue por implementar;
+no se presenta el análisis estático como una corrección ni como paridad completa.
+
 Seguimiento del 4 de noviembre: la [CI completa de `46c10a1`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41890910372)
 terminó **fallida**, con Swift como único paso fallido. Ubuntu aprobó 4062
 pruebas Python (47 omitidas) y macOS 4109. Swift ejecutó 725 casos, una omisión
@@ -19,8 +26,11 @@ sin error y con resultados; el preciso devolvió `objc_missing_error` código 0,
 con callback sin error ni resultados. Eso difiere del control Seatbelt físico,
 donde el rápido devolvió Vision 8 (`VNErrorNotImplemented`). El Mac/SDK local
 27.2 y CI macOS 27.0.1/SDK 27.0 difieren; la causa remota sigue sin atribuirse.
-El selector optativo `predeterminado`/`27.2` del workflow focal ya tiene once
-pruebas aprobadas (ocho nuevas), pero su ejecución remota 27.2 sigue pendiente.
+El selector optativo `predeterminado`/`27.2` del workflow focal tenía once
+pruebas aprobadas (ocho nuevas). Su ejecución remota 27.2 ya terminó fallida:
+macOS 27.0.1, Xcode 27.2 build 27B48, SDK 27.2; 26 casos y siete fallos.
+Cambiar sólo el SDK no resolvió el fallo preciso. El comparador admite además
+`macos-26` por elección cerrada; 58 casos focales pasaron con cuota y recibo.
 La CI principal y la política OCR del producto no se han cambiado.
 
 Pasaron 146 regresiones focales del supervisor en grupos de 89 y 57; los once
@@ -41,8 +51,8 @@ arranque y antes del run; no acredita supresión universal al iniciar.
 
 La [plantilla G](rebuild/qa/product-background-native-20261104-g-template/SNAPSHOT.json)
 permanece **NOEXEC**, sin cambios. Las suites completas siguen en CI y el dueño
-autorizó el fallback local focal. Faltan la comparación remota 27.2 y la
-cualificación completa/nativa. La fase A sigue abierta y B aplazada: **62 familias
+autorizó el fallback local focal. Falta la cualificación completa/nativa y
+resolver la dependencia OCR/visión. La fase A sigue abierta y B aplazada: **62 familias
 parciales, 18 sin implementar y ninguna completa; REA 48 lotes y 186 rutas**.
 
 Decisión del dueño, 24-10-2026: **primero construir la variante completa funcional

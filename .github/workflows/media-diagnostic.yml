@@ -3,6 +3,14 @@ name: Diagnóstico focal de medios de Jarvis
 on:
   workflow_dispatch:
     inputs:
+      runner:
+        description: Runner oficial para el diagnóstico focal
+        type: choice
+        required: true
+        default: xcode-27
+        options:
+          - xcode-27
+          - macos-26
       xcode:
         description: Xcode para el diagnóstico focal
         type: choice
@@ -22,10 +30,29 @@ concurrency:
 jobs:
   media:
     name: OCR y vídeo reales, diagnóstico focal
-    runs-on: xcode-27
+    runs-on: ${{ inputs.runner == 'macos-26' && 'macos-26' || 'xcode-27' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
+      - name: Seleccionar el mínimo del runner oficial
+        id: runner_selection
+        shell: bash
+        env:
+          JARVIS_CI_RUNNER_CHOICE: ${{ inputs.runner }}
+          JARVIS_CI_XCODE_CHOICE: ${{ inputs.xcode }}
+        run: |
+          case "$JARVIS_CI_RUNNER_CHOICE:$JARVIS_CI_XCODE_CHOICE" in
+            xcode-27:predeterminado|xcode-27:27.2)
+              printf '%s\n' 'JARVIS_CI_MINIMUM_MAJOR=27' >> "$GITHUB_ENV"
+              ;;
+            macos-26:predeterminado)
+              printf '%s\n' 'JARVIS_CI_MINIMUM_MAJOR=26' >> "$GITHUB_ENV"
+              ;;
+            *)
+              printf '%s\n' 'La combinación de runner y Xcode no está admitida.' >&2
+              exit 2
+              ;;
+          esac
       - name: Seleccionar Xcode para el diagnóstico
         id: xcode_selection
         shell: bash
@@ -52,6 +79,7 @@ jobs:
       - name: Acreditar el entorno macOS remoto
         run: >-
           .venv/bin/python -B script/check_macos_ci_environment.py
+          --minimum-major "$JARVIS_CI_MINIMUM_MAJOR"
           --output "${{ runner.temp }}/Jarvis-media-probe-environment.json"
       - name: Diagnóstico focal supervisado, no cualificación completa
         shell: bash

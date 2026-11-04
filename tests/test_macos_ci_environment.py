@@ -38,6 +38,15 @@ def corpus(monkeypatch):
     return environment, responses, calls, run
 
 
+@pytest.fixture
+def corpus26(corpus):
+    environment, responses, calls, run = corpus
+    responses.update({"os": "26.7.2", "sdk": "26.5",
+        "xcode": "Xcode 26.6\nBuild version 26G123",
+        "swift": "Apple Swift version 6.3.2 (synthetic)\nTarget: arm64-apple-macosx26.0"})
+    return environment, responses, calls, run
+
+
 def test_records_actual_environment_without_claiming_full_qualification(corpus, tmp_path):
     environment, _responses, calls, run = corpus
     receipt = checker.collect(environment, command_runner=run)
@@ -51,6 +60,41 @@ def test_records_actual_environment_without_claiming_full_qualification(corpus, 
     assert receipt["full_workflow_success_claimed"] is False
     assert calls == list(checker.COMMANDS.values())
     assert output.stat().st_size < checker.RECEIPT_LIMIT
+
+
+def test_explicit_26_minimum_preserves_v1_receipt_and_actual_versions(corpus26):
+    environment, _responses, calls, run = corpus26
+    receipt = checker.collect(environment, command_runner=run, minimum_major=26)
+    assert receipt == {"format": "jarvis-ci-macos-environment/1", "source_commit": COMMIT,
+        "run_id": "12345", "os_version": "26.7.2", "architecture": "arm64",
+        "sdk_version": "26.5", "xcode_version": "26.6", "xcode_build": "26G123",
+        "swift_version": "6.3.2", "swift_target": "arm64-apple-macosx26.0",
+        "full_workflow_success_claimed": False}
+    assert calls == list(checker.COMMANDS.values())
+
+
+def test_default_27_minimum_still_rejects_26_environment(corpus26):
+    environment, _responses, _calls, run = corpus26
+    with pytest.raises(checker.EnvironmentCheckError, match="macos_27_required"):
+        checker.collect(environment, command_runner=run)
+
+
+@pytest.mark.parametrize("field,value,code", [
+    ("os", "25.9.2", "macos_26_required"), ("sdk", "25.5", "sdk_26_required"),
+])
+def test_26_minimum_rejects_older_actual_os_or_sdk(corpus26, field, value, code):
+    environment, responses, _calls, run = corpus26
+    responses[field] = value
+    with pytest.raises(checker.EnvironmentCheckError, match=code):
+        checker.collect(environment, command_runner=run, minimum_major=26)
+
+
+@pytest.mark.parametrize("minimum", [None, True, False, 26.0, "26", 25, 28])
+def test_minimum_major_is_a_closed_integer_choice_before_commands(corpus, minimum):
+    environment, _responses, calls, run = corpus
+    with pytest.raises(checker.EnvironmentCheckError, match="minimum_major_not_admitted"):
+        checker.collect(environment, command_runner=run, minimum_major=minimum)
+    assert calls == []
 
 
 @pytest.mark.parametrize(("field", "value"), [
@@ -120,7 +164,7 @@ def test_receipt_never_overwrites_existing_output_or_exceeds_limit(tmp_path):
 @pytest.mark.parametrize("failure", [OSError("private synthetic marker"),
                                     subprocess.TimeoutExpired("private synthetic marker", 1)])
 def test_cli_sanitizes_failures_without_publishing_receipt(monkeypatch, tmp_path, capsys, failure):
-    def reject():
+    def reject(**_kwargs):
         raise failure
 
     monkeypatch.setattr(checker, "collect", reject)
@@ -138,14 +182,43 @@ def test_cli_reports_controlled_admission_code(corpus, monkeypatch, tmp_path, ca
     environment, responses, _calls, run = corpus
     responses["architecture"] = "x86_64"
     original_collect = checker.collect
-    monkeypatch.setattr(checker, "collect",
-                        lambda: original_collect(environment, command_runner=run))
+    monkeypatch.setattr(checker, "collect", lambda **kwargs: original_collect(
+        environment, command_runner=run, **kwargs))
     output = tmp_path / "environment.json"
     assert checker.main(["--output", str(output)]) == 2
     rejection = json.loads(capsys.readouterr().err)
     assert rejection["error_class"] == "EnvironmentCheckError"
     assert rejection["error_code"] == "apple_silicon_required"
     assert not output.exists()
+
+
+def test_cli_forwards_explicit_minimum_without_rewriting_actual_versions(
+    corpus26, monkeypatch, tmp_path, capsys,
+):
+    environment, _responses, _calls, run = corpus26
+    original_collect, selected = checker.collect, []
+
+    def collect(*, minimum_major):
+        selected.append(minimum_major)
+        return original_collect(environment, command_runner=run, minimum_major=minimum_major)
+
+    monkeypatch.setattr(checker, "collect", collect)
+    output = tmp_path / "environment.json"
+    assert checker.main(["--minimum-major", "26", "--output", str(output)]) == 0
+    receipt = json.loads(capsys.readouterr().out)
+    assert selected == [26]
+    assert receipt["os_version"] == "26.7.2" and receipt["sdk_version"] == "26.5"
+    assert json.loads(output.read_text()) == receipt
+
+
+@pytest.mark.parametrize("minimum", ["25", "28", "26.5", "$(printf injected)"])
+def test_cli_rejects_other_minimums_before_collecting(monkeypatch, tmp_path, minimum):
+    monkeypatch.setattr(checker, "collect",
+                        lambda **_kwargs: pytest.fail("collected invalid major"))
+    output = tmp_path / "environment.json"
+    with pytest.raises(SystemExit) as failure:
+        checker.main(["--minimum-major", minimum, "--output", str(output)])
+    assert failure.value.code == 2 and not output.exists()
 
 
 def test_workflow_uses_one_standard_arm_pool_and_preserves_full_qualification():
