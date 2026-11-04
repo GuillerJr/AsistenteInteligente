@@ -1,0 +1,40 @@
+{
+  "commit": "c41378acc0c1f24f6534011f1aab09691a9a6948",
+  "ci_run_id": 41852070764,
+  "run_attempt": 2,
+  "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41852070764",
+  "status": "completed",
+  "conclusion": "failure",
+  "full_remote_ci_passed": false,
+  "qualified": false,
+  "purpose": "Disable implicit official-client plugin/catalog synchronization; macOS could not acquire hosted ARM64 runner in two attempts.",
+  "ubuntu": {
+    "job_id": 126662347435,
+    "original_job_id": 126650716068,
+    "retained_success_from_attempt": 1,
+    "passed": 3980,
+    "skipped": 47,
+    "failed": 0,
+    "seconds": 224.16,
+    "saved_decoded_log_sha256": "a782e56ba867c591a304dda257fae2f8850874c1eddd4cdc8d3b52fe1b45ec0b"
+  },
+  "macos": {
+    "job_id": 126662343529,
+    "original_job_id": 126650716615,
+    "conclusion": "cancelled",
+    "runner_assigned": false,
+    "tests_or_build_started": false,
+    "infrastructure_failure": "hosted_macOS_ARM64_capacity",
+    "attempts_with_same_capacity_failure": [
+      1,
+      2
+    ],
+    "local_replacement_run": false
+  },
+  "wheel_sdist_isolated_installation": "success_ubuntu_not_run_macos",
+  "self_contained_bundle_and_parent_eof": "not_run_macos",
+  "native_development_export": "not_run_macos",
+  "native_qa_artifact": null,
+  "local_full_suites_or_builds_run": false,
+  "native_final_case_executed": false
+}

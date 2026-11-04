@@ -15539,7 +15539,7 @@
         "id": "P-PRODUCT-COORDINATION",
         "component": "Producto, sesiones y coordinación locales",
         "status": "contract_tested_partial",
-        "qualification_status": "partial_native_background_ui_pending",
+        "qualification_status": "partial_client_fix_macOS_CI_capacity_blocked_native_final_pending",
         "capability_ids": [
           "A-14",
           "A-17",
@@ -15607,7 +15607,7 @@
           "REA_OC28_COORDINATION.json",
           "REA_OC28_WORKTREES.json"
         ],
-        "verified_scope": "Producto y coordinación: CI exacta 2c8259de aprobada (run 41842491175), 3980 Python Ubuntu (47 omitidas), 4027 macOS y 710 Swift (1 omitida, 0 fallos); 25 regresiones nuevas del exportador, paquetes, bundle/helper/EOF y artefacto nativo de desarrollo. El clic OS de octubre B→A y aviso 3→4 sigue cualificado por separado. D falló en admisión del observador y cerró por recuperación GUI; E observó A=1/1 y B=0/0 antes/después, pero su único run real terminó sin herramientas ni pregunta canónica. E cerró normalmente, con 12 identidades conocidas ausentes, mismo lease libre y cuota desmontada al primer intento. F añadió B desactivado durante A running en CUA e IPC firmado, pero se detuvo por el sublímite del proveedor antes de terminar. Los intentos siguen parciales y falta el recorrido completo con cierre normal. 62 familias parciales, 18 sin implementar, ninguna completa; REA 48 lotes/186 rutas. Fase A abierta y B aplazada.",
+        "verified_scope": "Producto y coordinación: CI exacta 2c8259de aprobada (run 41842491175), 3980 Python Ubuntu (47 omitidas), 4027 macOS y 710 Swift (1 omitida, 0 fallos); 25 regresiones nuevas del exportador, paquetes, bundle/helper/EOF y artefacto nativo de desarrollo. El clic OS de octubre B→A y aviso 3→4 sigue cualificado por separado. D falló en admisión del observador y cerró por recuperación GUI; E observó A=1/1 y B=0/0 antes/después, pero su único run real terminó sin herramientas ni pregunta canónica. E cerró normalmente, con 12 identidades conocidas ausentes, mismo lease libre y cuota desmontada al primer intento. F añadió B desactivado durante A running en CUA e IPC firmado, pero se detuvo por el sublímite del proveedor antes de terminar. Los intentos siguen parciales y falta el recorrido completo con cierre normal. 62 familias parciales, 18 sin implementar, ninguna completa; REA 48 lotes/186 rutas. Fase A abierta y B aplazada. Corrección del cliente en c41378a: Ubuntu: 3980 aprobados y 47 omitidos aprobó; dos intentos macOS terminaron sin runner por capacidad ARM64, sin ejecutar código. G se conserva NOEXEC y requiere nuevo enlace al SHA/CI exactos antes de abrir.",
         "ci_verified_checkpoint": {
           "commit": "64fbc48ac1b1b3d77d74f0d0576a02ada3be65e8",
           "ci_run_id": 41103606527,
@@ -15635,50 +15635,44 @@
           "self_contained_bundle_and_parent_eof": "success"
         },
         "latest_ci": {
-          "commit": "2c8259de8112aa5f1487814a5c5c35b3931e5c43",
-          "ci_run_id": 41842491175,
-          "run_attempt": 1,
-          "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41842491175",
+          "commit": "c41378acc0c1f24f6534011f1aab09691a9a6948",
+          "ci_run_id": 41852070764,
+          "run_attempt": 2,
+          "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41852070764",
           "status": "completed",
-          "conclusion": "success",
-          "full_remote_ci_passed": true,
-          "purpose": "Qualify compact native QA export and all existing product contracts; no local suites or compilation.",
+          "conclusion": "failure",
+          "full_remote_ci_passed": false,
+          "qualified": false,
+          "purpose": "Disable implicit official-client plugin/catalog synchronization; macOS could not acquire hosted ARM64 runner in two attempts.",
           "ubuntu": {
-            "job_id": 126617416540,
+            "job_id": 126662347435,
+            "original_job_id": 126650716068,
+            "retained_success_from_attempt": 1,
             "passed": 3980,
             "skipped": 47,
             "failed": 0,
-            "seconds": 229.39,
-            "saved_decoded_log_sha256": "4f5b5bffb3080d95f7b869c0fc13531470a21903329763df390ad39734ccd1af"
+            "seconds": 224.16,
+            "saved_decoded_log_sha256": "a782e56ba867c591a304dda257fae2f8850874c1eddd4cdc8d3b52fe1b45ec0b"
           },
           "macos": {
-            "job_id": 126617417127,
-            "python_passed": 4027,
-            "python_skipped": 0,
-            "python_failed": 0,
-            "python_seconds": 416.18,
-            "swift_executed": 710,
-            "swift_skipped": 1,
-            "swift_failures": 0,
-            "swift_seconds": 214.369,
-            "swift_wall_seconds": 214.487,
-            "saved_decoded_log_sha256": "d28c166806ccfe34d5f3b82d54ac6575de11ab988a6ee1d504d2c374835828cd"
+            "job_id": 126662343529,
+            "original_job_id": 126650716615,
+            "conclusion": "cancelled",
+            "runner_assigned": false,
+            "tests_or_build_started": false,
+            "infrastructure_failure": "hosted_macOS_ARM64_capacity",
+            "attempts_with_same_capacity_failure": [
+              1,
+              2
+            ],
+            "local_replacement_run": false
           },
-          "wheel_sdist_isolated_installation": "success_both_platforms",
-          "self_contained_bundle_and_parent_eof": "success",
-          "native_development_export": "success",
-          "native_qa_artifact": {
-            "id": 13329917886,
-            "bytes": 7698129,
-            "zip_sha256": "3a7dd21a3a92210aa602c72039a0378460ba98a0a9c6168e12762efc266a6f16",
-            "created_at": "2026-11-04T14:00:19Z",
-            "expires_at": "2026-11-18T14:00:17Z",
-            "retention_days": 14
-          },
-          "native_QA_export_new_tests_passed": 25,
-          "local_tests_or_builds_run": false,
-          "qualified": false,
-          "limit": "Complete exact-commit remote CI; selected external UI case remains incomplete. Passing CI and finite preference observations do not establish B while A waits on the canonical question or broad parity."
+          "wheel_sdist_isolated_installation": "success_ubuntu_not_run_macos",
+          "self_contained_bundle_and_parent_eof": "not_run_macos",
+          "native_development_export": "not_run_macos",
+          "native_qa_artifact": null,
+          "local_full_suites_or_builds_run": false,
+          "native_final_case_executed": false
         },
         "observed_selected_cases": {
           "local_client_selections": 7,
@@ -15759,14 +15753,61 @@
         "os_notification_click_pending": false,
         "notification_follow_up_record": "PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json#/native_qualification/notification_closeout_attempt",
         "pending_client_plugin_fix": {
-          "status": "implemented_remote_CI_and_native_retest_pending",
+          "status": "pushed_Ubuntu_passed_macOS_capacity_blocked",
           "flags": [
             "features.plugins=false",
             "features.remote_plugin=false"
           ],
           "discovery_sizes_only_no_contents_read": true,
           "provider_after_F_bytes": 170102784,
-          "prior_F_limit_not_extended": true
+          "prior_F_limit_not_extended": true,
+          "commit": "c41378acc0c1f24f6534011f1aab09691a9a6948"
+        },
+        "previous_successful_full_ci": {
+          "commit": "2c8259de8112aa5f1487814a5c5c35b3931e5c43",
+          "ci_run_id": 41842491175,
+          "run_attempt": 1,
+          "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41842491175",
+          "status": "completed",
+          "conclusion": "success",
+          "full_remote_ci_passed": true,
+          "purpose": "Qualify compact native QA export and all existing product contracts; no local suites or compilation.",
+          "ubuntu": {
+            "job_id": 126617416540,
+            "passed": 3980,
+            "skipped": 47,
+            "failed": 0,
+            "seconds": 229.39,
+            "saved_decoded_log_sha256": "4f5b5bffb3080d95f7b869c0fc13531470a21903329763df390ad39734ccd1af"
+          },
+          "macos": {
+            "job_id": 126617417127,
+            "python_passed": 4027,
+            "python_skipped": 0,
+            "python_failed": 0,
+            "python_seconds": 416.18,
+            "swift_executed": 710,
+            "swift_skipped": 1,
+            "swift_failures": 0,
+            "swift_seconds": 214.369,
+            "swift_wall_seconds": 214.487,
+            "saved_decoded_log_sha256": "d28c166806ccfe34d5f3b82d54ac6575de11ab988a6ee1d504d2c374835828cd"
+          },
+          "wheel_sdist_isolated_installation": "success_both_platforms",
+          "self_contained_bundle_and_parent_eof": "success",
+          "native_development_export": "success",
+          "native_qa_artifact": {
+            "id": 13329917886,
+            "bytes": 7698129,
+            "zip_sha256": "3a7dd21a3a92210aa602c72039a0378460ba98a0a9c6168e12762efc266a6f16",
+            "created_at": "2026-11-04T14:00:19Z",
+            "expires_at": "2026-11-18T14:00:17Z",
+            "retention_days": 14
+          },
+          "native_QA_export_new_tests_passed": 25,
+          "local_tests_or_builds_run": false,
+          "qualified": false,
+          "limit": "Complete exact-commit remote CI; selected external UI case remains incomplete. Passing CI and finite preference observations do not establish B while A waits on the canonical question or broad parity."
         }
       }
     ],
@@ -15834,7 +15875,7 @@
     },
     "previous_detail_file": "PHASE_A_AUTOMATION_CLOSEOUT.md",
     "qualification_file": "PHASE_A_RECOVERY_QUALIFICATION.json",
-    "latest_qualification_status": "os_navigation_verified_background_ui_pending",
+    "latest_qualification_status": "partial_macOS_CI_capacity_blocked_native_final_pending",
     "latest_qualification_record": "PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json",
     "completion_increment_file": "PHASE_A_RECOVERY_COMPLETION.md",
     "completion_increment_qualification": "recovery_finite_matrix_and_local_reconciliation_native_verified",
@@ -15912,7 +15953,9 @@
     "product_coordination_latest_ci_commit": "2c8259de8112aa5f1487814a5c5c35b3931e5c43",
     "product_coordination_latest_ci_status": "success",
     "product_coordination_latest_ci_run_id": 41842491175,
-    "product_coordination_os_notification_click_verified": true
+    "product_coordination_os_notification_click_verified": true,
+    "latest_ci_commit": "c41378acc0c1f24f6534011f1aab09691a9a6948",
+    "latest_ci_run": 41852070764
   },
   "target_decisions": {
     "date": "2026-10-24",

@@ -1,0 +1,124 @@
+{
+  "schema": "jarvis.native-background-G-review-checklist/1",
+  "status": "TEMPLATE_NOEXEC_missing_exact_CI_and_root_review",
+  "harness_root": "/private/tmp/jarvis-product-background-native-20261104-g",
+  "CI_gate": {
+    "source_commit": "c41378acc0c1f24f6534011f1aab09691a9a6948",
+    "run_id": 41852070764,
+    "run_attempt": 2,
+    "job_ids": {
+      "macos": 126662343529,
+      "ubuntu": 126662347435
+    },
+    "artifact_id": null,
+    "artifact_zip_sha256": null,
+    "artifact_name": "jarvis-native-qa-c41378acc0c1f24f6534011f1aab09691a9a6948"
+  },
+  "source_pins": {
+    "script/export_native_qa.py": "94ca17f738027b4258d94e1a19916dd15b38f2b196ad2ceea6053aeaf2982fa2",
+    "script/test_resource_guard.py": "472712a42d0f2c68bec33c19ab7a9443aff6fbd4a0898dd81658a481a92d6273",
+    "src/jarvis_core/product_interactions.py": "bc586b9b795390ef2f3f9702eb6058c47bdb5f84ed0bd42853c2d898f5e6450a",
+    "src/jarvis_core/product_tools.py": "bd0e0fbc73d44eeec116c44163b7593d0084c058a1ebf196167c8d0802de7864",
+    "native/JarvisDesktop/Sources/QALaunchSupport/QALaunchAdmission.swift": "66436f578155fd3b5c7ca1f403f61ff8e0796024e49798d11bff2ccb1e31dc52",
+    "native/JarvisDesktop/Sources/QALaunchSupport/QALaunchCoordinator.swift": "14523fe581fb63727910ce9cde344829f70d2abc646afb440dfd443e819aa585",
+    "native/JarvisDesktop/Sources/JarvisQALauncher/QALaunchMain.swift": "8c83ec185162548d42f48fb95033b253fc13446f81fcb7e0f033f59acceb6db0",
+    "native/JarvisDesktop/Sources/DesktopCore/ServiceLaunchPlan.swift": "dcd74bcbce782bea922d5e7969f94369cc2beb5fc31aab661ac6909da292aa24",
+    "src/jarvis_core/codex.py": "6aa48979966f854033e1fcbf5a51afeca138a4ef571aead19718fde6935a7c39"
+  },
+  "resource_contract": {
+    "physical_APFS_capacity_mib": 2048,
+    "preparation_seconds": 300,
+    "native_active_seconds": 810,
+    "cleanup_reserve_seconds": 90,
+    "native_total_seconds": 900,
+    "Data_free_floor_GiB": 25,
+    "unaccounted_Data_drop_GiB": 1,
+    "provider_metadata_reuse_interval_seconds": 1,
+    "known_process_limit": 128,
+    "native_archive_compressed_mib": 32,
+    "native_archive_uncompressed_mib": 128,
+    "source_copies_mib": 32,
+    "dependency_copies_mib": 256,
+    "Codex_copy_single_file_mib": 512,
+    "copy_manifest_maximum_mib": 4,
+    "probe_total_seconds": 40,
+    "probe_input_bytes": 262144,
+    "receipt_output_bytes": 65536,
+    "manifest_is_not_receipt": true,
+    "provider_baseline_bytes": 170102784,
+    "provider_growth_budget_bytes": 67108864,
+    "provider_absolute_sampled_limit_bytes": 237211648
+  },
+  "scripts_sha256": {
+    "common.py": "30a9c1ce1483d8167b44c9cac67ae0c5d8b85499d1592f97f9666c000a0e8f79",
+    "prepare.py": "60c1c089513bd194a40ca86e69549266c945554e0f4f110e4e9bb21474054557",
+    "supervise.py": "c89e1dab6dd78516a2b90c56703417291caface2460c4e27002609b232df2ec5",
+    "probe.py": "92568b79f88d8bcdd5095200ec073bf52fed4954281ededb0c29b7f2cd4ad346"
+  },
+  "prior_E_question_gate_remains_failed": true,
+  "prior_F_resource_failure_remains_failed": true,
+  "product_source_modified_by_harness": false,
+  "gates": [
+    "No import starts processes or reads credentials. Template cannot be admitted. No execution before exact full CI green, new artifact and root freeze/review.",
+    "F prepared/closed/active/root cleanup pinned: known4 exact identities absent, same F lease inode11385 free; image and mountpoint inode fixed; unique normal attach.",
+    "F128MiB provider failure preserved; distinct G starts at170102784 and has sampled absolute cap237211648 bytes=baseline+64MiB. Physical2GiB unchanged.",
+    "Only synthetic provider reused by official client; no auth/private contents read/copied. Metadata only bounded10000 entries.",
+    "New native archive only exact successful full workflow and both jobs; four original artifact files and signatures unchanged; Jarvis-G.app separate from old app.",
+    "Fresh state-g/HOME/TMP/source-g; source only tracked src exact new HEAD Git blobs; full preserved deps/Codex hash verification, rebind only device.",
+    "One real model turn, zero accepted tools/questions; actual CUA B0 while A En curso plus signed read-only during running, later same model run complete known clean/B0/returnA1.",
+    "CUA only acquires newly admitted exact G app after active proof; no old handles reacquired.",
+    "Prep300s, active810s+cleanup90, probe40s/262144input/65536receipt; no replay/quota extension/deletion/force.",
+    "Normal GUI quit exact G identity; known processes absent and same G lease free before normal detach<=2; retain E/F/G originals.",
+    "Optional watch-during uses one client/Inspector and the same aggregate262144 input cap across at most100 initial polls<=20s plus16 active samples separated>=0.2s; single64KiB receipt/global40s. Root must pair a running/B0 sample whose runs.get request starts at or after actual CUA B0 time; absent matching sample fails. No model/effect replay or GUI proof from RPC."
+  ],
+  "ci_attempt_history": {
+    "path": "/private/tmp/jarvis-product-background-native-20261104-g/ci-attempt-history.json",
+    "sha256": "0ac1598ba4219a49e59a90f1e9b181a35a77d264cda421aa16b8d4dd6b6f6e1b",
+    "attempt_1_infrastructure_failure_preserved": true
+  },
+  "root_provider_cache_metadata_oracle": {
+    "status": "intended_root_read_only_metadata_oracle_not_executed",
+    "actor": "root",
+    "required_for_UI_isolation_pass": false,
+    "provider": "/private/tmp/jq-8k57q6f0/provider",
+    "relative_paths": [
+      "client/cache/remote_plugin_catalog/9c6e5a9fad20d28f.json",
+      "client/.tmp/plugins/.git/objects/pack/pack-c862b02aa1d0540db8b7f5542a4661fc3707a014.pack"
+    ],
+    "before": "After successful G preparation, before the sole native launch.",
+    "after": "After the same sole model run completes known and clean, before GUI quit.",
+    "receipts": [
+      "cache-before.json",
+      "cache-after.json"
+    ],
+    "operation": "lstat only on the same two known synthetic-provider regular files; record inode, size, mtime_ns, ctime_ns and allocated blocks; no file-content read, recursion, auth read or mutation.",
+    "comparison": "Compare the five metadata values per path unchanged before/after.",
+    "evidence_limit": "Corroborates unchanged metadata of these two preexisting cached files; does not prove absence of all possible cache or catalog activity.",
+    "extra_model_runs_or_effects": false,
+    "contents_or_auth_read": false
+  },
+  "read_only_watch_during": {
+    "mode": "watch-during",
+    "optional": true,
+    "status": "prepared_NOEXEC_not_exercised",
+    "start": "Root starts the observer immediately before actual Send+select B in one CUA call; wait for sanitized watch_ready if needed.",
+    "same_client_and_Inspector_for_all_polls": true,
+    "initial_new_run_wait_maximum_seconds": 20,
+    "initial_poll_limit": 100,
+    "active_samples_maximum": 16,
+    "minimum_poll_interval_seconds": 0.2,
+    "whole_probe_SIGALRM_seconds": 40,
+    "RPC_async_window_seconds": 30,
+    "aggregate_RPC_input_bytes_all_polls": 262144,
+    "single_final_receipt_bytes": 65536,
+    "fixed_session_A_and_B": true,
+    "same_observed_run_pinned_across_samples": true,
+    "maximum_model_runs_started_by_probe": 0,
+    "mutations_sent": false,
+    "normalized_output_only": "Preferences, scoped session/run inventory counts, statuses/conditions, answer byte count and observation timestamps; no message or answer values.",
+    "root_pairing_required": "Root selects an actual passed running/B-empty sample with run_request_started_at_unix >= actual CUA B-empty observation time. Request start is conservative, before call checkpoint/send; response observation time alone cannot establish causality. If none exists, paired UI condition fails.",
+    "RPC_is_GUI_proof": false,
+    "numeric_fidelity_gate": false,
+    "read_polling_is_model_or_effect_replay": false
+  }
+}

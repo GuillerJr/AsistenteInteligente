@@ -1,5 +1,14 @@
 # Variante propia inspirada en OpenClaw — base limpia
 
+Punto guardado del 4 de noviembre: la corrección del cliente `c41378a` está
+publicada y Ubuntu aprobó 3980 pruebas (47 omitidas). macOS no obtuvo un runner
+ARM64 en dos intentos; ninguno compiló ni ejecutó pruebas. La
+[CI de esa corrección](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41852070764)
+queda incompleta. El [caso G preparado](qa/product-background-native-20261104-g-template/SNAPSHOT.json)
+permanece **NOEXEC** hasta disponer de CI completa, artefacto y SHA actuales
+verificados. No hay app ni cuota de prueba activas. Las cifras de CI completa
+que siguen corresponden al checkpoint anterior `2c8259de`.
+
 El incremento de [producto y coordinación avanzada](PHASE_A_PRODUCT_COORDINATION.md)
 está implementado y conectado. La [CI completa de `2c8259de`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41842491175)
 aprobó 3980 casos Python en Ubuntu (47 omitidos), 4027 en macOS y 710 Swift

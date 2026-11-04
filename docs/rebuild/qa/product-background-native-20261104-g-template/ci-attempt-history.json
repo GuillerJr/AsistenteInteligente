@@ -1,0 +1,58 @@
+{
+  "schema": "jarvis.native-G-CI-attempt-history/1",
+  "source_commit": "c41378acc0c1f24f6534011f1aab09691a9a6948",
+  "run_id": 41852070764,
+  "provenance": "GitHub Actions metadata and annotation observations communicated by root; this subagent did not query or rerun CI.",
+  "attempts": [
+    {
+      "attempt": 1,
+      "workflow_conclusion": "failure",
+      "job_ids": {
+        "macos": 126650716615,
+        "ubuntu": 126650716068
+      },
+      "macos": {
+        "conclusion": "failure",
+        "runner_acquired": false,
+        "failure_kind": "hosted_macOS_ARM64_capacity_infrastructure",
+        "annotation_exact": "The job was not acquired by Runner of type hosted even after multiple attempts",
+        "additional_capacity_notices_count": 3,
+        "additional_notices_scope": "macOS ARM64 hosted runner capacity; exact notice text not reproduced by this subagent"
+      },
+      "ubuntu": {
+        "conclusion": "success",
+        "python_passed": 3980,
+        "python_skipped": 47,
+        "python_seconds": 224.16
+      },
+      "native_artifact_available": false,
+      "failure_preserved": true
+    },
+    {
+      "attempt": 2,
+      "workflow_status": "pending_not_fully_qualified",
+      "workflow_success_observed": false,
+      "root_rerun_command": "gh run rerun 41852070764 --failed",
+      "rerun_scope": "Only failed macOS job; successful Ubuntu result retained, no new Ubuntu suite run.",
+      "job_ids": {
+        "macos": 126662343529,
+        "ubuntu": 126662347435
+      },
+      "macos": {
+        "last_reported_status": "queued",
+        "conclusion": null
+      },
+      "ubuntu": {
+        "last_reported_status": "completed",
+        "conclusion": "success",
+        "result_retained_from_attempt": 1,
+        "suite_rerun": false
+      },
+      "native_artifact_available": false
+    }
+  ],
+  "local_suites_or_builds_run": false,
+  "native_G_execution_started": false,
+  "attempt_1_failure_converted_to_success": false,
+  "full_CI_success_claimed": false
+}

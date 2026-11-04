@@ -8,6 +8,15 @@ producto anterior sigue en Git y sus inventarios están congelados.
 Alcance inicial elegido: macOS Apple Silicon y Telegram como primer canal externo.
 El dueño aplazó expresamente la app de iPhone; ver [decisiones](rebuild/PHASE_A_TARGETS.md).
 
+**Bloqueo actual:** la corrección `c41378a`, publicada en `main`, aprobó 3980
+pruebas en Ubuntu (47 omitidas). GitHub no pudo asignar un runner macOS ARM64 en
+dos intentos, sin compilar ni ejecutar código. Falta esa
+[validación remota](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41852070764)
+y el recorrido nativo final. El caso G queda guardado como
+[plantilla NOEXEC](rebuild/qa/product-background-native-20261104-g-template/SNAPSHOT.json):
+requiere volver a fijar SHA, CI, artefacto y pines actuales antes de ejecutarlo.
+Las copias de prueba están cerradas y las imágenes se conservan desmontadas.
+
 El [bloque de producto y sesiones avanzadas](rebuild/PHASE_A_PRODUCT_COORDINATION.md)
 ya implementa proyectos/GitHub, preguntas/progreso/presencia/sugerencias, paneles,
 avisos optativos, carpetas por conversación, colaboración/A2A local, presupuestos

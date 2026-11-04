@@ -1,0 +1,263 @@
+{
+  "source_commit": "c41378acc0c1f24f6534011f1aab09691a9a6948",
+  "run_id": 41852070764,
+  "run_attempt": 2,
+  "job_ids": {
+    "macos": 126662343529,
+    "ubuntu": 126662347435
+  },
+  "artifact_id": null,
+  "artifact_zip_sha256": null,
+  "artifact_bytes_observed": null,
+  "artifact_name": "jarvis-native-qa-c41378acc0c1f24f6534011f1aab09691a9a6948",
+  "source_pins": {
+    "script/export_native_qa.py": "94ca17f738027b4258d94e1a19916dd15b38f2b196ad2ceea6053aeaf2982fa2",
+    "script/test_resource_guard.py": "472712a42d0f2c68bec33c19ab7a9443aff6fbd4a0898dd81658a481a92d6273",
+    "src/jarvis_core/product_interactions.py": "bc586b9b795390ef2f3f9702eb6058c47bdb5f84ed0bd42853c2d898f5e6450a",
+    "src/jarvis_core/product_tools.py": "bd0e0fbc73d44eeec116c44163b7593d0084c058a1ebf196167c8d0802de7864",
+    "native/JarvisDesktop/Sources/QALaunchSupport/QALaunchAdmission.swift": "66436f578155fd3b5c7ca1f403f61ff8e0796024e49798d11bff2ccb1e31dc52",
+    "native/JarvisDesktop/Sources/QALaunchSupport/QALaunchCoordinator.swift": "14523fe581fb63727910ce9cde344829f70d2abc646afb440dfd443e819aa585",
+    "native/JarvisDesktop/Sources/JarvisQALauncher/QALaunchMain.swift": "8c83ec185162548d42f48fb95033b253fc13446f81fcb7e0f033f59acceb6db0",
+    "native/JarvisDesktop/Sources/DesktopCore/ServiceLaunchPlan.swift": "dcd74bcbce782bea922d5e7969f94369cc2beb5fc31aab661ac6909da292aa24",
+    "src/jarvis_core/codex.py": "6aa48979966f854033e1fcbf5a51afeca138a4ef571aead19718fde6935a7c39"
+  },
+  "selected_local_programs": {
+    "python": {
+      "path": "/Users/guillerjr/Documents/Proyectos/AsistenteInteligente/.venv.nosync/bin/python",
+      "sha256": "50de159a94723fa71090030ac642b101e27f8d29488ec4bdae91edfa1e86dbbd",
+      "bytes": 52448,
+      "version": "3.11.15",
+      "selection": "Explicit existing local interpreter launcher; ServiceLaunchPlan resolves it before -I-S-B execution"
+    },
+    "python_process": {
+      "path": "/opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python",
+      "sha256": "e17826d56c53bce1083f70b4cdb68ea29105fdc84c1c345746523f2af0b8287d",
+      "bytes": 51392
+    },
+    "codex": {
+      "path": "/opt/homebrew/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex",
+      "sha256": "8813367285524ac798dd96d1b071aea30d58708c7226fd236cd275cf1cfdee31",
+      "bytes": 249952688,
+      "version": "0.163.0",
+      "selection": "Official installed CLI Mach-O; copied into quota, never inherit owner auth state"
+    }
+  },
+  "selected_dependencies": {
+    "path": "/Users/guillerjr/Documents/Proyectos/AsistenteInteligente/.venv.nosync/lib/python3.11/site-packages",
+    "verified_versions": {
+      "cryptography": "50.0.2",
+      "jsonschema": "4.26.0",
+      "numpy": "2.3.5",
+      "onnxruntime": "1.31.1",
+      "referencing": "0.37.0",
+      "tokenizers": "0.22.1"
+    },
+    "missing_declared": [
+      "soundfile"
+    ],
+    "source": "Parent metadata inventory, rechecked from copied METADATA before launch; never import to discover credentials",
+    "complete_product_runtime_claimed": false
+  },
+  "resource_contract": {
+    "physical_APFS_capacity_mib": 2048,
+    "preparation_seconds": 300,
+    "native_active_seconds": 810,
+    "cleanup_reserve_seconds": 90,
+    "native_total_seconds": 900,
+    "Data_free_floor_GiB": 25,
+    "unaccounted_Data_drop_GiB": 1,
+    "provider_metadata_reuse_interval_seconds": 1,
+    "known_process_limit": 128,
+    "native_archive_compressed_mib": 32,
+    "native_archive_uncompressed_mib": 128,
+    "source_copies_mib": 32,
+    "dependency_copies_mib": 256,
+    "Codex_copy_single_file_mib": 512,
+    "copy_manifest_maximum_mib": 4,
+    "probe_total_seconds": 40,
+    "probe_input_bytes": 262144,
+    "receipt_output_bytes": 65536,
+    "manifest_is_not_receipt": true,
+    "provider_baseline_bytes": 170102784,
+    "provider_growth_budget_bytes": 67108864,
+    "provider_absolute_sampled_limit_bytes": 237211648
+  },
+  "distribution_channel": "development",
+  "self_contained": false,
+  "CI_app_modified_or_resigned": false,
+  "expected_CI_bundle_identifier": "local.jarvis.qa.native.c41378acc0c1",
+  "helper_flags": [
+    "--python",
+    "--source",
+    "--dependencies",
+    "--state",
+    "--codex",
+    "--provider-state"
+  ],
+  "helper_argument_count": 12,
+  "owner_OS_actions_required": [],
+  "normal_detach_maximum": 2,
+  "force_detach": false,
+  "deletion": false,
+  "automatic_effect_replay": false,
+  "metadata_reader": {
+    "maximum_lookup_samples": 10,
+    "maximum_lookup_seconds": 2,
+    "pause_between_unavailable_samples_seconds": 0.05,
+    "retry_eligible": "Only unavailable BSDInfo/executable-path samples, never an observed UID/birth/path mismatch. Callers retain original identity pins.",
+    "Popen_ownership": "Temporary map of exact Popen objects, inserted before on_spawn and removed on cleanup. poll/reap only that controlled child before scans and during an unavailable helper sample. No arbitrary waitpid or PID-pattern effect.",
+    "signals_or_launches_from_metadata_retry": false,
+    "audit": "PID, stage, returned bytes and errno for unavailable samples; recovered/absence/own-Popen-exit counters. Maximum32events plus dropped_audit_events; no arguments/environment.",
+    "global_900s_or_resources_extended": false,
+    "D_exact_failing_PID_or_cause_established": false
+  },
+  "schema": "jarvis.native-development-background-G-admission/1",
+  "status": "TEMPLATE_NOEXEC_missing_exact_CI",
+  "review_status": "not_frozen_missing_exact_CI_and_root_review",
+  "harness_root": "/private/tmp/jarvis-product-background-native-20261104-g",
+  "scripts_sha256": {
+    "common.py": "30a9c1ce1483d8167b44c9cac67ae0c5d8b85499d1592f97f9666c000a0e8f79",
+    "prepare.py": "60c1c089513bd194a40ca86e69549266c945554e0f4f110e4e9bb21474054557",
+    "supervise.py": "c89e1dab6dd78516a2b90c56703417291caface2460c4e27002609b232df2ec5",
+    "probe.py": "92568b79f88d8bcdd5095200ec073bf52fed4954281ededb0c29b7f2cd4ad346"
+  },
+  "maximum_sessions": 2,
+  "maximum_model_runs": 1,
+  "maximum_question_tools": 0,
+  "maximum_other_tools_accepted": 0,
+  "maximum_explicit_host_answers": 0,
+  "model_prompt": "No uses ninguna herramienta. Escribe \u00fanicamente INICIO PRUEBA FINITA, despu\u00e9s los n\u00fameros enteros del 1 al 1000 en orden, cada n\u00famero en su propia l\u00ednea, sin abreviar ni omitir ninguno, y termina con FIN PRUEBA FINITA.",
+  "model_prompt_is_not_enforced_tool_allowlist": true,
+  "case_purpose": "Observe B empty while the sole real Codex run in A is actually running, then B stays empty and A shows its own answer. Question selection is not part of this case.",
+  "prior_E": {
+    "root": "/private/tmp/jarvis-product-background-native-20261104-e",
+    "prepared_sha256": "2ee2419813d866116202dde4e96a8246aadf1dc83ae5be44e25a4f357f9fb599",
+    "closed_sha256": "a52b472ad082c957ec45132fc3ec344f55e32d6b9f22efa39d5592bbc449d648",
+    "active_sha256": "054923a82b1129529345011a0ffedb71031132018114965007934fb7e68a2713",
+    "image": "/private/tmp/jarvis-product-background-native-20261104-e/quota.sparseimage",
+    "image_identity": [
+      16777230,
+      72850467
+    ],
+    "mountpoint": "/private/tmp/jq-8k57q6f0",
+    "underlying_identity": [
+      16777230,
+      72850465
+    ],
+    "old_lease_inode": 3334,
+    "known_identities_to_reobserve": 12,
+    "previous_failed_question_gate_preserved": true,
+    "new_G_case_is_not_replay_or_extension_of_E": true
+  },
+  "quota_reuse": {
+    "maximum_normal_attach_calls": 1,
+    "physical_capacity_mib": 2048,
+    "old_profile_preserved": "/private/tmp/jq-8k57q6f0/state-f",
+    "new_profile": "/private/tmp/jq-8k57q6f0/state-g",
+    "new_HOME": "/private/tmp/jq-8k57q6f0/launcher-home-g",
+    "new_TMPDIR": "/private/tmp/jq-8k57q6f0/launcher-tmp-g",
+    "new_profile_must_not_exist": true,
+    "empty_underlying_inode_permission_readmission": "Record intent, verify prior inode and absent known identities, restore 0700 only for normal attach. Restore old mode on failed unmounted admission; normal close returns to 0.",
+    "public_copies": "Full dependency/Codex hashes match E/F; rebind only remount device, retaining inode/size/time/mode/hash. Source-g is fresh exact new HEAD tracked src with every Git blob verified. Old source/app/manifests stay untouched.",
+    "CI_app_bytes_modified_or_resigned": false,
+    "downloads_or_builds_or_public_copies": "Only new exact native CI archive download and fresh tracked src copy; no build/dependency/Codex/provider copy",
+    "other_profiles_preserved": [
+      "/private/tmp/jq-8k57q6f0/state"
+    ],
+    "new_source": "/private/tmp/jq-8k57q6f0/source-g",
+    "new_app": "/private/tmp/jq-8k57q6f0/Jarvis-G.app"
+  },
+  "provider_reuse": {
+    "path": "/private/tmp/jq-8k57q6f0/provider",
+    "scope": "Only established synthetic E provider authenticated by owner through official client; never owner prior production provider.",
+    "allocated_baseline_bytes": 170102784,
+    "absolute_sampled_limit_bytes": 237211648,
+    "sampling_cache_maximum_seconds": 1,
+    "growth_label": "max(0,current-170102784); new G cap baseline+64MiB, F128MiB failure remains failed",
+    "credentials_read_or_copied_by_harness": false,
+    "official_client_may_use_its_existing_account_state": true,
+    "growth_budget_bytes": 67108864
+  },
+  "oracle_sequence": [
+    "A preferences revision2 enabled=true silenced=true; B revision0 both=false; both empty.",
+    "Send exact one model prompt in A and select B in same CUA call.",
+    "While actual A run status is running and cleanup_confirmed=false, capture real native B empty and sidebar A En curso; matching read-only during receipt.",
+    "After sole run completes known with cleanup confirmed, capture B still empty, then select A and capture its own one user/one assistant exchange.",
+    "No question tools, host answers or other tool receipts accepted; no additional run if too fast or inconclusive."
+  ],
+  "owner_account_actions_required": [
+    "No account reauthorization expected: official client alone reuses the synthetic provider authenticated in E. If disconnected, stop this case for owner decision; do not inspect or copy credentials."
+  ],
+  "no_OS_notification_permission_or_real_notification_required": true,
+  "signals_allowed_only_for_exact_admitted_app_on_deadline_or_resource_failure": true,
+  "happy_path_requires_no_signals": true,
+  "original_historical_attempt_complete": false,
+  "full_OpenClaw_parity_claimed": false,
+  "execution_approved_by_this_file": false,
+  "ci_success_claimed_by_this_file": false,
+  "reviewer_checklist_sha256": "fed420efa5b1647efa85673dd9c086908f2972ff2b1a2a2a3de220bfdcb10eab",
+  "prior_F": {
+    "root": "/private/tmp/jarvis-product-background-native-20261104-f",
+    "prepared_sha256": "01bab74674e6a2f47b9d058c39965193e0c2e70807dd534789d577d0b979bdcc",
+    "closed_sha256": "f90e0ae56ddcde81b0023e7d31ad43ef8f16ab1d5d0e838adc36774a9e598a46",
+    "active_sha256": "816694cd02a1d125bf7dc4ee02ab76e1d6815d7e39a68634adbf2a46aeadbb71",
+    "root_cleanup_sha256": "73c040c23d678c9a56f42fe562b01cfaf8ce06548d5f794b0849737df9b6a811",
+    "provider_metadata_sha256": "1aeefa22d0bbc1131f4f460e583cb5b15be2f2525b42136b25ca430adb24f962",
+    "old_lease_inode": 11385,
+    "known_identities_to_reobserve": 4,
+    "resource_failure_preserved": true,
+    "original_absolute_provider_limit_bytes": 134217728,
+    "new_G_case_is_not_replay_or_extension_of_F": true
+  },
+  "model_output_numeric_fidelity_is_pass_condition": false,
+  "ci_attempt_history": {
+    "path": "/private/tmp/jarvis-product-background-native-20261104-g/ci-attempt-history.json",
+    "sha256": "0ac1598ba4219a49e59a90f1e9b181a35a77d264cda421aa16b8d4dd6b6f6e1b",
+    "attempt_1_infrastructure_failure_preserved": true
+  },
+  "root_provider_cache_metadata_oracle": {
+    "status": "intended_root_read_only_metadata_oracle_not_executed",
+    "actor": "root",
+    "required_for_UI_isolation_pass": false,
+    "provider": "/private/tmp/jq-8k57q6f0/provider",
+    "relative_paths": [
+      "client/cache/remote_plugin_catalog/9c6e5a9fad20d28f.json",
+      "client/.tmp/plugins/.git/objects/pack/pack-c862b02aa1d0540db8b7f5542a4661fc3707a014.pack"
+    ],
+    "before": "After successful G preparation, before the sole native launch.",
+    "after": "After the same sole model run completes known and clean, before GUI quit.",
+    "receipts": [
+      "cache-before.json",
+      "cache-after.json"
+    ],
+    "operation": "lstat only on the same two known synthetic-provider regular files; record inode, size, mtime_ns, ctime_ns and allocated blocks; no file-content read, recursion, auth read or mutation.",
+    "comparison": "Compare the five metadata values per path unchanged before/after.",
+    "evidence_limit": "Corroborates unchanged metadata of these two preexisting cached files; does not prove absence of all possible cache or catalog activity.",
+    "extra_model_runs_or_effects": false,
+    "contents_or_auth_read": false
+  },
+  "read_only_watch_during": {
+    "mode": "watch-during",
+    "optional": true,
+    "status": "prepared_NOEXEC_not_exercised",
+    "start": "Root starts the observer immediately before actual Send+select B in one CUA call; wait for sanitized watch_ready if needed.",
+    "same_client_and_Inspector_for_all_polls": true,
+    "initial_new_run_wait_maximum_seconds": 20,
+    "initial_poll_limit": 100,
+    "active_samples_maximum": 16,
+    "minimum_poll_interval_seconds": 0.2,
+    "whole_probe_SIGALRM_seconds": 40,
+    "RPC_async_window_seconds": 30,
+    "aggregate_RPC_input_bytes_all_polls": 262144,
+    "single_final_receipt_bytes": 65536,
+    "fixed_session_A_and_B": true,
+    "same_observed_run_pinned_across_samples": true,
+    "maximum_model_runs_started_by_probe": 0,
+    "mutations_sent": false,
+    "normalized_output_only": "Preferences, scoped session/run inventory counts, statuses/conditions, answer byte count and observation timestamps; no message or answer values.",
+    "root_pairing_required": "Root selects an actual passed running/B-empty sample with run_request_started_at_unix >= actual CUA B-empty observation time. Request start is conservative, before call checkpoint/send; response observation time alone cannot establish causality. If none exists, paired UI condition fails.",
+    "RPC_is_GUI_proof": false,
+    "numeric_fidelity_gate": false,
+    "read_polling_is_model_or_effect_replay": false
+  }
+}

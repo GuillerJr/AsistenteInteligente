@@ -1,0 +1,65 @@
+{
+  "schema": "jarvis.NOEXEC-QA-template-snapshot/1",
+  "source_commit": "c41378acc0c1f24f6534011f1aab09691a9a6948",
+  "source_root": "/private/tmp/jarvis-product-background-native-20261104-g",
+  "files": [
+    {
+      "path": "common.py",
+      "bytes": 24739,
+      "sha256": "30a9c1ce1483d8167b44c9cac67ae0c5d8b85499d1592f97f9666c000a0e8f79"
+    },
+    {
+      "path": "prepare.py",
+      "bytes": 29768,
+      "sha256": "60c1c089513bd194a40ca86e69549266c945554e0f4f110e4e9bb21474054557"
+    },
+    {
+      "path": "supervise.py",
+      "bytes": 13713,
+      "sha256": "c89e1dab6dd78516a2b90c56703417291caface2460c4e27002609b232df2ec5"
+    },
+    {
+      "path": "probe.py",
+      "bytes": 17315,
+      "sha256": "92568b79f88d8bcdd5095200ec073bf52fed4954281ededb0c29b7f2cd4ad346"
+    },
+    {
+      "path": "admission.json",
+      "bytes": 14441,
+      "sha256": "5204eab2cf0aaf6dba081713a8137001a09660a36f9a798c28c546717b8976b8"
+    },
+    {
+      "path": "reviewer-checklist.json",
+      "bytes": 7826,
+      "sha256": "fed420efa5b1647efa85673dd9c086908f2972ff2b1a2a2a3de220bfdcb10eab"
+    },
+    {
+      "path": "RUNBOOK_NOEXEC.md",
+      "bytes": 10814,
+      "sha256": "7b6c28b16e7b527360acbb5c28e89f1e660699a3ca9aae5a4432559fa70b811d"
+    },
+    {
+      "path": "root-review.TEMPLATE.json",
+      "bytes": 315,
+      "sha256": "e01832c8cc24f31510e2933e639c8fbb5e1f9bc9c67401453e7c906f1d501321"
+    },
+    {
+      "path": "ci-attempt-history.json",
+      "bytes": 2004,
+      "sha256": "0ac1598ba4219a49e59a90f1e9b181a35a77d264cda421aa16b8d4dd6b6f6e1b"
+    }
+  ],
+  "executed": false,
+  "admissible_for_execution": false,
+  "artifact_missing": true,
+  "full_CI_macOS_capacity_blocked": true,
+  "no_profile_provider_auth_or_key_exported": true,
+  "requires_current_main_and_exact_CI_rebinding_before_execution": true,
+  "no_old_deadlines_extended": true,
+  "root_static_checks": [
+    "AST4",
+    "RuffF_E9",
+    "script_and_checklist_pins"
+  ],
+  "case_or_phase_qualification_claimed": false
+}

@@ -1,6 +1,6 @@
 {
   "schema": "jarvis.product-coordination-qualification/1",
-  "status": "implemented_remote_ci_passed_physical_os_navigation_passed_background_ui_pending",
+  "status": "partial_client_fix_Ubuntu_passed_macOS_capacity_blocked_native_G_NOT_executed",
   "phase_a_complete": false,
   "phase_b_started": false,
   "notification_presentation_follow_up": {
@@ -431,7 +431,7 @@
     }
   ],
   "native_qualification": {
-    "status": "selected_real_paths_and_physical_os_navigation_passed_background_ui_pending",
+    "status": "partial_G_NOT_executed_macOS_CI_capacity_blocked",
     "local_full_suites_run": false,
     "local_builds_run": false,
     "owner_installed_app_modified": false,
@@ -3100,50 +3100,25 @@
       "automatic_in_place_budget_extension": false
     },
     "next_background_case_plan": {
-      "status": "native_QA_export_remote_CI_passed_background_case_incomplete",
-      "reason": "Large runtime artifact transfer failed in three independently preserved bounded preparations. Native-only GUI case can use selected available local development dependencies; full distribution remains separately qualified remotely.",
-      "local_dependency_inventory": {
-        "python_version": "3.11.15",
-        "site_packages_allocated_bytes": 156913664,
-        "entries": 3347,
-        "symlinks": 0,
-        "runtime_dependencies_present": 6,
-        "runtime_dependencies_expected": 7,
-        "missing": "soundfile==0.13.1; lazy Ogg decoding import, not service startup or this selected UI case",
-        "official_codex_package": "@openai/codex-darwin-arm640.163.0-darwin-arm64",
-        "official_codex_binary_bytes": 249952688,
-        "official_codex_binary_sha256": "8813367285524ac798dd96d1b071aea30d58708c7226fd236cd275cf1cfdee31",
-        "account_or_auth_files_read": false,
-        "compatibility_in_execution_not_claimed": true,
-        "python_actual_executable_sha256": "e17826d56c53bce1083f70b4cdb68ea29105fdc84c1c345746523f2af0b8287d",
-        "python_actual_executable": "/opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python",
-        "executed_selected_scope": "One authenticated Codex run with no tool calls; service startup and model completion only. Canonical-question compatibility remains unqualified.",
-        "service_and_model_execution_observed": true
-      },
-      "native_UI_pending": true,
-      "self_contained_qualification_from_dev_case_forbidden": true,
-      "implementation": {
-        "script/export_native_qa.py": {
-          "bytes": 18171,
-          "sha256": "94ca17f738027b4258d94e1a19916dd15b38f2b196ad2ceea6053aeaf2982fa2"
-        },
-        "tests/test_native_qa_export.py": {
-          "bytes": 16764,
-          "sha256": "55358659edfed80c1bdb08ce9b3e04ad327b0fe0be57328cacf2e23c82b0175b"
-        },
-        ".github/workflows/ci.yml": {
-          "bytes": 7471,
-          "sha256": "f8ddc02915015db703a422861e9826596752df5691f400fff485541351ad6e65"
-        }
-      },
-      "new_unit_cases_written_not_run_locally": 25,
-      "compressed_limit_bytes": 33554432,
-      "uncompressed_limit_bytes": 134217728,
-      "native_artifact_retention_days": 14,
-      "full_bundle_and_suites_preserved": true,
-      "exact_ci_commit": "2c8259de8112aa5f1487814a5c5c35b3931e5c43",
-      "exact_ci_run_id": 41842491175,
-      "new_unit_cases_remote_passed": 25
+      "status": "template_saved_NOT_admitted_for_execution",
+      "source_commit_in_template": "c41378acc0c1f24f6534011f1aab09691a9a6948",
+      "scope": "A1/B0 rendered during actual model run and after same run completes, then A1 return and normal GUI close; numeric text only latency, no question dependency.",
+      "durable_template": "docs/rebuild/qa/product-background-native-20261104-g-template/SNAPSHOT.json",
+      "snapshot_sha256": "524b1104bcef21e97aa2be2be74cf6d014fd589f35e505b2689e22ee0666823f",
+      "executed": false,
+      "artifact_missing": true,
+      "requires_current_main_SHA_CI_artifact_and_pins_rebinding_before_execution": true,
+      "whole_exact_CI_gate_not_relaxed": true,
+      "read_only_watch": "Same Inspector/client with aggregate262144B, max20s initial wait/16active samples,40s total/64KiB receipt.",
+      "causal_pair_requirement": "Select sample whose run_request_started_at_unix is at or after actual root CUA B0 observation; otherwise fail.",
+      "credentials_read_or_copied_by_agent": false,
+      "physical_quota_bytes": 2147483648,
+      "preserved_provider_baseline_bytes": 170102784,
+      "new_case_provider_absolute_limit_bytes": 237211648,
+      "prior_F_128MiB_limit_extended": false,
+      "new_active_seconds": 810,
+      "new_cleanup_seconds": 90,
+      "no_mount_or_app_active_at_checkpoint": true
     },
     "background_native_20261104_d": {
       "status": "incomplete_observer_admission_failed_root_GUI_recovery_closed",
@@ -3384,7 +3359,7 @@
     ]
   },
   "provider_plugin_startup_fix_20261104": {
-    "status": "implemented_pending_exact_remote_CI_and_new_finite_native_case",
+    "status": "implemented_pushed_Ubuntu_passed_macOS_infrastructure_capacity_blocked_native_final_pending",
     "observation": "Official client created remote catalog and temporary plugin repository in the synthetic provider despite apps=false; metadata only, no credential or cache contents read.",
     "settings": [
       "features.apps=false",
@@ -3406,6 +3381,87 @@
     ],
     "tests_executed_locally": false,
     "new_runtime_validation_claimed": false,
-    "question_tool_omission_in_E_explained_by_this_fix": false
+    "question_tool_omission_in_E_explained_by_this_fix": false,
+    "implementation_commit": "c41378acc0c1f24f6534011f1aab09691a9a6948",
+    "current_source_ci": {
+      "commit": "c41378acc0c1f24f6534011f1aab09691a9a6948",
+      "ci_run_id": 41852070764,
+      "run_attempt": 2,
+      "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41852070764",
+      "status": "completed",
+      "conclusion": "failure",
+      "full_remote_ci_passed": false,
+      "qualified": false,
+      "purpose": "Disable implicit official-client plugin/catalog synchronization; macOS could not acquire hosted ARM64 runner in two attempts.",
+      "ubuntu": {
+        "job_id": 126662347435,
+        "original_job_id": 126650716068,
+        "retained_success_from_attempt": 1,
+        "passed": 3980,
+        "skipped": 47,
+        "failed": 0,
+        "seconds": 224.16,
+        "saved_decoded_log_sha256": "a782e56ba867c591a304dda257fae2f8850874c1eddd4cdc8d3b52fe1b45ec0b"
+      },
+      "macos": {
+        "job_id": 126662343529,
+        "original_job_id": 126650716615,
+        "conclusion": "cancelled",
+        "runner_assigned": false,
+        "tests_or_build_started": false,
+        "infrastructure_failure": "hosted_macOS_ARM64_capacity",
+        "attempts_with_same_capacity_failure": [
+          1,
+          2
+        ],
+        "local_replacement_run": false
+      },
+      "wheel_sdist_isolated_installation": "success_ubuntu_not_run_macos",
+      "self_contained_bundle_and_parent_eof": "not_run_macos",
+      "native_development_export": "not_run_macos",
+      "native_qa_artifact": null,
+      "local_full_suites_or_builds_run": false,
+      "native_final_case_executed": false
+    }
+  },
+  "current_source_ci_status": {
+    "commit": "c41378acc0c1f24f6534011f1aab09691a9a6948",
+    "ci_run_id": 41852070764,
+    "run_attempt": 2,
+    "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41852070764",
+    "status": "completed",
+    "conclusion": "failure",
+    "full_remote_ci_passed": false,
+    "qualified": false,
+    "purpose": "Disable implicit official-client plugin/catalog synchronization; macOS could not acquire hosted ARM64 runner in two attempts.",
+    "ubuntu": {
+      "job_id": 126662347435,
+      "original_job_id": 126650716068,
+      "retained_success_from_attempt": 1,
+      "passed": 3980,
+      "skipped": 47,
+      "failed": 0,
+      "seconds": 224.16,
+      "saved_decoded_log_sha256": "a782e56ba867c591a304dda257fae2f8850874c1eddd4cdc8d3b52fe1b45ec0b"
+    },
+    "macos": {
+      "job_id": 126662343529,
+      "original_job_id": 126650716615,
+      "conclusion": "cancelled",
+      "runner_assigned": false,
+      "tests_or_build_started": false,
+      "infrastructure_failure": "hosted_macOS_ARM64_capacity",
+      "attempts_with_same_capacity_failure": [
+        1,
+        2
+      ],
+      "local_replacement_run": false
+    },
+    "wheel_sdist_isolated_installation": "success_ubuntu_not_run_macos",
+    "self_contained_bundle_and_parent_eof": "not_run_macos",
+    "native_development_export": "not_run_macos",
+    "native_qa_artifact": null,
+    "local_full_suites_or_builds_run": false,
+    "native_final_case_executed": false
   }
 }

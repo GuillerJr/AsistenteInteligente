@@ -1,5 +1,16 @@
 # Producto, sesiones y coordinación avanzadas
 
+La corrección del cliente `c41378a` se publicó en `main`. Ubuntu aprobó 3980
+pruebas (47 omitidas, 224,16 s); macOS terminó sin runner ARM64 en dos intentos,
+por falta de capacidad del proveedor. No se ejecutaron compilación ni pruebas de
+macOS para esa revisión. La
+[CI actual](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41852070764)
+no está aprobada. La [plantilla G](qa/product-background-native-20261104-g-template/SNAPSHOT.json)
+conserva el recorrido preparado y su observador firmado, sin ejecución. Antes
+de usarla deben fijarse de nuevo el SHA de `main`, CI completa, artefacto y pines
+exactos. No hay app ni cuota de prueba activas. Este bloqueo no convierte los
+recorridos parciales en cualificados ni inicia B.
+
 Continuación solicitada el 30-10-2026. La implementación está conectada y la
 [CI completa de `2c8259de`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41842491175)
 aprobó 3980 casos Python en Ubuntu (47 omitidos), 4027 en macOS y 710 Swift

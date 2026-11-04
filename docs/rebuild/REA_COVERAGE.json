@@ -7065,6 +7065,56 @@
     "reference_coverage_changed": false,
     "reference_runtime_executed": false,
     "latest_ci": {
+      "commit": "c41378acc0c1f24f6534011f1aab09691a9a6948",
+      "ci_run_id": 41852070764,
+      "run_attempt": 2,
+      "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41852070764",
+      "status": "completed",
+      "conclusion": "failure",
+      "full_remote_ci_passed": false,
+      "qualified": false,
+      "purpose": "Disable implicit official-client plugin/catalog synchronization; macOS could not acquire hosted ARM64 runner in two attempts.",
+      "ubuntu": {
+        "job_id": 126662347435,
+        "original_job_id": 126650716068,
+        "retained_success_from_attempt": 1,
+        "passed": 3980,
+        "skipped": 47,
+        "failed": 0,
+        "seconds": 224.16,
+        "saved_decoded_log_sha256": "a782e56ba867c591a304dda257fae2f8850874c1eddd4cdc8d3b52fe1b45ec0b"
+      },
+      "macos": {
+        "job_id": 126662343529,
+        "original_job_id": 126650716615,
+        "conclusion": "cancelled",
+        "runner_assigned": false,
+        "tests_or_build_started": false,
+        "infrastructure_failure": "hosted_macOS_ARM64_capacity",
+        "attempts_with_same_capacity_failure": [
+          1,
+          2
+        ],
+        "local_replacement_run": false
+      },
+      "wheel_sdist_isolated_installation": "success_ubuntu_not_run_macos",
+      "self_contained_bundle_and_parent_eof": "not_run_macos",
+      "native_development_export": "not_run_macos",
+      "native_qa_artifact": null,
+      "local_full_suites_or_builds_run": false,
+      "native_final_case_executed": false
+    },
+    "selected_native_observations": "Producto y coordinación: CI exacta 2c8259de aprobada (run 41842491175), 3980 Python Ubuntu (47 omitidas), 4027 macOS y 710 Swift (1 omitida, 0 fallos); 25 regresiones nuevas del exportador, paquetes, bundle/helper/EOF y artefacto nativo de desarrollo. El clic OS de octubre B→A y aviso 3→4 sigue cualificado por separado. D falló en admisión del observador y cerró por recuperación GUI; E observó A=1/1 y B=0/0 antes/después, pero su único run real terminó sin herramientas ni pregunta canónica. E cerró normalmente, con 12 identidades conocidas ausentes, mismo lease libre y cuota desmontada al primer intento. F añadió B desactivado durante A running en CUA e IPC firmado, pero se detuvo por el sublímite del proveedor antes de terminar. Los intentos siguen parciales y falta el recorrido completo con cierre normal. 62 familias parciales, 18 sin implementar, ninguna completa; REA 48 lotes/186 rutas. Fase A abierta y B aplazada. Corrección del cliente en c41378a: Ubuntu: 3980 aprobados y 47 omitidos aprobó; dos intentos macOS terminaron sin runner por capacidad ARM64, sin ejecutar código. G se conserva NOEXEC y requiere nuevo enlace al SHA/CI exactos antes de abrir.",
+    "prior_failures_and_unknown_custody_preserved": true,
+    "scope_limit": "Implementación propia separada de REA estática, sin ampliar 48 lotes/186 rutas. F observó B durante A activa y terminó por límite del proveedor. La corrección c41378a pasó Ubuntu; macOS no obtuvo runner en dos intentos. G permanece NOEXEC. No completa familias amplias ni distribución desde development.",
+    "capability_status_counts": {
+      "implementacion_parcial_contratos_probados": 62,
+      "no_implementado": 18,
+      "complete": 0
+    },
+    "phase_a_complete": false,
+    "phase_b_started": false,
+    "previous_successful_full_ci": {
       "commit": "2c8259de8112aa5f1487814a5c5c35b3931e5c43",
       "ci_run_id": 41842491175,
       "run_attempt": 1,
@@ -7109,16 +7159,6 @@
       "local_tests_or_builds_run": false,
       "qualified": false,
       "limit": "Complete exact-commit remote CI; selected external UI case remains incomplete. Passing CI and finite preference observations do not establish B while A waits on the canonical question or broad parity."
-    },
-    "selected_native_observations": "Producto y coordinación: CI exacta 2c8259de aprobada (run 41842491175), 3980 Python Ubuntu (47 omitidas), 4027 macOS y 710 Swift (1 omitida, 0 fallos); 25 regresiones nuevas del exportador, paquetes, bundle/helper/EOF y artefacto nativo de desarrollo. El clic OS de octubre B→A y aviso 3→4 sigue cualificado por separado. D falló en admisión del observador y cerró por recuperación GUI; E observó A=1/1 y B=0/0 antes/después, pero su único run real terminó sin herramientas ni pregunta canónica. E cerró normalmente, con 12 identidades conocidas ausentes, mismo lease libre y cuota desmontada al primer intento. F añadió B desactivado durante A running en CUA e IPC firmado, pero se detuvo por el sublímite del proveedor antes de terminar. Los intentos siguen parciales y falta el recorrido completo con cierre normal. 62 familias parciales, 18 sin implementar, ninguna completa; REA 48 lotes/186 rutas. Fase A abierta y B aplazada.",
-    "prior_failures_and_unknown_custody_preserved": true,
-    "scope_limit": "Implementación propia separada de REA estática, sin ampliar48lotes/186rutas. F observa B durante A activa pero termina por límite del proveedor. La corrección desactiva sincronización implícita de plugins; su CI exacta y recorrido completo están pendientes. No completa familias amplias ni distribución desde development.",
-    "capability_status_counts": {
-      "implementacion_parcial_contratos_probados": 62,
-      "no_implementado": 18,
-      "complete": 0
-    },
-    "phase_a_complete": false,
-    "phase_b_started": false
+    }
   }
 }

@@ -1,0 +1,8 @@
+{
+  "schema": "jarvis.native-development-root-review/1",
+  "source_commit": "c41378acc0c1f24f6534011f1aab09691a9a6948",
+  "admission_sha256": null,
+  "execution_review_passed": false,
+  "status": "TEMPLATE_ONLY_DO_NOT_RENAME_UNTIL_ROOT_APPROVES_EXACT_FROZEN_INPUTS",
+  "full_phase_A_qualification_claimed": false
+}
