@@ -311,12 +311,24 @@ def sandbox_policy(source: Path, control: Path, mount: Path, *, extra_reads=()):
              Path("/sbin"), Path("/opt/homebrew"), Path("/Library/Frameworks/Python.framework"),
              Path("/Library/Developer"), Path("/Applications/Xcode.app"),
              Path("/private/var/db/dyld"), Path("/private/etc"), Path("/dev")]
+    # These root-owned Apple frameworks are canonical targets of /System
+    # symlinks or dependencies needed by Xcode's tool lookup. Admit their code
+    # bundles, not the surrounding /Library/Apple tree or its other contents.
+    apple_frameworks = Path("/Library/Apple/System/Library/PrivateFrameworks")
+    reads.extend(apple_frameworks / name for name in (
+        "DeviceInterface.framework", "DeviceLink.framework", "Mercury.framework",
+        "MobileDevice.framework"))
     reads.extend(extra_reads)
     # Descriptor-based custody walks from '/' without following symlinks.
     # Opening each ancestor needs read-data for that directory itself. Literal
     # grants permit the walk, never a recursive read of its other descendants.
-    ancestors = sorted({str(parent) for path in reads for parent in path.parents})
-    literals = " ".join(f"(literal {json.dumps(path)})" for path in ancestors)
+    # xcrun reads the root-owned public receipt of an already accepted Xcode
+    # licence. Grant that file alone, never the user's or system preferences tree.
+    public_xcode_license = Path("/Library/Preferences/com.apple.dt.Xcode.plist")
+    literal_paths = {str(public_xcode_license)}
+    literal_paths.update(str(parent) for path in [*reads, public_xcode_license]
+                         for parent in path.parents)
+    literals = " ".join(f"(literal {json.dumps(path)})" for path in sorted(literal_paths))
     filters = " ".join(f"(subpath {json.dumps(str(path))})" for path in reads)
     quote = json.dumps(str(mount))
     return "\n".join([

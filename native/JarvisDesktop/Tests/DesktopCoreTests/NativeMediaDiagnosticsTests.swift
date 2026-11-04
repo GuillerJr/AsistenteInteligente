@@ -1,5 +1,9 @@
+import CoreGraphics
 import CoreML
+import CoreText
 import Foundation
+import ImageIO
+import UniformTypeIdentifiers
 import Vision
 import XCTest
 @testable import DesktopCore
@@ -10,7 +14,7 @@ private struct PretendedObjCError: Error, CustomNSError {
     var errorUserInfo: [String: Any] { [NSLocalizedDescriptionKey: "PRIVATE-PRETENDED-ERROR"] }
 }
 
-private enum VisionReferenceIssue: Error { case cpuUnavailable }
+private enum VisionReferenceIssue: Error { case cpuUnavailable, imageUnavailable }
 
 final class NativeMediaDiagnosticsTests: XCTestCase {
     func testOnlyClosedPhaseWhitelistedDomainsAndCodesSurvivePrivateErrorInfo() throws {
@@ -102,54 +106,106 @@ final class NativeMediaDiagnosticsTests: XCTestCase {
     }
 
     func testIndependentAppleVisionReferenceComparesOnlyLegacyCPUFlagOnSameBitmap() throws {
-        let image = try NativeMediaFixtures.picture("JARVIS LOCAL IMAGE 4826")
-        let modern = VNRecognizeTextRequest(), legacy = VNRecognizeTextRequest()
-        XCTAssertEqual(modern.revision, legacy.revision)
-        let variants: [(NativeMediaDiagnostics.ReferenceVariant, VNRecognizeTextRequest, Bool)] = [
-            (.modern, modern, false), (.legacy, legacy, true),
-        ]
-        for (variant, request, legacyCPU) in variants {
-            request.recognitionLevel = .accurate
-            request.recognitionLanguages = ["en-US"]
-            request.usesLanguageCorrection = false
-            // The requests share the exact bitmap and per-stage CPU policy.
-            // Only this public legacy flag differs; no product helper runs.
-            request.usesCPUOnly = legacyCPU
-            do {
-                let supported: [VNComputeStage: [MLComputeDevice]] = try request.supportedComputeStageDevices
-                guard !supported.isEmpty else { throw VisionReferenceIssue.cpuUnavailable }
-                for (stage, devices) in supported {
-                    guard let cpu = devices.first(where: { if case .cpu = $0 { return true }; return false }) else {
-                        throw VisionReferenceIssue.cpuUnavailable
+        let image = try canonicalReferenceImage()
+        let png = try canonicalReferencePNG(image)
+        let formats: [NativeMediaDiagnostics.ReferenceSourceFormat] = [.cgImage, .pngData]
+        for sourceFormat in formats {
+            let modern = VNRecognizeTextRequest(), legacy = VNRecognizeTextRequest()
+            XCTAssertEqual(modern.revision, legacy.revision)
+            let variants: [(NativeMediaDiagnostics.ReferenceVariant, VNRecognizeTextRequest, Bool)] = [
+                (.modern, modern, false), (.legacy, legacy, true),
+            ]
+            for (variant, request, legacyCPU) in variants {
+                request.recognitionLevel = .accurate
+                request.recognitionLanguages = ["en-US"]
+                request.usesLanguageCorrection = false
+                // Within each source format, only this public legacy flag
+                // differs. Raster generation and OCR use no product helper.
+                request.usesCPUOnly = legacyCPU
+                do {
+                    let supported: [VNComputeStage: [MLComputeDevice]] = try request.supportedComputeStageDevices
+                    guard !supported.isEmpty else { throw VisionReferenceIssue.cpuUnavailable }
+                    for (stage, devices) in supported {
+                        guard let cpu = devices.first(where: { if case .cpu = $0 { return true }; return false }) else {
+                            throw VisionReferenceIssue.cpuUnavailable
+                        }
+                        request.setComputeDevice(cpu, for: stage)
                     }
-                    request.setComputeDevice(cpu, for: stage)
+                    let handler: VNImageRequestHandler
+                    switch sourceFormat {
+                    case .cgImage: handler = VNImageRequestHandler(cgImage: image, options: [:])
+                    case .pngData: handler = VNImageRequestHandler(data: png, options: [:])
+                    }
+                    try handler.perform([request])
+                    let text = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
+                    let recognized = text.contains("4826")
+                    NativeMediaDiagnostics.emitReferenceOutcome(variant, sourceFormat: sourceFormat,
+                                                               recognizedMarker: recognized)
+                    if variant == .legacy {
+                        XCTAssertTrue(recognized, "La referencia Apple CPU debe reconocer el marcador real")
+                    }
+                } catch {
+                    NativeMediaDiagnostics.emit(variant.failurePhase, error: error, sourceFormat: sourceFormat)
+                    NativeMediaDiagnostics.emitReferenceOutcome(variant, sourceFormat: sourceFormat,
+                                                               recognizedMarker: false)
+                    if variant == .legacy { XCTFail("La referencia Apple CPU no pudo confirmar el marcador real") }
                 }
-                try VNImageRequestHandler(cgImage: image, options: [:]).perform([request])
-                let text = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
-                let recognized = text.contains("4826")
-                NativeMediaDiagnostics.emitReferenceOutcome(variant, recognizedMarker: recognized)
-                if variant == .legacy {
-                    XCTAssertTrue(recognized, "La referencia Apple CPU debe reconocer el marcador real")
-                }
-            } catch {
-                NativeMediaDiagnostics.emit(variant.failurePhase, error: error)
-                NativeMediaDiagnostics.emitReferenceOutcome(variant, recognizedMarker: false)
-                if variant == .legacy { throw error }
             }
         }
     }
 
-    func testReferenceResultsExposeOnlyClosedVariantAndMarkerBoolean() throws {
+    private func canonicalReferenceImage() throws -> CGImage {
+        let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+        let info = CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.premultipliedFirst.rawValue
+        let context = try XCTUnwrap(CGContext(data: nil, width: 1200, height: 300,
+            bitsPerComponent: 8, bytesPerRow: 1200 * 4, space: space, bitmapInfo: info))
+        context.setFillColor(red: 1, green: 1, blue: 1, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: 1200, height: 300))
+        let attributes: [NSAttributedString.Key: Any] = [
+            NSAttributedString.Key(kCTFontAttributeName as String): CTFontCreateWithName("Helvetica" as CFString, 44, nil),
+            NSAttributedString.Key(kCTForegroundColorAttributeName as String): CGColor(gray: 0, alpha: 1),
+        ]
+        let marker = NSAttributedString(string: "JARVIS LOCAL IMAGE 4826", attributes: attributes)
+        context.textMatrix = .identity
+        context.textPosition = CGPoint(x: 50, y: 130)
+        CTLineDraw(CTLineCreateWithAttributedString(marker), context)
+        return try XCTUnwrap(context.makeImage())
+    }
+
+    private func canonicalReferencePNG(_ image: CGImage) throws -> Data {
+        let data = NSMutableData()
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(data as CFMutableData,
+            UTType.png.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, image, nil)
+        guard CGImageDestinationFinalize(destination) else {
+            XCTFail("No se pudo crear el PNG canónico de control")
+            throw VisionReferenceIssue.imageUnavailable
+        }
+        return data as Data
+    }
+
+    func testReferenceResultsExposeOnlyClosedVariantSourceFormatAndMarkerBoolean() throws {
         let variants: [NativeMediaDiagnostics.ReferenceVariant] = [.modern, .legacy]
-        for variant in variants {
-            for recognized in [false, true] {
-                let data = try XCTUnwrap(NativeMediaDiagnostics.referencePayload(variant: variant, recognizedMarker: recognized))
-                XCTAssertLessThanOrEqual(data.count, 1024)
-                let record = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-                XCTAssertEqual(Set(record.keys), Set(["format", "variant", "recognized_marker"]))
-                XCTAssertEqual(record["format"] as? String, "jarvis.native-media-reference/1")
-                XCTAssertEqual(record["variant"] as? String, variant.rawValue)
-                XCTAssertEqual(record["recognized_marker"] as? Bool, recognized)
+        let formats: [NativeMediaDiagnostics.ReferenceSourceFormat] = [.cgImage, .pngData]
+        for sourceFormat in formats {
+            for variant in variants {
+                for recognized in [false, true] {
+                    let data = try XCTUnwrap(NativeMediaDiagnostics.referencePayload(variant: variant,
+                        sourceFormat: sourceFormat, recognizedMarker: recognized))
+                    XCTAssertLessThanOrEqual(data.count, 1024)
+                    let record = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+                    XCTAssertEqual(Set(record.keys), Set(["format", "variant", "source_format", "recognized_marker"]))
+                    XCTAssertEqual(record["format"] as? String, "jarvis.native-media-reference/1")
+                    XCTAssertEqual(record["variant"] as? String, variant.rawValue)
+                    XCTAssertEqual(record["source_format"] as? String, sourceFormat.rawValue)
+                    XCTAssertEqual(record["recognized_marker"] as? Bool, recognized)
+                    let failure = try XCTUnwrap(NativeMediaDiagnostics.payload(phase: variant.failurePhase,
+                        error: NSError(domain: "PRIVATE-DOMAIN", code: 0), sourceFormat: sourceFormat))
+                    let failureRecord = try XCTUnwrap(JSONSerialization.jsonObject(with: failure) as? [String: Any])
+                    XCTAssertEqual(Set(failureRecord.keys), Set(["format", "phase", "source_format", "errors"]))
+                    XCTAssertEqual(failureRecord["source_format"] as? String, sourceFormat.rawValue)
+                    XCTAssertFalse(String(decoding: failure, as: UTF8.self).contains("PRIVATE-DOMAIN"))
+                }
             }
         }
     }

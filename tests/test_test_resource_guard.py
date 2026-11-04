@@ -238,6 +238,45 @@ def test_policy_blocks_writes_and_chmod_outside_private_volume(tmp_path):
     assert '(remote ip "localhost:*")' in value
 
 
+def test_policy_reads_only_the_public_xcode_license_preference_literally(tmp_path):
+    value = guard.sandbox_policy(tmp_path / "source", tmp_path / "control", tmp_path / "volume")
+    public_file = "/Library/Preferences/com.apple.dt.Xcode.plist"
+    assert '(literal ' + json.dumps(public_file) + ')' in value
+    assert '(literal "/Library/Preferences")' in value
+    assert '(subpath "/Library/Preferences")' not in value
+    assert '(subpath "/Library")' not in value
+    assert value.count('"/Library/Preferences/') == 1
+    for path in ("/Library/Preferences/.GlobalPreferences.plist",
+                 "/Library/Preferences/com.apple.dt.Xcode.LSSharedFileList.plist",
+                 "/Users/jarvis-fixture/Library/Preferences/com.apple.dt.Xcode.plist"):
+        assert json.dumps(path) not in value
+    read_grant = next(line for line in value.splitlines() if line.startswith("(allow file-read* "))
+    assert '(literal ' + json.dumps(public_file) + ')' in read_grant
+    assert not any(public_file in line for line in value.splitlines()
+                   if "file-write" in line)
+    assert "mach-lookup" not in value
+
+
+def test_policy_reads_canonical_apple_frameworks_without_broad_library_access(tmp_path):
+    value = guard.sandbox_policy(tmp_path / "source", tmp_path / "control", tmp_path / "volume")
+    framework_parent = Path("/Library/Apple/System/Library/PrivateFrameworks")
+    read_grant = next(line for line in value.splitlines() if line.startswith("(allow file-read* "))
+    for name in ("DeviceInterface.framework", "DeviceLink.framework", "Mercury.framework",
+                 "MobileDevice.framework"):
+        canonical_bundle = str(framework_parent / name)
+        assert '(subpath ' + json.dumps(canonical_bundle) + ')' in read_grant
+        assert not any(canonical_bundle in line for line in value.splitlines()
+                       if "file-write" in line)
+    assert '(subpath "/System")' in read_grant
+    assert value.count('"/Library/Apple/System/Library/PrivateFrameworks/') == 4
+    for parent in (framework_parent, *framework_parent.parents):
+        assert '(subpath ' + json.dumps(str(parent)) + ')' not in value
+        assert '(literal ' + json.dumps(str(parent)) + ')' in read_grant
+    assert '(subpath "/Library/Preferences")' not in value
+    assert "/Users/jarvis-fixture/Library" not in value
+    assert "mach-lookup" not in value
+
+
 @pytest.mark.parametrize("chosen,accepted", [
     ("/Applications/Xcode.app/Contents/Developer/usr/bin/git", True),
     ("/private/tmp/not-an-admitted-developer/git", False),

@@ -45,6 +45,11 @@ enum NativeMediaDiagnostics {
         }
     }
 
+    enum ReferenceSourceFormat: String {
+        case cgImage = "cg_image"
+        case pngData = "png_data"
+    }
+
     private static let allowedDomains: Set<String> = [
         VNErrorDomain, MLModelErrorDomain, AVFoundationErrorDomain,
         NSCocoaErrorDomain, NSPOSIXErrorDomain, NSOSStatusErrorDomain, NSURLErrorDomain,
@@ -63,7 +68,7 @@ enum NativeMediaDiagnostics {
         return .other
     }
 
-    static func payload(phase: Phase, error: Error) -> Data? {
+    static func payload(phase: Phase, error: Error, sourceFormat: ReferenceSourceFormat? = nil) -> Data? {
         var currentError: Error = error
         var errors: [[String: Any]] = []
         for depth in 0..<3 {
@@ -73,13 +78,16 @@ enum NativeMediaDiagnostics {
             guard depth < 2, let underlying = current.userInfo[NSUnderlyingErrorKey] as? Error else { break }
             currentError = underlying
         }
-        let record: [String: Any] = ["format": "jarvis.native-media-diagnostic/1",
+        var record: [String: Any] = ["format": "jarvis.native-media-diagnostic/1",
                                     "phase": phase.rawValue, "errors": errors]
+        if let sourceFormat { record["source_format"] = sourceFormat.rawValue }
         return boundedJSON(record)
     }
 
-    static func referencePayload(variant: ReferenceVariant, recognizedMarker: Bool) -> Data? {
+    static func referencePayload(variant: ReferenceVariant, sourceFormat: ReferenceSourceFormat,
+                                 recognizedMarker: Bool) -> Data? {
         boundedJSON(["format": "jarvis.native-media-reference/1", "variant": variant.rawValue,
+                     "source_format": sourceFormat.rawValue,
                      "recognized_marker": recognizedMarker])
     }
 
@@ -97,15 +105,17 @@ enum NativeMediaDiagnostics {
         #endif
     }
 
-    static func emit(_ phase: Phase, error: Error) {
+    static func emit(_ phase: Phase, error: Error, sourceFormat: ReferenceSourceFormat? = nil) {
         guard enabled(environment: ProcessInfo.processInfo.environment),
-              let data = payload(phase: phase, error: error) else { return }
+              let data = payload(phase: phase, error: error, sourceFormat: sourceFormat) else { return }
         try? FileHandle.standardError.write(contentsOf: data)
     }
 
-    static func emitReferenceOutcome(_ variant: ReferenceVariant, recognizedMarker: Bool) {
+    static func emitReferenceOutcome(_ variant: ReferenceVariant, sourceFormat: ReferenceSourceFormat,
+                                     recognizedMarker: Bool) {
         guard enabled(environment: ProcessInfo.processInfo.environment),
-              let data = referencePayload(variant: variant, recognizedMarker: recognizedMarker) else { return }
+              let data = referencePayload(variant: variant, sourceFormat: sourceFormat,
+                                          recognizedMarker: recognizedMarker) else { return }
         try? FileHandle.standardError.write(contentsOf: data)
     }
 }
