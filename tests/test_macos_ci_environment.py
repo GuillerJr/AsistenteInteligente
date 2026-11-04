@@ -152,7 +152,10 @@ def test_workflow_uses_one_standard_arm_pool_and_preserves_full_qualification():
     workflow = ROOT / ".github/workflows/ci.yml"
     if not workflow.is_file():
         pytest.skip("CI workflow belongs to the source checkout, not the runtime archive")
-    job = yaml.safe_load(workflow.read_text())["jobs"]["python"]
+    definition = yaml.safe_load(workflow.read_text())
+    assert definition["concurrency"]["cancel-in-progress"] is True
+    assert definition["concurrency"]["group"] == "ci-jarvis-v3-${{ github.ref }}"
+    job = definition["jobs"]["python"]
     assert job["strategy"]["matrix"]["os"] == ["ubuntu-24.04", "xcode-27"]
     steps = job["steps"]
     environment = next(step for step in steps

@@ -10,9 +10,9 @@ permissions:
   contents: read
 
 concurrency:
-  # Prior group was retained by a GitHub run with completed jobs and cancel 409.
+  # v2 retained run 41859494638 as queued while both cancellation APIs returned 409.
   # A new epoch retains the same single-run-per-ref and cancellation policy.
-  group: ci-jarvis-v2-${{ github.ref }}
+  group: ci-jarvis-v3-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
