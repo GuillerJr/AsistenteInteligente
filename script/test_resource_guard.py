@@ -409,8 +409,12 @@ def resolve_local_swift(environment):
     # The /usr/bin shim queries host licence/preferences services denied by the
     # quota sandbox. Use the already installed toolchain; never accept licences
     # or change global developer settings as part of a test.
+    # Resolve with only the child's bounded scratch locations and locale. A
+    # caller-supplied developer directory must not become a child capability.
+    resolution_environment = {key: environment[key] for key in (
+        "PATH", "LANG", "LC_ALL", "HOME", "TMPDIR") if key in environment}
     result = subprocess.run(["/usr/bin/xcrun", "--find", "swift"], capture_output=True,
-                            timeout=10, check=False)
+                            timeout=10, check=False, env=resolution_environment)
     if result.returncode:
         raise GuardError("No se pudo resolver Swift para el focal aislado.")
     executable = Path(os.fsdecode(result.stdout).strip()).resolve(strict=True)
@@ -418,15 +422,46 @@ def resolve_local_swift(environment):
     if (not any(executable.is_relative_to(base) for base in allowed)
             or not executable.is_file() or not os.access(executable, os.X_OK)):
         raise GuardError("Swift queda fuera de las rutas de desarrollo admitidas.")
+    # --toolchain expects the root containing usr/bin, not usr itself. This
+    # covers both an Xcode .xctoolchain and CommandLineTools' root/usr layout.
+    # Apple's swift entry point may resolve to swift-frontend in that same bin.
+    toolchain = executable.parent.parent.parent
+    if (executable.parent != toolchain / "usr/bin" or not toolchain.is_dir()
+            or (toolchain / "usr/bin/swift").resolve(strict=True) != executable):
+        raise GuardError("Swift no tiene una raíz de toolchain admitida.")
+    developer = None
+    for candidate in (Path("/Applications/Xcode.app/Contents/Developer"),
+                      Path("/Library/Developer/CommandLineTools")):
+        if executable.is_relative_to(candidate):
+            if candidate.resolve(strict=True) != candidate or not candidate.is_dir():
+                raise GuardError("El directorio de desarrollo no es una ruta física admitida.")
+            developer = candidate
+            resolution_environment["DEVELOPER_DIR"] = str(candidate)
+            break
     result = subprocess.run(["/usr/bin/xcrun", "--sdk", "macosx", "--show-sdk-path"],
-                            capture_output=True, timeout=10, check=False)
+                            capture_output=True, timeout=10, check=False,
+                            env=resolution_environment)
     if result.returncode:
         raise GuardError("No se pudo resolver el SDK de macOS instalado.")
     sdk = Path(os.fsdecode(result.stdout).strip()).resolve(strict=True)
     if not any(sdk.is_relative_to(base) for base in allowed) or not sdk.is_dir():
         raise GuardError("El SDK queda fuera de las rutas de desarrollo admitidas.")
+    # SDKROOT does not provide the XCTest framework/library search paths.
+    # SwiftPM's explicit platform override avoids another xcrun inside Seatbelt.
+    result = subprocess.run(["/usr/bin/xcrun", "--sdk", "macosx", "--show-sdk-platform-path"],
+                            capture_output=True, timeout=10, check=False,
+                            env=resolution_environment)
+    if result.returncode:
+        raise GuardError("No se pudo resolver la plataforma de macOS instalada.")
+    platform = Path(os.fsdecode(result.stdout).strip()).resolve(strict=True)
+    if not any(platform.is_relative_to(base) for base in allowed) or not platform.is_dir():
+        raise GuardError("La plataforma queda fuera de las rutas de desarrollo admitidas.")
     environment["SDKROOT"] = str(sdk)
-    environment["JARVIS_TEST_GUARD_TOOLCHAIN"] = str(executable.parent.parent)
+    environment["SWIFTPM_PLATFORM_PATH_macosx"] = str(platform)
+    environment["JARVIS_TEST_GUARD_TOOLCHAIN"] = str(toolchain)
+    environment.pop("DEVELOPER_DIR", None)
+    if developer is not None:
+        environment["DEVELOPER_DIR"] = str(developer)
     environment["PATH"] = str(executable.parent) + ":" + environment.get("PATH", os.defpath)
 
 

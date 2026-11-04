@@ -203,9 +203,13 @@ def test_environment_is_private_and_does_not_inherit_account_secrets(tmp_path):
     value = guard.child_environment(tmp_path, tmp_path, admission,
         {"PATH": os.defpath, "OPENAI_API_KEY": "SYNTHETIC_NEVER_FORWARD",
          "GITHUB_TOKEN": "SYNTHETIC_NEVER_FORWARD",
+         "SWIFTPM_PLATFORM_PATH_macosx": "/not/an/admitted/platform",
+         "JARVIS_TEST_GUARD_TOOLCHAIN": "/not/an/admitted/toolchain",
          "JARVIS_MINILM_TEST_ASSETS": "/not/an/admitted/input",
          "JARVIS_MINILM_REQUIRE_REAL": "1"}, tmp_path)
     assert "OPENAI_API_KEY" not in value and "GITHUB_TOKEN" not in value
+    assert "SWIFTPM_PLATFORM_PATH_macosx" not in value
+    assert "JARVIS_TEST_GUARD_TOOLCHAIN" not in value
     assert "JARVIS_MINILM_TEST_ASSETS" not in value and "JARVIS_MINILM_REQUIRE_REAL" not in value
     assert Path(value["HOME"]).is_relative_to(tmp_path)
     assert value["PYTHONDONTWRITEBYTECODE"] == "1"
@@ -238,31 +242,136 @@ def test_policy_blocks_writes_and_chmod_outside_private_volume(tmp_path):
     ("/Applications/Xcode.app/Contents/Developer/usr/bin/git", True),
     ("/private/tmp/not-an-admitted-developer/git", False),
 ])
-@pytest.mark.parametrize("resolver,tool", [(guard.resolve_local_git, "git"),
-                                          (guard.resolve_local_swift, "swift")])
-def test_tool_resolution_is_explicit_and_does_not_broaden_sandbox(
-    monkeypatch, chosen, accepted, resolver, tool,
-):
-    chosen = str(Path(chosen).with_name(tool))
-    sdk = "/Applications/Xcode.app/Contents/Developer/SDKs/MacOSX.sdk"
+def test_git_resolution_is_explicit_and_does_not_broaden_sandbox(monkeypatch, chosen, accepted):
     monkeypatch.setattr(guard.subprocess, "run", lambda arguments, **k:
-                        SimpleNamespace(returncode=0, stdout=(
-                            sdk if "--show-sdk-path" in arguments else chosen).encode()))
+                        SimpleNamespace(returncode=0, stdout=chosen.encode()))
     monkeypatch.setattr(guard.Path, "resolve", lambda self, **_kwargs: self)
     monkeypatch.setattr(guard.Path, "is_file", lambda _self: True)
     monkeypatch.setattr(guard.Path, "is_dir", lambda _self: True)
     monkeypatch.setattr(guard.os, "access", lambda *_args: True)
     environment = {"PATH": "/usr/bin:/bin"}
     if accepted:
-        resolver(environment)
-        if tool == "git":
-            assert environment["JARVIS_TEST_GUARD_GIT"] == chosen
-        else:
-            assert environment["SDKROOT"] == sdk
+        guard.resolve_local_git(environment)
+        assert environment["JARVIS_TEST_GUARD_GIT"] == chosen
         assert environment["PATH"].startswith(str(Path(chosen).parent) + ":")
     else:
         with pytest.raises(guard.GuardError, match="fuera de las rutas"):
-            resolver(environment)
+            guard.resolve_local_git(environment)
+
+
+def fake_swift_resolution(monkeypatch, *, layout="xcode", changes=None, redirects=None,
+                          failed_query=None):
+    developer = Path("/Applications/Xcode.app/Contents/Developer" if layout == "xcode"
+                     else "/Library/Developer/CommandLineTools")
+    toolchain = (developer / "Toolchains/XcodeDefault.xctoolchain"
+                 if layout == "xcode" else developer)
+    paths = {"swift": toolchain / "usr/bin/swift",
+             "sdk": developer / "SDKs/MacOSX.sdk",
+             "platform": developer / "Platforms/MacOSX.platform"}
+    paths.update(changes or {})
+    redirects = redirects or {}
+    queries = [("/usr/bin/xcrun", "--find", "swift"),
+               ("/usr/bin/xcrun", "--sdk", "macosx", "--show-sdk-path"),
+               ("/usr/bin/xcrun", "--sdk", "macosx", "--show-sdk-platform-path")]
+    outputs = dict(zip(queries, paths.values(), strict=True))
+    calls = []
+
+    def run(arguments, **kwargs):
+        query = tuple(arguments)
+        assert query in outputs, "Only read-only xcrun resolution is permitted"
+        calls.append((query, dict(kwargs, env=dict(kwargs["env"]))))
+        return SimpleNamespace(returncode=int(query == failed_query),
+                               stdout=str(outputs[query]).encode())
+
+    directories = {developer, toolchain, paths["sdk"], paths["platform"]}
+    canonical_swift = redirects.get(paths["swift"], paths["swift"])
+    monkeypatch.setattr(guard.subprocess, "run", run)
+    monkeypatch.setattr(guard.Path, "resolve", lambda self, **_kwargs: redirects.get(self, self))
+    monkeypatch.setattr(guard.Path, "is_file", lambda self: self == canonical_swift)
+    monkeypatch.setattr(guard.Path, "is_dir", lambda self: self in directories)
+    monkeypatch.setattr(guard.os, "access", lambda path, _mode: path == canonical_swift)
+    return SimpleNamespace(paths=paths, developer=developer, toolchain=toolchain,
+                           calls=calls, queries=queries)
+
+
+@pytest.mark.parametrize("layout", ["xcode", "clt"])
+def test_swift_resolution_pins_platform_and_toolchain_without_global_changes(monkeypatch, layout):
+    fixture = fake_swift_resolution(monkeypatch, layout=layout)
+    environment = {"PATH": "/usr/bin:/bin", "DEVELOPER_DIR": "/untrusted/developer",
+                   "SWIFTPM_PLATFORM_PATH_macosx": "/untrusted/platform",
+                   "OPENAI_API_KEY": "SYNTHETIC_NEVER_FORWARD"}
+    policy = guard.sandbox_policy(Path("/source"), Path("/control"), Path("/volume"))
+    guard.resolve_local_swift(environment)
+    assert environment["SDKROOT"] == str(fixture.paths["sdk"])
+    assert environment["SWIFTPM_PLATFORM_PATH_macosx"] == str(fixture.paths["platform"])
+    assert environment["JARVIS_TEST_GUARD_TOOLCHAIN"] == str(fixture.toolchain)
+    assert environment["DEVELOPER_DIR"] == str(fixture.developer)
+    assert environment["PATH"].startswith(str(fixture.paths["swift"].parent) + ":")
+    assert [query for query, _kwargs in fixture.calls] == fixture.queries
+    for index, (_query, kwargs) in enumerate(fixture.calls):
+        assert kwargs["capture_output"] and kwargs["timeout"] == 10 and not kwargs["check"]
+        assert "OPENAI_API_KEY" not in kwargs["env"]
+        assert "SWIFTPM_PLATFORM_PATH_macosx" not in kwargs["env"]
+        assert kwargs["env"].get("DEVELOPER_DIR") == (
+            str(fixture.developer) if index else None)
+    assert policy == guard.sandbox_policy(Path("/source"), Path("/control"), Path("/volume"))
+    assert "mach-lookup" not in policy
+
+
+def test_swift_resolution_accepts_the_installed_swift_frontend_alias(monkeypatch):
+    alias = Path("/Applications/Xcode.app/Contents/Developer/Toolchains/"
+                 "XcodeDefault.xctoolchain/usr/bin/swift")
+    fixture = fake_swift_resolution(
+        monkeypatch, redirects={alias: alias.with_name("swift-frontend")})
+    environment = {"PATH": "/usr/bin:/bin"}
+    guard.resolve_local_swift(environment)
+    assert environment["JARVIS_TEST_GUARD_TOOLCHAIN"] == str(fixture.toolchain)
+    assert environment["SWIFTPM_PLATFORM_PATH_macosx"] == str(fixture.paths["platform"])
+    assert environment["PATH"].startswith(str(alias.parent) + ":")
+
+
+@pytest.mark.parametrize("component", ["swift", "sdk", "platform"])
+@pytest.mark.parametrize("through_symlink", [False, True])
+def test_swift_resolution_rejects_paths_or_links_outside_developer_roots(
+    monkeypatch, component, through_symlink,
+):
+    outside = Path("/private/tmp/untrusted") / component
+    if through_symlink:
+        fixture = fake_swift_resolution(monkeypatch)
+        fake_swift_resolution(monkeypatch, redirects={fixture.paths[component]: outside})
+    else:
+        fake_swift_resolution(monkeypatch, changes={component: outside})
+    environment = {"PATH": "/usr/bin:/bin"}
+    with pytest.raises(guard.GuardError, match="fuera de las rutas"):
+        guard.resolve_local_swift(environment)
+    assert "SWIFTPM_PLATFORM_PATH_macosx" not in environment
+    assert "JARVIS_TEST_GUARD_TOOLCHAIN" not in environment
+
+
+def test_swift_platform_resolution_failure_is_reported_before_dispatch(monkeypatch):
+    query = ("/usr/bin/xcrun", "--sdk", "macosx", "--show-sdk-platform-path")
+    fixture = fake_swift_resolution(monkeypatch, failed_query=query)
+    environment = {"PATH": "/usr/bin:/bin"}
+    with pytest.raises(guard.GuardError, match="resolver la plataforma"):
+        guard.resolve_local_swift(environment)
+    assert len(fixture.calls) == 3
+    assert environment == {"PATH": "/usr/bin:/bin"}
+
+
+def test_swift_resolution_rejects_an_unrecognized_bin_layout(monkeypatch):
+    fake_swift_resolution(monkeypatch, changes={
+        "swift": Path("/Applications/Xcode.app/Contents/Developer/bin/swift")})
+    with pytest.raises(guard.GuardError, match="raíz de toolchain"):
+        guard.resolve_local_swift({"PATH": "/usr/bin:/bin"})
+
+
+def test_swift_resolution_never_exports_a_developer_directory_symlink(monkeypatch):
+    developer = Path("/Applications/Xcode.app/Contents/Developer")
+    fake_swift_resolution(monkeypatch, redirects={developer: Path("/private/tmp/untrusted")})
+    environment = {"PATH": "/usr/bin:/bin"}
+    with pytest.raises(guard.GuardError, match="ruta física"):
+        guard.resolve_local_swift(environment)
+    assert "DEVELOPER_DIR" not in environment
 
 
 def test_receipt_requires_same_tree_success_cleanup_and_log_identity(source, tmp_path):
