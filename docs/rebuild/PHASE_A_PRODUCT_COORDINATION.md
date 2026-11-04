@@ -1,16 +1,38 @@
 # Producto, sesiones y coordinación avanzadas
 
 Continuación solicitada el 30-10-2026. La implementación está conectada y la
-[CI completa de `4686f25`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41108646785)
-aprobó Ubuntu, macOS, Swift, paquetes y el bundle autocontenido. Los recorridos
-finitos de clientes, Git, GitHub, preguntas, carpetas y paneles tienen evidencia
-separada en el [registro de cualificación](PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json).
-Queda sin acreditar la presentación y el clic real de un aviso de macOS. El dueño
-aclaró después que pulsó «Ver chat» dentro de Jarvis: ese gesto consume la
-notificación y el reconciliador retira su solicitud del sistema. Su ausencia
-posterior no demuestra un fallo de envío. El ACK y `resumed` tampoco demuestran
-por sí solos un clic del sistema. Este bloque no se presenta como completo
-ni cierra las familias amplias de la matriz; la fase B sigue aplazada.
+[CI completa de `1b0a7ead`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41123446861)
+aprobó Ubuntu, macOS, Swift, paquetes, bundle/helper y smoke de cierre por EOF.
+Los recorridos finitos de clientes, Git, GitHub, preguntas, carpetas y paneles
+conservan evidencia separada en el
+[registro de cualificación](PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json).
+
+La nueva QA propia de ese artefacto acredita la navegación por un clic físico
+OS confirmado por el dueño. Con B seleccionado, el clic volvió a A: la interfaz
+mostró «Prueba de aviso terminada», el control de avisos en 1 y «Chat abierto».
+El mismo aviso pasó de `delivered` revisión 3 a `resumed` revisión 4. Hubo un
+único run de Codex `completed`, resultado conocido, limpieza confirmada y cero
+herramientas; B quedó vacío, con avisos desactivados y revisión 0.
+
+El intento sigue parcial respecto de su plan de seis etapas: un índice AX
+inválido y la respuesta rápida impidieron observar B mientras A seguía activo.
+La navegación OS está cualificada en ese caso; el recorrido UI completo no.
+Queda un caso independiente con pregunta sintética para sostener A activo y
+observar B, sin reutilizar el run ni repetir sus efectos. El bloque no se
+presenta como completo: la matriz mantiene 62 familias parciales, 18 sin
+implementar y ninguna familia amplia completa. La fase A sigue abierta y B
+aplazada; la publicación real de GitHub continúa sin ejercitarse.
+
+El cierre de esta QA fue normal, sin señales: cuatro identidades conocidas
+ausentes, el mismo lease libre y ambas cuotas desmontadas normalmente al primer
+intento. El recibo de cierre conserva SHA-256
+`8fd28daeb775a09fdc7cefa4989a368cc3cde9fc34230fefa56d8704f79578fe`.
+
+El intento anterior de `4686f25` se conserva con su explicación: el dueño
+confirmó que pulsó «Ver chat» dentro de Jarvis, gesto que consume la notificación
+y retira su solicitud del sistema. Su ausencia posterior no demuestra un fallo
+de envío; aquel ACK y `resumed` tampoco acreditaban por sí solos un clic OS.
+El nuevo caso con clic físico no reescribe ese registro histórico.
 
 La continuación cambia la etiqueta de `delivered` a «Aceptado por macOS» y
 explica su límite en la propia fila. El adaptador inmutable usado por los
@@ -20,7 +42,7 @@ del mismo chat. Una revisión obsoleta no envía RPC ni modifica el snapshot y
 pide revisar los avisos actuales; un contexto que ya cambió se descarta sin
 escribir errores en el nuevo chat. Las pruebas del adaptador y Store reales usan
 barreras para A → B → respuesta A demorada → B → A, rechazo de contexto/revisión
-y CAS vigente. Deben pasar su CI remota. Un valor AX de
+y CAS vigente. Pasaron la CI remota exacta de `1b0a7ead`. Un valor AX de
 preferencias que no coincidió con el snapshot RPC de B se conserva como
 observación sin causa establecida, no como una fuga de permisos demostrada.
 
@@ -38,17 +60,49 @@ panel, ventana visible pero no principal, sin mutaciones. Nunca alcanzó B.
 Ese extractor no permite evaluar la UI y se retira de las pruebas activas; su
 código y ambos fallos permanecen en Git y en el registro. Se sustituye por los
 contratos deterministas de inputs/Store, sin atribuirles cobertura de render.
-La UI A → B → B tras completar A → A y el texto de aceptación quedan como
-requisitos obligatorios del recorrido externo con CUA en una app real de CI
-aprobada, junto al clic OS del dueño. Ni un snapshot RPC ni una representación
-AX sintética los sustituyen. No se ejecutaron suites ni compilaciones locales.
+La UI A → B → B tras completar A → A y el texto de aceptación siguen siendo
+requisitos obligatorios del recorrido externo con CUA. El clic OS ya está
+acreditado en la QA nueva; aún falta la observación de B durante A. Ni un
+snapshot RPC ni una representación AX sintética sustituyen esa evidencia.
+No se ejecutaron suites ni compilaciones locales.
 CI conservará además el log ya acotado de Swift inmediatamente después de esa
 suite, antes de Python, con `pipefail` y el código de salida original; las pruebas
 del fragmento YAML verifican fallo 37, éxito 0, salida y archivo exactos.
 Los [resultados vigentes de CI](https://github.com/GuillerJr/AsistenteInteligente/actions/workflows/ci.yml?query=branch%3Amain)
-deben contrastarse con el SHA exacto de la revisión publicada. Este documento se
-versiona antes de ejecutar esa revisión y conserva los checkpoints históricos;
-una ejecución posterior aprobada no transforma el fallo `3c35fa0` en un éxito.
+deben contrastarse con el SHA exacto del código y del artefacto. La CI aprobada
+de `1b0a7ead` no transforma los fallos de `3c35fa0` y `c403ba7` en éxitos.
+
+## Reanudación del 4 de noviembre
+
+La CI del mismo código `1b0a7ead`, intento 2, volvió a aprobar ambas plataformas:
+3955 Python en Ubuntu (47 omisiones), 4002 en macOS y 710 Swift (una omisión,
+cero fallos), paquetes y bundle autocontenido. Las referencias temporales de
+octubre ya no conservan sus archivos originales; el registro distingue esa
+disponibilidad actual de la custodia que se verificó al cerrar aquel recorrido.
+
+Tres preparaciones nuevas terminaron antes de abrir Jarvis. La primera detectó
+un recorrido de 2642 directorios repetido por bloque de descarga; las siguientes
+conservaron sus límites y fallaron al transferir el ZIP de 299 MB, tanto por la
+vía directa como por la referencia del conector. Cada cuota se desmontó
+normalmente al primer intento, conservando su imagen y los recibos saneados.
+No hubo inferencia ni se modificó la app instalada. Los códigos exactos y sus
+límites están en el registro; no se atribuye una causa de red no establecida.
+
+Para este único caso UI se añade un artefacto nativo de desarrollo separado,
+producido desde el bundle ya compilado en CI. Exporta el ejecutable, el
+lanzador, Info.plist y su sello nuevo; conserva las secciones de código y los
+bytes del lanzador. Excluye runtime, configuración, perfiles y recursos ajenos.
+Tiene manifiesto propio, límites de 32 MiB comprimidos y 128 MiB expandidos y
+retención de 14 días. El exportador y sus contratos deben pasar la CI exacta
+antes de usarlo; todavía no acreditan el recorrido pendiente.
+
+La QA de desarrollo usará Python 3.11.15, fuentes seleccionadas y dependencias
+locales copiadas a una cuota nueva, junto con Codex oficial 0.163.0. Falta
+`soundfile` en ese entorno local y no se ejercitará audio: su importación es
+diferida al decodificar Ogg. Esta selección verifica preguntas y aislamiento
+de la interfaz; no cualifica distribución autocontenida, códecs ni todas las
+capacidades. El proveedor será nuevo y privado; su acceso oficial lo completa
+el dueño si la app lo pide.
 
 ## Alcance de esta entrega
 
@@ -101,10 +155,11 @@ proyecto/worktree con estado/diff y conservación; panel funcional y navegación
 El acceso real de GitHub y el permiso de avisos los concedió el dueño. Las
 aprobaciones de los perfiles sintéticos se realizaron bajo su delegación. Las
 pruebas locales no incluyeron suites completas ni compilaciones; los recorridos
-de interfaz e IPC tuvieron cuotas, plazos y recibos propios. La CI exacta pasa
-3952 casos Python en Ubuntu (47 omitidos), 3999 en macOS (ninguno omitido) y
-ejecuta 705 Swift (uno omitido, cero fallos). También pasan wheel/sdist,
-instalación aislada, bundle/helper y cierre del servicio por EOF.
+de interfaz e IPC tuvieron cuotas, plazos y recibos propios. La CI exacta de
+`1b0a7ead`, ejecución `41123446861`, pasó 3955 casos Python en Ubuntu (47
+omitidos, 302,13 s), 4002 en macOS (ninguno omitido, 300,29 s) y ejecutó 710 Swift
+(uno omitido, cero fallos, 170,872 s). También pasaron wheel/sdist, instalación
+aislada, bundle/helper y smoke de cierre del servicio por EOF.
 
 Siete selecciones de clientes verificaron CLI/TUI, el subconjunto ACP declarado,
 colaboración, cancelación, A2A, presupuestos y revocación. Son 57 comprobaciones
@@ -145,16 +200,16 @@ con argumentos vacíos, identidad `local.jarvis.qa`, manifiesto/configuración
 fijados y los mismos controles de propietario, enlaces y cambios. El home se
 obtiene de `getpwuid`, no de `HOME`. Solicitud, recibo, perfil, proveedor y entorno
 siguen limitados a `/private/tmp`. Esta excepción es del helper optativo de QA;
-no activa perfiles ni amplía los destinos del producto. El recorrido estable
-pasó su CI y conserva recibos nuevos. macOS concedió el permiso y aceptó el
-`add`; la interfaz/RPC registró `delivered` en revisión 3. Después apareció
-`resumed` en revisión 4, pero no se trazó qué vía lo produjo y el dueño indicó
-«No encuentro el aviso». Por ello no se acredita presentación física ni clic
-OS. No se abrió el centro de notificaciones personal ni se modificaron sus
-ajustes para forzar el resultado. La causa de la ausencia sigue sin establecerse;
-la ubicación estable y la identidad QA cambiaron juntas y no prueban por sí
-solas la causa del error temporal anterior. El identificador de firma del bundle
-original de CI coincide con su Info.plist, comprobado sin ejecutar ese binario.
+no activa perfiles ni amplía los destinos del producto. En el intento estable
+anterior `4686f25`, macOS concedió el permiso y aceptó `add`; `delivered` revisión
+3 y `resumed` revisión 4 no trazaban por sí solos un clic OS. El dueño confirmó
+después el uso de «Ver chat» dentro de Jarvis, que consume y retira el aviso.
+No se abrió su centro de notificaciones personal ni se cambiaron ajustes para
+forzar aquel resultado. La ubicación estable y la identidad QA cambiaron juntas
+y no prueban la causa del error temporal anterior. El caso nuevo de `1b0a7ead`
+sí acredita el clic físico y la navegación descritos arriba, sin reescribir los
+límites del intento previo. El identificador de firma del bundle original de
+CI coincide con su Info.plist, comprobado sin ejecutar ese binario.
 
 El paquete instala `jarvis` y `jarvis-acp`; también están disponibles mediante
 `python -m jarvis_core.product_client` y `python -m jarvis_core.product_acp`.

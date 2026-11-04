@@ -1,0 +1,85 @@
+{
+  "schema": "jarvis.background-question-native-admission/1",
+  "status": "prepared_not_executed",
+  "review_status": "frozen_draft_pending_root_review",
+  "harness_root": "/private/tmp/jarvis-product-background-20261104",
+  "source_commit": "1b0a7ead49f2659ef536d47947a9ed7364d0e632",
+  "run_id": 41123446861,
+  "run_attempt": 2,
+  "job_ids": {
+    "macos": 126587339018,
+    "ubuntu": 126587339325
+  },
+  "artifact_id": 13323672851,
+  "artifact_zip_sha256": "5ee799ebece9726526305e7a9090bc2b3a7d7621f1782e7fdd23cef8f42af19c",
+  "bundle_identifier": "local.jarvis.qa.background.20261104.1b0a7ead",
+  "provider": "/private/tmp/jarvis-mcp-final-20261028-1793214534198/provider",
+  "scripts_sha256": {
+    "common.py": "23f872b6ef88596162b2f814676abb7e847a9814bba87b6496dc8ae36d8e7476",
+    "prepare.py": "a47ef561969e563a4ec9fccd8f9f79465d3792e7f02260ef9094e61a4eb86d3d",
+    "supervise.py": "c2ec37b2353135efcb05f85f6c55128970e7116bd4eac82cae1a7a71473acfb5",
+    "probe.py": "671339c18256c19e3a3c82d00b7ee0550f338fb8c61ec6db8c0924caa740f1eb"
+  },
+  "source_pins": {
+    "script/test_resource_guard.py": "472712a42d0f2c68bec33c19ab7a9443aff6fbd4a0898dd81658a481a92d6273",
+    "script/package_desktop_runtime.py": "e3d76ef64ebcc97bba4c2ae18838dbab5ef39cc0f151fb4710609207b3041eee",
+    "script/qualify_bundled_runtime.py": "88f80d2317982714aff655e2b6acbc838750c59e12c6ebc921780bfd6a94f4ae",
+    "src/jarvis_core/bundled_runtime.py": "d6b422dfdaf8290cdbd07d82721a5221087fefc7fc7468f9ead7ff0e18ffea5b",
+    "native/JarvisDesktop/Sources/QALaunchSupport/QALaunchAdmission.swift": "66436f578155fd3b5c7ca1f403f61ff8e0796024e49798d11bff2ccb1e31dc52",
+    "native/JarvisDesktop/Sources/QALaunchSupport/QALaunchCoordinator.swift": "14523fe581fb63727910ce9cde344829f70d2abc646afb440dfd443e819aa585",
+    "native/JarvisDesktop/Sources/JarvisQALauncher/QALaunchMain.swift": "8c83ec185162548d42f48fb95033b253fc13446f81fcb7e0f033f59acceb6db0"
+  },
+  "reviewer_checklist_sha256": "9392a463c9ee286b8a338966b948b42048870246e4d37ef015c9ca9ba4ed9ae6",
+  "maximum_model_runs": 1,
+  "maximum_sessions": 2,
+  "maximum_question_tools": 1,
+  "maximum_other_tools_accepted": 0,
+  "maximum_explicit_host_answers": 1,
+  "question": {
+    "id": "background_gate",
+    "header": "Continuar",
+    "prompt": "¿Continuamos la prueba sintética?",
+    "options": [
+      {
+        "id": "continuar",
+        "label": "Continuar",
+        "description": "Completa esta prueba."
+      },
+      {
+        "id": "detener",
+        "label": "Detener",
+        "description": "Termina sin continuar."
+      }
+    ],
+    "sensitive": false
+  },
+  "model_prompt": "Llama exactamente una vez a la herramienta dinámica jarvis_request_user_input de Jarvis con estos argumentos JSON: {\"questions\":[{\"id\":\"background_gate\",\"header\":\"Continuar\",\"prompt\":\"¿Continuamos la prueba sintética?\",\"options\":[{\"id\":\"continuar\",\"label\":\"Continuar\",\"description\":\"Completa esta prueba.\"},{\"id\":\"detener\",\"label\":\"Detener\",\"description\":\"Termina sin continuar.\"}],\"sensitive\":false}]}. No uses otras herramientas. Espera la respuesta. Después responde únicamente: Prueba de fondo terminada.",
+  "model_prompt_is_not_enforced_tool_allowlist": true,
+  "owner_OS_actions_required": [],
+  "resource_contract": {
+    "single_new_APFS_capacity_mib": 2048,
+    "preparation_seconds": 300,
+    "active_seconds": 810,
+    "cleanup_reserve_seconds": 90,
+    "Data_free_floor_GiB": 25,
+    "provider_growth_mib": 128,
+    "residual_Data_drop_GiB": 1,
+    "known_process_limit": 128,
+    "capture_stdout_limit": 1048576,
+    "capture_stderr_limit": 65536,
+    "codesign_combined_limit": 16384,
+    "probe_total_seconds": 40,
+    "probe_input_bytes": 262144,
+    "receipt_output_bytes": 65536,
+    "physical_quota_is_not_sandbox": true
+  },
+  "native_signal_policy": "Record GUI quit intent before CmdQ. Exact app may receive SIGTERM only on admitted deadline/resource/observer failure and only if birth/UID/path still match. Such a path cannot pass normal-close gate. Unconfirmed returned_candidate is never signal authority.",
+  "normal_detach_maximum": 2,
+  "force_detach": false,
+  "deletion": false,
+  "automatic_effect_replay": false,
+  "original_historical_attempt_complete": false,
+  "new_case_full_OpenClaw_parity_claimed": false,
+  "execution_approved_by_this_file": false,
+  "ci_success_claimed_by_this_file": false
+}

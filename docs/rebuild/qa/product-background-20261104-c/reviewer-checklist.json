@@ -1,0 +1,159 @@
+{
+  "schema": "jarvis.background-question-reviewer-checklist/1",
+  "status": "frozen_draft_no_execution_pending_root_review",
+  "harness_root": "/private/tmp/jarvis-product-background-20261104-c",
+  "source_commit": "1b0a7ead49f2659ef536d47947a9ed7364d0e632",
+  "required_source_CI": {
+    "run_id": 41123446861,
+    "run_attempt": 2,
+    "job_ids": {
+      "macos": 126587339018,
+      "ubuntu": 126587339325
+    },
+    "artifact_id": 13323672851,
+    "artifact_zip_sha256": "5ee799ebece9726526305e7a9090bc2b3a7d7621f1782e7fdd23cef8f42af19c",
+    "full_success_required_before_any_mount": true,
+    "root_report_at_draft": "Root reports exact attempt2 full success; preparation independently verifies official run/jobs/artifact before mounting."
+  },
+  "resource_contract": {
+    "single_new_APFS_capacity_mib": 2048,
+    "preparation_seconds": 300,
+    "active_seconds": 810,
+    "cleanup_reserve_seconds": 90,
+    "Data_free_floor_GiB": 25,
+    "provider_growth_mib": 128,
+    "residual_Data_drop_GiB": 1,
+    "known_process_limit": 128,
+    "capture_stdout_limit": 1048576,
+    "capture_stderr_limit": 65536,
+    "codesign_combined_limit": 16384,
+    "probe_total_seconds": 40,
+    "probe_input_bytes": 262144,
+    "receipt_output_bytes": 65536,
+    "physical_quota_is_not_sandbox": true,
+    "provider_location": "new <root_quota>/provider under the same 2GiB physical quota",
+    "provider_initial_baseline_bytes": 0,
+    "provider_sub_budget_mib": 128,
+    "provider_measurement": "Metadata sampled with per-process reuse interval <=1s; freshly sampled on entry and before launch/answer/detach effects. This sampled sub-budget is not a separate physical provider sandbox.",
+    "external_provider_access": false
+  },
+  "preparation_checks": [
+    "Exact run attempt2 whole conclusion and both exact job IDs success before mount. Artifact exactID/name/head/run/digest/provenance, no early diagnostics accepted.",
+    "Source pins + selected Git diff; CI extraction physical file/directory only, no links/specials/path escape/case collision. Preserve original main/helper hashes and original signature.",
+    "Only new outer QA ID/config/Info.plist change, ad-hoc re-sign with explicit ID, bounded signing metadata matching. Main __TEXT section bytes and helper full bytes unchanged. Full runtime tree and source commit verified before and after.",
+    "Resource anchor set immediately after mounted volume before download; original anchor preserved through preparation and native run. No source tree build/test.",
+    "Provider sampling cache fixes watcher overhead; no per64KiB recursive external scans. Resource residual subtracts only aggregate-quota used delta, avoiding double-counting the provider already inside it.",
+    "ZIP bytes alone change transfer: root supplies an authenticated connector reference and two pinned private files; validate origin/artifact/digest/opaque ref ID/expiry/initial HTTPS host before GET. Curl disables user curlrc, uses credential file rather than URL argv, HTTPS redirects<=2, remaining original deadline. Exact official ZIP SHA/provenance/source/signature gates still precede extraction or native launch. No credential bytes or identifier/hash snapshots exported."
+  ],
+  "native_checks": [
+    "One O_EXCL launch intent, exact helper bytes/request/app hashes. Source compiled NSWorkspace helper requests fresh app instance, exact returned-app process birth identity. Only a fresh quota-owned provider may be selected; no external profile fallback.",
+    "Only selected PID/BSD metadata and children of known parents; no args/environment/global app inventory. proc_listchildpids count ABI, not byte count; max128 records, UID/birth/path checked.",
+    "GUI CUA is exclusively root-owned app window. A exactprefrev2 enabledtrue/silencedtrue, B exactrev0falsefalse. No OS permission requested.",
+    "One canonical model question tool is a deterministic barrier, no effect tools approved. A pending, then B AX0 plus contemporaneous signed read-only running/pending oracle.",
+    "Fresh root CUA at_testtime bound to prepared/waiting/app/PID, age<=60s, then one O_EXCL answer intent before one scoped answer. ACK exact four fields, no implicit authority. Timeout/unknown never replayed.",
+    "B AX0 after completion, A AX1 on return; read-only post verifies same question consumedrev3, one known receipt without answer values, one cleaned completed model run, no notices, no B messages/run.",
+    "Record GUI quit intent before CmdQ. Exact app may receive SIGTERM only on admitted deadline/resource/observer failure and only if birth/UID/path still match. Such a path cannot pass normal-close gate. Unconfirmed returned_candidate is never signal authority.",
+    "After all known identities absent, exact profile.lock inode must be free. Normal hdiutil detach only, max2 attempts within reserve; check mounted identity, image identity, absence+lease before each. Underlying fresh mount inode must reappear. No deletion or force."
+  ],
+  "success_is_conjunction": [
+    "All four required external CUA stages observed (A1; B0 while A pending; B0 after A completes; A1 return) independently of RPC.",
+    "Pre/wait/post scalar conditions all pass and sole answer acknowledged once with no replay, no additional tools/model runs/OS notices.",
+    "Normal GUI quit, no signals/issues/resource breach, known absence, same lease free, normal unmount; originals preserved."
+  ],
+  "prior_attempt_preserved": {
+    "historical_six_stage_case": "20261030 remains incomplete in B_during_A_model; physical OS path passed separately; new case does not rewrite it.",
+    "closed_sha256": "8fd28daeb775a09fdc7cefa4989a368cc3cde9fc34230fefa56d8704f79578fe"
+  },
+  "source_references": {
+    "process_BSDInfo": "Local SDK sys/proc_info.h struct proc_bsdinfo,136bytes,PROC_PIDTBSDINFO3",
+    "child_count": "https://raw.githubusercontent.com/apple-oss-distributions/xnu/main/libsyscall/wrappers/libproc/libproc.c proc_listchildpids returns proc_listpids result / sizeof(int)",
+    "question_ACK": "src/jarvis_core/product_interactions.py:390-393 exact id/revision/status/grants_tool_approval, no kind/payload"
+  },
+  "source_pins": {
+    "script/test_resource_guard.py": "472712a42d0f2c68bec33c19ab7a9443aff6fbd4a0898dd81658a481a92d6273",
+    "script/package_desktop_runtime.py": "e3d76ef64ebcc97bba4c2ae18838dbab5ef39cc0f151fb4710609207b3041eee",
+    "script/qualify_bundled_runtime.py": "88f80d2317982714aff655e2b6acbc838750c59e12c6ebc921780bfd6a94f4ae",
+    "src/jarvis_core/bundled_runtime.py": "d6b422dfdaf8290cdbd07d82721a5221087fefc7fc7468f9ead7ff0e18ffea5b",
+    "native/JarvisDesktop/Sources/QALaunchSupport/QALaunchAdmission.swift": "66436f578155fd3b5c7ca1f403f61ff8e0796024e49798d11bff2ccb1e31dc52",
+    "native/JarvisDesktop/Sources/QALaunchSupport/QALaunchCoordinator.swift": "14523fe581fb63727910ce9cde344829f70d2abc646afb440dfd443e819aa585",
+    "native/JarvisDesktop/Sources/JarvisQALauncher/QALaunchMain.swift": "8c83ec185162548d42f48fb95033b253fc13446f81fcb7e0f033f59acceb6db0"
+  },
+  "scripts_sha256": {
+    "common.py": "d210ce7574044e329098232c7f9f114b4c83ff6443925178b25d3a2c2320e4bc",
+    "prepare.py": "ae6a15e554f5b6858c642a5d6781831c040ee683a657576bad28d0e23b0ff6bc",
+    "supervise.py": "2dfa5397bd61ae0b2a8a9a6dcb195f6e785837d5c692ff106d06a2779b9b3685",
+    "probe.py": "73604e643a121f1c28a3245f78abe3a88cd381b19aaf6b8ec852050d9c91211a"
+  },
+  "no_tests_builds_network_mounts_app_launch_or_credential_reads_performed": true,
+  "prior_preparation": {
+    "root": "/private/tmp/jarvis-product-background-20261104-b",
+    "admission_sha256": "b60b24b5eff2ff674313653410d49fa11921e569f48f24dbba4fa666b4b6a354",
+    "preparation_closeout_sha256": "bcce720f6c95ae0c6dab62f8df22a62e90ceb515adbc0630059921e2e44cb4d2",
+    "status": "preparation_deadline_no_app_launch_normal_detach_original_image_preserved",
+    "partial_zip_bytes": 180322304,
+    "sources_modified": false,
+    "automatic_retry": false,
+    "new_case_reason": "Root diagnosed slow GitHub API transport with fast local quota/provider metadata. New independent case changes only ZIP transfer to an exact connector-provided file HTTPS reference, with private pinned credential files. No budget change, partial ZIP reuse, resumed app or effect replay."
+  },
+  "provider_policy": {
+    "fresh_provider": "Create only root_quota/provider mode0700 immediately after confirmed mount, before resource anchor. Signed QA config pins that path. No old provider access, contents or metadata.",
+    "owner_account_action": "Owner completes official Codex/ChatGPT login from this new app if account is disconnected; no credentials or codes in chat. No OS notification/TCC prompt in this case.",
+    "maximum_metadata_cache_reuse_seconds": 1,
+    "all_state_and_provider_writes_physically_limited_by_same_quota": true
+  },
+  "prior_preparations": [
+    {
+      "root": "/private/tmp/jarvis-product-background-20261104",
+      "admission_sha256": "f02dc0b3b68c622021bf6d70e34abee61c7179ce165f3ef7f7c1e1fe6da9fedf",
+      "preparation_closeout_sha256": "19d7d72cc470b8c5ab4ef9db0295b0f5c5a1565df3c4ef1a9e473d3926c0dbb0",
+      "status": "preparation_deadline_no_app_launch_normal_detach_original_image_preserved",
+      "sources_modified": false,
+      "automatic_retry": false,
+      "new_case_reason": "Root diagnosed provider metadata recursion on every download chunk. New independent source/provider layout closes the probe overhead without extending the old deadline or replaying an app/effect."
+    },
+    {
+      "root": "/private/tmp/jarvis-product-background-20261104-b",
+      "admission_sha256": "b60b24b5eff2ff674313653410d49fa11921e569f48f24dbba4fa666b4b6a354",
+      "preparation_closeout_sha256": "bcce720f6c95ae0c6dab62f8df22a62e90ceb515adbc0630059921e2e44cb4d2",
+      "status": "preparation_deadline_no_app_launch_normal_detach_original_image_preserved",
+      "partial_zip_bytes": 180322304,
+      "sources_modified": false,
+      "automatic_retry": false,
+      "new_case_reason": "Root diagnosed slow GitHub API transport with fast local quota/provider metadata. New independent case changes only ZIP transfer to an exact connector-provided file HTTPS reference, with private pinned credential files. No budget change, partial ZIP reuse, resumed app or effect replay."
+    }
+  ],
+  "download_transport": {
+    "type": "github_connector_artifact_file_HTTPS",
+    "source": "github.download_workflow_artifact",
+    "credential_configuration": "ROOT/download.conf exact url-only JSONquoted config, mode0600; required private CLI SHA pin",
+    "reference": "ROOT/download-reference.json exact eight metadata fields, mode0600; required private CLI SHA pin",
+    "reference_schema": "jarvis.connector-artifact-download-reference/1",
+    "reference_fields": [
+      "schema",
+      "source",
+      "artifact_id",
+      "artifact_zip_sha256",
+      "ref_file_id",
+      "issued_at_unix",
+      "expires_at_unix",
+      "config_sha256"
+    ],
+    "initial_host_allowlist": "*.oaiusercontent.com",
+    "HTTPS_only": true,
+    "maximum_redirects": 2,
+    "maximum_reference_lifetime_seconds": 300,
+    "minimum_reference_remaining_at_start_and_GET_seconds": 10,
+    "post_GET_reference_check": "Same pinned config/reference integrity and original lifetime, without requiring a naturally elapsed URL to remain live after a read begun validly.",
+    "command": "/usr/bin/curl --disable --config ROOT/download.conf --fail --location --silent --show-error --proto =https --proto-redir =https --max-redirs 2 --connect-timeout15 --max-time remaining_global_preparation_deadline_minus2",
+    "URL_in_argv_or_logs": false,
+    "credential_material_in_receipts": false,
+    "credential_files_exported": false,
+    "read_only_GET_grants_native_launch_authority": false,
+    "ZIP_SHA_before_extraction_required": true,
+    "secret_file_exclusion": [
+      "download.conf",
+      "download-reference.json"
+    ],
+    "no_new_API_methods_in_harness": true
+  }
+}

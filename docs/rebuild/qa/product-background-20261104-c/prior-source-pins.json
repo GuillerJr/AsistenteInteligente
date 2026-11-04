@@ -1,0 +1,13 @@
+{
+  "prior_root": "/private/tmp/jarvis-product-background-20261104-b",
+  "copied_sources_without_execution": true,
+  "sha256": {
+    "common.py": "d210ce7574044e329098232c7f9f114b4c83ff6443925178b25d3a2c2320e4bc",
+    "prepare.py": "27d9005d22603cca07166e0569070a8d423a0ba86d0fc48852b77bcc5650e804",
+    "supervise.py": "2dfa5397bd61ae0b2a8a9a6dcb195f6e785837d5c692ff106d06a2779b9b3685",
+    "probe.py": "73604e643a121f1c28a3245f78abe3a88cd381b19aaf6b8ec852050d9c91211a",
+    "admission.json": "b60b24b5eff2ff674313653410d49fa11921e569f48f24dbba4fa666b4b6a354",
+    "reviewer-checklist.json": "3ea3f0ecf95c9df185320eb53f622bf2be1fdf78c5f4f0ac0fd8adfa034458d0",
+    "RUNBOOK_NOEXEC.md": "dbf153a94c7c0bd3c6c8e2210bc4c3f6d0a3986b727d52efb552a2c8720b784e"
+  }
+}

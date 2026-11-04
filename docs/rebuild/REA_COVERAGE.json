@@ -7065,32 +7065,36 @@
     "reference_coverage_changed": false,
     "reference_runtime_executed": false,
     "latest_ci": {
-      "commit": "4686f25c960bf1b76702b91f66a3d20915cff22b",
-      "ci_run_id": 41108646785,
-      "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41108646785",
+      "commit": "1b0a7ead49f2659ef536d47947a9ed7364d0e632",
+      "ci_run_id": 41123446861,
+      "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41123446861",
       "status": "completed",
       "conclusion": "success",
       "ubuntu": {
-        "passed": 3952,
+        "passed": 3955,
         "skipped": 47,
         "failed": 0,
-        "seconds": 297.72
+        "seconds": 302.13,
+        "saved_log_sha256": "0806e2ef23d363262ac1ff4dde23ab9747c18fad3109efd00dbc7549e3c3cb5b"
       },
       "macos": {
-        "python_passed": 3999,
+        "python_passed": 4002,
         "python_skipped": 0,
         "python_failed": 0,
-        "python_seconds": 434.08,
-        "swift_executed": 705,
+        "python_seconds": 300.29,
+        "swift_executed": 710,
         "swift_skipped": 1,
-        "swift_failed": 0,
-        "swift_seconds": 199.849
+        "swift_failures": 0,
+        "swift_seconds": 170.872,
+        "saved_log_sha256": "24dbacb923f15f7a951de7f0ddcb06ef624714340f71ed2d335fef883bc37e33",
+        "early_swift_log_sha256": "dfb53653939c0904fb90f0de2057019fdfe433b27be835ce3d6c89f34ebddf32"
       },
-      "basis": "Conclusión y cifras del checkpoint exacto comunicadas por coordinación; no atribuirlas a otro commit."
+      "wheel_sdist_isolated_installation": "success_both_platforms",
+      "self_contained_bundle_and_parent_eof": "success"
     },
-    "selected_native_observations": "QA estable en dos sesiones reales: A panel oscuro legible y dos sugerencias conocidas; selección sólo prepara borrador. B nuevo vacío sin panel; sugerencias de B descartadas y canceladas rev2. Permiso OS permitido y native/RPC delivered rev3; dueño no encuentra aviso en centro y clic OS real pendiente.",
+    "selected_native_observations": "Producto y coordinación: CI exacta 1b0a7ead aprobada (run 41123446861), 3955 Python Ubuntu (47 omitidas), 4002 macOS y 710 Swift (1 omitida, 0 fallos). Recorridos previos de clientes, Git, GitHub de lectura, paneles y preguntas conservados por checkpoint. Nueva QA acredita clic OS del dueño desde B hacia A, controles A=1/B=0 y mismo aviso delivered3→resumed4, sin otro run/herramienta; cierre normal, cuatro identidades conocidas ausentes y ambas cuotas desmontadas sin fuerza. Falta observar B durante A en un caso independiente: el intento original de seis etapas sigue parcial. 62 familias parciales, 18 sin implementar, ninguna familia amplia completa; REA48lotes/186rutas. Fase A abierta y B aplazada.",
     "prior_failures_and_unknown_custody_preserved": true,
-    "scope_limit": "Evidencia de la implementación propia, separada de la REA estática: no amplía los 48 lotes/186 rutas ni acredita ejecución o paridad runtime de OpenClaw. No completa el incremento ni ninguna familia.",
+    "scope_limit": "Evidencia de implementación propia, separada de REA estática; no amplía48lotes/186rutas ni acredita runtimeOpenClaw. El incremento aún requiere el caso UI B durante A; no completa familias amplias.",
     "capability_status_counts": {
       "implementacion_parcial_contratos_probados": 62,
       "no_implementado": 18,

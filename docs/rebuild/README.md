@@ -1,22 +1,30 @@
 # Variante propia inspirada en OpenClaw — base limpia
 
 El incremento de [producto y coordinación avanzada](PHASE_A_PRODUCT_COORDINATION.md)
-está implementado y conectado. La CI completa de `4686f25` y los recorridos
-finitos de clientes, GitHub, Git y preguntas ya están registrados. La copia
-estable verificó panel oscuro, sugerencias como borrador, descarte, aislamiento
-de dos chats y cierre normal sin procesos conocidos ni cuotas montadas.
-El permiso de avisos y la aceptación de una solicitud por macOS están observados;
-su visualización y clic real siguen sin acreditarse. El dueño confirmó después
-que usó «Ver chat», lo que consume y retira el aviso; no demuestra un fallo de
-envío. La corrección del texto y de las preferencias obsoletas requiere su CI
-remota y el recorrido UI externo; el extractor AX in-process fallido no aporta
-esa evidencia. Incluye proyectos/GitHub, workspaces por sesión,
-colaboración local, preguntas/paneles/avisos, presupuestos inclusivos y
-clientes propios CLI/TUI/ACP. La [revisión OC-28](REA_OC28_PRODUCT_COORDINATION.md)
-conserva tres particiones y sus límites. No se presenta como paridad acreditada
-por haber escrito código o pruebas. La matriz actual contiene **62 familias
-parciales, 18 sin implementar y ninguna completa**; REA conserva **48 lotes y
-186 rutas TS/JS únicas** seleccionadas. La fase B sigue aplazada.
+está implementado y conectado. La [CI completa de `1b0a7ead`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41123446861)
+aprobó Ubuntu/macOS, 710 Swift (una omisión, cero fallos), paquetes y
+bundle/helper/EOF. La nueva QA de ese artefacto acredita el clic físico OS
+confirmado por el dueño y la navegación desde B al chat A; el mismo aviso pasó
+de `delivered` revisión 3 a `resumed` revisión 4. Un único run de Codex completó
+con limpieza confirmada y cero herramientas. El cierre fue normal, sin señales,
+con cuatro identidades conocidas ausentes, el mismo lease libre y ambas cuotas
+desmontadas normalmente al primer intento.
+El intento sigue parcial: un índice AX inválido y la respuesta rápida dejaron
+sin observar B mientras A estaba activo. Ese paso UI obligatorio se resolverá
+en un caso independiente; un snapshot RPC no lo sustituye. Se conservan los
+fallos `3c35fa0`/`c403ba7` y el intento `4686f25`, cuyo «Ver chat» interno no
+acreditaba un clic OS. Clientes, Git, preguntas y paneles conservan sus recorridos
+finitos; la publicación real de GitHub sigue sin ejercitarse. La
+[revisión OC-28](REA_OC28_PRODUCT_COORDINATION.md) conserva sus fuentes y límites.
+La matriz mantiene **62 familias parciales, 18 sin implementar y ninguna
+completa**; REA conserva **48 lotes y 186 rutas TS/JS únicas** seleccionadas.
+La fase A sigue abierta y B aplazada.
+
+La reanudación del 4 de noviembre conserva tres preparaciones fallidas y cerradas
+sin abrir la app. Se prepara un artefacto nativo ligero desde CI para terminar
+el único caso UI pendiente con dependencias de desarrollo elegidas; ese paquete
+no es una distribución autocontenida. Su exportador y pruebas esperan la CI
+exacta. El registro conserva las fuentes y recibos saneados en el repositorio.
 
 El incremento de [distribución autocontenida y servicio residente](PHASE_A_DISTRIBUTION_RESIDENT.md)
 incorpora el runtime base completo, verificación del manifiesto cuyo pin está en

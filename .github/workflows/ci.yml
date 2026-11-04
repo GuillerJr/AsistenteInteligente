@@ -95,6 +95,26 @@ jobs:
             ${{ runner.temp }}/Jarvis-provenance.json
           if-no-files-found: error
           retention-days: 3
+      - name: Exportar app nativa de QA sin runtime
+        id: native_qa_export
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          .venv/bin/python -B script/export_native_qa.py \
+            --app /private/tmp/jarvis-ci-desktop/Jarvis.app \
+            --output "$RUNNER_TEMP/jarvis-native-qa" \
+            --source-commit "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID"
+      - name: Conservar app nativa de desarrollo para QA
+        id: native_qa_artifact
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-native-qa-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/jarvis-native-qa/Jarvis-native-qa-arm64.tar.gz
+            ${{ runner.temp }}/jarvis-native-qa/Jarvis-native-qa-provenance.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Pruebas Swift
         id: native_contracts
         if: ${{ !cancelled() && runner.os == 'macOS' && steps.dependencies.outcome == 'success' && steps.memory_model.outcome == 'success' }}

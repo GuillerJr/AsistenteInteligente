@@ -1,15 +1,15 @@
 {
   "schema": "jarvis.product-coordination-qualification/1",
-  "status": "implemented_ci_passed_selected_native_paths_passed_os_navigation_pending",
+  "status": "implemented_remote_ci_passed_physical_os_navigation_passed_background_ui_pending",
   "phase_a_complete": false,
   "phase_b_started": false,
   "notification_presentation_follow_up": {
-    "status": "implemented_requires_exact_commit_remote_ci",
+    "status": "exact_commit_remote_ci_passed_os_navigation_passed_background_ui_pending",
     "verification_authority": "This record is published before its containing commit can be tested. Consult GitHub Actions for that exact commit; a historical failed checkpoint is retained below and is not the latest live CI result.",
     "workflow_results_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/workflows/ci.yml?query=branch%3Amain",
     "acceptance_label": "Aceptado por macOS",
     "acceptance_explanation": "macOS aceptó la solicitud; su visualización depende de los ajustes del sistema.",
-    "durable_delivered_semantics": "UNUserNotificationCenter.add acknowledgement only; no observed banner or physical click claim.",
+    "durable_delivered_semantics": "UNUserNotificationCenter.add acknowledgement only. Physical click is separately evidenced by owner and external CUA in notification_closeout_attempt.",
     "binding_context": "The production UI uses immutable ProductNotificationPreferenceChoice inputs: view identity, preference revision, enabled and silenced. Store validates both expected identity and expected revision before any RPC.",
     "regressions": [
       "Native ACK presentation and in-app resume without physical click attribution",
@@ -23,10 +23,11 @@
       "original_ax_discrepancy_causally_attributed_to_this_race": false
     },
     "external_ui_qualification": {
-      "status": "required_before_qualification",
+      "status": "partial_five_of_six_stages_and_physical_os_click_passed",
       "in_process_extractor_retired": true,
       "reason": "c403 observed zero controls and no panel text in Ainitial. It did not reach B and is not an isolation or render oracle.",
-      "required": "A real green-CI QA app with CUA must expose the strict checkbox values and texts with correlated snapshots, including B after A completes. A callback test or an RPC-only observation cannot replace this UI evidence. Physical OS click remains separate."
+      "required": "A real green-CI QA app with CUA must expose the strict checkbox values and texts with correlated snapshots, including B after A completes. A callback test or an RPC-only observation cannot replace this UI evidence. Physical OS click remains separate.",
+      "missing_stage": "B_during_A_model; preserved in the pinned attempt rather than inferred from later B."
     },
     "observed_ax_preference_discrepancy": {
       "status": "cause_not_established",
@@ -34,7 +35,8 @@
       "limit": "The retired in-process extractor could not observe the first control at all; it did not reproduce the earlier native observation. The context/revision fixes are not presented as the established cause of that observation."
     },
     "local_tests_or_builds_run": false,
-    "os_delivery_repeated": false
+    "os_delivery_repeated": true,
+    "os_delivery_repeat_scope": "One fresh, separately admitted synthetic app/profile and sole model run; no repeat inside historical attempt."
   },
   "remote_ci_queue_incident": {
     "stuck_run_id": 41098533224,
@@ -51,18 +53,114 @@
   "reference": "REA_OC28_PRODUCT_COORDINATION.md",
   "checkpoints": [
     {
+      "commit": "1b0a7ead49f2659ef536d47947a9ed7364d0e632",
+      "ci_run_id": 41123446861,
+      "run_attempt": 2,
+      "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41123446861/attempts/2",
+      "status": "completed",
+      "conclusion": "success",
+      "full_remote_ci_passed": true,
+      "purpose": "Rebuild exact source after three-day CI artifact expiry; no local suites or compilation.",
+      "ubuntu": {
+        "job_id": 126587339325,
+        "passed": 3955,
+        "skipped": 47,
+        "failed": 0,
+        "seconds": 283.48,
+        "saved_decoded_log_sha256": "733016426353e90d88fa070993700ae51631bfe0c9020608a000fcb54521ef9b"
+      },
+      "macos": {
+        "job_id": 126587339018,
+        "python_passed": 4002,
+        "python_skipped": 0,
+        "python_failed": 0,
+        "python_seconds": 364.84,
+        "swift_executed": 710,
+        "swift_skipped": 1,
+        "swift_failures": 0,
+        "swift_seconds": 195.002,
+        "saved_decoded_log_sha256": "cb0cd01cbfa00acb3ef6d66f55381ed85a10e3f2d3fc8005f6193f787e755aeb"
+      },
+      "wheel_sdist_isolated_installation": "success_both_platforms",
+      "self_contained_bundle_and_parent_eof": "success",
+      "artifact": {
+        "id": 13323672851,
+        "bytes": 299429795,
+        "zip_sha256": "5ee799ebece9726526305e7a9090bc2b3a7d7621f1782e7fdd23cef8f42af19c",
+        "created_at": "2026-11-04T13:01:58Z",
+        "expires_at": "2026-11-07T13:01:45Z"
+      },
+      "qualified": false,
+      "limit": "Exact-source remote qualification. Independent native background-question UI evidence still required; original October six-stage attempt remains incomplete."
+    },
+    {
+      "commit": "1b0a7ead49f2659ef536d47947a9ed7364d0e632",
+      "ci_run_id": 41123446861,
+      "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41123446861/attempts/1",
+      "status": "completed",
+      "conclusion": "success",
+      "full_remote_ci_passed": true,
+      "ubuntu": {
+        "passed": 3955,
+        "skipped": 47,
+        "failed": 0,
+        "seconds": 302.13,
+        "saved_log_sha256": "0806e2ef23d363262ac1ff4dde23ab9747c18fad3109efd00dbc7549e3c3cb5b"
+      },
+      "macos": {
+        "python_passed": 4002,
+        "python_skipped": 0,
+        "python_failed": 0,
+        "python_seconds": 300.29,
+        "swift_executed": 710,
+        "swift_skipped": 1,
+        "swift_failures": 0,
+        "swift_seconds": 170.872,
+        "saved_log_sha256": "24dbacb923f15f7a951de7f0ddcb06ef624714340f71ed2d335fef883bc37e33",
+        "early_swift_log_sha256": "dfb53653939c0904fb90f0de2057019fdfe433b27be835ce3d6c89f34ebddf32"
+      },
+      "wheel_sdist_isolated_installation": "success_both_platforms",
+      "self_contained_bundle_and_parent_eof": "success",
+      "artifact": {
+        "id": 13010390676,
+        "bytes": 299430048,
+        "zip_sha256": "f3043efb00ec8a1b14aac6576290b6c75f5100aaec7aaba73660316c78563717"
+      },
+      "early_swift_artifact": {
+        "id": 13010850404,
+        "bytes": 31988,
+        "zip_sha256": "212f3d3d0f6c73fe64d3f6f57c7a8039f4f3f6b58d5f37c320615852efb7acef",
+        "member": "jarvis-swift-diagnostic.log",
+        "uncompressed_bytes": 262630
+      },
+      "qualified": false,
+      "limit": "Exact code remote CI passed. Native scope is assessed separately; this does not complete broad OpenClaw parity.",
+      "run_attempt": 1
+    },
+    {
       "commit": "c403ba7776f02aeea44849259304ae554428c82d",
       "ci_run_id": 41118849186,
       "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41118849186",
-      "status": "completed", "conclusion": "failure", "qualified": false,
+      "status": "completed",
+      "conclusion": "failure",
+      "qualified": false,
       "ubuntu": {
-        "passed": 3952, "skipped": 47, "failed": 0, "seconds": 315.09,
+        "passed": 3952,
+        "skipped": 47,
+        "failed": 0,
+        "seconds": 315.09,
         "saved_log_sha256": "bb75de12f0488b12e1d32eeae5003972e2c5a933dbee0ad5d33cb94fa50dfb67"
       },
       "macos": {
-        "python_passed": 3999, "python_skipped": 0, "python_failed": 0,
-        "python_seconds": 403.25, "swift_executed": 708, "swift_skipped": 1,
-        "swift_failures": 1, "swift_unexpected_failures": 0, "swift_seconds": 228.258,
+        "python_passed": 3999,
+        "python_skipped": 0,
+        "python_failed": 0,
+        "python_seconds": 403.25,
+        "swift_executed": 708,
+        "swift_skipped": 1,
+        "swift_failures": 1,
+        "swift_unexpected_failures": 0,
+        "swift_seconds": 228.258,
         "saved_log_sha256": "5e9c365f365d7f129a5a06ae9807e12bbe0fe4b8c9d4416636e1a7a0a52a2d60",
         "notification_delivery_core_tests": "six_passed",
         "panel_appearance_tests": "three_passed"
@@ -71,11 +169,25 @@
       "self_contained_bundle_and_parent_eof": "success",
       "failure": {
         "test": "ProductNotificationPanelRenderingTests.testRenderedNotificationToggleTracksAThenBThenAAndIgnoresLateAResponse",
-        "stage": "Ainitial", "scope": "A", "store_enabled": true,
-        "nodes": 47, "controls": 0, "values": [], "invalid_values": [],
-        "title_observed": false, "explanation_observed": false,
-        "window_visible": true, "window_key": false, "hosting_size": [560, 760],
-        "held_read": false, "mutations": 0, "samples": [], "seconds": 5.186,
+        "stage": "Ainitial",
+        "scope": "A",
+        "store_enabled": true,
+        "nodes": 47,
+        "controls": 0,
+        "values": [],
+        "invalid_values": [],
+        "title_observed": false,
+        "explanation_observed": false,
+        "window_visible": true,
+        "window_key": false,
+        "hosting_size": [
+          560,
+          760
+        ],
+        "held_read": false,
+        "mutations": 0,
+        "samples": [],
+        "seconds": 5.186,
         "limit": "The extractor never observed the first control or text and did not reach B. These data do not demonstrate a wrong toggle value, isolation breach, OS-send failure or the cause of missing virtual AX nodes.",
         "replacement": "Remove the unsupported in-process extractor from active tests, retaining it and both failures in Git/evidence. Test actual production preference inputs and Store with deterministic barriers in CI; require the full external UI path in a bounded real QA app before qualification. No skip or synthetic AX overlay stands in for UI."
       }
@@ -87,13 +199,22 @@
       "status": "completed",
       "conclusion": "failure",
       "ubuntu": {
-        "passed": 3952, "skipped": 47, "failed": 0, "seconds": 285.50,
+        "passed": 3952,
+        "skipped": 47,
+        "failed": 0,
+        "seconds": 285.5,
         "saved_log_sha256": "e63bd9c06df1b513dcf871694b30a2c1a0446520921bb67a33755c5c5b95011e"
       },
       "macos": {
-        "python_passed": 3999, "python_skipped": 0, "python_failed": 0,
-        "python_seconds": 417.38, "swift_executed": 708, "swift_skipped": 1,
-        "swift_failures": 2, "swift_unexpected_failures": 1, "swift_seconds": 264.172,
+        "python_passed": 3999,
+        "python_skipped": 0,
+        "python_failed": 0,
+        "python_seconds": 417.38,
+        "swift_executed": 708,
+        "swift_skipped": 1,
+        "swift_failures": 2,
+        "swift_unexpected_failures": 1,
+        "swift_seconds": 264.172,
         "saved_log_sha256": "15e268a27c5618d8b055d826666ab2795480e5a2ecfff86de381db9f41f66bcc",
         "notification_delivery_core_tests": "six_passed",
         "panel_appearance_tests": "three_passed"
@@ -260,7 +381,7 @@
     }
   ],
   "native_qualification": {
-    "status": "selected_real_paths_passed_os_notification_navigation_pending",
+    "status": "selected_real_paths_and_physical_os_navigation_passed_background_ui_pending",
     "local_full_suites_run": false,
     "local_builds_run": false,
     "owner_installed_app_modified": false,
@@ -2569,14 +2690,418 @@
       "full_increment_qualified": false,
       "phase_a_complete": false,
       "phase_b_started": false
+    },
+    "notification_closeout_attempt": {
+      "status": "os_navigation_passed_external_six_stage_sequence_incomplete",
+      "root": "/private/tmp/jarvis-product-notification-closeout-20261030",
+      "source_commit": "1b0a7ead49f2659ef536d47947a9ed7364d0e632",
+      "ci_run_id": 41123446861,
+      "admission": {
+        "file": "admission.json",
+        "bytes": 17788,
+        "sha256": "f9f367060a9c218e502a884426b644fba257cca299d90d32f739556238eb7607"
+      },
+      "reviewer_checklist": {
+        "file": "reviewer-checklist.json",
+        "bytes": 25443,
+        "sha256": "c9eb8c175f7eb228b0b33ea1ce570436e44718f912038c2ac61b37770fc60b42"
+      },
+      "preparation": {
+        "file": "prepared.json",
+        "bytes": 4889,
+        "sha256": "31cfcf0f57fb92520f260b4b77e99310795627b4fe3e7a10f0ef5e136498128f"
+      },
+      "resource_limits": {
+        "aggregate_quota_bytes": 2147483648,
+        "app_quota_mib": 1536,
+        "data_quota_mib": 512,
+        "native_active_seconds": 810,
+        "cleanup_reserve_seconds": 90,
+        "external_provider_growth_limit_bytes": 134217728,
+        "free_floor_bytes": 26843545600
+      },
+      "probes": {
+        "inventory-a": {
+          "file": "inventory-a.json",
+          "bytes": 2571,
+          "sha256": "089cbe95e44edd4abe1f75238702cf59abff8ed669b13d3e8b4bbfaf69090bc5"
+        },
+        "inventory-b": {
+          "file": "inventory-b.json",
+          "bytes": 2476,
+          "sha256": "64f752e0b50fff173aa340e8b68514403c15034b9cc2f2538f767e7cf6d7cdb1"
+        },
+        "inventory-b-root": {
+          "file": "inventory-b-root.json",
+          "bytes": 2661,
+          "sha256": "b6b8799978d877ef7fb681ab872031db4e83765a9c66fa05b1b520fe9f7f74ce"
+        },
+        "before": {
+          "file": "before.json",
+          "bytes": 3419,
+          "sha256": "1a7e150b9ba3c03d0c344b2dbae5fec54770d84b81555adc0999c1e466588fce"
+        },
+        "inventory-run": {
+          "file": "inventory-run.json",
+          "bytes": 2750,
+          "sha256": "480b4ee43782cd379c707ee50b1e17456a206a3d93eed25d72fa8779df891d2d"
+        },
+        "accepted": {
+          "file": "accepted.json",
+          "bytes": 4717,
+          "sha256": "a0023b7b97e4f6b8e5aa52579394171994ebf446aea95638a0a0e85b754b7a37"
+        },
+        "resumed": {
+          "file": "resumed.json",
+          "bytes": 4757,
+          "sha256": "46d23829973de9c9e5d6181794e7c4f7ff04e07e30263a02e4d4eb9f54e3300f"
+        }
+      },
+      "probe_failure_preserved": {
+        "file": "inventory-b.json",
+        "kind": "PermissionError",
+        "elapsed_seconds": 0.413,
+        "effects_or_model_run_sent": false,
+        "root_explicit_read_only_retry": "inventory-b-root.json",
+        "limit": "The first inventory sandbox failure is not an app or notification defect."
+      },
+      "run": {
+        "run_id": "c291fafe316b415bb9d83307fc44edb8",
+        "status": "completed",
+        "outcome": "known",
+        "cleanup_confirmed": true,
+        "answer_source": "model",
+        "action_receipts_count": 0,
+        "answer_bytes": 26
+      },
+      "session_a": "6b3f74839bbc40678676a52ecf8a2165",
+      "session_b": "8e70dbf7df4142afa16e6ae727f41b1b",
+      "accepted_conditions": {
+        "b_empty": true,
+        "b_opted_out": true,
+        "b_no_notices": true,
+        "a_opted_in": true,
+        "exactly_one_run": true,
+        "run_completed": true,
+        "cleanup_confirmed": true,
+        "answer_source_model": true,
+        "no_tool_calls": true,
+        "exactly_one_notice": true,
+        "notice_matches_run": true,
+        "notice_add_ack": true,
+        "initial_settled_revision": true
+      },
+      "resumed_conditions": {
+        "b_empty": true,
+        "b_opted_out": true,
+        "b_no_notices": true,
+        "a_opted_in": true,
+        "exactly_one_run": true,
+        "run_completed": true,
+        "cleanup_confirmed": true,
+        "answer_source_model": true,
+        "no_tool_calls": true,
+        "exactly_one_notice": true,
+        "notice_matches_run": true,
+        "same_notice_resumed_once": true
+      },
+      "notification": {
+        "notice_id": "21414d1a9e99389290d2328b5fe127e802d7c5284dcfd8c67be708f8bd85aff6",
+        "accepted_revision": 3,
+        "resumed_revision": 4,
+        "owner_allowed_os_permission": true,
+        "owner_report": "Pulsé el aviso de macOS y volvió al chat",
+        "physical_os_click_attributable": true,
+        "end_to_end_os_navigation_qualified": true,
+        "os_visibility_source": "Direct owner report of selecting this exact own-app OS notice; agent did not open personal Notification Center.",
+        "baseline": "B selected after manual A review, before accepted.json. From this baseline to OS activation no internal Ver chat, manual A selection or resume RPC was performed.",
+        "after_click": "Root external CUA observed A selected, synthetic answer, checkbox enabled=1, silenced=0 and Chat abierto; read-only resumed probe bound to accepted SHA proved same notice revision3 to4 and no extra run/tool.",
+        "notice_removal_independently_observed": false,
+        "rpc_alone_proves_os_click": false
+      },
+      "root_authored_cua_observation_summary": {
+        "raw_trace_not_embedded": true,
+        "A_initial": {
+          "observed": true,
+          "enabled": 1,
+          "silenced": 0
+        },
+        "B_during_A_model": {
+          "observed": false,
+          "reason": "The first B row reference was invalidated; after fresh AX A had already completed. No second inference was sent."
+        },
+        "B_after_A_complete": {
+          "observed": true,
+          "enabled": 0,
+          "silenced": 0,
+          "empty": true,
+          "acceptance_text_absent": true
+        },
+        "A_manual_review_before_baseline": {
+          "observed": true,
+          "enabled": 1,
+          "silenced": 0,
+          "acceptance_label": "Aceptado por macOS",
+          "acceptance_explanation": "macOS aceptó la solicitud; su visualización depende de los ajustes del sistema."
+        },
+        "B_fresh_accepted_baseline": {
+          "observed": true,
+          "enabled": 0,
+          "empty": true
+        },
+        "A_after_owner_OS_click": {
+          "observed": true,
+          "selected": true,
+          "enabled": 1,
+          "silenced": 0,
+          "status": "Chat abierto"
+        }
+      },
+      "six_stage_external_ui_qualified": false,
+      "missing_stage": "B_during_A_model",
+      "failure_policy_preserved": "This attempt remains incomplete under its original six-stage conjunction. The successful OS path does not retroactively pass the missed timing stage. No replay or second inference in this attempt.",
+      "closure": {
+        "receipt": {
+          "file": "closed.json",
+          "bytes": 5008,
+          "sha256": "8fd28daeb775a09fdc7cefa4989a368cc3cde9fc34230fefa56d8704f79578fe"
+        },
+        "gui_quit_intent": {
+          "file": "gui-quit-intent.json",
+          "bytes": 323,
+          "sha256": "d0a95749099868812a3e79e651289535b41f8730ba7af425487b37469af4d93c"
+        },
+        "status": "closed_after_gui_intent",
+        "native_custody_closeout_passed": true,
+        "all_known_identities_absent": true,
+        "known_process_identity_count": 4,
+        "same_lease_free": true,
+        "signals_sent": [],
+        "normal_detach_counts": {
+          "app": 1,
+          "data": 1
+        },
+        "volumes_unmounted": {
+          "app": true,
+          "data": true
+        },
+        "quota_unmounted_without_force": true,
+        "profile_or_originals_deleted": false,
+        "images_preserved": true,
+        "peak_quota_used_bytes": 1068564480,
+        "provider_growth_bytes_last": 2494464,
+        "scope": "Known identities and exact synthetic lease only. No global process-absence or storage-attribution claim."
+      },
+      "owner_installed_app_modified": false,
+      "local_full_suites_run": false,
+      "local_builds_run": false,
+      "full_increment_qualified": false
+    },
+    "background_preparation_20261104": {
+      "status": "preparation_failed_closed_without_app_launch",
+      "root": "/private/tmp/jarvis-product-background-20261104",
+      "durable_evidence_directory": "qa/product-background-20261104",
+      "source_commit": "1b0a7ead49f2659ef536d47947a9ed7364d0e632",
+      "run_id": 41123446861,
+      "run_attempt": 2,
+      "admission_sha256": "f02dc0b3b68c622021bf6d70e34abee61c7179ce165f3ef7f7c1e1fe6da9fedf",
+      "error": "command_deadline",
+      "preparation_deadline_seconds": 300,
+      "diagnosis": {
+        "observed_archive_bytes_at_13_17_26_UTC": 47759360,
+        "app_present_at_that_time": false,
+        "external_selected_provider_metadata_entries": 2642,
+        "single_metadata_scan_seconds": 0.346,
+        "file_contents_read_by_diagnostic": false,
+        "explanation": "The streaming capture called the full recursive metadata observer on every 64KiB block. A single measured scan took0.346s; repeated scans throttled reading of the ZIP. This is an oracle preparation performance defect, not a Jarvis inference/UI failure.",
+        "counterfactual_not_claimed": "No claim of the network transfer rate absent the observer; the new independent case moves provider state inside quota and samples its metadata at most once per second."
+      },
+      "app_launch_attempted": false,
+      "model_runs": 0,
+      "quota_unmounted_without_force": true,
+      "normal_detach_attempts": 1,
+      "image_preserved_at_close": true,
+      "profile_or_originals_deleted": false,
+      "receipts": {
+        "root-review.json": {
+          "bytes": 748,
+          "sha256": "350201447f7c93f55a7ce6290052ba4bcbe41fdcf76fd23730a1d9becf857aa2"
+        },
+        "preparation-intent.json": {
+          "bytes": 459,
+          "sha256": "a16408bfead74fa5ea3bacc6945012879e8297bd93f4620c89cc5a8efa98e758"
+        },
+        "volume-intent.json": {
+          "bytes": 215,
+          "sha256": "c8d5f4ecf9ab9b2911c5af43cc2877951ccaadc3c23f1462d30b0dff37489de6"
+        },
+        "volume-mounted.json": {
+          "bytes": 177,
+          "sha256": "207aa53e311c790aac8e469d49fc43d2ef341f2ad83ca3040a7ac077219ba93d"
+        },
+        "preparation-failed.json": {
+          "bytes": 1533,
+          "sha256": "f2ae81d8c961d67f6d52d475de65e523ed362b4a49fc2e173f61331134dd035b"
+        },
+        "preparation-closeout.json": {
+          "bytes": 419,
+          "sha256": "19d7d72cc470b8c5ab4ef9db0295b0f5c5a1565df3c4ef1a9e473d3926c0dbb0"
+        }
+      },
+      "full_UI_qualification": false,
+      "replay_or_in_place_budget_extension": false
+    },
+    "background_preparation_20261104_b": {
+      "status": "preparation_closed_without_app_launch",
+      "durable_evidence_directory": "qa/product-background-20261104-b",
+      "source_commit": "1b0a7ead49f2659ef536d47947a9ed7364d0e632",
+      "run_id": 41123446861,
+      "run_attempt": 2,
+      "admission_sha256": "b60b24b5eff2ff674313653410d49fa11921e569f48f24dbba4fa666b4b6a354",
+      "error": "preparation_deadline",
+      "deadline_seconds": 300,
+      "partial_ZIP_bytes": 180322304,
+      "app_launch_attempted": false,
+      "model_runs": 0,
+      "fresh_provider_physically_in_quota": true,
+      "no_external_provider_reads": true,
+      "source_correction": "Provider metadata sampled at most once per second; quota and volume metadata checked each checkpoint.",
+      "observed_limit": "The direct GitHub ZIP transfer did not finish in300s. Five statvfs/image metadata operations averaged below10microseconds in a separate read-only measurement; the underlying transport cause is not established.",
+      "quota_unmounted_without_force": true,
+      "normal_detach_attempts": 1,
+      "image_preserved_at_close": true,
+      "originals_deleted": false,
+      "receipts": {
+        "root-review.json": {
+          "bytes": 401,
+          "sha256": "70f11527c9c42ffda6b5628e3408ae42ddf504030cff2c1ef7d6d2a16399a778"
+        },
+        "preparation-intent.json": {
+          "bytes": 425,
+          "sha256": "98b47bb10405b3db652b2792cc6fbfd889517dc7a147f82c5b0b0ae88031894b"
+        },
+        "volume-intent.json": {
+          "bytes": 217,
+          "sha256": "512b7639d7cbca2a907dda25b49b30066cc35eb3b35a7e22ecbb22245588a583"
+        },
+        "volume-mounted.json": {
+          "bytes": 179,
+          "sha256": "75b9ecdc1fe586e545dae555ebab6928e1e6c7faa665af826426ba9a323b661c"
+        },
+        "preparation-failed.json": {
+          "bytes": 2255,
+          "sha256": "1b532f60880e964c1848d0a2da2a7eeada978377d044e020250ef01a14e1452b"
+        },
+        "preparation-closeout.json": {
+          "bytes": 455,
+          "sha256": "bcce720f6c95ae0c6dab62f8df22a62e90ceb515adbc0630059921e2e44cb4d2"
+        }
+      },
+      "UI_qualification_claimed": false,
+      "automatic_in_place_budget_extension": false
+    },
+    "background_preparation_20261104_c": {
+      "status": "preparation_closed_without_app_launch",
+      "durable_evidence_directory": "qa/product-background-20261104-c",
+      "source_commit": "1b0a7ead49f2659ef536d47947a9ed7364d0e632",
+      "run_id": 41123446861,
+      "run_attempt": 2,
+      "admission_sha256": "e8d3c421e423f203a1cf11e7cda842bac261edc10abbcf9b507d4e7b56386022",
+      "error": "command_failed",
+      "deadline_seconds": 300,
+      "partial_ZIP_bytes": 11539567,
+      "app_launch_attempted": false,
+      "model_runs": 0,
+      "fresh_provider_physically_in_quota": true,
+      "transport": "GitHub connector file reference, HTTPS curl with private config; URL/config/reference excluded from exports",
+      "resource_observation_average_seconds": 0.00011,
+      "observed_limit": "Alternate transfer did not complete; command_failed preserves neither the exact curl exit code nor HTTP status. Underlying transport cause is unknown. No inference or UI result was tested.",
+      "quota_unmounted_without_force": true,
+      "normal_detach_attempts": 1,
+      "image_preserved_at_close": true,
+      "originals_deleted": false,
+      "receipts": {
+        "root-review.json": {
+          "bytes": 488,
+          "sha256": "ecf5ccc520ec64ee8764efcae65adca720aaf83633c67045c9462669191b0f78"
+        },
+        "preparation-intent.json": {
+          "bytes": 425,
+          "sha256": "b59fbe48e8cbc7f9668b7e180da807934ce3de2cf35af7c17185b353d88d9254"
+        },
+        "volume-intent.json": {
+          "bytes": 217,
+          "sha256": "31e924ca6c7fd39ef640941ac83f8777d6348d021fd6607db4ec3821a703be5a"
+        },
+        "volume-mounted.json": {
+          "bytes": 179,
+          "sha256": "63db6fdc85dca154b15c5e594979958c0d38f3635b0e284163efe891bde3a2a5"
+        },
+        "preparation-failed.json": {
+          "bytes": 2244,
+          "sha256": "d94c52561620d98afbb4c45bb77425877038684513b24a34498e0b54bc444ed2"
+        },
+        "preparation-closeout.json": {
+          "bytes": 448,
+          "sha256": "16a9668b4117773097bc5150abb65ad5b43405da6183e863657443d513811223"
+        }
+      },
+      "UI_qualification_claimed": false,
+      "automatic_in_place_budget_extension": false
+    },
+    "next_background_case_plan": {
+      "status": "implemented_native_QA_export_requires_exact_commit_remote_CI",
+      "reason": "Large runtime artifact transfer failed in three independently preserved bounded preparations. Native-only GUI case can use selected available local development dependencies; full distribution remains separately qualified remotely.",
+      "local_dependency_inventory": {
+        "python_version": "3.11.15",
+        "site_packages_allocated_bytes": 156913664,
+        "entries": 3347,
+        "symlinks": 0,
+        "runtime_dependencies_present": 6,
+        "runtime_dependencies_expected": 7,
+        "missing": "soundfile==0.13.1; lazy Ogg decoding import, not service startup or this selected UI case",
+        "official_codex_package": "@openai/codex-darwin-arm640.163.0-darwin-arm64",
+        "official_codex_binary_bytes": 249952688,
+        "official_codex_binary_sha256": "8813367285524ac798dd96d1b071aea30d58708c7226fd236cd275cf1cfdee31",
+        "account_or_auth_files_read": false,
+        "compatibility_in_execution_not_claimed": true,
+        "python_actual_executable_sha256": "e17826d56c53bce1083f70b4cdb68ea29105fdc84c1c345746523f2af0b8287d",
+        "python_actual_executable": "/opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python"
+      },
+      "native_UI_pending": true,
+      "self_contained_qualification_from_dev_case_forbidden": true,
+      "implementation": {
+        "script/export_native_qa.py": {
+          "bytes": 18171,
+          "sha256": "94ca17f738027b4258d94e1a19916dd15b38f2b196ad2ceea6053aeaf2982fa2"
+        },
+        "tests/test_native_qa_export.py": {
+          "bytes": 16764,
+          "sha256": "55358659edfed80c1bdb08ce9b3e04ad327b0fe0be57328cacf2e23c82b0175b"
+        },
+        ".github/workflows/ci.yml": {
+          "bytes": 7471,
+          "sha256": "f8ddc02915015db703a422861e9826596752df5691f400fff485541351ad6e65"
+        }
+      },
+      "new_unit_cases_written_not_run_locally": 25,
+      "compressed_limit_bytes": 33554432,
+      "uncompressed_limit_bytes": 134217728,
+      "native_artifact_retention_days": 14,
+      "full_bundle_and_suites_preserved": true
     }
   },
   "qualified_complete_increment": false,
   "residual_unknowns": [
     {
       "scope": "physical_os_notification_navigation",
-      "status": "unresolved",
-      "required_evidence": "Visible own OS notification and attributable native tap returning to the intended session without sending a prompt or approving a tool. The owner could not locate the notice in this attempt."
+      "status": "resolved_selected_case",
+      "required_evidence": "Fresh exact-CI QA app: owner OS click plus B-to-A external CUA and same-notice read-only revision3-to4; see notification_closeout_attempt. Historical absence and internal-click attempt remain unchanged."
+    },
+    {
+      "scope": "background_notification_preferences_ui",
+      "status": "pending_selected_case",
+      "limit": "The six-stage native attempt missed B while A was running. Deterministic production adapter/Store tests passed remotely; external in-flight B UI still requires its own bounded case."
     },
     {
       "scope": "real_github_publication",
@@ -2588,5 +3113,19 @@
       "status": "partial",
       "limit": "CLI/TUI and declared ACP v1 subset, local collaboration/A2A, sampled project cases and native states do not qualify every platform, protocol option or broad OpenClaw family."
     }
-  ]
+  ],
+  "evidence_availability_20261104": {
+    "observation_date": "2026-11-04",
+    "source": "Owner-requested resume; bounded metadata checks of the exact own synthetic paths",
+    "notification_root": "/private/tmp/jarvis-product-notification-closeout-20261030",
+    "background_draft_root": "/private/tmp/jarvis-product-background-question-20261030",
+    "background_draft_files_present": false,
+    "original_notification_receipts_currently_available": false,
+    "historical_custody": "images_preserved and receipt references describe the verified close on 2026-10-30, not present-day availability. The normalized record, exact hashes and direct owner/CUA observations survive in the working tree and chat; they are not substitutes for retained original bytes.",
+    "cause_of_missing_temporary_files": "not_established",
+    "original_attempt_replayed": false,
+    "ci_artifact_retention_days": 3,
+    "old_artifact_available_from_workflow_api": false,
+    "follow_up": "New formal rerun of exact commit 1b0a7ea in remote CI and an independently admitted bounded synthetic background-question case. No local suites/builds or reuse of expired QA receipts."
+  }
 }

@@ -1,0 +1,108 @@
+{
+  "schema": "jarvis.background-question-native-admission/1",
+  "status": "prepared_not_executed",
+  "review_status": "frozen_draft_pending_root_review",
+  "harness_root": "/private/tmp/jarvis-product-background-20261104-b",
+  "source_commit": "1b0a7ead49f2659ef536d47947a9ed7364d0e632",
+  "run_id": 41123446861,
+  "run_attempt": 2,
+  "job_ids": {
+    "macos": 126587339018,
+    "ubuntu": 126587339325
+  },
+  "artifact_id": 13323672851,
+  "artifact_zip_sha256": "5ee799ebece9726526305e7a9090bc2b3a7d7621f1782e7fdd23cef8f42af19c",
+  "bundle_identifier": "local.jarvis.qa.background.20261104b.1b0a7ead",
+  "scripts_sha256": {
+    "common.py": "d210ce7574044e329098232c7f9f114b4c83ff6443925178b25d3a2c2320e4bc",
+    "prepare.py": "27d9005d22603cca07166e0569070a8d423a0ba86d0fc48852b77bcc5650e804",
+    "supervise.py": "2dfa5397bd61ae0b2a8a9a6dcb195f6e785837d5c692ff106d06a2779b9b3685",
+    "probe.py": "73604e643a121f1c28a3245f78abe3a88cd381b19aaf6b8ec852050d9c91211a"
+  },
+  "source_pins": {
+    "script/test_resource_guard.py": "472712a42d0f2c68bec33c19ab7a9443aff6fbd4a0898dd81658a481a92d6273",
+    "script/package_desktop_runtime.py": "e3d76ef64ebcc97bba4c2ae18838dbab5ef39cc0f151fb4710609207b3041eee",
+    "script/qualify_bundled_runtime.py": "88f80d2317982714aff655e2b6acbc838750c59e12c6ebc921780bfd6a94f4ae",
+    "src/jarvis_core/bundled_runtime.py": "d6b422dfdaf8290cdbd07d82721a5221087fefc7fc7468f9ead7ff0e18ffea5b",
+    "native/JarvisDesktop/Sources/QALaunchSupport/QALaunchAdmission.swift": "66436f578155fd3b5c7ca1f403f61ff8e0796024e49798d11bff2ccb1e31dc52",
+    "native/JarvisDesktop/Sources/QALaunchSupport/QALaunchCoordinator.swift": "14523fe581fb63727910ce9cde344829f70d2abc646afb440dfd443e819aa585",
+    "native/JarvisDesktop/Sources/JarvisQALauncher/QALaunchMain.swift": "8c83ec185162548d42f48fb95033b253fc13446f81fcb7e0f033f59acceb6db0"
+  },
+  "reviewer_checklist_sha256": "3ea3f0ecf95c9df185320eb53f622bf2be1fdf78c5f4f0ac0fd8adfa034458d0",
+  "maximum_model_runs": 1,
+  "maximum_sessions": 2,
+  "maximum_question_tools": 1,
+  "maximum_other_tools_accepted": 0,
+  "maximum_explicit_host_answers": 1,
+  "question": {
+    "id": "background_gate",
+    "header": "Continuar",
+    "prompt": "¿Continuamos la prueba sintética?",
+    "options": [
+      {
+        "id": "continuar",
+        "label": "Continuar",
+        "description": "Completa esta prueba."
+      },
+      {
+        "id": "detener",
+        "label": "Detener",
+        "description": "Termina sin continuar."
+      }
+    ],
+    "sensitive": false
+  },
+  "model_prompt": "Llama exactamente una vez a la herramienta dinámica jarvis_request_user_input de Jarvis con estos argumentos JSON: {\"questions\":[{\"id\":\"background_gate\",\"header\":\"Continuar\",\"prompt\":\"¿Continuamos la prueba sintética?\",\"options\":[{\"id\":\"continuar\",\"label\":\"Continuar\",\"description\":\"Completa esta prueba.\"},{\"id\":\"detener\",\"label\":\"Detener\",\"description\":\"Termina sin continuar.\"}],\"sensitive\":false}]}. No uses otras herramientas. Espera la respuesta. Después responde únicamente: Prueba de fondo terminada.",
+  "model_prompt_is_not_enforced_tool_allowlist": true,
+  "owner_OS_actions_required": [],
+  "resource_contract": {
+    "single_new_APFS_capacity_mib": 2048,
+    "preparation_seconds": 300,
+    "active_seconds": 810,
+    "cleanup_reserve_seconds": 90,
+    "Data_free_floor_GiB": 25,
+    "provider_growth_mib": 128,
+    "residual_Data_drop_GiB": 1,
+    "known_process_limit": 128,
+    "capture_stdout_limit": 1048576,
+    "capture_stderr_limit": 65536,
+    "codesign_combined_limit": 16384,
+    "probe_total_seconds": 40,
+    "probe_input_bytes": 262144,
+    "receipt_output_bytes": 65536,
+    "physical_quota_is_not_sandbox": true,
+    "provider_location": "new <root_quota>/provider under the same 2GiB physical quota",
+    "provider_initial_baseline_bytes": 0,
+    "provider_sub_budget_mib": 128,
+    "provider_measurement": "Metadata sampled with per-process reuse interval <=1s; freshly sampled on entry and before launch/answer/detach effects. This sampled sub-budget is not a separate physical provider sandbox.",
+    "external_provider_access": false
+  },
+  "native_signal_policy": "Record GUI quit intent before CmdQ. Exact app may receive SIGTERM only on admitted deadline/resource/observer failure and only if birth/UID/path still match. Such a path cannot pass normal-close gate. Unconfirmed returned_candidate is never signal authority.",
+  "normal_detach_maximum": 2,
+  "force_detach": false,
+  "deletion": false,
+  "automatic_effect_replay": false,
+  "original_historical_attempt_complete": false,
+  "new_case_full_OpenClaw_parity_claimed": false,
+  "execution_approved_by_this_file": false,
+  "ci_success_claimed_by_this_file": false,
+  "app_name": "Jarvis Fondo Prueba B",
+  "prior_preparation": {
+    "root": "/private/tmp/jarvis-product-background-20261104",
+    "admission_sha256": "f02dc0b3b68c622021bf6d70e34abee61c7179ce165f3ef7f7c1e1fe6da9fedf",
+    "preparation_closeout_sha256": "19d7d72cc470b8c5ab4ef9db0295b0f5c5a1565df3c4ef1a9e473d3926c0dbb0",
+    "status": "preparation_deadline_no_app_launch_normal_detach_original_image_preserved",
+    "sources_modified": false,
+    "automatic_retry": false,
+    "new_case_reason": "Root diagnosed provider metadata recursion on every download chunk. New independent source/provider layout closes the probe overhead without extending the old deadline or replaying an app/effect."
+  },
+  "provider_policy": {
+    "fresh_provider": "Create only root_quota/provider mode0700 immediately after confirmed mount, before resource anchor. Signed QA config pins that path. No old provider access, contents or metadata.",
+    "owner_account_action": "Owner completes official Codex/ChatGPT login from this new app if account is disconnected; no credentials or codes in chat. No OS notification/TCC prompt in this case.",
+    "maximum_metadata_cache_reuse_seconds": 1,
+    "all_state_and_provider_writes_physically_limited_by_same_quota": true
+  },
+  "owner_account_actions_required": [
+    "Complete official Codex with ChatGPT login from the visible new QA app only if disconnected; passwords/account grants are owner-only."
+  ]
+}

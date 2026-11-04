@@ -1,0 +1,109 @@
+{
+  "schema": "jarvis.background-question-reconstruction-plan/1",
+  "status": "draft_no_execution",
+  "purpose": "Close selected native UI B-during-A isolation gap without claiming the historical six-stage attempt passed.",
+  "source_head": "1b0a7ead49f2659ef536d47947a9ed7364d0e632",
+  "artifact_gate": {
+    "official_run": "completed/success exact SHA, both Ubuntu/macOS jobs successful",
+    "official_artifact": "jarvis-desktop-<full SHA>, exact run/id/digest/provenance; not early Swift log",
+    "retention_days": 3,
+    "historical_artifact_13010390676": "Must query official metadata; likely expired on 2026-11-04. Do not reconstruct historical artifact bytes."
+  },
+  "minimal_new_layout": {
+    "quota": "One new private APFS volume, 2048MiB total, short /private/tmp/jq-*",
+    "why_one_volume": "No OS-notification path in this independent case; QALaunchAdmission supports /private/tmp app with empty args. Home stable app location and two volumes are not necessary for suppressed notices.",
+    "members": [
+      "download ZIP",
+      "Jarvis.app",
+      "state",
+      "provider if new login needed",
+      "launcher-home",
+      "launcher-tmp"
+    ],
+    "images": "Preserve after native close; do not use general run() cleanup that removes originals."
+  },
+  "budgets": {
+    "capacity_mib": 2048,
+    "active_seconds": 810,
+    "cleanup_reserve_seconds": 90,
+    "preparation_seconds": 300,
+    "minimum_Data_free_GiB": 25,
+    "external_synthetic_provider_growth_mib": 128,
+    "unaccounted_Data_drop_GiB": 1,
+    "known_process_limit": 128,
+    "probe_seconds": 40,
+    "probe_input_bytes": 262144,
+    "receipt_output_bytes": 65536
+  },
+  "versioned_primitives": {
+    "physical_volume": "script/test_resource_guard.py:Volume,create_volume,detach_volume; import only in explicitly admitted preparation, never invoke run() for this native QA",
+    "strong_archive_writer": "script/package_desktop_runtime.py:Budget,TreeWriter (materializes safe physical files; no symlink output); apply explicit archive-member validation before use",
+    "runtime_verifier": "src/jarvis_core/bundled_runtime.py:verify_runtime_tree(expected_manifest_sha256,expected_source_commit)",
+    "native_launch": "native/JarvisDesktop/Sources/JarvisQALauncher/QALaunchMain.swift and QALaunchSupport/QALaunchAdmission.swift,QALaunchCoordinator.swift; bundled helper already compiled in CI",
+    "runtime_profile": "native/JarvisDesktop/Sources/DesktopCore/BundledLaunchOptions.swift:qualificationProfile; exact canonical JSON and signed outer app Info.plist pin",
+    "probe": "src/jarvis_core/protocol.py:LocalRpcClient with src/jarvis_core/client_identity.py:ClientIdentity; exact own fresh desktop.key only",
+    "lease": "src/jarvis_core/host_profile.py:ProfileLease; independently test exact same lock inode free only after all known identities absent",
+    "question_contract": "src/jarvis_core/product_interactions.py:create_question,answer_question,consume_answers; answer ACK exact id/revision/status/grants_tool_approval only",
+    "wire_alias": "src/jarvis_core/product_tools.py:jarvis_request_user_input -> canonical request_user_input"
+  },
+  "state_machine": [
+    "admitted with script/guard/source pins",
+    "official CI+artifact identity verified",
+    "exclusive preparation intent before volume effect",
+    "archive/extracted bytes/source/runtime/signature/provenance verified",
+    "only outer QA Info.plist/config/id update and re-sign; no local compilation",
+    "exclusive request before one bundled helper launch",
+    "active receipt with returned app PID/start-time/executable tuple",
+    "CUA A1/silenced1 preferences revision2; B empty/default rev0",
+    "exact sole canonical question prompt once; no other tool approvals",
+    "CUA A pending then B0 while read-only runs.get running + canonical pending question revision1",
+    "fresh root CUA attestation of B0 bound to prepared/waiting/PID <=60s",
+    "exclusive answer intent then one signed product.interaction question.answer; unknown never replay",
+    "read-only same question consumed revision3, one known question receipt without values or tool authority, sole model run completed/cleanup confirmed",
+    "CUA B0 after completion then A1",
+    "prepared-bound GUI quit intent and own-app CmdQ",
+    "all known process birth identities absent + exact lock inode free",
+    "normal unmount only, at most2 attempts, no force/delete, originals and receipt retained"
+  ],
+  "question": {
+    "id": "background_gate",
+    "header": "Continuar",
+    "prompt": "¿Continuamos la prueba sintética?",
+    "options": [
+      {
+        "id": "continuar",
+        "label": "Continuar",
+        "description": "Completa esta prueba."
+      },
+      {
+        "id": "detener",
+        "label": "Detener",
+        "description": "Termina sin continuar."
+      }
+    ],
+    "sensitive": false
+  },
+  "counter_limits": {
+    "sessions": 2,
+    "model_runs": 1,
+    "canonical_question_tools": 1,
+    "other_tools_accepted": 0,
+    "explicit_host_answers": 1,
+    "OS_notice_requests": 0
+  },
+  "credential_policy": "Only official Codex client may use explicitly selected surviving synthetic provider. Never read auth contents. If missing, new provider profile and owner official login are needed; no credential recovery/search.",
+  "no_actions_performed": [
+    "no tests",
+    "no build",
+    "no network",
+    "no artifact download",
+    "no mounting",
+    "no app launch",
+    "no UI",
+    "no credential reads"
+  ],
+  "unimplemented_here": [
+    "Full execution supervisor/prepare/probe helpers still need writing/review; this is a plan only.",
+    "Do not execute old temp paths or reacquire closed old CUA handles."
+  ]
+}

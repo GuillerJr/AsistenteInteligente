@@ -11,21 +11,35 @@ El dueño aplazó expresamente la app de iPhone; ver [decisiones](rebuild/PHASE_
 El [bloque de producto y sesiones avanzadas](rebuild/PHASE_A_PRODUCT_COORDINATION.md)
 ya implementa proyectos/GitHub, preguntas/progreso/presencia/sugerencias, paneles,
 avisos optativos, carpetas por conversación, colaboración/A2A local, presupuestos
-y clientes CLI/TUI/ACP. La [evidencia por checkpoint](rebuild/PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json)
-conserva la CI completa de `4686f25`, siete selecciones de clientes, dos lecturas
-GitHub, diez planes Git y dos preguntas simultáneas con seis rechazos y consumo.
-La copia estable de ese commit acreditó panel oscuro legible, sugerencias sólo
-como borrador, descarte y aislamiento entre dos chats. Cerró normalmente, sin
-señales ni procesos conocidos retenidos, y desmontó ambas cuotas sin fuerza.
-El dueño concedió avisos y macOS aceptó una solicitud. Después confirmó que
-pulsó «Ver chat», gesto que la consume y retira; no hay un fallo de envío
-demostrado. Su visualización y clic OS siguen sin acreditarse. Se distingue
-aceptación de visualización y se corrige un clic de preferencias obsoletas que
-podía sobrescribir una revisión más reciente. CI debe acreditar inputs y estado;
-la UI real y navegación OS siguen siendo requisitos del cierre nativo.
-La matriz actual tiene **62 familias parciales, 18 sin implementar y ninguna
-completa**. REA registra **48 lotes y 186 rutas TS/JS únicas** seleccionadas.
-Las cifras de cierres anteriores que siguen abajo pertenecen a sus checkpoints.
+y clientes CLI/TUI/ACP. La [CI completa de `1b0a7ead`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41123446861)
+aprobó 3955 casos Python en Ubuntu (47 omitidos), 4002 en macOS y 710 Swift
+(uno omitido, cero fallos), paquetes, bundle/helper y smoke de cierre por EOF.
+La [evidencia por checkpoint](rebuild/PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json)
+conserva los recorridos de clientes, Git, preguntas y paneles, y los fallos
+históricos `3c35fa0`/`c403ba7`. El uso interno de «Ver chat» en `4686f25` explica
+su consumo sin acreditar un clic OS en aquel intento.
+La nueva QA propia del artefacto `1b0a7ead` sí acredita el clic físico OS
+confirmado por el dueño: desde B volvió a A con «Prueba de aviso terminada»,
+control de avisos en 1 y «Chat abierto»; el mismo aviso pasó de revisión 3 a 4.
+Hubo un único run de Codex completado, limpieza confirmada y cero herramientas;
+B quedó vacío y con avisos desactivados en revisión 0. El cierre fue normal,
+sin señales, con cuatro identidades conocidas ausentes, el mismo lease libre
+y ambas cuotas desmontadas normalmente al primer intento.
+Queda pendiente la etapa UI de observar B mientras A está activo: un índice AX
+inválido y la respuesta rápida impidieron cubrirla en este intento parcial de
+seis etapas. Se prepara un caso independiente con pregunta sintética, sin
+reutilizar el run ni repetir sus efectos; los datos RPC no sustituyen la UI.
+La navegación OS está cualificada en ese caso, el bloque completo aún no.
+La publicación real de GitHub sigue sin ejercitarse. La matriz mantiene
+**62 familias parciales, 18 sin implementar y ninguna completa**; REA registra
+**48 lotes y 186 rutas TS/JS únicas** seleccionadas. La fase A sigue abierta y B
+aplazada. Las cifras históricas siguientes pertenecen a sus propios checkpoints.
+
+La reanudación del 4 de noviembre conserva tres preparaciones fallidas y cerradas
+sin abrir la app. Se prepara un artefacto nativo ligero desde CI para terminar
+el único caso UI pendiente con dependencias de desarrollo elegidas; ese paquete
+no es una distribución autocontenida. Su exportador y pruebas esperan la CI
+exacta. El registro conserva las fuentes y recibos saneados en el repositorio.
 
 Alcance elegido cualificado: [distribución autocontenida y servicio residente](rebuild/PHASE_A_DISTRIBUTION_RESIDENT.md).
 La app incorpora Python, dependencias, Codex y MiniLM; el registro de inicio en

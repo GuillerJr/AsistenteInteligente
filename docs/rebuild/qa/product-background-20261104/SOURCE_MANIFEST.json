@@ -1,0 +1,43 @@
+{
+  "schema": "jarvis.native-qa-source-snapshot/1",
+  "date": "2026-11-04",
+  "source_commit": "1b0a7ead49f2659ef536d47947a9ed7364d0e632",
+  "declared_original_root": "/private/tmp/jarvis-product-background-20261104",
+  "files": {
+    "common.py": {
+      "bytes": 13710,
+      "sha256": "23f872b6ef88596162b2f814676abb7e847a9814bba87b6496dc8ae36d8e7476"
+    },
+    "prepare.py": {
+      "bytes": 15123,
+      "sha256": "a47ef561969e563a4ec9fccd8f9f79465d3792e7f02260ef9094e61a4eb86d3d"
+    },
+    "supervise.py": {
+      "bytes": 13480,
+      "sha256": "c2ec37b2353135efcb05f85f6c55128970e7116bd4eac82cae1a7a71473acfb5"
+    },
+    "probe.py": {
+      "bytes": 24459,
+      "sha256": "671339c18256c19e3a3c82d00b7ee0550f338fb8c61ec6db8c0924caa740f1eb"
+    },
+    "admission.json": {
+      "bytes": 4406,
+      "sha256": "f02dc0b3b68c622021bf6d70e34abee61c7179ce165f3ef7f7c1e1fe6da9fedf"
+    },
+    "reviewer-checklist.json": {
+      "bytes": 6221,
+      "sha256": "9392a463c9ee286b8a338966b948b42048870246e4d37ef015c9ca9ba4ed9ae6"
+    },
+    "RUNBOOK_NOEXEC.md": {
+      "bytes": 6959,
+      "sha256": "33ba0d2c32dbe72b169962d9c9d2fccc51e6d3bebea2a85539ac3be76d8679af"
+    },
+    "PLAN_NOEXEC.json": {
+      "bytes": 5696,
+      "sha256": "69a5009db1afcc063b6ae50250cb2b9021d26d412da9652eae09834e5330459a"
+    }
+  },
+  "status": "reviewed_source_only_execution_not_proven_by_this_snapshot",
+  "owner_credentials_or_profiles_included": false,
+  "read_only_consultation": true
+}
