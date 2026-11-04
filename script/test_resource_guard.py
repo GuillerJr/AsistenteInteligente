@@ -38,6 +38,9 @@ MAX_SOURCE_BYTES = 256 * MIB
 REPO = Path(__file__).resolve().parents[1]
 SENSITIVE = {"auth.json", "credentials.json", "secrets.json", "id_rsa", "id_ed25519"}
 SENSITIVE_RELATIVE = {".claude/settings.local.json"}
+NATIVE_MEDIA_SELECTION = "NativeMedia(Executor|Diagnostics)Tests"
+NATIVE_MEDIA_ENV = "JARVIS_TEST_GUARD_NATIVE_MEDIA_FRAMEWORKS"
+NATIVE_MEDIA_CACHE = Path("home/Library/Caches/com.apple.dt.xctest.tool")
 
 
 class GuardError(RuntimeError):
@@ -189,6 +192,16 @@ def validate_options(options, environment, identity, root):
         raise GuardError("Falta el comando explícito que se debe comprobar.")
     if not options.selection.strip() or len(options.selection.encode()) > 4096:
         raise GuardError("Indica una selección focal explícita.")
+    if getattr(options, "native_media_frameworks", False) and (
+            options.profile != "local" or options.kind != "swift" or options.full
+            or options.selection != NATIVE_MEDIA_SELECTION):
+        raise GuardError("--native-media-frameworks exige el focal Swift local exacto de medios.")
+    if getattr(options, "native_media_frameworks", False):
+        if any(getattr(options, name, None) for name in (
+                "minilm_test_assets", "export_relative", "export_destination",
+                "self_contained_export")):
+            raise GuardError("El focal de frameworks nativos no admite modelos ni exportaciones.")
+        validate_native_media_command(options.command, root)
     if options.profile == "local":
         if options.full or options.selection.strip().lower() in {"all", "full", "todos", "tests"}:
             raise GuardError("Las suites completas se ejecutan en CI; indica pruebas focales.")
@@ -306,7 +319,66 @@ def detach_volume(volume: Volume):
     return True
 
 
-def sandbox_policy(source: Path, control: Path, mount: Path, *, extra_reads=()):
+def validate_native_media_command(command, root: Path, *, admitted=False):
+    root = root.resolve(strict=True)
+    child = ["/bin/bash", str(root / "script/test_desktop.sh"), "--guard-child",
+             "--filter", NATIVE_MEDIA_SELECTION]
+    expected = child if admitted else [str(root / ".venv/bin/python"), "-B",
+        str(root / "script/test_resource_guard.py"), "admitted-exec", "--kind", "swift",
+        "--", *child]
+    path_arguments = {0, 1} if admitted else {0, 2, 7, 8}
+    if len(command) != len(expected):
+        raise GuardError("El argv del focal nativo debe ser la cadena exacta admitida.")
+    for index, (given, wanted) in enumerate(zip(command, expected, strict=True)):
+        if index not in path_arguments:
+            if given != wanted:
+                raise GuardError("El argv del focal nativo contiene argumentos no admitidos.")
+            continue
+        path = Path(given)
+        if index == 0 and "/" not in given:
+            raise GuardError("El argv nativo exige una ruta explícita al ejecutable.")
+        if not path.is_absolute():
+            path = root / path
+        # Python finds pyvenv.cfg from its invoked entry point. Resolving to the
+        # same host binary alone must not allow bypassing the repository venv.
+        if not admitted and index == 0 and path != Path(wanted):
+            raise GuardError("El argv nativo exige el Python de .venv del repositorio.")
+        try:
+            same = path.resolve(strict=True) == Path(wanted).resolve(strict=True)
+        except (OSError, RuntimeError) as error:
+            raise GuardError("No se pudo verificar una ruta del argv nativo.") from error
+        if not same:
+            raise GuardError("Una ruta del argv nativo no corresponde al repositorio.")
+
+
+def native_media_capabilities(root: Path | None):
+    return {"enabled": True, "mach_global_names": ["com.apple.lsd.mapdb"],
+        "xpc_service_names": ["com.apple.coremedia.videoencoder"],
+        "file_issue_extension": {"class": "com.apple.app-sandbox.read",
+            "path": str(root / NATIVE_MEDIA_CACHE) if root is not None else None,
+            "access": "read_only"},
+        "argv_scope": {"parent": "repo_venv_python_B_guard_admitted_exec_swift",
+            "admitted": "system_bash_repo_desktop_guard_child", "filter": NATIVE_MEDIA_SELECTION,
+            "extra_arguments": False, "external_inputs": False, "exports": False},
+        "external_os_xpc": {"custody_scope": "outside_owned_process_group",
+            "cache_writes_outside_quota": "unconfirmed",
+            "all_service_filesystem_effects_confined": False,
+            "cleanup_scope": "owned_process_group_and_private_quota_only"}}
+
+
+def native_media_admitted(admission, root: Path):
+    if "native_media_frameworks" not in admission:
+        return False
+    if (admission.get("profile") != "local" or admission.get("kind") != "swift"
+            or admission.get("full") is not False
+            or admission.get("selection") != NATIVE_MEDIA_SELECTION
+            or admission["native_media_frameworks"] != native_media_capabilities(root)):
+        raise GuardError("La admisión de frameworks nativos no corresponde al focal autorizado.")
+    return True
+
+
+def sandbox_policy(source: Path, control: Path, mount: Path, *, extra_reads=(),
+                   native_media_frameworks=False):
     reads = [source, control, mount, Path("/System"), Path("/usr"), Path("/bin"),
              Path("/sbin"), Path("/opt/homebrew"), Path("/Library/Frameworks/Python.framework"),
              Path("/Library/Developer"), Path("/Applications/Xcode.app"),
@@ -331,7 +403,7 @@ def sandbox_policy(source: Path, control: Path, mount: Path, *, extra_reads=()):
     literals = " ".join(f"(literal {json.dumps(path)})" for path in sorted(literal_paths))
     filters = " ".join(f"(subpath {json.dumps(str(path))})" for path in reads)
     quote = json.dumps(str(mount))
-    return "\n".join([
+    rules = [
         "(version 1)", "(deny default)",
         "(allow process-exec process-fork sysctl-read file-read-metadata)",
         "(allow signal (target same-sandbox))",
@@ -343,7 +415,17 @@ def sandbox_policy(source: Path, control: Path, mount: Path, *, extra_reads=()):
         f'(allow network-inbound (local ip "localhost:*") (local unix-socket (subpath {quote})))',
         f'(allow network-outbound (remote ip "localhost:*") '
         f'(remote unix-socket (subpath {quote})))',
-    ]) + "\n"
+    ]
+    if native_media_frameworks:
+        cache = json.dumps(str(mount / NATIVE_MEDIA_CACHE))
+        rules.extend([
+            '(allow mach-lookup (global-name "com.apple.lsd.mapdb") '
+            '(xpc-service-name "com.apple.coremedia.videoencoder"))',
+            '(allow file-issue-extension (require-all '
+            '(extension-class "com.apple.app-sandbox.read") '
+            f'(subpath {cache})))',
+        ])
+    return "\n".join(rules) + "\n"
 
 
 def child_environment(root: Path, control: Path, admission, original, source: Path,
@@ -366,6 +448,8 @@ def child_environment(root: Path, control: Path, admission, original, source: Pa
         "JARVIS_DESKTOP_SOURCE": str(source / "src"),
         "JARVIS_RPC_CLIENT_KEY_FILE": str(root / "synthetic-client.key"),
         "CLANG_MODULE_CACHE_PATH": str(root / "clang-cache")})
+    if native_media_admitted(admission, root):
+        environment[NATIVE_MEDIA_ENV] = "1"
     # Values are explicit code/dependency locations, never account state.
     for key in ("JARVIS_DESKTOP_DEPENDENCIES", "JARVIS_RPC_BOOTSTRAP_PUBLIC_KEY"):
         if key in original:
@@ -873,6 +957,8 @@ def finalize_evidence(*, control, pending_path, pending_identity, options, befor
         "full_qualification": "pending_remote_ci" if options.profile == "local" else
             "ci_job_result_requires_workflow_completion", "result": result,
         "created_ns": time.time_ns()}
+    if getattr(options, "native_media_frameworks", False):
+        receipt["native_media_frameworks"] = native_media_capabilities(run_root)
     if qualification_data is not None:
         receipt["qualification_data"] = qualification_data
         receipt["inputs_unchanged"] = inputs_unchanged
@@ -945,6 +1031,9 @@ def run(options):
                 "selection": options.selection, "full": options.full,
                 "nonce": os.urandom(24).hex(), "source_fingerprint": before["fingerprint"],
                 "run_root": str(run_root), "guard_pid": os.getpid()}
+            native_media = getattr(options, "native_media_frameworks", False)
+            if native_media:
+                admission["native_media_frameworks"] = native_media_capabilities(run_root)
             write_json(control / "admission.json", admission)
             command = [part.replace("@RUN_ROOT@", str(run_root)) for part in options.command]
             environment = child_environment(run_root, control, admission, os.environ, root,
@@ -955,7 +1044,8 @@ def run(options):
                     resolve_local_swift(environment)
                 policy = control / "quota.sb"
                 extra_reads = () if qualification_data is None else (Path(asset_path),)
-                policy.write_text(sandbox_policy(root, control, run_root, extra_reads=extra_reads))
+                policy.write_text(sandbox_policy(root, control, run_root, extra_reads=extra_reads,
+                                                 native_media_frameworks=native_media))
                 policy.chmod(0o600)
                 command = ["/usr/bin/sandbox-exec", "-f", str(policy), *command]
             result, tail = supervise(command, environment=environment, cwd=root,
@@ -1070,6 +1160,9 @@ def verify_admission(root: Path, kind: str):
             or value["guard_pid"] != os.getppid()):
         raise GuardError("La admisión del comando no corresponde al supervisor actual.")
     private_directory(Path(value["run_root"]))
+    native_media = native_media_admitted(value, Path(value["run_root"]))
+    if environment.get(NATIVE_MEDIA_ENV) != ("1" if native_media else None):
+        raise GuardError("El entorno de frameworks nativos no corresponde a la admisión.")
     if value["guard_pid"] != os.getppid():
         raise GuardError("El supervisor dejó de ser el padre del comando.")
     return value
@@ -1100,6 +1193,7 @@ def parser():
     execute.add_argument("--budget-mib", type=int, required=True)
     execute.add_argument("--deadline", type=float, required=True)
     execute.add_argument("--full", action="store_true")
+    execute.add_argument("--native-media-frameworks", action="store_true")
     execute.add_argument("--export-relative")
     execute.add_argument("--export-destination", type=Path)
     execute.add_argument("--self-contained-export", action="store_true")
@@ -1124,8 +1218,10 @@ def main():
             verify_admission(options.repo_root, options.kind)
             return 0
         if options.operation == "admitted-exec":
-            value = verify_admission(options.repo_root, options.kind)
             command = options.command[1:] if options.command[:1] == ["--"] else options.command
+            value = verify_admission(options.repo_root, options.kind)
+            if "native_media_frameworks" in value:
+                validate_native_media_command(command, options.repo_root, admitted=True)
             if not command:
                 raise GuardError("Falta el comando interno admitido.")
             environment = dict(os.environ)

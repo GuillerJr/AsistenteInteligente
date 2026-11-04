@@ -7065,48 +7065,98 @@
     "reference_coverage_changed": false,
     "reference_runtime_executed": false,
     "latest_ci": {
-      "commit": "c41378acc0c1f24f6534011f1aab09691a9a6948",
-      "ci_run_id": 41852070764,
-      "run_attempt": 2,
-      "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41852070764",
       "status": "completed",
       "conclusion": "failure",
       "full_remote_ci_passed": false,
-      "qualified": false,
-      "purpose": "Disable implicit official-client plugin/catalog synchronization; macOS could not acquire hosted ARM64 runner in two attempts.",
       "ubuntu": {
-        "job_id": 126662347435,
-        "original_job_id": 126650716068,
-        "retained_success_from_attempt": 1,
-        "passed": 3980,
+        "job_id": 126763230307,
+        "status": "completed",
+        "conclusion": "success",
+        "passed": 4014,
         "skipped": 47,
         "failed": 0,
-        "seconds": 224.16,
-        "saved_decoded_log_sha256": "a782e56ba867c591a304dda257fae2f8850874c1eddd4cdc8d3b52fe1b45ec0b"
+        "seconds": 287.64,
+        "guard_elapsed_seconds": 289.039,
+        "guard_peak_bytes": 569335808,
+        "guard_source_unchanged": true,
+        "guard_cleanup_status": "confirmed"
       },
       "macos": {
-        "job_id": 126662343529,
-        "original_job_id": 126650716615,
-        "conclusion": "cancelled",
-        "runner_assigned": false,
-        "tests_or_build_started": false,
-        "infrastructure_failure": "hosted_macOS_ARM64_capacity",
-        "attempts_with_same_capacity_failure": [
-          1,
-          2
+        "job_id": 126763230303,
+        "status": "completed",
+        "conclusion": "failure",
+        "python_passed": 4061,
+        "python_seconds": 424.49,
+        "python_guard_elapsed_seconds": 426.468,
+        "python_guard_peak_bytes": 266067968,
+        "python_guard_source_unchanged": true,
+        "python_guard_cleanup_status": "confirmed",
+        "swift_executed": 722,
+        "swift_skipped": 1,
+        "swift_unexpected_failures": 2,
+        "swift_failed_test_methods": 3,
+        "swift_seconds": 244.264,
+        "other_passed": [
+          "self_contained_bundle",
+          "helper",
+          "parent_EOF",
+          "native_QA_export",
+          "wheel",
+          "sdist",
+          "installation_smoke"
         ],
-        "local_replacement_run": false
+        "provenance": "Parent preserved the decoded complete GitHub job log with hash; values above supplied after the job completed.",
+        "saved_job_log_path": "/private/tmp/jarvis-product-ci-20261104/d089-macos-job.log",
+        "saved_job_log_bytes": 572121,
+        "saved_job_log_sha256": "c71b54cd78d73ae94e96306913a26eb81efc51348b87413d1fd5fced44f76afb",
+        "swift_failures": 4,
+        "failures": [
+          {
+            "test": "NativeMediaDiagnosticsTests.testIndependentAppleVisionReferenceComparesOnlyLegacyCPUFlagOnSameBitmap",
+            "assertion_failures": 2,
+            "error_kind": "objc_missing_error",
+            "code": 0
+          },
+          {
+            "test": "NativeMediaExecutorTests.testScannedPDFAndPNGRunRealOfflineVisionWithSourceCitations",
+            "error": "decoderFailed"
+          },
+          {
+            "test": "NativeMediaExecutorTests.testVideoIsSampledLocallyAndCannotClaimFullObservation",
+            "error": "decoderFailed"
+          }
+        ]
       },
-      "wheel_sdist_isolated_installation": "success_ubuntu_not_run_macos",
-      "self_contained_bundle_and_parent_eof": "not_run_macos",
-      "native_development_export": "not_run_macos",
-      "native_qa_artifact": null,
+      "artifacts": {
+        "environment": {
+          "id": 13351016151,
+          "archive_bytes": 394,
+          "archive_sha256": "97dd724d9269f6ca426c96e5a6b06c7c6690fbc836656140c1e0da225b8664ec"
+        },
+        "native_QA": {
+          "id": 13351795751,
+          "archive_bytes": 7935189,
+          "archive_sha256": "6e59afc1ad9eb2b75b8f6ec57e8b4b2132753703d20fbeba894d8a0e839bf67c"
+        },
+        "full_Swift_diagnostic": {
+          "id": 13350644233,
+          "archive_bytes": 33662,
+          "archive_sha256": "ada8ac35b48c6a36d45bdc2190a31d9b7235338d3fe6804904e5a7d6a7349632"
+        },
+        "scope": "Artifact metadata does not establish a green workflow; native artifact must not be consumed for G under the current gate."
+      },
+      "commit": "d089d16550d8c2fa56cd2d5ce20726bd3bdff0bf",
+      "run_attempt": 1,
+      "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41883935412",
+      "qualified": false,
+      "native_final_case_executed": false,
       "local_full_suites_or_builds_run": false,
-      "native_final_case_executed": false
+      "limit": "Latest completed exact-source CI is failed; artifacts and passing Python do not qualify media or G. Physical focal receipts below bind their own worktree fingerprints.",
+      "ci_run_id": 41883935412
     },
-    "selected_native_observations": "Producto y coordinación: CI exacta 2c8259de aprobada (run 41842491175), 3980 Python Ubuntu (47 omitidas), 4027 macOS y 710 Swift (1 omitida, 0 fallos); 25 regresiones nuevas del exportador, paquetes, bundle/helper/EOF y artefacto nativo de desarrollo. El clic OS de octubre B→A y aviso 3→4 sigue cualificado por separado. D falló en admisión del observador y cerró por recuperación GUI; E observó A=1/1 y B=0/0 antes/después, pero su único run real terminó sin herramientas ni pregunta canónica. E cerró normalmente, con 12 identidades conocidas ausentes, mismo lease libre y cuota desmontada al primer intento. F añadió B desactivado durante A running en CUA e IPC firmado, pero se detuvo por el sublímite del proveedor antes de terminar. Los intentos siguen parciales y falta el recorrido completo con cierre normal. 62 familias parciales, 18 sin implementar, ninguna completa; REA 48 lotes/186 rutas. Fase A abierta y B aplazada. Corrección del cliente en c41378a: Ubuntu: 3980 aprobados y 47 omitidos aprobó; dos intentos macOS terminaron sin runner por capacidad ARM64, sin ejecutar código. G se conserva NOEXEC y requiere nuevo enlace al SHA/CI exactos antes de abrir.",
+    "selected_native_observations": "La CI completa de d089d16 (41883935412) terminó fallida: Ubuntu aprobó 4014 Python (47 omitidas) y macOS 4061 Python, bundle autocontenido/helper/EOF, exportación nativa, paquetes y smoke. Swift ejecutó 722 casos, con una omisión y cuatro fallos en tres métodos. El focal físico nuevo compiló y ejecutó 26 métodos, con ocho fallos en cuatro métodos: el preciso revisión 3 devuelve objc_missing_error código 0, callback llamado sin error ni resultados; el rápido revisión 3 devuelve Vision código 8 (VNErrorNotImplemented) tanto en perform como en callback. Ambos admiten en-US y anuncian revisiones [1,2,3], sin reconocimiento confirmado ni causa establecida. Las 103 regresiones focales del supervisor pasaron; no cualifican medios. G sigue NOEXEC y H preparado sólo como diagnóstico independiente, sin ejecución ni cualificación. La publicación real de GitHub sigue sin ejercitarse. Se mantienen 62 familias parciales, 18 sin implementar y ninguna completa; REA 48 lotes y 186 rutas. Fase A abierta y B aplazada.",
     "prior_failures_and_unknown_custody_preserved": true,
-    "scope_limit": "Implementación propia separada de REA estática, sin ampliar 48 lotes/186 rutas. F observó B durante A activa y terminó por límite del proveedor. La corrección c41378a pasó Ubuntu; macOS no obtuvo runner en dos intentos. G permanece NOEXEC. No completa familias amplias ni distribución desde development.",
+    "scope_limit": "Diagnóstico propio de Jarvis, sin nueva cobertura REA ni ejecución de OpenClaw. La CI d089 falló en medios; los 103 casos focales del supervisor no los cualifican. Las sondas accurate/fast compilaron y se ejecutaron, con 26 métodos y ocho fallos, sin causa ni fallback establecidos. G NOEXEC y H diagnóstico preparado sin ejecución. No completa familias ni A; B sigue aplazada.",
     "capability_status_counts": {
       "implementacion_parcial_contratos_probados": 62,
       "no_implementado": 18,
@@ -7159,6 +7209,9 @@
       "local_tests_or_builds_run": false,
       "qualified": false,
       "limit": "Complete exact-commit remote CI; selected external UI case remains incomplete. Passing CI and finite preference observations do not establish B while A waits on the canonical question or broad parity."
-    }
+    },
+    "local_supervisor_focal_regressions_passed": 103,
+    "new_completion_fast_diagnostics_qualified": false,
+    "new_completion_fast_diagnostics_executed": true
   }
 }

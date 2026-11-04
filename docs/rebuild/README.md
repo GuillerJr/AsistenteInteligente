@@ -1,35 +1,43 @@
 # Variante propia inspirada en OpenClaw — base limpia
 
-Seguimiento `4d5c3e1`: Swift ejecutó 715 casos; las cinco regresiones nuevas
-pasaron, pero OCR y vídeo siguen devolviendo `decoderFailed`. El siguiente paso
-es un diagnóstico focal remoto con fase y códigos de Apple, sin imágenes, texto
-ni rutas. Ese workflow manual no sustituye la cualificación completa ni autoriza
-ejecutar G; los antecedentes de CI siguientes se conservan.
+Seguimiento del 4 de noviembre: la [CI completa de `d089d16`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41883935412)
+terminó **fallida**. Ubuntu aprobó 4014 pruebas Python (47 omitidas) y macOS
+4061 Python. En macOS también pasaron bundle autocontenido/helper/EOF,
+exportación nativa, paquetes e instalación aislada. Swift ejecutó 722 casos,
+con una omisión y cuatro fallos en tres métodos: referencia Apple y los dos
+casos originales de OCR/vídeo. Compilar no acredita su funcionamiento.
 
-La [CI de `e61c912`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41862674611)
-ya recibió el runner estándar ARM64 `xcode-27`. El recibo remoto acredita
-macOS 27.0.1, SDK 27.0, Xcode 27.1 (27A9275) y Swift 6.4. Ubuntu aprobó
-4002 pruebas (47 omitidas); macOS aprobó 4049 Python, pero Swift ejecutó
-710 casos con una omisión y dos fallos inesperados: OCR de PDF/PNG
-(`decoderFailed`) y muestreo de vídeo (`CancellationError`). La CI completa
-**no está aprobada**. La última lectura del workflow seguía `in_progress`;
-las lecturas anteriores `queued`, contradictorias con los artefactos publicados,
-se conservan sin atribuirles una causa.
+El diagnóstico canónico llama directamente a Vision con CGImage y PNG propios,
+sin helpers de Jarvis. Registró `objc_missing_error`, código 0, sin error
+subyacente. La selección física autorizada reprodujo el fallo con CPU explícita
+y selección automática; no establece una causa de GPU, virtualización o CPU.
+Una concesión experimental de IOSurface tampoco mejoró el resultado y se retiró.
+Pasaron 103 regresiones focales del supervisor en grupos de 47 y 56. Los recibos
+conservan identidad del árbol y cierre; no sustituyen la CI completa ni
+cualifican los medios. Las sondas completion/accurate/fast sí compilaron y se
+ejecutaron: 26 métodos, ocho fallos en cuatro métodos.
 
-Se preparan correcciones para asignar CPU explícitamente a cada etapa Vision
-y rechazar una etapa sin CPU, y para esperar la terminación del temporizador
-en éxito, error, cancelación y reset. Incluyen dos regresiones de política OCR
-y tres de custodia del temporizador; todavía requieren una nueva CI exacta.
-El uso de GPU del runner es una hipótesis plausible, sin demostrar; los fallos
-observados no establecen esa causa.
+En ese focal, el nivel preciso con revisión 3 falló con `objc_missing_error`
+código 0; llamó al callback sin error ni resultados. El rápido con la misma
+revisión falló con Vision código 8 (`VNErrorNotImplemented`) en `perform` y en
+el callback. Ambos admitieron `en-US` y anunciaron revisiones `[1,2,3]`, con
+revisión solicitada, predeterminada y actual 3. No reconocieron el marcador:
+el modo rápido no es un fallback ni una solución acreditada. La causa sigue
+sin establecerse; [el recibo](PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json)
+conserva el árbol probado y su cierre normal, sin cualificar un commit posterior.
 
-Como antecedente, la corrección del cliente `c41378a` aprobó Ubuntu, pero sus dos
-intentos macOS 26 no recibieron runner ni ejecutaron código. Ese registro no se
-reescribe como aprobado por el entorno nuevo. El
-[caso G preparado](qa/product-background-native-20261104-g-template/SNAPSHOT.json)
-permanece **NOEXEC**: requiere CI completa aprobada, artefacto y SHA actuales
-verificados. No hay app ni cuota de prueba activas. Las cifras de CI completa
-que siguen corresponden al checkpoint anterior `2c8259de`.
+La [plantilla G](qa/product-background-native-20261104-g-template/SNAPSHOT.json)
+sigue **NOEXEC**: requiere CI completa aprobada y SHA, artefacto, entorno y pines
+actuales. H está preparado como diagnóstico independiente de la UI, sin ejecución
+ni cualificación; no habilita G ni cierra los fallos de medios. Las suites
+completas siguen remotas; el dueño autorizó la excepción local focal con cuota,
+plazo y recibo. El [registro](PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json)
+separa estos intentos de las pruebas históricas.
+
+Se conservan los antecedentes de `e61c912`/`4d5c3e1`, la compilación fallida
+de tests de `e8bb033` y los intentos macOS 26 sin runner de `c41378a`. No se
+convierten en resultados aprobados. La última CI completamente verde anterior
+sigue siendo la de `2c8259de`; el cambio de SO/SDK requiere cualificación propia.
 
 El incremento de [producto y coordinación avanzada](PHASE_A_PRODUCT_COORDINATION.md)
 está implementado y conectado. La [CI completa de `2c8259de`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41842491175)

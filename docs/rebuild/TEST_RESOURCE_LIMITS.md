@@ -128,3 +128,59 @@ en 1,60 s, con cuota real de 64 MiB vigilados, volumen APFS y cierre confirmados
 Recibo `jarvis-test-evidence-a1m5i2fj/receipt.json` del registro privado; SHA-256
 `c2f57a4fe2766546a704bc6d958fe5696924d53e11c4d80ce62544da453d4620`.
 No se elevan los presupuestos ni se omiten los casos para resolver esa diferencia.
+
+
+## Excepción focal de frameworks de medios — 4 de noviembre
+
+El dueño autorizó pruebas locales cuando la comprobación no pueda completarse
+en CI. Esto no habilita una suite completa ni una compilación productiva local.
+El opt-in `--native-media-frameworks` sólo admite perfil `local`, tipo `swift`
+y la selección literal `NativeMedia(Executor|Diagnostics)Tests`. Se liga al
+Python de `.venv`, al supervisor, al wrapper del repositorio y a su argv exacto;
+`admitted-exec` y el child vuelven a comprobarlo antes de preparar claves.
+Se rechazan `--full`, filtros repetidos o distintos, `--skip-build`, argumentos
+extra, modelos, lecturas adicionales y exportaciones antes de crear la cuota.
+
+Este modo añade únicamente `mach-lookup` de `com.apple.lsd.mapdb`, el servicio
+XPC `com.apple.coremedia.videoencoder` y emisión de extensión **de lectura**
+`com.apple.app-sandbox.read` para la caché de XCTest dentro del HOME de la cuota:
+`<cuota>/home/Library/Caches/com.apple.dt.xctest.tool`. No añade IOKit, permisos
+TCC, credenciales, red externa ni preferencias privadas. Se conservan 2 GiB,
+600 segundos y vigilancia de caída de espacio libre; los permisos por defecto
+y de CI no cambian. Las lecturas públicas exactas del recibo de licencia de Xcode
+y sus dependencias Apple se registran por separado en el código del supervisor;
+no aceptan licencias ni cambian la configuración del dueño.
+
+Los servicios XPC de Apple quedan fuera del grupo propio supervisado. Sus cachés
+y demás efectos no se declaran confinados por la cuota APFS ni cerrados por el
+cierre del grupo. La vigilancia del volumen continúa activa; el recibo declara
+este límite. El diagnóstico DEBUG sólo emite campos cerrados, códigos y hasta
+dos errores subyacentes, con un máximo de 1024 bytes, sin texto, imágenes, rutas
+o información arbitraria del error.
+
+Pasaron 47 regresiones de admisión tras retirar las concesiones experimentales
+de IOSurface (`5erz26uz`, 1,609 s de supervisor, pico 4.030.464 bytes) y 56 casos
+restantes (`h4asho24`, 5,408 s, 5.156.864 bytes). Son **103 casos focales**, con
+cierre e identidad confirmados. Recibos preservados bajo
+`/private/tmp/jarvis-product-ci-20261104/local-receipts/`; SHA-256 respectivos:
+`19b9adb071b82dce6f322de30c4100c928c40aefeb43e78f75c6da79ea63f4a6`
+y `2addfca3e1de962ae34cdf1ad2e2002b6f081922adc223eb9b18b1ffbba3a9e5`.
+
+Los primeros focales reales de medios ejecutaron 24 métodos en cada intento y
+fallaron: Vision reprodujo `objc_missing_error` código 0 con CPU y selección
+automática; el fixture de vídeo local devolvió AVFoundation -11834. Añadir
+IOSurface no mejoró el resultado y esas concesiones se retiraron. Las nuevas
+sondas completion/accurate/fast sí compilaron y se ejecutaron: 26 métodos, ocho
+fallos en cuatro métodos (`defi_ebn`, 87,833 s, pico 621.158.400 bytes). Preciso
+revisión 3 devolvió `objc_missing_error` código 0; su callback se llamó sin error
+ni resultados. Rápido revisión 3 devolvió Vision 8 (`VNErrorNotImplemented`) en
+perform y callback. Ambos admitieron `en-US` y revisiones `[1,2,3]`; ningún modo
+confirmó el marcador. No hay fallback ni causa acreditados. El recibo archivado
+conserva SHA-256
+`10142e643c798da31584792fa45103a91133309b7c2cab8e6062ecadf93322a5`,
+identidad del árbol y cierre confirmado; no cualifica un commit posterior. No se amplían
+presupuestos ni se omiten afirmaciones para convertir estos fallos en positivos.
+La poda del registro conserva un conjunto acotado de ejecuciones cerradas: los
+recibos necesarios se archivan antes de nuevas pruebas. `bk3xmch4` e `iivyc0c5`
+ya no estaban disponibles al archivar; sus observaciones de herramienta se
+conservan como tales, sin afirmar que sus archivos originales persisten.

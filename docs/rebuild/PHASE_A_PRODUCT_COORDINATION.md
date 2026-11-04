@@ -1,21 +1,44 @@
 # Producto, sesiones y coordinación avanzadas
 
-Para continuar sin repetir la cola de la imagen 26 se elige el runner estándar
-ARM64 `xcode-27`. Mantiene todas las comprobaciones y presupuestos del workflow;
-un recibo remoto exige SO/SDK ≥27 y registra versiones reales. Se trata de una
-cualificación nueva en macOS 27, no de una equivalencia de SDK ni de un positivo
-retroactivo para macOS 26. Debe aprobar la CI exacta antes del caso nativo final.
+Seguimiento del 4 de noviembre: la [CI completa de `d089d16`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41883935412)
+terminó **fallida**. Ubuntu aprobó 4014 pruebas Python (47 omitidas) y macOS
+4061 Python. En macOS también pasaron bundle autocontenido/helper/EOF,
+exportación nativa, paquetes e instalación aislada. Swift ejecutó 722 casos,
+con una omisión y cuatro fallos en tres métodos: referencia Apple y los dos
+casos originales de OCR/vídeo. Compilar no acredita su funcionamiento.
 
-La corrección del cliente `c41378a` se publicó en `main`. Ubuntu aprobó 3980
-pruebas (47 omitidas, 224,16 s); macOS terminó sin runner ARM64 en dos intentos,
-por falta de capacidad del proveedor. No se ejecutaron compilación ni pruebas de
-macOS para esa revisión. La
-[CI actual](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41852070764)
-no está aprobada. La [plantilla G](qa/product-background-native-20261104-g-template/SNAPSHOT.json)
-conserva el recorrido preparado y su observador firmado, sin ejecución. Antes
-de usarla deben fijarse de nuevo el SHA de `main`, CI completa, artefacto y pines
-exactos. No hay app ni cuota de prueba activas. Este bloqueo no convierte los
-recorridos parciales en cualificados ni inicia B.
+El diagnóstico canónico llama directamente a Vision con CGImage y PNG propios,
+sin helpers de Jarvis. Registró `objc_missing_error`, código 0, sin error
+subyacente. La selección física autorizada reprodujo el fallo con CPU explícita
+y selección automática; no establece una causa de GPU, virtualización o CPU.
+Una concesión experimental de IOSurface tampoco mejoró el resultado y se retiró.
+Pasaron 103 regresiones focales del supervisor en grupos de 47 y 56. Los recibos
+conservan identidad del árbol y cierre; no sustituyen la CI completa ni
+cualifican los medios. Las sondas completion/accurate/fast sí compilaron y se
+ejecutaron: 26 métodos, ocho fallos en cuatro métodos.
+
+En ese focal, el nivel preciso con revisión 3 falló con `objc_missing_error`
+código 0; llamó al callback sin error ni resultados. El rápido con la misma
+revisión falló con Vision código 8 (`VNErrorNotImplemented`) en `perform` y en
+el callback. Ambos admitieron `en-US` y anunciaron revisiones `[1,2,3]`, con
+revisión solicitada, predeterminada y actual 3. No reconocieron el marcador:
+el modo rápido no es un fallback ni una solución acreditada. La causa sigue
+sin establecerse; [el recibo](PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json)
+conserva el árbol probado y su cierre normal, sin cualificar un commit posterior.
+
+La [plantilla G](qa/product-background-native-20261104-g-template/SNAPSHOT.json)
+sigue **NOEXEC**: requiere CI completa aprobada y SHA, artefacto, entorno y pines
+actuales. H está preparado como diagnóstico independiente de la UI, sin ejecución
+ni cualificación; no habilita G ni cierra los fallos de medios. Las suites
+completas siguen remotas; el dueño autorizó la excepción local focal con cuota,
+plazo y recibo. El [registro](PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json)
+separa estos intentos de las pruebas históricas.
+
+El runner estándar ARM64 `xcode-27` mantiene todas las suites y presupuestos.
+El recibo de entorno registra SO/SDK y herramientas reales; no equivale al
+checkpoint macOS 26 ni reescribe sus fallos de capacidad. Las concesiones
+optativas del focal local están delimitadas en [límites](TEST_RESOURCE_LIMITS.md):
+no modifican el producto ni acreditan el cierre de servicios Apple externos.
 
 Continuación solicitada el 30-10-2026. La implementación está conectada y la
 [CI completa de `2c8259de`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41842491175)
@@ -87,7 +110,8 @@ requisitos obligatorios del recorrido externo con CUA. E observó los valores
 de A y B antes y después, pero no B durante A. El clic OS ya está
 acreditado en la QA de octubre; aún falta esa observación durante el run. Ni un
 snapshot RPC ni una representación AX sintética sustituyen esa evidencia.
-No se ejecutaron suites ni compilaciones locales.
+En esos recorridos de octubre no se ejecutaron suites ni compilaciones locales.
+La excepción focal del 4 de noviembre se registra por separado arriba.
 CI conservará además el log ya acotado de Swift inmediatamente después de esa
 suite, antes de Python, con `pipefail` y el código de salida original; las pruebas
 del fragmento YAML verifican fallo 37, éxito 0, salida y archivo exactos.
@@ -222,9 +246,10 @@ mensaje correlacionado sin transferencia de permisos; límites/uso desconocido;
 proyecto/worktree con estado/diff y conservación; panel funcional y navegación.
 
 El acceso real de GitHub y el permiso de avisos los concedió el dueño. Las
-aprobaciones de los perfiles sintéticos se realizaron bajo su delegación. Las
-pruebas locales no incluyeron suites completas ni compilaciones; los recorridos
-de interfaz e IPC tuvieron cuotas, plazos y recibos propios. La CI exacta de
+aprobaciones de los perfiles sintéticos se realizaron bajo su delegación. Los
+recorridos de octubre no incluyeron suites locales ni compilaciones; sus pruebas
+de interfaz e IPC tuvieron cuotas, plazos y recibos propios. La excepción focal
+del 4 de noviembre, con compilación necesaria para esa selección, no es una suite completa. La CI exacta de
 `1b0a7ead`, ejecución `41123446861`, pasó 3955 casos Python en Ubuntu (47
 omitidos, 302,13 s), 4002 en macOS (ninguno omitido, 300,29 s) y ejecutó 710 Swift
 (uno omitido, cero fallos, 170,872 s). También pasaron wheel/sdist, instalación

@@ -1,16 +1,38 @@
 # Pendientes de Jarvis
 
-Seguimiento: `4d5c3e1` compiló y ejecutó 715 pruebas Swift. Pasaron las cinco
-regresiones nuevas de CPU y custodia, pero siguen fallando los dos casos originales
-de OCR y vídeo. Se añade un diagnóstico focal remoto por fase y código del error
-de Apple, sin contenido, imágenes ni rutas. No sustituye la CI completa ni habilita
-el caso nativo G. La causa sigue pendiente de ese diagnóstico.
+Seguimiento del 4 de noviembre: la [CI completa de `d089d16`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41883935412)
+terminó **fallida**. Ubuntu aprobó 4014 pruebas Python (47 omitidas) y macOS
+4061 Python. En macOS también pasaron bundle autocontenido/helper/EOF,
+exportación nativa, paquetes e instalación aislada. Swift ejecutó 722 casos,
+con una omisión y cuatro fallos en tres métodos: referencia Apple y los dos
+casos originales de OCR/vídeo. Compilar no acredita su funcionamiento.
 
-La CI de `e61c912` ya recibió el runner estándar ARM64 `xcode-27`: el recibo
-remoto acredita macOS 27.0.1, SDK 27.0, Xcode 27.1 (27A9275) y Swift 6.4.
-Ubuntu aprobó 4002 pruebas (47 omitidas) y macOS 4049 Python. Swift ejecutó
-710 casos, con una omisión y dos fallos inesperados. Toda la compilación y las
-pruebas siguen remotas; la CI completa y el recorrido nativo final siguen pendientes.
+El diagnóstico canónico llama directamente a Vision con CGImage y PNG propios,
+sin helpers de Jarvis. Registró `objc_missing_error`, código 0, sin error
+subyacente. La selección física autorizada reprodujo el fallo con CPU explícita
+y selección automática; no establece una causa de GPU, virtualización o CPU.
+Una concesión experimental de IOSurface tampoco mejoró el resultado y se retiró.
+Pasaron 103 regresiones focales del supervisor en grupos de 47 y 56. Los recibos
+conservan identidad del árbol y cierre; no sustituyen la CI completa ni
+cualifican los medios. Las sondas completion/accurate/fast sí compilaron y se
+ejecutaron: 26 métodos, ocho fallos en cuatro métodos.
+
+En ese focal, el nivel preciso con revisión 3 falló con `objc_missing_error`
+código 0; llamó al callback sin error ni resultados. El rápido con la misma
+revisión falló con Vision código 8 (`VNErrorNotImplemented`) en `perform` y en
+el callback. Ambos admitieron `en-US` y anunciaron revisiones `[1,2,3]`, con
+revisión solicitada, predeterminada y actual 3. No reconocieron el marcador:
+el modo rápido no es un fallback ni una solución acreditada. La causa sigue
+sin establecerse; [el recibo](rebuild/PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json)
+conserva el árbol probado y su cierre normal, sin cualificar un commit posterior.
+
+La [plantilla G](rebuild/qa/product-background-native-20261104-g-template/SNAPSHOT.json)
+sigue **NOEXEC**: requiere CI completa aprobada y SHA, artefacto, entorno y pines
+actuales. H está preparado como diagnóstico independiente de la UI, sin ejecución
+ni cualificación; no habilita G ni cierra los fallos de medios. Las suites
+completas siguen remotas; el dueño autorizó la excepción local focal con cuota,
+plazo y recibo. El [registro](rebuild/PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json)
+separa estos intentos de las pruebas históricas.
 
 Decisión del dueño, 24-10-2026: **primero construir la variante completa funcional
 de OpenClaw con el nombre Jarvis, mediante investigación con REA y código propio**.
@@ -20,27 +42,11 @@ producto anterior sigue en Git y sus inventarios están congelados.
 Alcance inicial elegido: macOS Apple Silicon y Telegram como primer canal externo.
 El dueño aplazó expresamente la app de iPhone; ver [decisiones](rebuild/PHASE_A_TARGETS.md).
 
-**Bloqueo actual:** la
-[CI exacta de `e61c912`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41862674611)
-no está aprobada: fallaron el OCR real de PDF/PNG (`decoderFailed`) y el muestreo
-local de vídeo (`CancellationError`) en `NativeMediaExecutorTests`. La última
-lectura del workflow seguía `in_progress`; las lecturas previas `queued` y los
-artefactos publicados no sustituyen el resultado de las suites ni establecen la
-causa de esa discrepancia.
-
-Se preparan la asignación explícita de CPU para cada etapa Vision, con rechazo
-si alguna no la admite, y la espera del temporizador en todos los caminos de
-éxito, error, cancelación y reset. Dos regresiones OCR y tres de custodia del
-temporizador acompañan estos cambios, pendientes de una nueva CI exacta.
-La hipótesis de GPU del runner sigue sin demostrarse. El caso G continúa como
-[plantilla NOEXEC](rebuild/qa/product-background-native-20261104-g-template/SNAPSHOT.json):
-requiere CI completa aprobada y volver a fijar SHA, artefacto y pines actuales
-antes de ejecutarlo. Las copias de prueba están cerradas y las imágenes se
-conservan desmontadas.
-
-El fallo de capacidad anterior se conserva: `c41378a` aprobó 3980 pruebas Ubuntu
-(47 omitidas), pero sus dos intentos macOS 26 no obtuvieron runner ni ejecutaron
-código. El entorno macOS 27 nuevo no los cualifica retroactivamente.
+Como antecedentes, `e61c912` obtuvo el runner ARM64 `xcode-27`, pero falló
+en OCR/vídeo; `4d5c3e1` aprobó cinco regresiones nuevas de CPU/custodia y conservó
+los dos fallos originales. La asignación explícita de CPU no resolvió OCR.
+`c41378a` conserva sus dos intentos macOS 26 sin runner ni ejecución de código;
+el entorno nuevo no los cualifica retroactivamente. La causa sigue sin establecerse.
 
 El [bloque de producto y sesiones avanzadas](rebuild/PHASE_A_PRODUCT_COORDINATION.md)
 ya implementa proyectos/GitHub, preguntas/progreso/presencia/sugerencias, paneles,

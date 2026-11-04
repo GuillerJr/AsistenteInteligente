@@ -14,6 +14,16 @@ enum NativeMediaDiagnostics {
         case visionPerform = "vision.perform"
         case referenceModern = "vision.reference_modern"
         case referenceLegacy = "vision.reference_legacy"
+        case referenceAutomatic = "vision.reference_automatic"
+        case referenceAccurateLanguages = "vision.reference_accurate_languages"
+        case referenceAccuratePerform = "vision.reference_accurate_perform"
+        case referenceAccurateCompletion = "vision.reference_accurate_completion"
+        case referenceFastLanguages = "vision.reference_fast_languages"
+        case referenceFastPerform = "vision.reference_fast_perform"
+        case referenceFastCompletion = "vision.reference_fast_completion"
+        case referenceRevision3Languages = "vision.reference_revision3_languages"
+        case referenceRevision3Perform = "vision.reference_revision3_perform"
+        case referenceRevision3Completion = "vision.reference_revision3_completion"
         case pdfSource = "pdf.source"
         case pdfPage = "pdf.page"
         case pdfRaster = "pdf.raster"
@@ -35,12 +45,13 @@ enum NativeMediaDiagnostics {
     }
 
     enum ReferenceVariant: String {
-        case modern, legacy
+        case modern, legacy, automatic
 
         var failurePhase: Phase {
             switch self {
             case .modern: .referenceModern
             case .legacy: .referenceLegacy
+            case .automatic: .referenceAutomatic
             }
         }
     }
@@ -99,7 +110,14 @@ enum NativeMediaDiagnostics {
 
     static func enabled(environment: [String: String]) -> Bool {
         #if DEBUG
-        return environment["GITHUB_ACTIONS"] == "true"
+        if environment["GITHUB_ACTIONS"] == "true" { return true }
+        guard environment["JARVIS_TEST_GUARD_PROFILE"] == "local",
+              environment["JARVIS_TEST_GUARD_SELECTION"] == "NativeMedia(Executor|Diagnostics)Tests",
+              environment["JARVIS_TEST_GUARD_NATIVE_MEDIA_FRAMEWORKS"] == "1",
+              let nonce = environment["JARVIS_TEST_GUARD_NONCE"],
+              environment["JARVIS_TEST_GUARD_CHILD_CHECKED"] == nonce,
+              nonce.utf8.count == 48 else { return false }
+        return nonce.utf8.allSatisfy { ($0 >= 48 && $0 <= 57) || ($0 >= 97 && $0 <= 102) }
         #else
         return false
         #endif

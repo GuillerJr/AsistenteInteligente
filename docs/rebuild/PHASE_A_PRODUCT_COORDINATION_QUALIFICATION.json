@@ -1,6 +1,6 @@
 {
   "schema": "jarvis.product-coordination-qualification/1",
-  "status": "partial_macOS27_native_media_Swift_failures_native_G_NOT_executed",
+  "status": "partial_macOS27_media_failures_G_NOEXEC_H_diagnostic_only_preparing",
   "phase_a_complete": false,
   "phase_b_started": false,
   "notification_presentation_follow_up": {
@@ -56,6 +56,96 @@
   },
   "reference": "REA_OC28_PRODUCT_COORDINATION.md",
   "checkpoints": [
+    {
+      "status": "completed",
+      "conclusion": "failure",
+      "full_remote_ci_passed": false,
+      "ubuntu": {
+        "job_id": 126763230307,
+        "status": "completed",
+        "conclusion": "success",
+        "passed": 4014,
+        "skipped": 47,
+        "failed": 0,
+        "seconds": 287.64,
+        "guard_elapsed_seconds": 289.039,
+        "guard_peak_bytes": 569335808,
+        "guard_source_unchanged": true,
+        "guard_cleanup_status": "confirmed"
+      },
+      "macos": {
+        "job_id": 126763230303,
+        "status": "completed",
+        "conclusion": "failure",
+        "python_passed": 4061,
+        "python_seconds": 424.49,
+        "python_guard_elapsed_seconds": 426.468,
+        "python_guard_peak_bytes": 266067968,
+        "python_guard_source_unchanged": true,
+        "python_guard_cleanup_status": "confirmed",
+        "swift_executed": 722,
+        "swift_skipped": 1,
+        "swift_unexpected_failures": 2,
+        "swift_failed_test_methods": 3,
+        "swift_seconds": 244.264,
+        "other_passed": [
+          "self_contained_bundle",
+          "helper",
+          "parent_EOF",
+          "native_QA_export",
+          "wheel",
+          "sdist",
+          "installation_smoke"
+        ],
+        "provenance": "Parent preserved the decoded complete GitHub job log with hash; values above supplied after the job completed.",
+        "saved_job_log_path": "/private/tmp/jarvis-product-ci-20261104/d089-macos-job.log",
+        "saved_job_log_bytes": 572121,
+        "saved_job_log_sha256": "c71b54cd78d73ae94e96306913a26eb81efc51348b87413d1fd5fced44f76afb",
+        "swift_failures": 4,
+        "failures": [
+          {
+            "test": "NativeMediaDiagnosticsTests.testIndependentAppleVisionReferenceComparesOnlyLegacyCPUFlagOnSameBitmap",
+            "assertion_failures": 2,
+            "error_kind": "objc_missing_error",
+            "code": 0
+          },
+          {
+            "test": "NativeMediaExecutorTests.testScannedPDFAndPNGRunRealOfflineVisionWithSourceCitations",
+            "error": "decoderFailed"
+          },
+          {
+            "test": "NativeMediaExecutorTests.testVideoIsSampledLocallyAndCannotClaimFullObservation",
+            "error": "decoderFailed"
+          }
+        ]
+      },
+      "artifacts": {
+        "environment": {
+          "id": 13351016151,
+          "archive_bytes": 394,
+          "archive_sha256": "97dd724d9269f6ca426c96e5a6b06c7c6690fbc836656140c1e0da225b8664ec"
+        },
+        "native_QA": {
+          "id": 13351795751,
+          "archive_bytes": 7935189,
+          "archive_sha256": "6e59afc1ad9eb2b75b8f6ec57e8b4b2132753703d20fbeba894d8a0e839bf67c"
+        },
+        "full_Swift_diagnostic": {
+          "id": 13350644233,
+          "archive_bytes": 33662,
+          "archive_sha256": "ada8ac35b48c6a36d45bdc2190a31d9b7235338d3fe6804904e5a7d6a7349632"
+        },
+        "scope": "Artifact metadata does not establish a green workflow; native artifact must not be consumed for G under the current gate."
+      },
+      "commit": "d089d16550d8c2fa56cd2d5ce20726bd3bdff0bf",
+      "run_attempt": 1,
+      "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41883935412",
+      "qualified": false,
+      "native_final_case_executed": false,
+      "local_full_suites_or_builds_run": false,
+      "limit": "Latest completed exact-source CI is failed; artifacts and passing Python do not qualify media or G. Physical focal receipts below bind their own worktree fingerprints.",
+      "ci_run_id": 41883935412
+    },
     {
       "commit": "e61c912adb62be384cd736d9f08f2d8e3abe580d",
       "ci_run_id": 41862674611,
@@ -3396,6 +3486,14 @@
       "final_after_completion_stage_observed": false,
       "unknown_effect_replayed": false,
       "credentials_or_provider_contents_read": false
+    },
+    "background_native_20261104_h": {
+      "status": "diagnostic_only_prepared_NOT_executed",
+      "executed": false,
+      "qualified": false,
+      "qualifies_G": false,
+      "full_remote_ci_passed": false,
+      "scope": "Independent selected GUI diagnostic prepared and under separate admission review; no runtime observation, normal closure or qualification claimed. It does not replace G, erase media failures or qualify the broad block."
     }
   },
   "qualified_complete_increment": false,
@@ -3512,93 +3610,101 @@
     },
     "current_source_ci_record_role": "Historical CI of implementation c41378a; preserved with both macOS26 capacity failures.",
     "latest_follow_up_ci": {
-      "commit": "e61c912adb62be384cd736d9f08f2d8e3abe580d",
-      "ci_run_id": 41862674611,
+      "commit": "d089d16550d8c2fa56cd2d5ce20726bd3bdff0bf",
+      "ci_run_id": 41883935412,
       "full_remote_ci_passed": false,
       "native_final_case_executed": false
     }
   },
   "current_source_ci_status": {
-    "commit": "e61c912adb62be384cd736d9f08f2d8e3abe580d",
-    "ci_run_id": 41862674611,
-    "run_attempt": 1,
-    "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41862674611",
-    "status": "in_progress",
-    "conclusion": null,
-    "workflow_updated_at_last_read": "2026-11-04T16:23:57Z",
+    "status": "completed",
+    "conclusion": "failure",
     "full_remote_ci_passed": false,
-    "qualified": false,
-    "purpose": "Qualify the new actual macOS27 ARM64 environment with all existing remote suites, bundles and smokes; Swift failures block complete qualification and native G.",
     "ubuntu": {
-      "job_id": 126688508340,
-      "passed": 4002,
+      "job_id": 126763230307,
+      "status": "completed",
+      "conclusion": "success",
+      "passed": 4014,
       "skipped": 47,
       "failed": 0,
-      "seconds": 271.46,
-      "saved_decoded_log_sha256": "bd9a527fe2e3d94d1c416f32bc56e4dee0545970cd0b28f6934da7dcdc8cefdb",
-      "status": "completed",
-      "conclusion": "success"
+      "seconds": 287.64,
+      "guard_elapsed_seconds": 289.039,
+      "guard_peak_bytes": 569335808,
+      "guard_source_unchanged": true,
+      "guard_cleanup_status": "confirmed"
     },
     "macos": {
-      "job_id": 126688508879,
-      "python_passed": 4049,
-      "python_skipped": 0,
-      "python_failed": 0,
-      "python_seconds": 408.7,
-      "swift_executed": 710,
+      "job_id": 126763230303,
+      "status": "completed",
+      "conclusion": "failure",
+      "python_passed": 4061,
+      "python_seconds": 424.49,
+      "python_guard_elapsed_seconds": 426.468,
+      "python_guard_peak_bytes": 266067968,
+      "python_guard_source_unchanged": true,
+      "python_guard_cleanup_status": "confirmed",
+      "swift_executed": 722,
       "swift_skipped": 1,
-      "swift_failures": 2,
       "swift_unexpected_failures": 2,
-      "swift_seconds": 225.638,
-      "saved_decoded_log_sha256": "f90e86e26e63a6eb4b099ef7cf8692e643a5324daeb40d1b8247b046b6fe15d4",
+      "swift_failed_test_methods": 3,
+      "swift_seconds": 244.264,
+      "other_passed": [
+        "self_contained_bundle",
+        "helper",
+        "parent_EOF",
+        "native_QA_export",
+        "wheel",
+        "sdist",
+        "installation_smoke"
+      ],
+      "provenance": "Parent preserved the decoded complete GitHub job log with hash; values above supplied after the job completed.",
+      "saved_job_log_path": "/private/tmp/jarvis-product-ci-20261104/d089-macos-job.log",
+      "saved_job_log_bytes": 572121,
+      "saved_job_log_sha256": "c71b54cd78d73ae94e96306913a26eb81efc51348b87413d1fd5fced44f76afb",
+      "swift_failures": 4,
       "failures": [
         {
+          "test": "NativeMediaDiagnosticsTests.testIndependentAppleVisionReferenceComparesOnlyLegacyCPUFlagOnSameBitmap",
+          "assertion_failures": 2,
+          "error_kind": "objc_missing_error",
+          "code": 0
+        },
+        {
           "test": "NativeMediaExecutorTests.testScannedPDFAndPNGRunRealOfflineVisionWithSourceCitations",
-          "error": "decoderFailed",
-          "observed_message": "El analizador local no pudo confirmar el contenido del adjunto.",
-          "cause": "Not established; runner GPU/accelerator availability is a plausible unproven hypothesis."
+          "error": "decoderFailed"
         },
         {
           "test": "NativeMediaExecutorTests.testVideoIsSampledLocallyAndCannotClaimFullObservation",
-          "error": "CancellationError",
-          "cause": "Not established by the saved log."
+          "error": "decoderFailed"
         }
-      ],
-      "status": "in_progress",
-      "conclusion": null,
-      "other_completed_successful_steps": [
-        "self_contained_bundle",
-        "helper",
-        "native_development_export",
-        "python_suite",
-        "wheel",
-        "sdist",
-        "final_installation_smoke"
       ]
     },
-    "actual_environment": {
-      "format": "jarvis-ci-macos-environment/1",
-      "source_commit": "e61c912adb62be384cd736d9f08f2d8e3abe580d",
-      "run_id": "41862674611",
-      "architecture": "arm64",
-      "os_version": "27.0.1",
-      "sdk_version": "27.0",
-      "xcode_version": "27.1",
-      "xcode_build": "27A9275",
-      "swift_version": "6.4",
-      "swift_target": "arm64-apple-macosx27.0.0",
-      "artifact_id": 13340383194,
-      "artifact_digest_sha256": "9c644f5e1e0fcdbcde18eb35f30c2f9066e4a70cef57d1276e6f03bcd5fcc1c7",
-      "receipt_sha256": "beac90062782fac017d66f57914e362a103f85271043214de711b61f9fac9aef",
-      "full_workflow_success_claimed": false,
-      "scope": "Actual new macOS27 environment only; no retroactive macOS26 qualification."
+    "artifacts": {
+      "environment": {
+        "id": 13351016151,
+        "archive_bytes": 394,
+        "archive_sha256": "97dd724d9269f6ca426c96e5a6b06c7c6690fbc836656140c1e0da225b8664ec"
+      },
+      "native_QA": {
+        "id": 13351795751,
+        "archive_bytes": 7935189,
+        "archive_sha256": "6e59afc1ad9eb2b75b8f6ec57e8b4b2132753703d20fbeba894d8a0e839bf67c"
+      },
+      "full_Swift_diagnostic": {
+        "id": 13350644233,
+        "archive_bytes": 33662,
+        "archive_sha256": "ada8ac35b48c6a36d45bdc2190a31d9b7235338d3fe6804904e5a7d6a7349632"
+      },
+      "scope": "Artifact metadata does not establish a green workflow; native artifact must not be consumed for G under the current gate."
     },
-    "local_full_suites_or_builds_run": false,
+    "commit": "d089d16550d8c2fa56cd2d5ce20726bd3bdff0bf",
+    "run_attempt": 1,
+    "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41883935412",
+    "qualified": false,
     "native_final_case_executed": false,
-    "limit": "Python, the actual environment receipt, bundle/helper, native export, packages and final installation smokes passed. Two unexpected Swift failures block full exact-commit qualification; macOS job/workflow were still in_progress at the last read. Published artifacts and delayed workflow reads do not override test failures.",
-    "wheel_sdist_isolated_installation": "success_both_platforms",
-    "self_contained_bundle_and_parent_eof": "success",
-    "native_development_export": "success"
+    "local_full_suites_or_builds_run": false,
+    "limit": "Latest completed exact-source CI is failed; artifacts and passing Python do not qualify media or G. Physical focal receipts below bind their own worktree fingerprints.",
+    "ci_run_id": 41883935412
   },
   "standard_runner_upgrade_20261104": {
     "status": "actual_macOS27_environment_verified_full_qualification_blocked_by_Swift_failures",
@@ -3640,7 +3746,7 @@
     "full_remote_ci_passed": false
   },
   "native_media_macos27_follow_up_20261104": {
-    "status": "five_regressions_passed_original_media_failures_remain_safe_diagnostics_pending_remote_probe",
+    "status": "canonical_and_completion_accurate_fast_probes_executed_failed_cause_unestablished",
     "failed_checkpoint_commit": "e61c912adb62be384cd736d9f08f2d8e3abe580d",
     "failed_checkpoint_ci_run_id": 41862674611,
     "correction_commit": "e8bb0332cf9d69300d7ae057635a62b0e31a85a0",
@@ -3690,7 +3796,7 @@
       }
     ],
     "cause_of_original_OCR_failure_established": false,
-    "runner_GPU_hypothesis": "Plausible, unproven; the saved log does not identify the underlying Vision device failure.",
+    "runner_GPU_hypothesis": "Unproven; canonical references and physical automatic/CPU failures do not identify a GPU or virtualization cause.",
     "OCR_correction": {
       "source": "native/JarvisDesktop/Sources/DesktopCore/NativeMediaExecutorDecode.swift",
       "policy": "Assign an explicitly available CPU device to every supported Vision stage before execution; reject an empty catalogue or any stage without CPU.",
@@ -3710,7 +3816,7 @@
       ],
       "cause_of_original_video_CancellationError_established": false
     },
-    "tests_or_builds_executed_locally": false,
+    "tests_or_builds_executed_locally": true,
     "new_runtime_validation_claimed": false,
     "safe_diagnostic_follow_up": {
       "first_probe": {
@@ -3721,7 +3827,10 @@
         "failed": 2,
         "privacy_tests_passed": 3,
         "phase_for_both_original_failures": "vision.perform",
-        "sanitized_error": {"domain": "other", "code": 0},
+        "sanitized_error": {
+          "domain": "other",
+          "code": 0
+        },
         "underlying_error_reported": false,
         "artifact_id": 13344898877,
         "archive_bytes": 8280,
@@ -3739,7 +3848,11 @@
         "peak_temporary_bytes": 143302656,
         "test_execution_started": false,
         "failure": "Swift test compilation could not locate XCTest; the installed public framework exists.",
-        "local_environment": {"os": "27.2", "sdk": "27.2", "swift": "6.4.2"},
+        "local_environment": {
+          "os": "27.2",
+          "sdk": "27.2",
+          "swift": "6.4.2"
+        },
         "receipt": "/private/tmp/jarvis-test-resource-501-68a1d7e5af41/jarvis-test-evidence-58pr7drz/receipt.json",
         "receipt_sha256": "59a26524d8a10ff11aa705d2235821c18759a2841dfd35a26c90dda531f28f80",
         "tail_log_sha256": "c260556bdbfcb71fb007cc1a346d0acec007f005599dc90820ae028099e1c157",
@@ -3751,11 +3864,12 @@
       "follow_up_prepared": {
         "error_kind": "Closed classification distinguishes cancellation from Foundation's real missing-Objective-C-error type; no arbitrary type or domain is emitted.",
         "independent_framework_reference": "Two Apple Vision requests use the same synthetic bitmap, recognition settings and direct per-stage CPU assignment; only the public legacy usesCPUOnly flag differs. Modern outcome is recorded without requiring it; legacy must recognize 4826. Original product assertions remain intact.",
-        "reference_runtime_result": "pending",
+        "reference_runtime_result": "Compiled and executed physical focal: 26 tests, 8 failures in 4 methods. Accurate revision3 perform returned objc_missing_error0; callback ran without error or results. Fast revision3 returned Vision8/VNErrorNotImplemented in perform and callback. Both advertised en-US and revisions1/2/3. No fallback, passing recognition or cause claimed.",
         "local_XCTest_resolver": "Resolve and validate the macOS platform before Seatbelt, export SWIFTPM_PLATFORM_PATH_macosx and a derived DEVELOPER_DIR, and supply the actual toolchain root rather than usr. Preserve the official swift-to-swift-frontend alias through canonical path validation.",
-        "sandbox_permissions_or_global_developer_settings_expanded": false,
-        "local_focal_revalidation": "pending",
-        "primary_SwiftPM_reference": "https://github.com/swiftlang/swift-package-manager/blob/swift-6.4.2-RELEASE/Sources/PackageModel/SwiftSDKs/SwiftSDK.swift"
+        "sandbox_permissions_or_global_developer_settings_expanded": true,
+        "local_focal_revalidation": "Media remains failing; 47 native-admission and 56 other guard cases passed in separate local focal selections.",
+        "primary_SwiftPM_reference": "https://github.com/swiftlang/swift-package-manager/blob/swift-6.4.2-RELEASE/Sources/PackageModel/SwiftSDKs/SwiftSDK.swift",
+        "permission_scope": "Explicit local focal opt-in only: lsd.mapdb, videoencoder XPC and private XCTest cache read-extension. No global developer setting, TCC or default/CI permission changed. The ineffective IOSurface grants were removed."
       },
       "workflow": ".github/workflows/media-diagnostic.yml",
       "scope": "Manual remote focal diagnostic only; the main workflow retains every full suite, build and installation smoke.",
@@ -3764,13 +3878,469 @@
       "selection_is_full_suite": false,
       "budget_mib": 6144,
       "deadline_seconds": 600,
-      "payload": "DEBUG and GitHub Actions only; closed phase, whitelisted domain or other, numeric error code, principal and at most two underlying errors, maximum 1024 bytes.",
+      "payload": "DEBUG only: GitHub Actions or exact local native-media admission; closed phases/kinds, whitelisted domains, numeric codes, at most two underlying errors and 1024 bytes; no content, messages, images, arbitrary types or paths.",
       "messages_images_text_paths_or_arbitrary_userInfo_logged": false,
       "functional_assertions_or_main_CI_reduced": false,
-      "qualification_claimed": false
+      "qualification_claimed": false,
+      "canonical_probe_d089": {
+        "run_id": 41884403318,
+        "url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41884403318",
+        "job_id": 126764896889,
+        "status": "completed",
+        "conclusion": "failure",
+        "executed": 23,
+        "assertion_failures": 4,
+        "failed_test_methods": 3,
+        "source_formats": [
+          "cg_image",
+          "png_data"
+        ],
+        "CPU_reference_variants": [
+          "modern",
+          "legacy"
+        ],
+        "all_four_reference_variants_recognized_marker": false,
+        "sanitized_error_kind": "objc_missing_error",
+        "sanitized_code": 0,
+        "underlying_error_reported": false,
+        "artifact_id": 13350931549,
+        "archive_bytes": 8782,
+        "archive_sha256": "648f743acc887d866b322078b91ecb88bc98c17a812e01121d835dc8e57a5664",
+        "log_path": "/private/tmp/jarvis-product-ci-20261104/d089-swift-decoded.log",
+        "log_sha256": "47e53283f4cdb52ce202c060a40549fec4c434bc4b35f7039315d275a58a72e1",
+        "scope": "Manual focal only, not full remote qualification."
+      },
+      "local_preserved_evidence": [
+        {
+          "id": "1j4dy60a",
+          "archive_directory": "/private/tmp/jarvis-product-ci-20261104/local-receipts/1j4dy60a",
+          "archive_status": "four_file_whitelist_preserved",
+          "receipt_sha256": "f85b5564b3f6084c569718311e33ce54c466972a501bd506690669e1010f6f18",
+          "kind": "swift",
+          "selection": "NativeMedia(Executor|Diagnostics)Tests",
+          "source_unchanged": true,
+          "cleanup_status": "confirmed",
+          "result": {
+            "custody_scope": "owned_process_group_only",
+            "elapsed_seconds": 88.908,
+            "exit_code": 1,
+            "interrupted": false,
+            "measurement_mode": "apfs_volume_used",
+            "peak_temporary_bytes": 622350336,
+            "process_group_exited": true,
+            "stop_reason": null
+          },
+          "artifact_hashes": {
+            "receipt.json": "f85b5564b3f6084c569718311e33ce54c466972a501bd506690669e1010f6f18",
+            "tail.log": "f056196c4bfbe2eb92e2a642942d36caae9cd36e15e687b219cd9be6f2bb33b4",
+            "admission.json": "07222a6e95dc972ca6c2a221989bcad1cc56b365d79bf05eafd49d18ebb455b7",
+            "quota.sb": "132f5bb2023312cdd3349dc3b735d038321f31b4550887add0219a08c306237f"
+          },
+          "source_identity": {
+            "head": "d089d16550d8c2fa56cd2d5ce20726bd3bdff0bf",
+            "fingerprint": "adf5140acb6e9bfd9283db851d53c0cd562624950a70fdad463e430a06b680ec",
+            "worktree_sha256": "89e57c83533752145ae41cf8dce992d553bae8f03048124062b1ecf5e1a0e9f2"
+          },
+          "swift_executed": 24,
+          "swift_assertion_failures": 6,
+          "swift_unexpected_failures": 2,
+          "failed_test_methods": 3,
+          "reference_error_kind": "objc_missing_error",
+          "reference_error_code": 0,
+          "reference_recognized_marker": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "product_OCR_error": "decoderFailed",
+          "local_video_fixture_error": {
+            "domain": "AVFoundationErrorDomain",
+            "code": -11834
+          },
+          "runtime_qualification_claimed": false
+        },
+        {
+          "id": "sp4jf2uu",
+          "archive_directory": "/private/tmp/jarvis-product-ci-20261104/local-receipts/sp4jf2uu",
+          "archive_status": "four_file_whitelist_preserved",
+          "receipt_sha256": "f4b61ae4296990c7f9324147972a0d721ee91487e9a8c8567ef447e7ba6565e0",
+          "kind": "python",
+          "selection": "tests/test_test_resource_guard.py",
+          "source_unchanged": true,
+          "cleanup_status": "confirmed",
+          "result": {
+            "custody_scope": "owned_process_group_only",
+            "elapsed_seconds": 1.563,
+            "exit_code": 0,
+            "interrupted": false,
+            "measurement_mode": "apfs_volume_used",
+            "peak_temporary_bytes": 4063232,
+            "process_group_exited": true,
+            "stop_reason": null
+          },
+          "artifact_hashes": {
+            "receipt.json": "f4b61ae4296990c7f9324147972a0d721ee91487e9a8c8567ef447e7ba6565e0",
+            "tail.log": "435d37d7f0202a80358415dd6cf4dad2621ec08b7c70792efb9a8a1e699adf66",
+            "admission.json": "96e1311e8132c4f0a65d4b1993e887c8e8847cfaed9e5f4cbc6513c89019dfb2",
+            "quota.sb": "568223400f4a9530f674cae2c1599e3600a5537de86b6c383ec1fe0a32b43b3d"
+          },
+          "source_identity": {
+            "head": "d089d16550d8c2fa56cd2d5ce20726bd3bdff0bf",
+            "fingerprint": "adf5140acb6e9bfd9283db851d53c0cd562624950a70fdad463e430a06b680ec",
+            "worktree_sha256": "89e57c83533752145ae41cf8dce992d553bae8f03048124062b1ecf5e1a0e9f2"
+          },
+          "pytest_passed": 47,
+          "pytest_deselected": 56,
+          "pytest_seconds": 0.79,
+          "subset": "-k native_media"
+        },
+        {
+          "id": "h4asho24",
+          "archive_directory": "/private/tmp/jarvis-product-ci-20261104/local-receipts/h4asho24",
+          "archive_status": "four_file_whitelist_preserved",
+          "receipt_sha256": "2addfca3e1de962ae34cdf1ad2e2002b6f081922adc223eb9b18b1ffbba3a9e5",
+          "kind": "python",
+          "selection": "tests/test_test_resource_guard.py",
+          "source_unchanged": true,
+          "cleanup_status": "confirmed",
+          "result": {
+            "custody_scope": "owned_process_group_only",
+            "elapsed_seconds": 5.408,
+            "exit_code": 0,
+            "interrupted": false,
+            "measurement_mode": "apfs_volume_used",
+            "peak_temporary_bytes": 5156864,
+            "process_group_exited": true,
+            "stop_reason": null
+          },
+          "artifact_hashes": {
+            "receipt.json": "2addfca3e1de962ae34cdf1ad2e2002b6f081922adc223eb9b18b1ffbba3a9e5",
+            "tail.log": "7861bae2fb717d55125c532c411b9a4a4875ce1742a10f5b0d4b87634b98c68b",
+            "admission.json": "346e940ca7792989d8d86b4da417ff0f5c94c79b1907a12e446c44f6ffa32067",
+            "quota.sb": "01a63ea44c3db5d3fbd6d899453011aa1896d37ee6016b73d22872c5c322451c"
+          },
+          "source_identity": {
+            "head": "d089d16550d8c2fa56cd2d5ce20726bd3bdff0bf",
+            "fingerprint": "adf5140acb6e9bfd9283db851d53c0cd562624950a70fdad463e430a06b680ec",
+            "worktree_sha256": "89e57c83533752145ae41cf8dce992d553bae8f03048124062b1ecf5e1a0e9f2"
+          },
+          "pytest_passed": 56,
+          "pytest_deselected": 47,
+          "pytest_seconds": 4.6,
+          "subset": "-k not native_media"
+        },
+        {
+          "id": "1zya08f2",
+          "archive_directory": "/private/tmp/jarvis-product-ci-20261104/local-receipts/1zya08f2",
+          "archive_status": "four_file_whitelist_preserved",
+          "receipt_sha256": "4d11210761046f81d91ea66ac6dfe3eb9450406cd04fbe15c6c196782e137888",
+          "kind": "python",
+          "selection": "tests/test_test_resource_guard.py -k native_media",
+          "source_unchanged": true,
+          "cleanup_status": "confirmed",
+          "result": {
+            "custody_scope": "owned_process_group_only",
+            "elapsed_seconds": 0.848,
+            "exit_code": 4,
+            "interrupted": false,
+            "measurement_mode": "apfs_volume_used",
+            "peak_temporary_bytes": 3383296,
+            "process_group_exited": true,
+            "stop_reason": null
+          },
+          "artifact_hashes": {
+            "receipt.json": "4d11210761046f81d91ea66ac6dfe3eb9450406cd04fbe15c6c196782e137888",
+            "tail.log": "cfc809ec144e7dae705091e0753eee92ca067d13c498420e440585a789a821be",
+            "admission.json": "20dcbd300cc88858f121ef89df61595b430f3d0ddb34c79344af702b1596426a",
+            "quota.sb": "7094fb0e26c00922186854621cae1371fc34c1ce9ccaec68447b3dc710406924"
+          },
+          "source_identity": {
+            "head": "d089d16550d8c2fa56cd2d5ce20726bd3bdff0bf",
+            "fingerprint": "adf5140acb6e9bfd9283db851d53c0cd562624950a70fdad463e430a06b680ec",
+            "worktree_sha256": "89e57c83533752145ae41cf8dce992d553bae8f03048124062b1ecf5e1a0e9f2"
+          },
+          "tests_started": false,
+          "rejection": "selection included -k as an admitted path rather than a pytest option"
+        },
+        {
+          "id": "4qm2nwe_",
+          "archive_directory": "/private/tmp/jarvis-product-ci-20261104/local-receipts/4qm2nwe_",
+          "archive_status": "four_file_whitelist_preserved",
+          "receipt_sha256": "1f567c273496d30016976458709141a09f89d7d28fc3952c81d4020474cd1b25",
+          "kind": "swift",
+          "selection": "NativeMedia(Executor|Diagnostics)Tests",
+          "source_unchanged": true,
+          "cleanup_status": "confirmed",
+          "result": {
+            "custody_scope": "owned_process_group_only",
+            "elapsed_seconds": 88.504,
+            "exit_code": 1,
+            "interrupted": false,
+            "measurement_mode": "apfs_volume_used",
+            "peak_temporary_bytes": 616431616,
+            "process_group_exited": true,
+            "stop_reason": null
+          },
+          "artifact_hashes": {
+            "receipt.json": "1f567c273496d30016976458709141a09f89d7d28fc3952c81d4020474cd1b25",
+            "tail.log": "db98d3b38a6ec1b5c6354e0b86ed329ae1aa6c79332c2e7203d89b6d7b08c7b7",
+            "admission.json": "f9eaabeae549ed0c38a98d361ecd6524ffb2d690019c3da15b7779014503d105",
+            "quota.sb": "9efde7c257cc587dcbe912328b370cbaf4c4c09b907361620b45e98744d1ba38"
+          },
+          "source_identity": {
+            "head": "d089d16550d8c2fa56cd2d5ce20726bd3bdff0bf",
+            "fingerprint": "46e395a12ee2f4b06942449926eb033a23412dbf369142588ede5ca19eeb37e5",
+            "worktree_sha256": "3b0d6af4e9deade0dbd3521f24071dbc5e3517ef00ee41403a7ad87db08f45db"
+          },
+          "swift_executed": 24,
+          "swift_assertion_failures": 6,
+          "failed_test_methods": 3,
+          "reference_error_kind": "objc_missing_error",
+          "reference_error_code": 0,
+          "reference_recognized_marker": [
+            false,
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "product_OCR_error": "decoderFailed",
+          "local_video_fixture_error": {
+            "domain": "AVFoundationErrorDomain",
+            "code": -11834
+          },
+          "scope": "Narrow IOSurface IOKit hypothesis only; the same six reference failures and video encoder error persisted.",
+          "causality_established": false,
+          "runtime_qualification_claimed": false,
+          "follow_up": "Parent reports the ineffective IOKit concessions are being removed; do not describe them as a validated dependency."
+        },
+        {
+          "id": "5erz26uz",
+          "archive_directory": "/private/tmp/jarvis-product-ci-20261104/local-receipts/5erz26uz",
+          "archive_status": "four_file_whitelist_preserved",
+          "receipt_sha256": "19b9adb071b82dce6f322de30c4100c928c40aefeb43e78f75c6da79ea63f4a6",
+          "kind": "python",
+          "selection": "tests/test_test_resource_guard.py",
+          "source_unchanged": true,
+          "cleanup_status": "confirmed",
+          "result": {
+            "custody_scope": "owned_process_group_only",
+            "elapsed_seconds": 1.609,
+            "exit_code": 0,
+            "interrupted": false,
+            "measurement_mode": "apfs_volume_used",
+            "peak_temporary_bytes": 4030464,
+            "process_group_exited": true,
+            "stop_reason": null
+          },
+          "artifact_hashes": {
+            "receipt.json": "19b9adb071b82dce6f322de30c4100c928c40aefeb43e78f75c6da79ea63f4a6",
+            "tail.log": "435d37d7f0202a80358415dd6cf4dad2621ec08b7c70792efb9a8a1e699adf66",
+            "admission.json": "6f3d869a23c8c3eb024cb3adf0cb852bb1d8497ee13d3048e8a2078fe9d7db4c",
+            "quota.sb": "20c82c684bb2ec016fe8e2a96dfd15493a6b3d516f2e8110f5dfae05d3c49d01"
+          },
+          "source_identity": {
+            "head": "d089d16550d8c2fa56cd2d5ce20726bd3bdff0bf",
+            "fingerprint": "adf5140acb6e9bfd9283db851d53c0cd562624950a70fdad463e430a06b680ec",
+            "worktree_sha256": "89e57c83533752145ae41cf8dce992d553bae8f03048124062b1ecf5e1a0e9f2"
+          },
+          "pytest_passed": 47,
+          "pytest_deselected": 56,
+          "subset": "-k native_media",
+          "scope": "Revalidation after removing ineffective IOKit concessions; final completion/fast diagnostic changes are not qualified by this receipt."
+        },
+        {
+          "id": "defi_ebn",
+          "archive_directory": "/private/tmp/jarvis-product-ci-20261104/local-receipts/defi_ebn",
+          "archive_status": "four_file_whitelist_preserved",
+          "receipt_sha256": "10142e643c798da31584792fa45103a91133309b7c2cab8e6062ecadf93322a5",
+          "kind": "swift",
+          "selection": "NativeMedia(Executor|Diagnostics)Tests",
+          "source_unchanged": true,
+          "cleanup_status": "confirmed",
+          "result": {
+            "custody_scope": "owned_process_group_only",
+            "elapsed_seconds": 87.833,
+            "exit_code": 1,
+            "interrupted": false,
+            "measurement_mode": "apfs_volume_used",
+            "peak_temporary_bytes": 621158400,
+            "process_group_exited": true,
+            "stop_reason": null
+          },
+          "source_identity": {
+            "head": "d089d16550d8c2fa56cd2d5ce20726bd3bdff0bf",
+            "fingerprint": "5f2ae5b55023b3b6faadefc6f0d6c585e91cbaaf50b239e835bcfd8c0df4a7d4",
+            "worktree_sha256": "34fbe9d4d748c1b1965fb4970717cc0bb85d0a868ebba1eaff05424b3e5b43fd"
+          },
+          "artifact_hashes": {
+            "receipt.json": "10142e643c798da31584792fa45103a91133309b7c2cab8e6062ecadf93322a5",
+            "tail.log": "c1cb845f85515e623707c660778d27497042ea2a90ac407e9bd99e381ca3933c",
+            "admission.json": "b25e9f5d7e88b58141fd385bfb6019622c81ee074856d882c42f7f00af9cf402",
+            "quota.sb": "3ada3947208e5bf3cfe4a1440c4673eaba03309f2fe82caa5e60f41d67b53036"
+          },
+          "swift_executed": 26,
+          "swift_assertion_failures": 8,
+          "swift_unexpected_failures": 2,
+          "failed_test_methods": 4,
+          "test_seconds": 26.133,
+          "accurate": {
+            "requested_revision": 3,
+            "default_revision": 3,
+            "current_revision": 3,
+            "supported_revisions": [
+              1,
+              2,
+              3
+            ],
+            "language_query_succeeded": true,
+            "locale_supported": true,
+            "perform_succeeded": false,
+            "perform_error_kind": "objc_missing_error",
+            "perform_error_code": 0,
+            "callback_called": true,
+            "callback_had_error": false,
+            "callback_has_results": false,
+            "recognized_marker": false
+          },
+          "fast": {
+            "requested_revision": 3,
+            "default_revision": 3,
+            "current_revision": 3,
+            "supported_revisions": [
+              1,
+              2,
+              3
+            ],
+            "language_query_succeeded": true,
+            "locale_supported": true,
+            "perform_succeeded": false,
+            "perform_error_domain": "com.apple.Vision",
+            "perform_error_code": 8,
+            "callback_called": true,
+            "callback_had_error": true,
+            "callback_error_domain": "com.apple.Vision",
+            "callback_error_code": 8,
+            "callback_has_results": false,
+            "recognized_marker": false
+          },
+          "causality_established": false,
+          "runtime_qualification_claimed": false,
+          "scope": "New completion-error and accurate/fast references compiled and executed against this worktree, but failed. Fast is not a fallback or demonstrated solution; the product recognition policy was not relaxed."
+        }
+      ],
+      "historical_tool_observations_without_current_original_archive": [
+        {
+          "id": "bk3xmch4",
+          "original_receipt_path": "/private/tmp/jarvis-test-resource-501-68a1d7e5af41/jarvis-test-evidence-bk3xmch4/receipt.json",
+          "availability": "not_available_before_archival",
+          "receipt_sha256_from_parent_tool_history": "e792a0d726aabc709bb20d96c9382153aa2fc30a49d733b16adb1852417f6859",
+          "source_fingerprint_from_parent_tool_history": "9e65fceb067bebdd047ebb069ef7598a07df2b1b89f035bbd7c52d0be7cd6847",
+          "head": "d089d16550d8c2fa56cd2d5ce20726bd3bdff0bf",
+          "executed": 24,
+          "assertion_failures": 4,
+          "elapsed_seconds": 84.165,
+          "peak_bytes": 624287744,
+          "process_group_exited": true,
+          "cleanup_status": "confirmed",
+          "source_unchanged": true,
+          "limit": "Tool-history observation retained; no claim that original receipt or log can currently be reread."
+        },
+        {
+          "id": "iivyc0c5",
+          "availability": "not_available_before_archival",
+          "exit_code": 4,
+          "tests_started": false,
+          "rejection": "The full guard-test file collected more than 100 cases; admission rejected before fixtures.",
+          "elapsed_seconds": 1.374,
+          "peak_bytes": 3383296,
+          "cleanup_status": "confirmed",
+          "source_unchanged": true,
+          "provenance": "Parent tool history, no current original artifact archive."
+        }
+      ],
+      "local_guard_positive_total": {
+        "passed": 103,
+        "selections": [
+          {
+            "id": "5erz26uz",
+            "passed": 47
+          },
+          {
+            "id": "h4asho24",
+            "passed": 56
+          }
+        ],
+        "full_suite": false,
+        "qualifies_new_completion_fast_probe": false
+      },
+      "ineffective_IOSurface_experiment": {
+        "id": "4qm2nwe_",
+        "causality_established": false,
+        "same_failures_persisted": true,
+        "IOKit_grants_retained": false
+      },
+      "new_level_probe": {
+        "id": "defi_ebn",
+        "swift_executed": 26,
+        "swift_assertion_failures": 8,
+        "failed_test_methods": 4,
+        "accurate": {
+          "requested_revision": 3,
+          "default_revision": 3,
+          "current_revision": 3,
+          "supported_revisions": [
+            1,
+            2,
+            3
+          ],
+          "language_query_succeeded": true,
+          "locale_supported": true,
+          "perform_succeeded": false,
+          "perform_error_kind": "objc_missing_error",
+          "perform_error_code": 0,
+          "callback_called": true,
+          "callback_had_error": false,
+          "callback_has_results": false,
+          "recognized_marker": false
+        },
+        "fast": {
+          "requested_revision": 3,
+          "default_revision": 3,
+          "current_revision": 3,
+          "supported_revisions": [
+            1,
+            2,
+            3
+          ],
+          "language_query_succeeded": true,
+          "locale_supported": true,
+          "perform_succeeded": false,
+          "perform_error_domain": "com.apple.Vision",
+          "perform_error_code": 8,
+          "callback_called": true,
+          "callback_had_error": true,
+          "callback_error_domain": "com.apple.Vision",
+          "callback_error_code": 8,
+          "callback_has_results": false,
+          "recognized_marker": false
+        },
+        "causality_established": false,
+        "runtime_qualification_claimed": false
+      }
     },
     "native_G_still_NOEXEC": true,
-    "scope_limit": "Prepared source and regression cases are not passing test evidence. Preserve D/E/F, macOS26 capacity failures, broad phase A open and phase B deferred."
+    "scope_limit": "Physical new probes compiled and executed but failed; the accurate/fast differences do not establish a root cause or a working fallback. Preserve D/E/F, prior CI failures and G NOEXEC; H is a separately prepared diagnostic with no execution or qualification. Phase A remains open and B deferred.",
+    "local_execution_scope": "Owner-authorized supervised focal tests only, including compilation for that selection. No complete local suite; each receipt binds its worktree, not a future source tree.",
+    "latest_completed_main_ci": {
+      "commit": "d089d16550d8c2fa56cd2d5ce20726bd3bdff0bf",
+      "ci_run_id": 41883935412,
+      "full_remote_ci_passed": false
+    }
   },
   "remote_ci_read_discrepancy_20261104": {
     "ci_run_id": 41862674611,
