@@ -1,13 +1,15 @@
 # Producto, sesiones y coordinación avanzadas
 
 Continuación solicitada el 30-10-2026. La implementación está conectada y la
-[CI completa de `1b0a7ead`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41123446861)
-aprobó Ubuntu, macOS, Swift, paquetes, bundle/helper y smoke de cierre por EOF.
+[CI completa de `2c8259de`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41842491175)
+aprobó 3980 casos Python en Ubuntu (47 omitidos), 4027 en macOS y 710 Swift
+(una omisión, cero fallos), paquetes, bundle/helper, exportador nativo y smoke
+de cierre por EOF. Los 25 casos nuevos del exportador pasaron en ambas plataformas.
 Los recorridos finitos de clientes, Git, GitHub, preguntas, carpetas y paneles
 conservan evidencia separada en el
 [registro de cualificación](PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json).
 
-La nueva QA propia de ese artefacto acredita la navegación por un clic físico
+La QA de octubre del artefacto `1b0a7ead` acredita la navegación por un clic físico
 OS confirmado por el dueño. Con B seleccionado, el clic volvió a A: la interfaz
 mostró «Prueba de aviso terminada», el control de avisos en 1 y «Chat abierto».
 El mismo aviso pasó de `delivered` revisión 3 a `resumed` revisión 4. Hubo un
@@ -17,8 +19,11 @@ herramientas; B quedó vacío, con avisos desactivados y revisión 0.
 El intento sigue parcial respecto de su plan de seis etapas: un índice AX
 inválido y la respuesta rápida impidieron observar B mientras A seguía activo.
 La navegación OS está cualificada en ese caso; el recorrido UI completo no.
-Queda un caso independiente con pregunta sintética para sostener A activo y
-observar B, sin reutilizar el run ni repetir sus efectos. El bloque no se
+El nuevo caso independiente E tampoco alcanzó esa etapa: su único run real
+terminó sin llamar a la pregunta canónica ni a otra herramienta. Se observaron
+las preferencias A/B antes y después. F observó B mientras A seguía activo,
+pero se detuvo por el sublímite del proveedor antes de completar el recorrido.
+Se conserva parcial y no se repitió su run. El bloque no se
 presenta como completo: la matriz mantiene 62 familias parciales, 18 sin
 implementar y ninguna familia amplia completa. La fase A sigue abierta y B
 aplazada; la publicación real de GitHub continúa sin ejercitarse.
@@ -61,8 +66,9 @@ Ese extractor no permite evaluar la UI y se retira de las pruebas activas; su
 código y ambos fallos permanecen en Git y en el registro. Se sustituye por los
 contratos deterministas de inputs/Store, sin atribuirles cobertura de render.
 La UI A → B → B tras completar A → A y el texto de aceptación siguen siendo
-requisitos obligatorios del recorrido externo con CUA. El clic OS ya está
-acreditado en la QA nueva; aún falta la observación de B durante A. Ni un
+requisitos obligatorios del recorrido externo con CUA. E observó los valores
+de A y B antes y después, pero no B durante A. El clic OS ya está
+acreditado en la QA de octubre; aún falta esa observación durante el run. Ni un
 snapshot RPC ni una representación AX sintética sustituyen esa evidencia.
 No se ejecutaron suites ni compilaciones locales.
 CI conservará además el log ya acotado de Swift inmediatamente después de esa
@@ -93,18 +99,64 @@ producido desde el bundle ya compilado en CI. Exporta el ejecutable, el
 lanzador, Info.plist y su sello nuevo; conserva las secciones de código y los
 bytes del lanzador. Excluye runtime, configuración, perfiles y recursos ajenos.
 Tiene manifiesto propio, límites de 32 MiB comprimidos y 128 MiB expandidos y
-retención de 14 días. El exportador y sus contratos deben pasar la CI exacta
-antes de usarlo; todavía no acreditan el recorrido pendiente.
+retención de 14 días. La CI exacta `2c8259de` aprobó el exportador y sus 25
+casos nuevos; generó el artefacto nativo de 7.698.129 bytes que usaron D y E.
+Pasaron también las suites completas, el bundle autocontenido y sus paquetes.
+Estos resultados remotos no acreditan el recorrido UI pendiente.
 
-La QA de desarrollo usará Python 3.11.15, fuentes seleccionadas y dependencias
+La QA de desarrollo usó Python 3.11.15, fuentes seleccionadas y dependencias
 locales copiadas a una cuota nueva, junto con Codex oficial 0.163.0. Falta
 `soundfile` en ese entorno local y no se ejercitará audio: su importación es
 diferida al decodificar Ogg. Esta selección verifica preguntas y aislamiento
 de la interfaz; no cualifica distribución autocontenida, códecs ni todas las
-capacidades. El proveedor será nuevo y privado; su acceso oficial lo completa
-el dueño si la app lo pide.
+capacidades. Cada proveedor fue nuevo y privado; el dueño completó el acceso
+oficial de E.
+
+La preparación D terminó en 45,472 s, pero el observador falló al confirmar
+metadatos de proceso antes de admitir el caso. La recuperación posterior por
+GUI cerró sus tres identidades conocidas y desmontó la cuota normalmente, sin
+señales; no hubo login, modelo ni herramientas. Se conserva el cierre original
+incierto por separado: el lock libre observado después de salir no tenía un pin
+previo y no demuestra el cierre del mismo lease. Su
+[snapshot saneado](qa/product-background-native-20261104/SNAPSHOT.json) conserva
+las fuentes y ambos recibos, sin perfiles ni credenciales.
+
+E corrigió únicamente la observación acotada de procesos y llegó al caso real.
+CUA observó A con avisos habilitados/silenciados (1/1), B vacío y desactivado
+(0/0), B todavía igual tras terminar A y A de nuevo en 1/1. El único run de
+Codex terminó con resultado conocido y limpieza confirmada, pero devolvió
+«Prueba de fondo terminada.» sin ninguna llamada de herramienta. No creó la
+pregunta canónica: el probe de espera falló sus condiciones y no se intentó
+responder ni repetir el run. La causa de la omisión sigue sin establecerse.
+
+E salió por GUI a los 330,088 s: doce identidades conocidas ausentes, el mismo
+lease libre y desmontaje normal al primer intento, sin señales ni fallos de
+recursos. El pico de la cuota fue 561.090.560 bytes dentro de 2 GiB; el proveedor
+alcanzó 106.471.424 bytes de su límite muestreado de 128 MiB. Se conservaron las
+imágenes y los originales. El
+[snapshot de E](qa/product-background-native-20261104-e/SNAPSHOT.json) separa
+estas comprobaciones aprobadas del caso funcional incompleto. La observación
+de B mientras A espera sigue pendiente; un cierre normal no la sustituye.
 
 ## Alcance de esta entrega
+
+El caso F añadió una observación real de B vacío y desactivado mientras A seguía
+«En curso», emparejada con un recibo firmado del mismo run `running`. Sigue
+parcial: el proveedor superó su sublímite de 128 MiB antes del estado final; el
+supervisor detuvo la app y se confirmó después la ausencia de sus cuatro
+identidades, el mismo lease libre y el desmontaje normal. No se amplió el límite
+ni se repitió la consulta. La [evidencia F](qa/product-background-native-20261104-f/SNAPSHOT.json)
+conserva esa parada, sin presentarla como cierre GUI normal.
+
+Los tamaños, sin leer contenidos, identificaron 170.102.784 bytes en el proveedor:
+un catálogo remoto de plugins de 58.605.568 bytes y un repositorio temporal entre
+sus mayores archivos. La configuración `apps=false` no desactiva la sincronización
+de plugins del cliente oficial 0.163.0. Se añaden `features.plugins=false` y
+`features.remote_plugin=false`, ambos necesarios para impedir también la
+alternativa Git. Los peers de autenticación/protocolo y herramientas dinámicas
+rechazan el arranque si falta cualquiera de esos bloqueos. Esta corrección debe
+aprobar la CI exacta y un caso nativo nuevo antes de declararse verificada. No
+explica por sí sola que E terminara sin invocar la pregunta.
 
 - Proyectos, repositorios y worktrees propios: selección explícita, estado/diff,
   historial y efectos Git revisados, con conservación de trabajo y recibos.

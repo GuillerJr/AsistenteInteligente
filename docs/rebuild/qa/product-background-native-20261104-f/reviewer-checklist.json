@@ -1,0 +1,71 @@
+{
+  "schema": "jarvis.native-background-F-review-checklist/1",
+  "status": "frozen_NOEXEC_pending_root_review",
+  "harness_root": "/private/tmp/jarvis-product-background-native-20261104-f",
+  "scripts_sha256": {
+    "common.py": "6d9517bc6b6cb52c42cf83bebcb2d9e4d35aa623c5b3b33ed3ee783f97c77120",
+    "prepare.py": "5d60f6a6da5d68539f3b379a8fdbf341aa8883a217859a79a28acde869f9a89c",
+    "supervise.py": "10912abfa0df86cf9ce57afda1b05a6d1fb0fe277264a3c3964ea1a13275643d",
+    "probe.py": "12833693f414c0cd926b6a80441c93b476b4ca6bff90903d3b05ab8308f49f8a"
+  },
+  "CI_gate": {
+    "source_commit": "2c8259de8112aa5f1487814a5c5c35b3931e5c43",
+    "run_id": 41842491175,
+    "run_attempt": 1,
+    "job_ids": {
+      "macos": 126617417127,
+      "ubuntu": 126617416540
+    },
+    "artifact_id": 13329917886,
+    "artifact_zip_sha256": "3a7dd21a3a92210aa602c72039a0378460ba98a0a9c6168e12762efc266a6f16",
+    "artifact_name": "jarvis-native-qa-2c8259de8112aa5f1487814a5c5c35b3931e5c43"
+  },
+  "source_pins": {
+    "script/export_native_qa.py": "94ca17f738027b4258d94e1a19916dd15b38f2b196ad2ceea6053aeaf2982fa2",
+    "script/test_resource_guard.py": "472712a42d0f2c68bec33c19ab7a9443aff6fbd4a0898dd81658a481a92d6273",
+    "src/jarvis_core/product_interactions.py": "bc586b9b795390ef2f3f9702eb6058c47bdb5f84ed0bd42853c2d898f5e6450a",
+    "src/jarvis_core/product_tools.py": "bd0e0fbc73d44eeec116c44163b7593d0084c058a1ebf196167c8d0802de7864",
+    "native/JarvisDesktop/Sources/QALaunchSupport/QALaunchAdmission.swift": "66436f578155fd3b5c7ca1f403f61ff8e0796024e49798d11bff2ccb1e31dc52",
+    "native/JarvisDesktop/Sources/QALaunchSupport/QALaunchCoordinator.swift": "14523fe581fb63727910ce9cde344829f70d2abc646afb440dfd443e819aa585",
+    "native/JarvisDesktop/Sources/JarvisQALauncher/QALaunchMain.swift": "8c83ec185162548d42f48fb95033b253fc13446f81fcb7e0f033f59acceb6db0",
+    "native/JarvisDesktop/Sources/DesktopCore/ServiceLaunchPlan.swift": "dcd74bcbce782bea922d5e7969f94369cc2beb5fc31aab661ac6909da292aa24"
+  },
+  "resource_contract": {
+    "physical_APFS_capacity_mib": 2048,
+    "preparation_seconds": 300,
+    "native_active_seconds": 810,
+    "cleanup_reserve_seconds": 90,
+    "native_total_seconds": 900,
+    "Data_free_floor_GiB": 25,
+    "unaccounted_Data_drop_GiB": 1,
+    "provider_sampled_subbudget_mib": 128,
+    "provider_metadata_reuse_interval_seconds": 1,
+    "known_process_limit": 128,
+    "native_archive_compressed_mib": 32,
+    "native_archive_uncompressed_mib": 128,
+    "source_copies_mib": 32,
+    "dependency_copies_mib": 256,
+    "Codex_copy_single_file_mib": 512,
+    "copy_manifest_maximum_mib": 4,
+    "probe_total_seconds": 40,
+    "probe_input_bytes": 262144,
+    "receipt_output_bytes": 65536,
+    "manifest_is_not_receipt": true
+  },
+  "gates": [
+    "No import starts processes or performs mount/network/UI/auth reads.",
+    "E prepared/closed/active JSON pins fixed. E known12 exact identities absent before remount and afterward.",
+    "Image single private regular inode and mountpoint underlying inode fixed; record intent before mode700 and one attach. No retry/force/deletion.",
+    "Prior lease same inode3334 remains free; only lock metadata/flock, no old profile database/history read.",
+    "Mounted dev is observed anew; F manifest rebinds only device and validates every public byte/hash and original inode/size/time/mode. E files stay untouched.",
+    "Provider previously synthetic authenticated, baseline106471424; absolute128MiB; no auth file contents read/copied by harness.",
+    "Fresh Fstate/HOME/TMP must not exist. No builds, downloads, dependency copies or resign.",
+    "One real model turn, no tools/questions/answers. Exact prompt1000numbers is model instruction, not enforced allowlist. No automatic retry if short/completed before during oracle.",
+    "A prefs2/Bprefs0; paired true native Bempty during Arunning plus read-only RPC. Bempty aftercomplete then A shows own exchange. No fixture or RPC replaces UI.",
+    "Normal GUI quit exact admitted app; all known identities absent + same Flease free before normal detach<=2. No force/deletion; original image remains.",
+    "Preparation300s and active810+cleanup90 fixed for distinct F case; no E deadline extension.",
+    "Development channel only; missing soundfile means no media/runtime/full distribution claim."
+  ],
+  "prior_E_question_gate_remains_failed": true,
+  "product_source_modified": false
+}

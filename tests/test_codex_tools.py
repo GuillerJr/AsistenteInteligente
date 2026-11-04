@@ -34,6 +34,12 @@ PEER = r'''
 import json, os, sys, time
 from pathlib import Path
 
+# Dynamic tools must remain usable with every implicit plugin surface disabled.
+settings = dict(sys.argv[index + 1].split('=', 1)
+                for index, argument in enumerate(sys.argv) if argument == '-c')
+assert all(settings.get(key) == 'false' for key in (
+    'features.apps', 'features.plugins', 'features.remote_plugin',
+))
 home = Path(os.environ['HOME'])
 log = home / 'synthetic-wire.jsonl'
 threads = 0

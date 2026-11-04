@@ -1,0 +1,138 @@
+{
+  "schema": "jarvis.native-QA-sanitized-evidence-snapshot/1",
+  "source_root": "/private/tmp/jarvis-product-background-native-20261104-e",
+  "source_commit": "2c8259de8112aa5f1487814a5c5c35b3931e5c43",
+  "files": [
+    {
+      "path": "common.py",
+      "bytes": 24524,
+      "sha256": "eda610cdad6d1785f8085dbf664c52a6612c96ff75c17156d7f6100a3e258362"
+    },
+    {
+      "path": "prepare.py",
+      "bytes": 24935,
+      "sha256": "203d78649bdcf67d3a44ad521e1e9737f9f51013d08effb38d29419ebfa8090c"
+    },
+    {
+      "path": "supervise.py",
+      "bytes": 13713,
+      "sha256": "10912abfa0df86cf9ce57afda1b05a6d1fb0fe277264a3c3964ea1a13275643d"
+    },
+    {
+      "path": "probe.py",
+      "bytes": 24688,
+      "sha256": "efff8206c2dc5ed94f6b68e77daf39737c3497eeca8d4326301b1a2d8891b87b"
+    },
+    {
+      "path": "admission.json",
+      "bytes": 9809,
+      "sha256": "ee992646c046698205b8b8215d4368f1440c329a3fc6cb753ff23123ce671185"
+    },
+    {
+      "path": "reviewer-checklist.json",
+      "bytes": 11621,
+      "sha256": "58e220e2d366a43264f6af53098ceaf7929269384a995ddd1941ed1d1a57e9dc"
+    },
+    {
+      "path": "RUNBOOK_NOEXEC.md",
+      "bytes": 9908,
+      "sha256": "e204bf9133c15161dcd8e17b35df289ab453907e4720af5cde2e6b836fa7a5dc"
+    },
+    {
+      "path": "prior-source-pins.json",
+      "bytes": 764,
+      "sha256": "2c22ef5bd2acde1659209766f63ab66acf332fe208d09dd096fa5bbcc06ebe6c"
+    },
+    {
+      "path": "root-review.json",
+      "bytes": 1006,
+      "sha256": "58f34c98ede358d66f59de9703f874d261876f56c44e1f9348e6419b431db495"
+    },
+    {
+      "path": "preparation-intent.json",
+      "bytes": 609,
+      "sha256": "d52166205c588757f3c1d70767d2d9e1f2beeac4a33d5b5f4d8f5488357f211c"
+    },
+    {
+      "path": "volume-intent.json",
+      "bytes": 224,
+      "sha256": "265d8a139819f41158da7d372dc66aef08e64abbae2c820134d3070d81eae68e"
+    },
+    {
+      "path": "volume-mounted.json",
+      "bytes": 186,
+      "sha256": "f023a8e7655bf8579fa00ddd040edea6579ae48c00fc5fa832ff701bc25bc7b6"
+    },
+    {
+      "path": "prepared.json",
+      "bytes": 5010,
+      "sha256": "2ee2419813d866116202dde4e96a8246aadf1dc83ae5be44e25a4f357f9fb599"
+    },
+    {
+      "path": "launch-request.json",
+      "bytes": 771,
+      "sha256": "387f9cea660856bad5cadcf74eb56b16262d0d2a3d8d4c3452bb426da56b4e74"
+    },
+    {
+      "path": "native-intent.json",
+      "bytes": 274,
+      "sha256": "770a7fc625d3684743d42bf547d527c5d559fecda526e234b42e717880dafd7f"
+    },
+    {
+      "path": "launch-receipt.json",
+      "bytes": 1440,
+      "sha256": "959a8fce8f47611197eebe8856393fcb06b3fc95cf039eafd52472f73ac37708"
+    },
+    {
+      "path": "active.json",
+      "bytes": 576,
+      "sha256": "054923a82b1129529345011a0ffedb71031132018114965007934fb7e68a2713"
+    },
+    {
+      "path": "inventory-a.json",
+      "bytes": 810,
+      "sha256": "98457d05a4829a61f60099186f2301cf701b287f4448d616f90bdbee3ab8fac5"
+    },
+    {
+      "path": "inventory-both.json",
+      "bytes": 888,
+      "sha256": "9fed3fe8572ff2d67c2451490be4a6a7d7cbe671b40d9eaf8baef3531aab9239"
+    },
+    {
+      "path": "before.json",
+      "bytes": 1821,
+      "sha256": "14f3b62b9350c0cc244998ff8ca3ca8f728d3db28082d4d6ba6a18966972bb49"
+    },
+    {
+      "path": "inventory-run.json",
+      "bytes": 972,
+      "sha256": "e54efc117edf1eff5b88c14909035085c3d03354c3998831b14b39fe7d5c2795"
+    },
+    {
+      "path": "waiting.json",
+      "bytes": 2643,
+      "sha256": "4255d990a627777f75f1fc97bafa432b8bd5aef731cb6bc823ddd9c6a4731f5c"
+    },
+    {
+      "path": "ui-observations.json",
+      "bytes": 949,
+      "sha256": "3a09ccabad222ccab08c1b37f993582b0c9fdc0ae916701f0a714f3991b19357"
+    },
+    {
+      "path": "quit-intent.json",
+      "bytes": 517,
+      "sha256": "4e8bf1eeb0ae43d1f3f5c93e06b8e88d39b7190e399400de651fc43741f2466d"
+    },
+    {
+      "path": "closed.json",
+      "bytes": 5035,
+      "sha256": "a52b472ad082c957ec45132fc3ec344f55e32d6b9f22efa39d5592bbc449d648"
+    }
+  ],
+  "allowlist_only": true,
+  "profiles_provider_keys_or_auth_exported": false,
+  "case_passed": false,
+  "reason": "Single real model run completed without canonical question or any tool call; B during pending A not observed; no model or effect replay",
+  "GUI_preferences_A_and_B_observed": true,
+  "normal_close_verified_separately": true
+}

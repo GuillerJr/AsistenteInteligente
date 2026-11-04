@@ -11,9 +11,10 @@ El dueño aplazó expresamente la app de iPhone; ver [decisiones](rebuild/PHASE_
 El [bloque de producto y sesiones avanzadas](rebuild/PHASE_A_PRODUCT_COORDINATION.md)
 ya implementa proyectos/GitHub, preguntas/progreso/presencia/sugerencias, paneles,
 avisos optativos, carpetas por conversación, colaboración/A2A local, presupuestos
-y clientes CLI/TUI/ACP. La [CI completa de `1b0a7ead`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41123446861)
-aprobó 3955 casos Python en Ubuntu (47 omitidos), 4002 en macOS y 710 Swift
-(uno omitido, cero fallos), paquetes, bundle/helper y smoke de cierre por EOF.
+y clientes CLI/TUI/ACP. La [CI completa de `2c8259de`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41842491175)
+aprobó 3980 casos Python en Ubuntu (47 omitidos), 4027 en macOS y 710 Swift
+(uno omitido, cero fallos), 25 casos nuevos del exportador nativo, paquetes,
+bundle/helper y smoke de cierre por EOF.
 La [evidencia por checkpoint](rebuild/PHASE_A_PRODUCT_COORDINATION_QUALIFICATION.json)
 conserva los recorridos de clientes, Git, preguntas y paneles, y los fallos
 históricos `3c35fa0`/`c403ba7`. El uso interno de «Ver chat» en `4686f25` explica
@@ -25,10 +26,11 @@ Hubo un único run de Codex completado, limpieza confirmada y cero herramientas;
 B quedó vacío y con avisos desactivados en revisión 0. El cierre fue normal,
 sin señales, con cuatro identidades conocidas ausentes, el mismo lease libre
 y ambas cuotas desmontadas normalmente al primer intento.
-Queda pendiente la etapa UI de observar B mientras A está activo: un índice AX
+Quedó pendiente en octubre la etapa UI de observar B mientras A está activo: un índice AX
 inválido y la respuesta rápida impidieron cubrirla en este intento parcial de
-seis etapas. Se prepara un caso independiente con pregunta sintética, sin
-reutilizar el run ni repetir sus efectos; los datos RPC no sustituyen la UI.
+seis etapas. El nuevo caso independiente E terminó sin pregunta canónica ni
+otra herramienta: observó A/B antes y después, pero no B mientras A espera.
+No se respondió ni repitió ese run; los datos RPC no sustituyen la UI.
 La navegación OS está cualificada en ese caso, el bloque completo aún no.
 La publicación real de GitHub sigue sin ejercitarse. La matriz mantiene
 **62 familias parciales, 18 sin implementar y ninguna completa**; REA registra
@@ -36,10 +38,20 @@ La publicación real de GitHub sigue sin ejercitarse. La matriz mantiene
 aplazada. Las cifras históricas siguientes pertenecen a sus propios checkpoints.
 
 La reanudación del 4 de noviembre conserva tres preparaciones fallidas y cerradas
-sin abrir la app. Se prepara un artefacto nativo ligero desde CI para terminar
-el único caso UI pendiente con dependencias de desarrollo elegidas; ese paquete
-no es una distribución autocontenida. Su exportador y pruebas esperan la CI
-exacta. El registro conserva las fuentes y recibos saneados en el repositorio.
+sin abrir la app. La CI exacta aprobó después el artefacto nativo ligero de
+7.698.129 bytes. D falló en la admisión de metadatos y cerró por recuperación GUI;
+E observó las preferencias A=1/1 y B=0/0, ejecutó un único run sin herramientas
+y cerró normalmente a los 330,088 s, con doce identidades conocidas ausentes,
+el mismo lease libre y desmontaje normal al primer intento. Su causa de omisión
+de la pregunta sigue sin establecerse. Se conservan ambos snapshots saneados
+en el registro. F observó después B desactivado mientras A seguía activo, con
+CUA e IPC firmado, pero el proveedor superó 128 MiB y el supervisor lo detuvo
+antes del estado final. La cuota se desmontó normalmente por separado y los
+casos siguen parciales. El crecimiento estaba en el catálogo remoto y el
+repositorio temporal de plugins del cliente oficial; se añaden los bloqueos
+`features.plugins=false` y `features.remote_plugin=false`, con regresiones de
+protocolo. Quedan por aprobar su CI exacta y el caso nativo nuevo completo.
+El paquete usa dependencias externas elegidas y no acredita distribución autocontenida.
 
 Alcance elegido cualificado: [distribución autocontenida y servicio residente](rebuild/PHASE_A_DISTRIBUTION_RESIDENT.md).
 La app incorpora Python, dependencias, Codex y MiniLM; el registro de inicio en

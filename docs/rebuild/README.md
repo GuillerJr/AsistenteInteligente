@@ -1,17 +1,21 @@
 # Variante propia inspirada en OpenClaw — base limpia
 
 El incremento de [producto y coordinación avanzada](PHASE_A_PRODUCT_COORDINATION.md)
-está implementado y conectado. La [CI completa de `1b0a7ead`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41123446861)
-aprobó Ubuntu/macOS, 710 Swift (una omisión, cero fallos), paquetes y
-bundle/helper/EOF. La nueva QA de ese artefacto acredita el clic físico OS
+está implementado y conectado. La [CI completa de `2c8259de`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41842491175)
+aprobó 3980 casos Python en Ubuntu (47 omitidos), 4027 en macOS y 710 Swift
+(una omisión, cero fallos), paquetes, bundle/helper/EOF y 25 casos nuevos del
+exportador nativo. La QA de octubre del artefacto `1b0a7ead` acredita el clic físico OS
 confirmado por el dueño y la navegación desde B al chat A; el mismo aviso pasó
 de `delivered` revisión 3 a `resumed` revisión 4. Un único run de Codex completó
 con limpieza confirmada y cero herramientas. El cierre fue normal, sin señales,
 con cuatro identidades conocidas ausentes, el mismo lease libre y ambas cuotas
 desmontadas normalmente al primer intento.
 El intento sigue parcial: un índice AX inválido y la respuesta rápida dejaron
-sin observar B mientras A estaba activo. Ese paso UI obligatorio se resolverá
-en un caso independiente; un snapshot RPC no lo sustituye. Se conservan los
+sin observar B mientras A estaba activo. El nuevo caso independiente E tampoco
+cubrió ese paso: el único run real terminó sin la pregunta canónica ni otra
+herramienta. Se observaron A/B antes y después. F añadió B desactivado mientras
+A seguía activo, tanto en CUA como en IPC firmado, pero el límite del proveedor
+interrumpió su cierre; falta un recorrido completo con cierre normal. Se conservan los
 fallos `3c35fa0`/`c403ba7` y el intento `4686f25`, cuyo «Ver chat» interno no
 acreditaba un clic OS. Clientes, Git, preguntas y paneles conservan sus recorridos
 finitos; la publicación real de GitHub sigue sin ejercitarse. La
@@ -21,10 +25,21 @@ completa**; REA conserva **48 lotes y 186 rutas TS/JS únicas** seleccionadas.
 La fase A sigue abierta y B aplazada.
 
 La reanudación del 4 de noviembre conserva tres preparaciones fallidas y cerradas
-sin abrir la app. Se prepara un artefacto nativo ligero desde CI para terminar
-el único caso UI pendiente con dependencias de desarrollo elegidas; ese paquete
-no es una distribución autocontenida. Su exportador y pruebas esperan la CI
-exacta. El registro conserva las fuentes y recibos saneados en el repositorio.
+sin abrir la app. La CI exacta aprobó después un artefacto nativo ligero de
+7.698.129 bytes, con dependencias externas de desarrollo explícitas. D falló al
+admitir los metadatos del proceso y cerró por recuperación GUI; E llegó al modelo
+real y salió normalmente, con doce identidades conocidas ausentes, el mismo
+lease libre y la cuota desmontada sin fuerza. Sus preferencias observadas no
+cierran el caso incompleto de pregunta/aislamiento durante A. El registro
+conserva los snapshots saneados de [D](qa/product-background-native-20261104/SNAPSHOT.json)
+y [E](qa/product-background-native-20261104-e/SNAPSHOT.json), sin perfiles
+ni credenciales. Este paquete de desarrollo no acredita distribución autocontenida.
+
+F identificó crecimiento del catálogo remoto y del repositorio temporal de plugins
+del cliente oficial. Se añaden `features.plugins=false` y
+`features.remote_plugin=false`, además de `apps=false`, con regresiones en los
+peers de autenticación y herramientas. Esta corrección queda pendiente de su CI
+exacta y de un caso nativo nuevo; no amplía el presupuesto del F detenido.
 
 El incremento de [distribución autocontenida y servicio residente](PHASE_A_DISTRIBUTION_RESIDENT.md)
 incorpora el runtime base completo, verificación del manifiesto cuyo pin está en

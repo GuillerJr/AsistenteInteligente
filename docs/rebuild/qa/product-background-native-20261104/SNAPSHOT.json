@@ -1,0 +1,102 @@
+{
+  "schema": "jarvis.native-QA-sanitized-evidence-snapshot/1",
+  "source_root": "/private/tmp/jarvis-product-background-native-20261104",
+  "source_commit": "2c8259de8112aa5f1487814a5c5c35b3931e5c43",
+  "files": [
+    {
+      "path": "common.py",
+      "bytes": 20795,
+      "sha256": "5526f4ecbe5ba9ca6ac32067268e2f8008e1934598c3d36eebec2400e49e65de"
+    },
+    {
+      "path": "prepare.py",
+      "bytes": 24935,
+      "sha256": "203d78649bdcf67d3a44ad521e1e9737f9f51013d08effb38d29419ebfa8090c"
+    },
+    {
+      "path": "supervise.py",
+      "bytes": 13713,
+      "sha256": "10912abfa0df86cf9ce57afda1b05a6d1fb0fe277264a3c3964ea1a13275643d"
+    },
+    {
+      "path": "probe.py",
+      "bytes": 24688,
+      "sha256": "efff8206c2dc5ed94f6b68e77daf39737c3497eeca8d4326301b1a2d8891b87b"
+    },
+    {
+      "path": "admission.json",
+      "bytes": 7499,
+      "sha256": "2bd7fa248dbe690d3f5b7fc96a68eb2a8026cb6d0c191a066b01490da5d0d341"
+    },
+    {
+      "path": "reviewer-checklist.json",
+      "bytes": 9075,
+      "sha256": "10d2f98d4f86c36f35132efbb9f49c16e667cc874e052c325bcf98dcad8b31eb"
+    },
+    {
+      "path": "RUNBOOK_NOEXEC.md",
+      "bytes": 8537,
+      "sha256": "637b0a8be930edd9a3b71ddf58930c45e67990e81f1dbf7ccc75bdde3de0005a"
+    },
+    {
+      "path": "root-review.json",
+      "bytes": 804,
+      "sha256": "b6273d9552ddfc544d8784b63ef8ddb28b604b9e6e3905c619de631db35a3d59"
+    },
+    {
+      "path": "preparation-intent.json",
+      "bytes": 609,
+      "sha256": "d71224fee6b7cf984fea093142b858b33ecb444000a106cadc786d2784bcd35f"
+    },
+    {
+      "path": "volume-intent.json",
+      "bytes": 222,
+      "sha256": "264c10759e951746033c07ee613956d91b882368b8cd04f2b2e5b98878b794bb"
+    },
+    {
+      "path": "volume-mounted.json",
+      "bytes": 184,
+      "sha256": "0bd57937622f767a6b1d1d2b273ce15817d399f9f84c9f5537d8444bc5ed269a"
+    },
+    {
+      "path": "prepared.json",
+      "bytes": 4752,
+      "sha256": "e57e912a2600dd27014b776cc09800977107ebdfbea28c767cd9695b0c2aa2e3"
+    },
+    {
+      "path": "launch-request.json",
+      "bytes": 771,
+      "sha256": "af2b3f128b476520ed6f12db50307afb42bc6612f2a20b398156f7c3818e1abe"
+    },
+    {
+      "path": "native-intent.json",
+      "bytes": 274,
+      "sha256": "df5b7206f8ad3b4e6cd9e6dd68b7efa583ede0c267e0dd856f3ef689d2c2f935"
+    },
+    {
+      "path": "launch-receipt.json",
+      "bytes": 1442,
+      "sha256": "d59dfbe5ac48482410da9a2da892af2ac34f7584a72c8b7587e85f07bceb542c"
+    },
+    {
+      "path": "closed.json",
+      "bytes": 1757,
+      "sha256": "b8bc73d79a9246b551cc1cad841de0253f512445fdfcad94f3c8084196bdf57e"
+    },
+    {
+      "path": "root-custody-recovery.json",
+      "bytes": 1522,
+      "sha256": "b295412605c8c2ecd0b4e2055bf7141144129db07bb73d11fc462a296e027b8d"
+    },
+    {
+      "path": "root-closeout.json",
+      "bytes": 1602,
+      "sha256": "12ddd0d7d868ee37c659df2e1a0d80cab26f9a2c8e55f39ef1bc5a414b0f0ac3"
+    }
+  ],
+  "allowlist_only": true,
+  "profiles_provider_keys_or_auth_exported": false,
+  "case_passed": false,
+  "original_closed_failure_preserved": true,
+  "root_GUI_recovery_close_is_separate": true
+}

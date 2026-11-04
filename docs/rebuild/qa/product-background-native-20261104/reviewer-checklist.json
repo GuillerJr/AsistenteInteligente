@@ -1,0 +1,122 @@
+{
+  "schema": "jarvis.native-development-background-QA-checklist/1",
+  "status": "frozen_NOEXEC_pending_root_review",
+  "harness_root": "/private/tmp/jarvis-product-background-native-20261104",
+  "CI_gate": {
+    "source_commit": "2c8259de8112aa5f1487814a5c5c35b3931e5c43",
+    "run_id": 41842491175,
+    "run_attempt": 1,
+    "job_ids": {
+      "macos": 126617417127,
+      "ubuntu": 126617416540
+    },
+    "artifact_id": 13329917886,
+    "artifact_zip_sha256": "3a7dd21a3a92210aa602c72039a0378460ba98a0a9c6168e12762efc266a6f16",
+    "artifact_bytes_observed": 7698129,
+    "artifact_name": "jarvis-native-qa-2c8259de8112aa5f1487814a5c5c35b3931e5c43"
+  },
+  "source_pins": {
+    "script/export_native_qa.py": "94ca17f738027b4258d94e1a19916dd15b38f2b196ad2ceea6053aeaf2982fa2",
+    "script/test_resource_guard.py": "472712a42d0f2c68bec33c19ab7a9443aff6fbd4a0898dd81658a481a92d6273",
+    "src/jarvis_core/product_interactions.py": "bc586b9b795390ef2f3f9702eb6058c47bdb5f84ed0bd42853c2d898f5e6450a",
+    "src/jarvis_core/product_tools.py": "bd0e0fbc73d44eeec116c44163b7593d0084c058a1ebf196167c8d0802de7864",
+    "native/JarvisDesktop/Sources/QALaunchSupport/QALaunchAdmission.swift": "66436f578155fd3b5c7ca1f403f61ff8e0796024e49798d11bff2ccb1e31dc52",
+    "native/JarvisDesktop/Sources/QALaunchSupport/QALaunchCoordinator.swift": "14523fe581fb63727910ce9cde344829f70d2abc646afb440dfd443e819aa585",
+    "native/JarvisDesktop/Sources/JarvisQALauncher/QALaunchMain.swift": "8c83ec185162548d42f48fb95033b253fc13446f81fcb7e0f033f59acceb6db0",
+    "native/JarvisDesktop/Sources/DesktopCore/ServiceLaunchPlan.swift": "dcd74bcbce782bea922d5e7969f94369cc2beb5fc31aab661ac6909da292aa24"
+  },
+  "scripts_sha256": {
+    "common.py": "5526f4ecbe5ba9ca6ac32067268e2f8008e1934598c3d36eebec2400e49e65de",
+    "prepare.py": "203d78649bdcf67d3a44ad521e1e9737f9f51013d08effb38d29419ebfa8090c",
+    "supervise.py": "10912abfa0df86cf9ce57afda1b05a6d1fb0fe277264a3c3964ea1a13275643d",
+    "probe.py": "efff8206c2dc5ed94f6b68e77daf39737c3497eeca8d4326301b1a2d8891b87b"
+  },
+  "resource_contract": {
+    "physical_APFS_capacity_mib": 2048,
+    "preparation_seconds": 300,
+    "native_active_seconds": 810,
+    "cleanup_reserve_seconds": 90,
+    "native_total_seconds": 900,
+    "Data_free_floor_GiB": 25,
+    "unaccounted_Data_drop_GiB": 1,
+    "provider_sampled_subbudget_mib": 128,
+    "provider_metadata_reuse_interval_seconds": 1,
+    "known_process_limit": 128,
+    "native_archive_compressed_mib": 32,
+    "native_archive_uncompressed_mib": 128,
+    "source_copies_mib": 32,
+    "dependency_copies_mib": 256,
+    "Codex_copy_single_file_mib": 512,
+    "copy_manifest_maximum_mib": 4,
+    "probe_total_seconds": 40,
+    "probe_input_bytes": 262144,
+    "receipt_output_bytes": 65536,
+    "manifest_is_not_receipt": true
+  },
+  "selected_local_programs": {
+    "python": {
+      "path": "/Users/guillerjr/Documents/Proyectos/AsistenteInteligente/.venv.nosync/bin/python",
+      "sha256": "50de159a94723fa71090030ac642b101e27f8d29488ec4bdae91edfa1e86dbbd",
+      "bytes": 52448,
+      "version": "3.11.15",
+      "selection": "Explicit existing local interpreter launcher; ServiceLaunchPlan resolves it before -I-S-B execution"
+    },
+    "python_process": {
+      "path": "/opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python",
+      "sha256": "e17826d56c53bce1083f70b4cdb68ea29105fdc84c1c345746523f2af0b8287d",
+      "bytes": 51392
+    },
+    "codex": {
+      "path": "/opt/homebrew/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex",
+      "sha256": "8813367285524ac798dd96d1b071aea30d58708c7226fd236cd275cf1cfdee31",
+      "bytes": 249952688,
+      "version": "0.163.0",
+      "selection": "Official installed CLI Mach-O; copied into quota, never inherit owner auth state"
+    }
+  },
+  "scope": "External native UI of already-compiled code. Explicit development bundle; not self-contained distribution, media qualification or full OpenClaw parity.",
+  "preparation": [
+    "Whole exact new workflow and both exact jobs must be successful before any mount; small native artifact only by exact name/ID/digest/run/provenance. Read-only GH download within300s, never299MiB fullbundle.",
+    "Exclusive preparation/volume intents before effects; no automatic replay or deleting original images. All archive/copies/state/provider/HOME/TMP in one new2GiB quota. Resource anchor starts immediately after mount before download and is preserved.",
+    "Extract only four physical files from native archive. Whole main/helper/Info/CodeResources hashes, exact __TEXT sections and native signature/ID match CI provenance; no local re-sign, config generation or runtime directory.",
+    "Copy only tracked src blobs matching exact Git HEAD. Copy selected physical local dependency files; no symlinks, site .pth hooks, pyc/cache, auth.json, direct_url.json or private key files read. Source32MiB, deps256MiB and per-file/entry bounds; destination new physical inodes.",
+    "Selected official Codex Mach-O copied and matched to explicit SHA; both local Python launcher and actual process executable have distinct pinned hashes. Six dependency versions checked from copied METADATA, soundfile remains absent/lazy; media tools are not exercised.",
+    "Copy manifest bounds4MiB and binds every own file hash/device/inode/size/mtime/ctime/mode, own directories and external Python pins. Full revalidation on entry; metadata-only immediate effect check avoids rehashing400MiB repeatedly. No malicious same-UID sandbox claim.",
+    "Helper development contract is SIX flags/TWELVE args; source/dependencies/state/provider physical inside/private/tmp, official copied Codex and selected Python explicit. No self-contained runtime/config pins are supplied."
+  ],
+  "native": [
+    "No CUA acquisition until active and exact NSWorkspace returned app PID/start/path/UID plus direct Python child REALprocesspath are confirmed. No old handle queries after Quit/uncertain start.",
+    "Fresh provider inside quota. Owner completes official ChatGPT login only if disconnected; harness never reads auth or account tokens. No OS/TCC request needed for this case.",
+    "A preference revision2 enabledtrue/silencedtrue; B revision0falsefalse/empty. One canonical question run; no other tools accepted or approved. Root external CUA A1, then B0 while pending canonical A question and paired read-only running oracle.",
+    "At most one explicit host answer. Fresh root CUA B0 attestation pinned to prepared/waiting/PID within60s; exclusive answer intent before one scoped question.answer, exact four-field ACK, unknown never replay.",
+    "Read-only post must see same question consumed revision3 without values/authority, one known question tool, one completed model run with cleanup, B0 empty and no OS notices; root then captures A1 on return.",
+    "Prepared-bound GUI quit intent, then root CUA CmdQ before810s. Source/app/copies remain frozen. Only exact confirmed app identity may receive SIGTERM on resource/deadline/observer failure; that path cannot pass normal close. Unconfirmed returned candidate is data, never signal authority.",
+    "All known identities absent + same profile.lock inode free before normal detach, max2 bounded attempts/no force/no deletion. Underlying mount identity must return. Images/originals retained, no global absence or storage attribution claims."
+  ],
+  "capture_custody_fix": "D opens O_EXCL output before spawning and protects spawn/on_spawn/drain/cleanup in one try/finally. Child is reaped before closing buffered output; an output-close error cannot suppress child cleanup. Previous A/B/C sources remain unchanged.",
+  "success_conjunction": [
+    "Four independently observed CUA stages A1/B0pending/B0complete/A1return",
+    "All before/waiting/answeronce/after conditions pass; sole model run/question/answer; no effect/model replay",
+    "Normal GUI close/no signals/issues/resource breach; known absence/same lease/normal unmount"
+  ],
+  "prior_preparations_preserved": [
+    {
+      "root": "/private/tmp/jarvis-product-background-20261104",
+      "admission_sha256": "f02dc0b3b68c622021bf6d70e34abee61c7179ce165f3ef7f7c1e1fe6da9fedf",
+      "closeout_sha256": "19d7d72cc470b8c5ab4ef9db0295b0f5c5a1565df3c4ef1a9e473d3926c0dbb0"
+    },
+    {
+      "root": "/private/tmp/jarvis-product-background-20261104-b",
+      "admission_sha256": "b60b24b5eff2ff674313653410d49fa11921e569f48f24dbba4fa666b4b6a354",
+      "closeout_sha256": "bcce720f6c95ae0c6dab62f8df22a62e90ceb515adbc0630059921e2e44cb4d2"
+    },
+    {
+      "root": "/private/tmp/jarvis-product-background-20261104-c",
+      "admission_sha256": "e8d3c421e423f203a1cf11e7cda842bac261edc10abbcf9b507d4e7b56386022",
+      "closeout_sha256": "16a9668b4117773097bc5150abb65ad5b43405da6183e863657443d513811223"
+    }
+  ],
+  "historical_20261030_six_stage_attempt_complete": false,
+  "physical_OS_click_historical_case_preserved": true,
+  "no_execution_performed_by_draft_author": true
+}

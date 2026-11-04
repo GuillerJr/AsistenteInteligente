@@ -182,6 +182,9 @@ class CodexClient:
                 'web_search="disabled"',
                 "features.shell_tool=false",
                 "features.apps=false",
+                # Apps and skills gates do not stop plugin startup synchronization.
+                "features.plugins=false",
+                "features.remote_plugin=false",
                 "features.multi_agent=false",
                 "features.image_generation=false",
                 "features.view_image=false",

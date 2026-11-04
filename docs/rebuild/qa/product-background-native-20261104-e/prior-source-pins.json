@@ -1,0 +1,13 @@
+{
+  "prior_root": "/private/tmp/jarvis-product-background-native-20261104",
+  "copied_sources_without_execution": true,
+  "sha256": {
+    "common.py": "5526f4ecbe5ba9ca6ac32067268e2f8008e1934598c3d36eebec2400e49e65de",
+    "prepare.py": "203d78649bdcf67d3a44ad521e1e9737f9f51013d08effb38d29419ebfa8090c",
+    "supervise.py": "10912abfa0df86cf9ce57afda1b05a6d1fb0fe277264a3c3964ea1a13275643d",
+    "probe.py": "efff8206c2dc5ed94f6b68e77daf39737c3497eeca8d4326301b1a2d8891b87b",
+    "admission.json": "2bd7fa248dbe690d3f5b7fc96a68eb2a8026cb6d0c191a066b01490da5d0d341",
+    "reviewer-checklist.json": "10d2f98d4f86c36f35132efbb9f49c16e667cc874e052c325bcf98dcad8b31eb",
+    "RUNBOOK_NOEXEC.md": "637b0a8be930edd9a3b71ddf58930c45e67990e81f1dbf7ccc75bdde3de0005a"
+  }
+}

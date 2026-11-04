@@ -27,7 +27,11 @@
       "in_process_extractor_retired": true,
       "reason": "c403 observed zero controls and no panel text in Ainitial. It did not reach B and is not an isolation or render oracle.",
       "required": "A real green-CI QA app with CUA must expose the strict checkbox values and texts with correlated snapshots, including B after A completes. A callback test or an RPC-only observation cannot replace this UI evidence. Physical OS click remains separate.",
-      "missing_stage": "B_during_A_model; preserved in the pinned attempt rather than inferred from later B."
+      "missing_stage": "B_during_A_model; preserved in the pinned attempt rather than inferred from later B.",
+      "independent_follow_up_cases": [
+        "#/native_qualification/background_native_20261104_d",
+        "#/native_qualification/background_native_20261104_e"
+      ]
     },
     "observed_ax_preference_discrepancy": {
       "status": "cause_not_established",
@@ -52,6 +56,52 @@
   },
   "reference": "REA_OC28_PRODUCT_COORDINATION.md",
   "checkpoints": [
+    {
+      "commit": "2c8259de8112aa5f1487814a5c5c35b3931e5c43",
+      "ci_run_id": 41842491175,
+      "run_attempt": 1,
+      "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41842491175",
+      "status": "completed",
+      "conclusion": "success",
+      "full_remote_ci_passed": true,
+      "purpose": "Qualify compact native QA export and all existing product contracts; no local suites or compilation.",
+      "ubuntu": {
+        "job_id": 126617416540,
+        "passed": 3980,
+        "skipped": 47,
+        "failed": 0,
+        "seconds": 229.39,
+        "saved_decoded_log_sha256": "4f5b5bffb3080d95f7b869c0fc13531470a21903329763df390ad39734ccd1af"
+      },
+      "macos": {
+        "job_id": 126617417127,
+        "python_passed": 4027,
+        "python_skipped": 0,
+        "python_failed": 0,
+        "python_seconds": 416.18,
+        "swift_executed": 710,
+        "swift_skipped": 1,
+        "swift_failures": 0,
+        "swift_seconds": 214.369,
+        "swift_wall_seconds": 214.487,
+        "saved_decoded_log_sha256": "d28c166806ccfe34d5f3b82d54ac6575de11ab988a6ee1d504d2c374835828cd"
+      },
+      "wheel_sdist_isolated_installation": "success_both_platforms",
+      "self_contained_bundle_and_parent_eof": "success",
+      "native_development_export": "success",
+      "native_qa_artifact": {
+        "id": 13329917886,
+        "bytes": 7698129,
+        "zip_sha256": "3a7dd21a3a92210aa602c72039a0378460ba98a0a9c6168e12762efc266a6f16",
+        "created_at": "2026-11-04T14:00:19Z",
+        "expires_at": "2026-11-18T14:00:17Z",
+        "retention_days": 14
+      },
+      "native_QA_export_new_tests_passed": 25,
+      "local_tests_or_builds_run": false,
+      "qualified": false,
+      "limit": "Complete exact-commit remote CI; selected external UI case remains incomplete. Passing CI and finite preference observations do not establish B while A waits on the canonical question or broad parity."
+    },
     {
       "commit": "1b0a7ead49f2659ef536d47947a9ed7364d0e632",
       "ci_run_id": 41123446861,
@@ -3050,7 +3100,7 @@
       "automatic_in_place_budget_extension": false
     },
     "next_background_case_plan": {
-      "status": "implemented_native_QA_export_requires_exact_commit_remote_CI",
+      "status": "native_QA_export_remote_CI_passed_background_case_incomplete",
       "reason": "Large runtime artifact transfer failed in three independently preserved bounded preparations. Native-only GUI case can use selected available local development dependencies; full distribution remains separately qualified remotely.",
       "local_dependency_inventory": {
         "python_version": "3.11.15",
@@ -3066,7 +3116,9 @@
         "account_or_auth_files_read": false,
         "compatibility_in_execution_not_claimed": true,
         "python_actual_executable_sha256": "e17826d56c53bce1083f70b4cdb68ea29105fdc84c1c345746523f2af0b8287d",
-        "python_actual_executable": "/opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python"
+        "python_actual_executable": "/opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python",
+        "executed_selected_scope": "One authenticated Codex run with no tool calls; service startup and model completion only. Canonical-question compatibility remains unqualified.",
+        "service_and_model_execution_observed": true
       },
       "native_UI_pending": true,
       "self_contained_qualification_from_dev_case_forbidden": true,
@@ -3088,7 +3140,200 @@
       "compressed_limit_bytes": 33554432,
       "uncompressed_limit_bytes": 134217728,
       "native_artifact_retention_days": 14,
-      "full_bundle_and_suites_preserved": true
+      "full_bundle_and_suites_preserved": true,
+      "exact_ci_commit": "2c8259de8112aa5f1487814a5c5c35b3931e5c43",
+      "exact_ci_run_id": 41842491175,
+      "new_unit_cases_remote_passed": 25
+    },
+    "background_native_20261104_d": {
+      "status": "incomplete_observer_admission_failed_root_GUI_recovery_closed",
+      "commit": "2c8259de8112aa5f1487814a5c5c35b3931e5c43",
+      "ci_run_id": 41842491175,
+      "snapshot": {
+        "path": "qa/product-background-native-20261104/SNAPSHOT.json",
+        "sha256": "86493602807509c8197814b575f18a6e2f7370136c5d872cb23a94691db6ca56"
+      },
+      "prepared_receipt": {
+        "path": "qa/product-background-native-20261104/prepared.json",
+        "sha256": "e57e912a2600dd27014b776cc09800977107ebdfbea28c767cd9695b0c2aa2e3"
+      },
+      "preparation_seconds": 45.472,
+      "development_native_app_identical_to_CI": true,
+      "self_contained": false,
+      "local_builds_or_full_suites_run": false,
+      "failure": "selected_process_metadata_unconfirmed during observer admission, before active case admission",
+      "native_supervisor_seconds": 0.971,
+      "original_closed_failure": {
+        "path": "qa/product-background-native-20261104/closed.json",
+        "sha256": "b8bc73d79a9246b551cc1cad841de0253f512445fdfcad94f3c8084196bdf57e"
+      },
+      "root_custody_recovery": {
+        "path": "qa/product-background-native-20261104/root-custody-recovery.json",
+        "sha256": "b295412605c8c2ecd0b4e2055bf7141144129db07bb73d11fc462a296e027b8d"
+      },
+      "root_GUI_closeout": {
+        "path": "qa/product-background-native-20261104/root-closeout.json",
+        "sha256": "12ddd0d7d868ee37c659df2e1a0d80cab26f9a2c8e55f39ef1bc5a414b0f0ac3"
+      },
+      "root_recovery_facts": {
+        "all_three_known_identities_absent": true,
+        "post_quit_profile_lock_free": true,
+        "lease_identity_captured_before_quit": false,
+        "normal_detach_attempts": 1,
+        "quota_unmounted_without_force": true,
+        "signals_sent": [],
+        "images_preserved": true
+      },
+      "account_login_attempted": false,
+      "models_or_tools_executed": false,
+      "case_passed": false,
+      "limit": "Original unknown supervisor closure is preserved. Root verified exact selected identities and later GUI closure separately; post-quit free lock without a pre-quit identity pin is not same-lease closure proof."
+    },
+    "background_native_20261104_e": {
+      "status": "incomplete_model_completed_without_required_question_normal_GUI_close_verified",
+      "commit": "2c8259de8112aa5f1487814a5c5c35b3931e5c43",
+      "ci_run_id": 41842491175,
+      "snapshot": {
+        "path": "qa/product-background-native-20261104-e/SNAPSHOT.json",
+        "sha256": "77be70448727bae4f3eadc70b9cbebee7175bbed3ce8c5dabbf6904d3359884a"
+      },
+      "prepared_receipt": {
+        "path": "qa/product-background-native-20261104-e/prepared.json",
+        "sha256": "2ee2419813d866116202dde4e96a8246aadf1dc83ae5be44e25a4f357f9fb599"
+      },
+      "preparation_seconds": 10.055,
+      "development_native_app_identical_to_CI": true,
+      "self_contained": false,
+      "local_builds_or_full_suites_run": false,
+      "owner_completed_official_account_login": true,
+      "guard_metadata_retry_scope": {
+        "unconfirmed_samples": 3,
+        "absent_after_pending": 2,
+        "own_child_reaped_observations": 1,
+        "max_samples_per_lookup": 10,
+        "max_seconds_per_lookup": 2,
+        "effects_replayed": false
+      },
+      "read_only_before_receipt": {
+        "path": "qa/product-background-native-20261104-e/before.json",
+        "sha256": "14f3b62b9350c0cc244998ff8ca3ca8f728d3db28082d4d6ba6a18966972bb49"
+      },
+      "ui_observations": {
+        "path": "qa/product-background-native-20261104-e/ui-observations.json",
+        "sha256": "3a09ccabad222ccab08c1b37f993582b0c9fdc0ae916701f0a714f3991b19357"
+      },
+      "observed_native_stages": [
+        {
+          "stage": "A_initial",
+          "enabled": 1,
+          "silenced": 1,
+          "observed_at_unix": 1793802686.047
+        },
+        {
+          "stage": "B_initial",
+          "enabled": 0,
+          "silenced": 0,
+          "observed_at_unix": 1793802691.154
+        },
+        {
+          "stage": "A_before_run",
+          "enabled": 1,
+          "silenced": 1,
+          "observed_at_unix": 1793802723.012
+        },
+        {
+          "stage": "B_after_A_completed",
+          "enabled": 0,
+          "silenced": 0,
+          "empty": true,
+          "A_pending_question": false,
+          "observed_at_unix": 1793802835.519
+        },
+        {
+          "stage": "A_return",
+          "enabled": 1,
+          "silenced": 1,
+          "completed_marker": "Prueba de fondo terminada.",
+          "observed_at_unix": 1793802841.756
+        }
+      ],
+      "waiting_receipt": {
+        "path": "qa/product-background-native-20261104-e/waiting.json",
+        "sha256": "4255d990a627777f75f1fc97bafa432b8bd5aef731cb6bc823ddd9c6a4731f5c"
+      },
+      "waiting_status": "failed_conditions",
+      "single_real_model_run": {
+        "run_id": "3281dc4e874d4e83a8f2bd5067a6ee89",
+        "status": "completed",
+        "outcome": "known",
+        "cleanup_confirmed": true,
+        "tool_calls": 0,
+        "canonical_question_created": false,
+        "answer_source": "model",
+        "final_synthetic_marker": "Prueba de fondo terminada."
+      },
+      "question_answer_attempted": false,
+      "model_run_repeated": false,
+      "cause_of_omitted_tool": "not_established",
+      "missing_stage": "B_while_A_waits_on_canonical_question",
+      "case_passed": false,
+      "closure": {
+        "receipt": {
+          "path": "qa/product-background-native-20261104-e/closed.json",
+          "sha256": "a52b472ad082c957ec45132fc3ec344f55e32d6b9f22efa39d5592bbc449d648"
+        },
+        "elapsed_seconds": 330.088,
+        "normal_GUI_quit_intent": true,
+        "all_twelve_known_identities_absent": true,
+        "same_lease_free": true,
+        "normal_detach_attempts": 1,
+        "quota_unmounted_without_force": true,
+        "signals_sent": [],
+        "issues": [],
+        "resource_failure": null,
+        "images_preserved": true
+      },
+      "resource_peaks": {
+        "quota_used_bytes": 561090560,
+        "provider_growth_bytes": 106471424,
+        "unaccounted_Data_drop_bytes": 39579648,
+        "last_Data_available_bytes": 210175324160,
+        "physical_quota_bytes": 2147483648,
+        "provider_sampled_limit_bytes": 134217728
+      },
+      "limit": "CUA observed A enabled/silenced and B default/empty before and after the single run, then A again. The model returned its final marker without calling any tool; the required waiting question and in-flight B UI were not observed. No answer, effect or model replay was attempted. Normal closure does not turn this partial case into a pass."
+    },
+    "active_case_f_20261104": {
+      "status": "partial_B_during_A_running_observed_resource_stop_before_final_stage",
+      "source_commit": "2c8259de8112aa5f1487814a5c5c35b3931e5c43",
+      "durable_snapshot": "docs/rebuild/qa/product-background-native-20261104-f/SNAPSHOT.json",
+      "snapshot_sha256": "1de8487504cb16c2c0f51c221199e3b8540c55bf143d170bca638d8a3b83e4ed",
+      "external_CUA_observation": "docs/rebuild/qa/product-background-native-20261104-f/ui-during-observation.json",
+      "prepared_sha256": "01bab74674e6a2f47b9d058c39965193e0c2e70807dd534789d577d0b979bdcc",
+      "run_id": "0221e514cd594639936637452a809c07",
+      "during_sha256": "902108d9db20b6328fd46aef239d91e2c58bd5d96dd511baea9d608d41ba9604",
+      "during_conditions_passed": true,
+      "B_rendered_empty_off_while_A_sidebar_in_progress": true,
+      "signed_A_running_cleanup_false": true,
+      "model_runs": 1,
+      "tools_called_at_during_observation": 0,
+      "provider_absolute_limit_bytes": 134217728,
+      "provider_allocated_bytes_after_stop": 170102784,
+      "metadata_only_diagnosis_sha256": "1aeefa22d0bbc1131f4f460e583cb5b15be2f2525b42136b25ca430adb24f962",
+      "largest_cache_bytes": 58605568,
+      "largest_cache_relative_path": "client/cache/remote_plugin_catalog/9c6e5a9fad20d28f.json",
+      "closed_sha256": "f90e0ae56ddcde81b0023e7d31ad43ef8f16ab1d5d0e838adc36774a9e598a46",
+      "root_normal_unmount_sha256": "73c040c23d678c9a56f42fe562b01cfaf8ce06548d5f794b0849737df9b6a811",
+      "signals_sent_by_supervisor": 1,
+      "all_four_known_identities_absent": true,
+      "same_lease_free": true,
+      "normal_detach_attempts_by_root": 1,
+      "provider_limit_extended": false,
+      "originals_deleted": false,
+      "normal_GUI_close_or_entire_case_passed": false,
+      "final_after_completion_stage_observed": false,
+      "unknown_effect_replayed": false,
+      "credentials_or_provider_contents_read": false
     }
   },
   "qualified_complete_increment": false,
@@ -3101,7 +3346,7 @@
     {
       "scope": "background_notification_preferences_ui",
       "status": "pending_selected_case",
-      "limit": "The six-stage native attempt missed B while A was running. Deterministic production adapter/Store tests passed remotely; external in-flight B UI still requires its own bounded case."
+      "limit": "The original six-stage attempt and new development case E both missed B while A was active. E observed A/B preferences before and after one real run, but the model called no canonical question or other tool. Cause of omission is not established; no model/answer/effect replay. External in-flight B UI still requires its own bounded case."
     },
     {
       "scope": "real_github_publication",
@@ -3126,6 +3371,41 @@
     "original_attempt_replayed": false,
     "ci_artifact_retention_days": 3,
     "old_artifact_available_from_workflow_api": false,
-    "follow_up": "New formal rerun of exact commit 1b0a7ea in remote CI and an independently admitted bounded synthetic background-question case. No local suites/builds or reuse of expired QA receipts."
+    "follow_up": "New formal rerun of exact commit 1b0a7ea in remote CI and an independently admitted bounded synthetic background-question case. No local suites/builds or reuse of expired QA receipts.",
+    "durable_native_development_snapshots": [
+      {
+        "path": "qa/product-background-native-20261104/SNAPSHOT.json",
+        "sha256": "86493602807509c8197814b575f18a6e2f7370136c5d872cb23a94691db6ca56"
+      },
+      {
+        "path": "qa/product-background-native-20261104-e/SNAPSHOT.json",
+        "sha256": "77be70448727bae4f3eadc70b9cbebee7175bbed3ce8c5dabbf6904d3359884a"
+      }
+    ]
+  },
+  "provider_plugin_startup_fix_20261104": {
+    "status": "implemented_pending_exact_remote_CI_and_new_finite_native_case",
+    "observation": "Official client created remote catalog and temporary plugin repository in the synthetic provider despite apps=false; metadata only, no credential or cache contents read.",
+    "settings": [
+      "features.apps=false",
+      "features.plugins=false",
+      "features.remote_plugin=false"
+    ],
+    "official_cli_version": "0.163.0",
+    "official_source_commit": "83086188ae0614bd882818ff1aa23f3194962012",
+    "official_source_links": [
+      "https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/features/src/lib.rs#L1621",
+      "https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/core-plugins/src/manager.rs#L2824",
+      "https://github.com/openai/codex/blob/83086188ae0614bd882818ff1aa23f3194962012/codex-rs/core-plugins/src/manager.rs#L757",
+      "https://learn.chatgpt.com/docs/config-file/config-reference"
+    ],
+    "own_code_change": "src/jarvis_core/codex.py",
+    "strict_protocol_peer_regressions": [
+      "tests/test_codex.py",
+      "tests/test_codex_tools.py"
+    ],
+    "tests_executed_locally": false,
+    "new_runtime_validation_claimed": false,
+    "question_tool_omission_in_E_explained_by_this_fix": false
   }
 }

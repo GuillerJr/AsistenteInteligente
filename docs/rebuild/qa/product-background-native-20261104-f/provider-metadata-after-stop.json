@@ -1,0 +1,86 @@
+{
+  "schema": "jarvis.synthetic-provider-metadata-only-diagnosis/1",
+  "entry_count": 8442,
+  "allocated_bytes": 170102784,
+  "largest_regular_files_excluding_auth": [
+    {
+      "relative_path": "client/cache/remote_plugin_catalog/9c6e5a9fad20d28f.json",
+      "allocated_bytes": 58605568,
+      "logical_bytes": 58605319
+    },
+    {
+      "relative_path": "client/.tmp/plugins/.git/objects/pack/pack-c862b02aa1d0540db8b7f5542a4661fc3707a014.pack",
+      "allocated_bytes": 25501696,
+      "logical_bytes": 25498517
+    },
+    {
+      "relative_path": "client/logs_2.sqlite-wal",
+      "allocated_bytes": 3198976,
+      "logical_bytes": 2859312
+    },
+    {
+      "relative_path": "client/state_5.sqlite-wal",
+      "allocated_bytes": 3170304,
+      "logical_bytes": 2661552
+    },
+    {
+      "relative_path": "client/.tmp/plugins/plugins/creative-production/mcp/server.bundle.mjs",
+      "allocated_bytes": 2191360,
+      "logical_bytes": 2188698
+    },
+    {
+      "relative_path": "client/.tmp/plugins/plugins/canva/assets/composer-icon.png",
+      "allocated_bytes": 1081344,
+      "logical_bytes": 1080894
+    },
+    {
+      "relative_path": "client/plugins/cache/openai-curated-remote/vibecoder/1.2.0/.codex-plugin/assets/composer-icon-dark.png",
+      "allocated_bytes": 966656,
+      "logical_bytes": 962677
+    },
+    {
+      "relative_path": "client/.tmp/plugins/plugins/dropbox/assets/screenshot-2.png",
+      "allocated_bytes": 917504,
+      "logical_bytes": 915865
+    },
+    {
+      "relative_path": "client/.tmp/plugins/plugins/shopify/skills/shopify-admin/assets/admin_2026-04.json.gz",
+      "allocated_bytes": 856064,
+      "logical_bytes": 854294
+    },
+    {
+      "relative_path": "client/.tmp/plugins/.git/index",
+      "allocated_bytes": 839680,
+      "logical_bytes": 837685
+    },
+    {
+      "relative_path": "client/.tmp/plugins/plugins/shopify/skills/shopify-storefront-graphql/scripts/validate.mjs",
+      "allocated_bytes": 667648,
+      "logical_bytes": 664677
+    },
+    {
+      "relative_path": "client/.tmp/plugins/plugins/shopify/skills/shopify-customer/scripts/validate.mjs",
+      "allocated_bytes": 667648,
+      "logical_bytes": 664647
+    },
+    {
+      "relative_path": "client/.tmp/plugins/plugins/shopify/skills/shopify-functions/scripts/validate.mjs",
+      "allocated_bytes": 667648,
+      "logical_bytes": 665415
+    },
+    {
+      "relative_path": "client/.tmp/plugins/plugins/shopify/skills/shopify-partner/scripts/validate.mjs",
+      "allocated_bytes": 667648,
+      "logical_bytes": 664644
+    },
+    {
+      "relative_path": "client/.tmp/plugins/plugins/shopify/skills/shopify-payments-apps/scripts/validate.mjs",
+      "allocated_bytes": 667648,
+      "logical_bytes": 664662
+    }
+  ],
+  "contents_read": false,
+  "auth_read": false,
+  "budget_extended": false,
+  "originals_deleted": false
+}

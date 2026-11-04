@@ -21,6 +21,12 @@ import json,os,sys,time
 from pathlib import Path
 assert Path.home() != Path(os.environ.get('OWNER_HOME','/unlikely'))
 assert not any(k in os.environ for k in ('OPENAI_API_KEY','NVIDIA_API_KEY','ANTHROPIC_API_KEY'))
+# Refuse the first protocol message if discovery could start in the child.
+settings = dict(sys.argv[index + 1].split('=', 1)
+                for index, argument in enumerate(sys.argv) if argument == '-c')
+assert all(settings.get(key) == 'false' for key in (
+    'features.apps', 'features.plugins', 'features.remote_plugin',
+))
 turns=0
 for line in sys.stdin:
     m=json.loads(line); p=m.get('params',{}); method=m.get('method')

@@ -1,0 +1,190 @@
+{
+  "source_commit": "2c8259de8112aa5f1487814a5c5c35b3931e5c43",
+  "run_id": 41842491175,
+  "run_attempt": 1,
+  "job_ids": {
+    "macos": 126617417127,
+    "ubuntu": 126617416540
+  },
+  "artifact_id": 13329917886,
+  "artifact_zip_sha256": "3a7dd21a3a92210aa602c72039a0378460ba98a0a9c6168e12762efc266a6f16",
+  "artifact_bytes_observed": 7698129,
+  "artifact_name": "jarvis-native-qa-2c8259de8112aa5f1487814a5c5c35b3931e5c43",
+  "source_pins": {
+    "script/export_native_qa.py": "94ca17f738027b4258d94e1a19916dd15b38f2b196ad2ceea6053aeaf2982fa2",
+    "script/test_resource_guard.py": "472712a42d0f2c68bec33c19ab7a9443aff6fbd4a0898dd81658a481a92d6273",
+    "src/jarvis_core/product_interactions.py": "bc586b9b795390ef2f3f9702eb6058c47bdb5f84ed0bd42853c2d898f5e6450a",
+    "src/jarvis_core/product_tools.py": "bd0e0fbc73d44eeec116c44163b7593d0084c058a1ebf196167c8d0802de7864",
+    "native/JarvisDesktop/Sources/QALaunchSupport/QALaunchAdmission.swift": "66436f578155fd3b5c7ca1f403f61ff8e0796024e49798d11bff2ccb1e31dc52",
+    "native/JarvisDesktop/Sources/QALaunchSupport/QALaunchCoordinator.swift": "14523fe581fb63727910ce9cde344829f70d2abc646afb440dfd443e819aa585",
+    "native/JarvisDesktop/Sources/JarvisQALauncher/QALaunchMain.swift": "8c83ec185162548d42f48fb95033b253fc13446f81fcb7e0f033f59acceb6db0",
+    "native/JarvisDesktop/Sources/DesktopCore/ServiceLaunchPlan.swift": "dcd74bcbce782bea922d5e7969f94369cc2beb5fc31aab661ac6909da292aa24"
+  },
+  "selected_local_programs": {
+    "python": {
+      "path": "/Users/guillerjr/Documents/Proyectos/AsistenteInteligente/.venv.nosync/bin/python",
+      "sha256": "50de159a94723fa71090030ac642b101e27f8d29488ec4bdae91edfa1e86dbbd",
+      "bytes": 52448,
+      "version": "3.11.15",
+      "selection": "Explicit existing local interpreter launcher; ServiceLaunchPlan resolves it before -I-S-B execution"
+    },
+    "python_process": {
+      "path": "/opt/homebrew/Cellar/python@3.11/3.11.15_1/Frameworks/Python.framework/Versions/3.11/Resources/Python.app/Contents/MacOS/Python",
+      "sha256": "e17826d56c53bce1083f70b4cdb68ea29105fdc84c1c345746523f2af0b8287d",
+      "bytes": 51392
+    },
+    "codex": {
+      "path": "/opt/homebrew/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex",
+      "sha256": "8813367285524ac798dd96d1b071aea30d58708c7226fd236cd275cf1cfdee31",
+      "bytes": 249952688,
+      "version": "0.163.0",
+      "selection": "Official installed CLI Mach-O; copied into quota, never inherit owner auth state"
+    }
+  },
+  "selected_dependencies": {
+    "path": "/Users/guillerjr/Documents/Proyectos/AsistenteInteligente/.venv.nosync/lib/python3.11/site-packages",
+    "verified_versions": {
+      "cryptography": "50.0.2",
+      "jsonschema": "4.26.0",
+      "numpy": "2.3.5",
+      "onnxruntime": "1.31.1",
+      "referencing": "0.37.0",
+      "tokenizers": "0.22.1"
+    },
+    "missing_declared": [
+      "soundfile"
+    ],
+    "source": "Parent metadata inventory, rechecked from copied METADATA before launch; never import to discover credentials",
+    "complete_product_runtime_claimed": false
+  },
+  "resource_contract": {
+    "physical_APFS_capacity_mib": 2048,
+    "preparation_seconds": 300,
+    "native_active_seconds": 810,
+    "cleanup_reserve_seconds": 90,
+    "native_total_seconds": 900,
+    "Data_free_floor_GiB": 25,
+    "unaccounted_Data_drop_GiB": 1,
+    "provider_sampled_subbudget_mib": 128,
+    "provider_metadata_reuse_interval_seconds": 1,
+    "known_process_limit": 128,
+    "native_archive_compressed_mib": 32,
+    "native_archive_uncompressed_mib": 128,
+    "source_copies_mib": 32,
+    "dependency_copies_mib": 256,
+    "Codex_copy_single_file_mib": 512,
+    "copy_manifest_maximum_mib": 4,
+    "probe_total_seconds": 40,
+    "probe_input_bytes": 262144,
+    "receipt_output_bytes": 65536,
+    "manifest_is_not_receipt": true
+  },
+  "distribution_channel": "development",
+  "self_contained": false,
+  "CI_app_modified_or_resigned": false,
+  "expected_CI_bundle_identifier": "local.jarvis.qa.native.2c8259de8112",
+  "helper_flags": [
+    "--python",
+    "--source",
+    "--dependencies",
+    "--state",
+    "--codex",
+    "--provider-state"
+  ],
+  "helper_argument_count": 12,
+  "owner_OS_actions_required": [],
+  "normal_detach_maximum": 2,
+  "force_detach": false,
+  "deletion": false,
+  "automatic_effect_replay": false,
+  "metadata_reader": {
+    "maximum_lookup_samples": 10,
+    "maximum_lookup_seconds": 2,
+    "pause_between_unavailable_samples_seconds": 0.05,
+    "retry_eligible": "Only unavailable BSDInfo/executable-path samples, never an observed UID/birth/path mismatch. Callers retain original identity pins.",
+    "Popen_ownership": "Temporary map of exact Popen objects, inserted before on_spawn and removed on cleanup. poll/reap only that controlled child before scans and during an unavailable helper sample. No arbitrary waitpid or PID-pattern effect.",
+    "signals_or_launches_from_metadata_retry": false,
+    "audit": "PID, stage, returned bytes and errno for unavailable samples; recovered/absence/own-Popen-exit counters. Maximum32events plus dropped_audit_events; no arguments/environment.",
+    "global_900s_or_resources_extended": false,
+    "D_exact_failing_PID_or_cause_established": false
+  },
+  "schema": "jarvis.native-development-background-F-admission/1",
+  "status": "prepared_not_executed",
+  "review_status": "frozen_NOEXEC_pending_root_review",
+  "harness_root": "/private/tmp/jarvis-product-background-native-20261104-f",
+  "scripts_sha256": {
+    "common.py": "6d9517bc6b6cb52c42cf83bebcb2d9e4d35aa623c5b3b33ed3ee783f97c77120",
+    "prepare.py": "5d60f6a6da5d68539f3b379a8fdbf341aa8883a217859a79a28acde869f9a89c",
+    "supervise.py": "10912abfa0df86cf9ce57afda1b05a6d1fb0fe277264a3c3964ea1a13275643d",
+    "probe.py": "12833693f414c0cd926b6a80441c93b476b4ca6bff90903d3b05ab8308f49f8a"
+  },
+  "maximum_sessions": 2,
+  "maximum_model_runs": 1,
+  "maximum_question_tools": 0,
+  "maximum_other_tools_accepted": 0,
+  "maximum_explicit_host_answers": 0,
+  "model_prompt": "No uses ninguna herramienta. Escribe únicamente INICIO PRUEBA FINITA, después los números enteros del 1 al 1000 en orden, cada número en su propia línea, sin abreviar ni omitir ninguno, y termina con FIN PRUEBA FINITA.",
+  "model_prompt_is_not_enforced_tool_allowlist": true,
+  "case_purpose": "Observe B empty while the sole real Codex run in A is actually running, then B stays empty and A shows its own answer. Question selection is not part of this case.",
+  "prior_E": {
+    "root": "/private/tmp/jarvis-product-background-native-20261104-e",
+    "prepared_sha256": "2ee2419813d866116202dde4e96a8246aadf1dc83ae5be44e25a4f357f9fb599",
+    "closed_sha256": "a52b472ad082c957ec45132fc3ec344f55e32d6b9f22efa39d5592bbc449d648",
+    "active_sha256": "054923a82b1129529345011a0ffedb71031132018114965007934fb7e68a2713",
+    "image": "/private/tmp/jarvis-product-background-native-20261104-e/quota.sparseimage",
+    "image_identity": [
+      16777230,
+      72850467
+    ],
+    "mountpoint": "/private/tmp/jq-8k57q6f0",
+    "underlying_identity": [
+      16777230,
+      72850465
+    ],
+    "old_lease_inode": 3334,
+    "known_identities_to_reobserve": 12,
+    "previous_failed_question_gate_preserved": true,
+    "new_F_case_is_not_replay_or_extension_of_E": true
+  },
+  "quota_reuse": {
+    "maximum_normal_attach_calls": 1,
+    "physical_capacity_mib": 2048,
+    "old_profile_preserved": "/private/tmp/jq-8k57q6f0/state",
+    "new_profile": "/private/tmp/jq-8k57q6f0/state-f",
+    "new_HOME": "/private/tmp/jq-8k57q6f0/launcher-home-f",
+    "new_TMPDIR": "/private/tmp/jq-8k57q6f0/launcher-tmp-f",
+    "new_profile_must_not_exist": true,
+    "empty_underlying_inode_permission_readmission": "Record intent, verify prior inode and absent known identities, restore 0700 only for normal attach. Restore old mode on failed unmounted admission; normal close returns to 0.",
+    "public_copies": "Full hashes must match E; fresh F manifest may rebind only device after this exact image normal attachment. Preserve inode/size/time/mode/hash. Never modify E manifests.",
+    "CI_app_bytes_modified_or_resigned": false,
+    "downloads_or_builds_or_public_copies": false
+  },
+  "provider_reuse": {
+    "path": "/private/tmp/jq-8k57q6f0/provider",
+    "scope": "Only established synthetic E provider authenticated by owner through official client; never owner prior production provider.",
+    "allocated_baseline_bytes": 106471424,
+    "absolute_sampled_limit_bytes": 134217728,
+    "sampling_cache_maximum_seconds": 1,
+    "growth_label": "max(0,current-baseline); absolute cap still128MiB",
+    "credentials_read_or_copied_by_harness": false,
+    "official_client_may_use_its_existing_account_state": true
+  },
+  "oracle_sequence": [
+    "A preferences revision2 enabled=true silenced=true; B revision0 both=false; both empty.",
+    "Send exact one model prompt in A and select B in same CUA call.",
+    "While actual A run status is running and cleanup_confirmed=false, capture real native B empty and sidebar A En curso; matching read-only during receipt.",
+    "After sole run completes known with cleanup confirmed, capture B still empty, then select A and capture its own one user/one assistant exchange.",
+    "No question tools, host answers or other tool receipts accepted; no additional run if too fast or inconclusive."
+  ],
+  "owner_account_actions_required": [
+    "No account reauthorization expected: official client alone reuses the synthetic provider authenticated in E. If disconnected, stop this case for owner decision; do not inspect or copy credentials."
+  ],
+  "no_OS_notification_permission_or_real_notification_required": true,
+  "signals_allowed_only_for_exact_admitted_app_on_deadline_or_resource_failure": true,
+  "happy_path_requires_no_signals": true,
+  "original_historical_attempt_complete": false,
+  "full_OpenClaw_parity_claimed": false,
+  "execution_approved_by_this_file": false,
+  "ci_success_claimed_by_this_file": false,
+  "reviewer_checklist_sha256": "7c467e51e3d6510476b61864306446ce92a023a50e95b4ad1f43cb490f913811"
+}
