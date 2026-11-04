@@ -3640,11 +3640,31 @@
     "full_remote_ci_passed": false
   },
   "native_media_macos27_follow_up_20261104": {
-    "status": "source_corrections_prepared_pending_new_exact_remote_CI",
+    "status": "test_continuation_annotation_corrected_pending_new_exact_remote_CI",
     "failed_checkpoint_commit": "e61c912adb62be384cd736d9f08f2d8e3abe580d",
     "failed_checkpoint_ci_run_id": 41862674611,
-    "correction_commit": null,
-    "new_exact_ci_run_id": null,
+    "correction_commit": "e8bb0332cf9d69300d7ae057635a62b0e31a85a0",
+    "new_exact_ci_run_id": 41867194251,
+    "validation_attempts": [
+      {
+        "commit": "e8bb0332cf9d69300d7ae057635a62b0e31a85a0",
+        "ci_run_id": 41867194251,
+        "macos_job_id": 126704327427,
+        "ubuntu_job_id": 126704329048,
+        "ubuntu_job_status": "completed_success",
+        "native_bundle_runtime_and_export_steps": "success",
+        "swift_status": "test_compilation_failed_before_runtime_suite",
+        "swift_runtime_tests_passed_claimed": false,
+        "diagnostic": "Swift compiler failed to produce a diagnostic for the generic continuation expression in NativeMediaTimerCleanupTests.swift:23.",
+        "diagnostic_artifact_id": 13344270161,
+        "diagnostic_archive_bytes": 6213,
+        "diagnostic_archive_sha256": "ef1a3b560d4e3620636b01921cd2eb7166705cdc3de9545043f6f908290f16bf",
+        "diagnostic_log_sha256": "d19e273cbd48d6ef74743b77e8f02b3c5fda62d217cd53f3c8f070226eaadbda",
+        "follow_up": "Make the Void/Error continuation type explicit without changing the clock, custody assertions or production behavior; qualify the next exact commit remotely.",
+        "full_remote_ci_passed": false,
+        "native_G_executed": false
+      }
+    ],
     "cause_of_original_OCR_failure_established": false,
     "runner_GPU_hypothesis": "Plausible, unproven; the saved log does not identify the underlying Vision device failure.",
     "OCR_correction": {

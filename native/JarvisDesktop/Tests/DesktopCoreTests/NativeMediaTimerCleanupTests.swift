@@ -20,8 +20,8 @@ private final class MediaTimerWitness {
     var settlementReturned = false
 
     func sleep() async throws {
-        try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
+        try await withTaskCancellationHandler { () async throws -> Void in
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 if released { continuation.resume(throwing: CancellationError()); return }
                 sleepers.append(continuation)
                 started = true
@@ -29,7 +29,7 @@ private final class MediaTimerWitness {
                 for waiter in waiting { waiter.resume() }
             }
         } onCancel: {
-            Task { @MainActor in self.noteCancellation() }
+            _ = Task { @MainActor in self.noteCancellation() }
         }
     }
 
