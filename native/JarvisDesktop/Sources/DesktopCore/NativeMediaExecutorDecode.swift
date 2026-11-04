@@ -1,4 +1,5 @@
 import AppKit
+import CoreML
 import CryptoKit
 import Foundation
 import ImageIO
@@ -127,6 +128,7 @@ enum NativeMediaDecoder {
             throw NativeMediaIssue.localeUnavailable
         }
         request.recognitionLanguages = [selected]
+        try configureCPU(request)
         let registration = cancellation.register { request.cancel() }
         defer { cancellation.remove(registration) }
         try cancellation.check()
@@ -147,6 +149,27 @@ enum NativeMediaDecoder {
             text += line
         }
         return text
+    }
+
+    static func cpuAssignments(_ supported: [VNComputeStage: [MLComputeDevice]]) throws -> [VNComputeStage: MLComputeDevice] {
+        guard !supported.isEmpty else { throw NativeMediaIssue.decoderFailed }
+        var selected: [VNComputeStage: MLComputeDevice] = [:]
+        for (stage, devices) in supported {
+            guard let cpu = devices.first(where: { if case .cpu = $0 { return true }; return false }) else {
+                throw NativeMediaIssue.decoderFailed
+            }
+            selected[stage] = cpu
+        }
+        return selected
+    }
+
+    static func configureCPU(_ request: VNRecognizeTextRequest) throws {
+        let selected: [VNComputeStage: MLComputeDevice]
+        do { selected = try cpuAssignments(request.supportedComputeStageDevices) }
+        catch { throw NativeMediaIssue.decoderFailed }
+        // Select every stage before mutating the request. A missing CPU never
+        // leaves an unassigned stage free to choose a VM accelerator silently.
+        for (stage, device) in selected { request.setComputeDevice(device, for: stage) }
     }
 
     static func render(_ page: PDFPage, maximum: Int) throws -> CGImage {

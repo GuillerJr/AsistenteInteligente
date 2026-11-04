@@ -1,17 +1,27 @@
 # Variante propia inspirada en OpenClaw — base limpia
 
-La reanudación usa ahora el runner estándar ARM64 `xcode-27` para cualificar
-macOS 27 con todas las suites, bundle y smoke existentes. Un recibo separado
-exige Apple Silicon y SO/SDK ≥27 y registra las versiones reales de Xcode y
-Swift. Esta validación nueva está pendiente de CI; no convierte en aprobados
-los intentos de macOS 26 que no recibieron runner.
+La [CI de `e61c912`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41862674611)
+ya recibió el runner estándar ARM64 `xcode-27`. El recibo remoto acredita
+macOS 27.0.1, SDK 27.0, Xcode 27.1 (27A9275) y Swift 6.4. Ubuntu aprobó
+4002 pruebas (47 omitidas); macOS aprobó 4049 Python, pero Swift ejecutó
+710 casos con una omisión y dos fallos inesperados: OCR de PDF/PNG
+(`decoderFailed`) y muestreo de vídeo (`CancellationError`). La CI completa
+**no está aprobada**. La última lectura del workflow seguía `in_progress`;
+las lecturas anteriores `queued`, contradictorias con los artefactos publicados,
+se conservan sin atribuirles una causa.
 
-Punto guardado del 4 de noviembre: la corrección del cliente `c41378a` está
-publicada y Ubuntu aprobó 3980 pruebas (47 omitidas). macOS no obtuvo un runner
-ARM64 en dos intentos; ninguno compiló ni ejecutó pruebas. La
-[CI de esa corrección](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41852070764)
-queda incompleta. El [caso G preparado](qa/product-background-native-20261104-g-template/SNAPSHOT.json)
-permanece **NOEXEC** hasta disponer de CI completa, artefacto y SHA actuales
+Se preparan correcciones para asignar CPU explícitamente a cada etapa Vision
+y rechazar una etapa sin CPU, y para esperar la terminación del temporizador
+en éxito, error, cancelación y reset. Incluyen dos regresiones de política OCR
+y tres de custodia del temporizador; todavía requieren una nueva CI exacta.
+El uso de GPU del runner es una hipótesis plausible, sin demostrar; los fallos
+observados no establecen esa causa.
+
+Como antecedente, la corrección del cliente `c41378a` aprobó Ubuntu, pero sus dos
+intentos macOS 26 no recibieron runner ni ejecutaron código. Ese registro no se
+reescribe como aprobado por el entorno nuevo. El
+[caso G preparado](qa/product-background-native-20261104-g-template/SNAPSHOT.json)
+permanece **NOEXEC**: requiere CI completa aprobada, artefacto y SHA actuales
 verificados. No hay app ni cuota de prueba activas. Las cifras de CI completa
 que siguen corresponden al checkpoint anterior `2c8259de`.
 

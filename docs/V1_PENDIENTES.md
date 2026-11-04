@@ -1,9 +1,10 @@
 # Pendientes de Jarvis
 
-Reanudación: CI pasa al runner estándar ARM64 `xcode-27`, manteniendo todas las
-pruebas y compilaciones remotas. Se acreditarán el SO, SDK y compilador realmente
-asignados mediante un recibo; el nuevo objetivo es macOS 27. Su cualificación y
-el recorrido nativo final continúan pendientes hasta observar sus resultados.
+La CI de `e61c912` ya recibió el runner estándar ARM64 `xcode-27`: el recibo
+remoto acredita macOS 27.0.1, SDK 27.0, Xcode 27.1 (27A9275) y Swift 6.4.
+Ubuntu aprobó 4002 pruebas (47 omitidas) y macOS 4049 Python. Swift ejecutó
+710 casos, con una omisión y dos fallos inesperados. Toda la compilación y las
+pruebas siguen remotas; la CI completa y el recorrido nativo final siguen pendientes.
 
 Decisión del dueño, 24-10-2026: **primero construir la variante completa funcional
 de OpenClaw con el nombre Jarvis, mediante investigación con REA y código propio**.
@@ -13,14 +14,27 @@ producto anterior sigue en Git y sus inventarios están congelados.
 Alcance inicial elegido: macOS Apple Silicon y Telegram como primer canal externo.
 El dueño aplazó expresamente la app de iPhone; ver [decisiones](rebuild/PHASE_A_TARGETS.md).
 
-**Bloqueo actual:** la corrección `c41378a`, publicada en `main`, aprobó 3980
-pruebas en Ubuntu (47 omitidas). GitHub no pudo asignar un runner macOS ARM64 en
-dos intentos, sin compilar ni ejecutar código. Falta esa
-[validación remota](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41852070764)
-y el recorrido nativo final. El caso G queda guardado como
+**Bloqueo actual:** la
+[CI exacta de `e61c912`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41862674611)
+no está aprobada: fallaron el OCR real de PDF/PNG (`decoderFailed`) y el muestreo
+local de vídeo (`CancellationError`) en `NativeMediaExecutorTests`. La última
+lectura del workflow seguía `in_progress`; las lecturas previas `queued` y los
+artefactos publicados no sustituyen el resultado de las suites ni establecen la
+causa de esa discrepancia.
+
+Se preparan la asignación explícita de CPU para cada etapa Vision, con rechazo
+si alguna no la admite, y la espera del temporizador en todos los caminos de
+éxito, error, cancelación y reset. Dos regresiones OCR y tres de custodia del
+temporizador acompañan estos cambios, pendientes de una nueva CI exacta.
+La hipótesis de GPU del runner sigue sin demostrarse. El caso G continúa como
 [plantilla NOEXEC](rebuild/qa/product-background-native-20261104-g-template/SNAPSHOT.json):
-requiere volver a fijar SHA, CI, artefacto y pines actuales antes de ejecutarlo.
-Las copias de prueba están cerradas y las imágenes se conservan desmontadas.
+requiere CI completa aprobada y volver a fijar SHA, artefacto y pines actuales
+antes de ejecutarlo. Las copias de prueba están cerradas y las imágenes se
+conservan desmontadas.
+
+El fallo de capacidad anterior se conserva: `c41378a` aprobó 3980 pruebas Ubuntu
+(47 omitidas), pero sus dos intentos macOS 26 no obtuvieron runner ni ejecutaron
+código. El entorno macOS 27 nuevo no los cualifica retroactivamente.
 
 El [bloque de producto y sesiones avanzadas](rebuild/PHASE_A_PRODUCT_COORDINATION.md)
 ya implementa proyectos/GitHub, preguntas/progreso/presencia/sugerencias, paneles,

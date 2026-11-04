@@ -1,6 +1,6 @@
 {
   "schema": "jarvis.product-coordination-qualification/1",
-  "status": "partial_client_fix_Ubuntu_passed_macOS_capacity_blocked_native_G_NOT_executed",
+  "status": "partial_macOS27_native_media_Swift_failures_native_G_NOT_executed",
   "phase_a_complete": false,
   "phase_b_started": false,
   "notification_presentation_follow_up": {
@@ -56,6 +56,89 @@
   },
   "reference": "REA_OC28_PRODUCT_COORDINATION.md",
   "checkpoints": [
+    {
+      "commit": "e61c912adb62be384cd736d9f08f2d8e3abe580d",
+      "ci_run_id": 41862674611,
+      "run_attempt": 1,
+      "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41862674611",
+      "status": "in_progress",
+      "conclusion": null,
+      "workflow_observed_at": "2026-11-04T16:23:57Z",
+      "workflow_updated_at_last_read": "2026-11-04T16:20:26Z",
+      "full_remote_ci_passed": false,
+      "qualified": false,
+      "purpose": "Qualify the new actual macOS27 ARM64 environment with all existing remote suites, bundles and smokes; Swift failures block complete qualification and native G.",
+      "ubuntu": {
+        "job_id": 126688508340,
+        "passed": 4002,
+        "skipped": 47,
+        "failed": 0,
+        "seconds": 271.46,
+        "saved_decoded_log_sha256": "bd9a527fe2e3d94d1c416f32bc56e4dee0545970cd0b28f6934da7dcdc8cefdb",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      "macos": {
+        "job_id": 126688508879,
+        "python_passed": 4049,
+        "python_skipped": 0,
+        "python_failed": 0,
+        "python_seconds": 408.7,
+        "swift_executed": 710,
+        "swift_skipped": 1,
+        "swift_failures": 2,
+        "swift_unexpected_failures": 2,
+        "swift_seconds": 225.638,
+        "saved_decoded_log_sha256": "f90e86e26e63a6eb4b099ef7cf8692e643a5324daeb40d1b8247b046b6fe15d4",
+        "failures": [
+          {
+            "test": "NativeMediaExecutorTests.testScannedPDFAndPNGRunRealOfflineVisionWithSourceCitations",
+            "error": "decoderFailed",
+            "observed_message": "El analizador local no pudo confirmar el contenido del adjunto.",
+            "cause": "Not established; runner GPU/accelerator availability is a plausible unproven hypothesis."
+          },
+          {
+            "test": "NativeMediaExecutorTests.testVideoIsSampledLocallyAndCannotClaimFullObservation",
+            "error": "CancellationError",
+            "cause": "Not established by the saved log."
+          }
+        ],
+        "status": "in_progress",
+        "conclusion": null,
+        "other_completed_successful_steps": [
+          "self_contained_bundle",
+          "helper",
+          "native_development_export",
+          "python_suite",
+          "wheel",
+          "sdist",
+          "final_installation_smoke"
+        ]
+      },
+      "actual_environment": {
+        "format": "jarvis-ci-macos-environment/1",
+        "source_commit": "e61c912adb62be384cd736d9f08f2d8e3abe580d",
+        "run_id": "41862674611",
+        "architecture": "arm64",
+        "os_version": "27.0.1",
+        "sdk_version": "27.0",
+        "xcode_version": "27.1",
+        "xcode_build": "27A9275",
+        "swift_version": "6.4",
+        "swift_target": "arm64-apple-macosx27.0.0",
+        "artifact_id": 13340383194,
+        "artifact_digest_sha256": "9c644f5e1e0fcdbcde18eb35f30c2f9066e4a70cef57d1276e6f03bcd5fcc1c7",
+        "receipt_sha256": "beac90062782fac017d66f57914e362a103f85271043214de711b61f9fac9aef",
+        "full_workflow_success_claimed": false,
+        "scope": "Actual new macOS27 environment only; no retroactive macOS26 qualification."
+      },
+      "local_full_suites_or_builds_run": false,
+      "native_final_case_executed": false,
+      "limit": "Python, the actual environment receipt, bundle/helper, native export, packages and final installation smokes passed. Two unexpected Swift failures block full exact-commit qualification; macOS job/workflow were still in_progress at the last read. Published artifacts and delayed workflow reads do not override test failures.",
+      "wheel_sdist_isolated_installation": "success_both_platforms",
+      "self_contained_bundle_and_parent_eof": "success",
+      "native_development_export": "success"
+    },
     {
       "commit": "2c8259de8112aa5f1487814a5c5c35b3931e5c43",
       "ci_run_id": 41842491175,
@@ -431,7 +514,7 @@
     }
   ],
   "native_qualification": {
-    "status": "partial_G_NOT_executed_macOS_CI_capacity_blocked",
+    "status": "partial_G_NOT_executed_macOS27_Swift_failures",
     "local_full_suites_run": false,
     "local_builds_run": false,
     "owner_installed_app_modified": false,
@@ -3100,7 +3183,7 @@
       "automatic_in_place_budget_extension": false
     },
     "next_background_case_plan": {
-      "status": "template_saved_NOT_admitted_for_execution",
+      "status": "template_saved_NOT_admitted_macOS27_Swift_failures",
       "source_commit_in_template": "c41378acc0c1f24f6534011f1aab09691a9a6948",
       "scope": "A1/B0 rendered during actual model run and after same run completes, then A1 return and normal GUI close; numeric text only latency, no question dependency.",
       "durable_template": "docs/rebuild/qa/product-background-native-20261104-g-template/SNAPSHOT.json",
@@ -3118,7 +3201,11 @@
       "prior_F_128MiB_limit_extended": false,
       "new_active_seconds": 810,
       "new_cleanup_seconds": 90,
-      "no_mount_or_app_active_at_checkpoint": true
+      "no_mount_or_app_active_at_checkpoint": true,
+      "latest_checked_source_commit": "e61c912adb62be384cd736d9f08f2d8e3abe580d",
+      "latest_checked_ci_run_id": 41862674611,
+      "latest_checked_ci_full_remote_passed": false,
+      "execution_blocker": "Two unexpected NativeMediaExecutor Swift failures in e61; require a new complete exact-commit CI before rebinding and admitting G."
     },
     "background_native_20261104_d": {
       "status": "incomplete_observer_admission_failed_root_GUI_recovery_closed",
@@ -3359,7 +3446,7 @@
     ]
   },
   "provider_plugin_startup_fix_20261104": {
-    "status": "implemented_pushed_Ubuntu_passed_macOS_infrastructure_capacity_blocked_native_final_pending",
+    "status": "implemented_pushed_follow_up_macOS27_Swift_failures_native_final_pending",
     "observation": "Official client created remote catalog and temporary plugin repository in the synthetic provider despite apps=false; metadata only, no credential or cache contents read.",
     "settings": [
       "features.apps=false",
@@ -3422,50 +3509,99 @@
       "native_qa_artifact": null,
       "local_full_suites_or_builds_run": false,
       "native_final_case_executed": false
+    },
+    "current_source_ci_record_role": "Historical CI of implementation c41378a; preserved with both macOS26 capacity failures.",
+    "latest_follow_up_ci": {
+      "commit": "e61c912adb62be384cd736d9f08f2d8e3abe580d",
+      "ci_run_id": 41862674611,
+      "full_remote_ci_passed": false,
+      "native_final_case_executed": false
     }
   },
   "current_source_ci_status": {
-    "commit": "c41378acc0c1f24f6534011f1aab09691a9a6948",
-    "ci_run_id": 41852070764,
-    "run_attempt": 2,
-    "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41852070764",
-    "status": "completed",
-    "conclusion": "failure",
+    "commit": "e61c912adb62be384cd736d9f08f2d8e3abe580d",
+    "ci_run_id": 41862674611,
+    "run_attempt": 1,
+    "ci_url": "https://github.com/GuillerJr/AsistenteInteligente/actions/runs/41862674611",
+    "status": "in_progress",
+    "conclusion": null,
+    "workflow_updated_at_last_read": "2026-11-04T16:23:57Z",
     "full_remote_ci_passed": false,
     "qualified": false,
-    "purpose": "Disable implicit official-client plugin/catalog synchronization; macOS could not acquire hosted ARM64 runner in two attempts.",
+    "purpose": "Qualify the new actual macOS27 ARM64 environment with all existing remote suites, bundles and smokes; Swift failures block complete qualification and native G.",
     "ubuntu": {
-      "job_id": 126662347435,
-      "original_job_id": 126650716068,
-      "retained_success_from_attempt": 1,
-      "passed": 3980,
+      "job_id": 126688508340,
+      "passed": 4002,
       "skipped": 47,
       "failed": 0,
-      "seconds": 224.16,
-      "saved_decoded_log_sha256": "a782e56ba867c591a304dda257fae2f8850874c1eddd4cdc8d3b52fe1b45ec0b"
+      "seconds": 271.46,
+      "saved_decoded_log_sha256": "bd9a527fe2e3d94d1c416f32bc56e4dee0545970cd0b28f6934da7dcdc8cefdb",
+      "status": "completed",
+      "conclusion": "success"
     },
     "macos": {
-      "job_id": 126662343529,
-      "original_job_id": 126650716615,
-      "conclusion": "cancelled",
-      "runner_assigned": false,
-      "tests_or_build_started": false,
-      "infrastructure_failure": "hosted_macOS_ARM64_capacity",
-      "attempts_with_same_capacity_failure": [
-        1,
-        2
+      "job_id": 126688508879,
+      "python_passed": 4049,
+      "python_skipped": 0,
+      "python_failed": 0,
+      "python_seconds": 408.7,
+      "swift_executed": 710,
+      "swift_skipped": 1,
+      "swift_failures": 2,
+      "swift_unexpected_failures": 2,
+      "swift_seconds": 225.638,
+      "saved_decoded_log_sha256": "f90e86e26e63a6eb4b099ef7cf8692e643a5324daeb40d1b8247b046b6fe15d4",
+      "failures": [
+        {
+          "test": "NativeMediaExecutorTests.testScannedPDFAndPNGRunRealOfflineVisionWithSourceCitations",
+          "error": "decoderFailed",
+          "observed_message": "El analizador local no pudo confirmar el contenido del adjunto.",
+          "cause": "Not established; runner GPU/accelerator availability is a plausible unproven hypothesis."
+        },
+        {
+          "test": "NativeMediaExecutorTests.testVideoIsSampledLocallyAndCannotClaimFullObservation",
+          "error": "CancellationError",
+          "cause": "Not established by the saved log."
+        }
       ],
-      "local_replacement_run": false
+      "status": "in_progress",
+      "conclusion": null,
+      "other_completed_successful_steps": [
+        "self_contained_bundle",
+        "helper",
+        "native_development_export",
+        "python_suite",
+        "wheel",
+        "sdist",
+        "final_installation_smoke"
+      ]
     },
-    "wheel_sdist_isolated_installation": "success_ubuntu_not_run_macos",
-    "self_contained_bundle_and_parent_eof": "not_run_macos",
-    "native_development_export": "not_run_macos",
-    "native_qa_artifact": null,
+    "actual_environment": {
+      "format": "jarvis-ci-macos-environment/1",
+      "source_commit": "e61c912adb62be384cd736d9f08f2d8e3abe580d",
+      "run_id": "41862674611",
+      "architecture": "arm64",
+      "os_version": "27.0.1",
+      "sdk_version": "27.0",
+      "xcode_version": "27.1",
+      "xcode_build": "27A9275",
+      "swift_version": "6.4",
+      "swift_target": "arm64-apple-macosx27.0.0",
+      "artifact_id": 13340383194,
+      "artifact_digest_sha256": "9c644f5e1e0fcdbcde18eb35f30c2f9066e4a70cef57d1276e6f03bcd5fcc1c7",
+      "receipt_sha256": "beac90062782fac017d66f57914e362a103f85271043214de711b61f9fac9aef",
+      "full_workflow_success_claimed": false,
+      "scope": "Actual new macOS27 environment only; no retroactive macOS26 qualification."
+    },
     "local_full_suites_or_builds_run": false,
-    "native_final_case_executed": false
+    "native_final_case_executed": false,
+    "limit": "Python, the actual environment receipt, bundle/helper, native export, packages and final installation smokes passed. Two unexpected Swift failures block full exact-commit qualification; macOS job/workflow were still in_progress at the last read. Published artifacts and delayed workflow reads do not override test failures.",
+    "wheel_sdist_isolated_installation": "success_both_platforms",
+    "self_contained_bundle_and_parent_eof": "success",
+    "native_development_export": "success"
   },
   "standard_runner_upgrade_20261104": {
-    "status": "implemented_pending_exact_remote_CI",
+    "status": "actual_macOS27_environment_verified_full_qualification_blocked_by_Swift_failures",
     "runner_label": "xcode-27",
     "architecture": "arm64",
     "minimum_host_major": 27,
@@ -3481,6 +3617,68 @@
       "https://raw.githubusercontent.com/actions/runner-images/main/images/macos/xcode-27-arm64-Readme.md",
       "https://developer.apple.com/xcode/system-requirements/"
     ],
-    "local_full_suites_or_builds_run": false
+    "local_full_suites_or_builds_run": false,
+    "verified_environment_ci_commit": "e61c912adb62be384cd736d9f08f2d8e3abe580d",
+    "verified_environment_ci_run_id": 41862674611,
+    "verified_environment_receipt": {
+      "format": "jarvis-ci-macos-environment/1",
+      "source_commit": "e61c912adb62be384cd736d9f08f2d8e3abe580d",
+      "run_id": "41862674611",
+      "architecture": "arm64",
+      "os_version": "27.0.1",
+      "sdk_version": "27.0",
+      "xcode_version": "27.1",
+      "xcode_build": "27A9275",
+      "swift_version": "6.4",
+      "swift_target": "arm64-apple-macosx27.0.0",
+      "artifact_id": 13340383194,
+      "artifact_digest_sha256": "9c644f5e1e0fcdbcde18eb35f30c2f9066e4a70cef57d1276e6f03bcd5fcc1c7",
+      "receipt_sha256": "beac90062782fac017d66f57914e362a103f85271043214de711b61f9fac9aef",
+      "full_workflow_success_claimed": false,
+      "scope": "Actual new macOS27 environment only; no retroactive macOS26 qualification."
+    },
+    "full_remote_ci_passed": false
+  },
+  "native_media_macos27_follow_up_20261104": {
+    "status": "source_corrections_prepared_pending_new_exact_remote_CI",
+    "failed_checkpoint_commit": "e61c912adb62be384cd736d9f08f2d8e3abe580d",
+    "failed_checkpoint_ci_run_id": 41862674611,
+    "correction_commit": null,
+    "new_exact_ci_run_id": null,
+    "cause_of_original_OCR_failure_established": false,
+    "runner_GPU_hypothesis": "Plausible, unproven; the saved log does not identify the underlying Vision device failure.",
+    "OCR_correction": {
+      "source": "native/JarvisDesktop/Sources/DesktopCore/NativeMediaExecutorDecode.swift",
+      "policy": "Assign an explicitly available CPU device to every supported Vision stage before execution; reject an empty catalogue or any stage without CPU.",
+      "recognition_level_languages_revision_or_language_correction_relaxed": false,
+      "regression_tests": [
+        "NativeMediaExecutorTests.testOCRAssignsRealCPUToEverySupportedStageWithoutChangingRecognition",
+        "NativeMediaExecutorTests.testOCRRejectsMissingOrNonCPUStageInsteadOfLeavingAutomaticCompute"
+      ]
+    },
+    "timer_custody_correction": {
+      "source": "native/JarvisDesktop/Sources/DesktopCore/NativeMediaExecutor.swift",
+      "policy": "Cancel and await the timer task before releasing operation custody on success or error; explicit cancellation and reset also await it.",
+      "regression_tests": [
+        "NativeMediaTimerCleanupTests.testSuccessAndFailureRetainCustodyUntilCancelledTimerReturns",
+        "NativeMediaTimerCleanupTests.testExplicitCancellationJoinsTimerAsWellAsDecoder",
+        "NativeMediaTimerCleanupTests.testResetJoinsTimerWithoutReplayingConsumedOperation"
+      ],
+      "cause_of_original_video_CancellationError_established": false
+    },
+    "tests_or_builds_executed_locally": false,
+    "new_runtime_validation_claimed": false,
+    "native_G_still_NOEXEC": true,
+    "scope_limit": "Prepared source and regression cases are not passing test evidence. Preserve D/E/F, macOS26 capacity failures, broad phase A open and phase B deferred."
+  },
+  "remote_ci_read_discrepancy_20261104": {
+    "ci_run_id": 41862674611,
+    "run_attempt": 1,
+    "earlier_workflow_read_status": "queued_despite_published_artifacts",
+    "later_workflow_read_status": "in_progress",
+    "later_workflow_observed_at": "2026-11-04T16:23:57Z",
+    "later_workflow_updated_at": "2026-11-04T16:20:26Z",
+    "underlying_cause_established": false,
+    "limit": "Delayed read states and artifact publication do not establish workflow success; the decoded logs contain two unexpected Swift failures."
   }
 }

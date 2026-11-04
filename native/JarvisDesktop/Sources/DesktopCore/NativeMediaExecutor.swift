@@ -178,16 +178,24 @@ public final class NativeMediaExecutor {
     private var submitted: Set<String> = []
     private var activeOperation: String?
     private var activeTask: Task<RPCValue, Error>?
+    private var activeTimeout: Task<Void, Never>?
     private var cancellation: NativeMediaCancellation?
     private var epoch = 0
     private var processingSeconds: TimeInterval = 180
+    private var deadlineSleep: @MainActor @Sendable (TimeInterval) async throws -> Void = {
+        try await Task.sleep(for: .seconds($0))
+    }
 
     public init() {}
-    init(processingSeconds: TimeInterval) throws {
+    init(processingSeconds: TimeInterval,
+         deadlineSleep: @escaping @MainActor @Sendable (TimeInterval) async throws -> Void = {
+             try await Task.sleep(for: .seconds($0))
+         }) throws {
         guard processingSeconds.isFinite, processingSeconds > 0, processingSeconds <= 180 else {
             throw NativeMediaIssue.invalidArguments
         }
         self.processingSeconds = processingSeconds
+        self.deadlineSleep = deadlineSleep
     }
 
     public func execute(_ command: String, arguments: [String: RPCValue]) async throws -> RPCValue {
@@ -206,34 +214,52 @@ public final class NativeMediaExecutor {
             return try await self.perform(request, flag: flag, version: version)
         }
         activeTask = task
-        let timeout = Task { @MainActor [processingSeconds] in
-            do { try await Task.sleep(for: .seconds(processingSeconds)) }
+        let timeout = Task { @MainActor [processingSeconds, deadlineSleep] in
+            do { try await deadlineSleep(processingSeconds) }
             catch { return }
             flag.cancel(.deadline); task.cancel()
         }
+        activeTimeout = timeout
         defer {
-            timeout.cancel()
             if activeOperation == request.operationID {
-                activeTask = nil; activeOperation = nil; cancellation = nil
+                activeTask = nil; activeTimeout = nil; activeOperation = nil; cancellation = nil
             }
         }
-        return try await withTaskCancellationHandler {
-            let result = try await task.value
+        let result: Result<RPCValue, Error>
+        do {
+            result = .success(try await withTaskCancellationHandler {
+                let value = try await task.value
+                try flag.check()
+                guard version == epoch else { throw NativeMediaIssue.cancelled }
+                return value
+            } onCancel: { flag.cancel(); task.cancel() })
+        } catch { result = .failure(error) }
+        // Cancelling the timer is only a signal. Retain ownership until that
+        // task has also returned, on both the successful and failed paths.
+        timeout.cancel()
+        await timeout.value
+        if case .success = result {
             try flag.check()
             guard version == epoch else { throw NativeMediaIssue.cancelled }
-            return result
-        } onCancel: { flag.cancel(); task.cancel() }
+        }
+        return try result.get()
     }
 
     public func cancel(operationID: String) async {
         guard activeOperation == operationID, let task = activeTask else { return }
+        let timeout = activeTimeout
         cancellation?.cancel(); task.cancel()
         _ = await task.result
+        if let timeout { timeout.cancel(); await timeout.value }
     }
 
     public func reset() async {
         epoch += 1
-        if let task = activeTask { cancellation?.cancel(); task.cancel(); _ = await task.result }
+        if let task = activeTask {
+            let timeout = activeTimeout
+            cancellation?.cancel(); task.cancel(); _ = await task.result
+            if let timeout { timeout.cancel(); await timeout.value }
+        }
         // Consumed IDs remain consumed after reset; no uncertain operation is replayed.
     }
 

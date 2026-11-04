@@ -1,6 +1,8 @@
 @preconcurrency import AVFoundation
+import CoreML
 import CryptoKit
 import Foundation
+import Vision
 import XCTest
 @testable import DesktopCore
 
@@ -72,6 +74,44 @@ final class NativeMediaExecutorTests: XCTestCase {
             XCTAssertEqual(result["segments"].array?.first?["locator"], .string(locator))
             XCTAssertTrue(result["segments"].array?.first?["text"].string?.contains("4826") == true)
             try assertFrame(result)
+        }
+    }
+    func testOCRAssignsRealCPUToEverySupportedStageWithoutChangingRecognition() throws {
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = false
+        request.recognitionLanguages = ["en-US"]
+        let revision = request.revision
+        let supported = try request.supportedComputeStageDevices
+        XCTAssertFalse(supported.isEmpty, "Vision debe acreditar etapas reales de OCR")
+        for (stage, devices) in supported {
+            XCTAssertTrue(devices.contains(where: { if case .cpu = $0 { return true }; return false }),
+                          "La etapa \(stage.rawValue) debe admitir CPU real")
+        }
+        try NativeMediaDecoder.configureCPU(request)
+        for stage in supported.keys {
+            let assigned = try XCTUnwrap(request.computeDevice(for: stage))
+            guard case .cpu = assigned else { return XCTFail("Cada etapa debe usar CPU explícita") }
+        }
+        XCTAssertEqual(request.recognitionLevel, .accurate)
+        XCTAssertFalse(request.usesLanguageCorrection)
+        XCTAssertEqual(request.recognitionLanguages, ["en-US"])
+        XCTAssertEqual(request.revision, revision)
+    }
+    func testOCRRejectsMissingOrNonCPUStageInsteadOfLeavingAutomaticCompute() throws {
+        let cpu = try XCTUnwrap(MLComputeDevice.allComputeDevices.first(where: {
+            if case .cpu = $0 { return true }; return false
+        }))
+        let nonCPU = MLComputeDevice.allComputeDevices.filter {
+            if case .cpu = $0 { return false }; return true
+        }
+        let unsupported: [[VNComputeStage: [MLComputeDevice]]] = [
+            [:], [.main: []], [.main: nonCPU], [.main: [cpu], .postProcessing: []],
+        ]
+        for stages in unsupported {
+            XCTAssertThrowsError(try NativeMediaDecoder.cpuAssignments(stages)) {
+                XCTAssertEqual($0 as? NativeMediaIssue, .decoderFailed)
+            }
         }
     }
     @MainActor func testEncryptedOrTooManyPDFPagesAreRejectedRatherThanMisreportedComplete() async throws {
