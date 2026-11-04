@@ -3463,5 +3463,24 @@
     "native_qa_artifact": null,
     "local_full_suites_or_builds_run": false,
     "native_final_case_executed": false
+  },
+  "standard_runner_upgrade_20261104": {
+    "status": "implemented_pending_exact_remote_CI",
+    "runner_label": "xcode-27",
+    "architecture": "arm64",
+    "minimum_host_major": 27,
+    "minimum_sdk_major": 27,
+    "full_suites_bundle_smokes_and_budgets_preserved": true,
+    "new_paid_runner_tier_or_service": false,
+    "qualification_scope": "New actual macOS27 environment; not equivalent to prior macOS26/SDK nor retroactive qualification.",
+    "actual_environment_receipt_script": "script/check_macos_ci_environment.py",
+    "environment_receipt_artifact": "jarvis-ci-environment-${github.sha}",
+    "previous_capacity_failures_preserved": true,
+    "official_sources": [
+      "https://docs.github.com/en/actions/reference/runners/github-hosted-runners",
+      "https://raw.githubusercontent.com/actions/runner-images/main/images/macos/xcode-27-arm64-Readme.md",
+      "https://developer.apple.com/xcode/system-requirements/"
+    ],
+    "local_full_suites_or_builds_run": false
   }
 }

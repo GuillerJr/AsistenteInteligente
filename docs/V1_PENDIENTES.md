@@ -1,5 +1,10 @@
 # Pendientes de Jarvis
 
+Reanudación: CI pasa al runner estándar ARM64 `xcode-27`, manteniendo todas las
+pruebas y compilaciones remotas. Se acreditarán el SO, SDK y compilador realmente
+asignados mediante un recibo; el nuevo objetivo es macOS 27. Su cualificación y
+el recorrido nativo final continúan pendientes hasta observar sus resultados.
+
 Decisión del dueño, 24-10-2026: **primero construir la variante completa funcional
 de OpenClaw con el nombre Jarvis, mediante investigación con REA y código propio**.
 Las mejoras propias se harán después. Se limpió este repositorio; el código del

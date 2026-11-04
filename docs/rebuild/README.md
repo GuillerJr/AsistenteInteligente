@@ -1,5 +1,11 @@
 # Variante propia inspirada en OpenClaw — base limpia
 
+La reanudación usa ahora el runner estándar ARM64 `xcode-27` para cualificar
+macOS 27 con todas las suites, bundle y smoke existentes. Un recibo separado
+exige Apple Silicon y SO/SDK ≥27 y registra las versiones reales de Xcode y
+Swift. Esta validación nueva está pendiente de CI; no convierte en aprobados
+los intentos de macOS 26 que no recibieron runner.
+
 Punto guardado del 4 de noviembre: la corrección del cliente `c41378a` está
 publicada y Ubuntu aprobó 3980 pruebas (47 omitidas). macOS no obtuvo un runner
 ARM64 en dos intentos; ninguno compiló ni ejecutó pruebas. La

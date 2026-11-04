@@ -1,5 +1,11 @@
 # Producto, sesiones y coordinación avanzadas
 
+Para continuar sin repetir la cola de la imagen 26 se elige el runner estándar
+ARM64 `xcode-27`. Mantiene todas las comprobaciones y presupuestos del workflow;
+un recibo remoto exige SO/SDK ≥27 y registra versiones reales. Se trata de una
+cualificación nueva en macOS 27, no de una equivalencia de SDK ni de un positivo
+retroactivo para macOS 26. Debe aprobar la CI exacta antes del caso nativo final.
+
 La corrección del cliente `c41378a` se publicó en `main`. Ubuntu aprobó 3980
 pruebas (47 omitidas, 224,16 s); macOS terminó sin runner ARM64 en dos intentos,
 por falta de capacidad del proveedor. No se ejecutaron compilación ni pruebas de

@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-26]
+        os: [ubuntu-24.04, xcode-27]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
@@ -32,6 +32,19 @@ jobs:
       - name: Preparar Python y dependencias de desarrollo
         id: dependencies
         run: uv sync --locked --group dev --python 3.11
+      - name: Acreditar el entorno real de macOS y Apple Silicon
+        if: runner.os == 'macOS'
+        run: >-
+          .venv/bin/python -B script/check_macos_ci_environment.py
+          --output "${{ runner.temp }}/Jarvis-ci-environment.json"
+      - name: Conservar el recibo del entorno de CI
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-ci-environment-${{ github.sha }}
+          path: ${{ runner.temp }}/Jarvis-ci-environment.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Comprobar pureza de la base
         run: uv run --no-sync python script/check_clean_base.py
       - name: Ruff
