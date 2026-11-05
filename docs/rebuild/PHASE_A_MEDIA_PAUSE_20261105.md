@@ -274,6 +274,40 @@ libre, cuota desmontada al primer intento sin fuerza; imagen física
 SHA-256 `f640ad9ecb823357e43abd71d0cb69ea1b83f2163ed7443458fdcf693faedd4a`.
 R no cualifica medios ni la fase A. No volver a ejecutar Q ni R.
 
+### Causa establecida con el rollout de R
+
+Con autorización del dueño, la imagen de cuota se montó en **sólo lectura** en
+un punto nuevo y vacío. Se leyó sólo `state-r/jarvis.sqlite3` (modo inmutable)
+para obtener el thread `01a1ad00-2547-7f33-88c3-44244d220696` y su rollout
+`provider/client/sessions/2026/11/05/rollout-2026-11-05T13-37-10-01a1ad00-2547-7f33-88c3-44244d220696.jsonl`
+(94.513 B, SHA-256 `d6639fe5edeb00d04c0caea902409510e052d839317582c86a3eccd5e03325da`).
+No se leyó `auth.json` ni otro thread. Desmontaje normal; imagen sin cambios
+(815.796.224 B, mismo inodo) y montura canónica desmontada con modo 000.
+
+El thread recibió las 55 herramientas dinámicas, incluida `media_inspect`. El
+modelo `gpt-6.1-sol` no la llamó directamente: usó la herramienta propia de modo
+de código `exec` (`custom_tool_call`) con JavaScript que invoca
+`tools.media_inspect({...})` con los argumentos exactos. Su salida fue
+`failed to spawn code-mode host /private/tmp/jq-8k57q6f0/bin/codex-code-mode-host:
+No such file or directory (os error 2)`. Después el modelo dio la respuesta de
+fallo. El app-server sólo emitió `item_completed` de `UserMessage` y
+`AgentMessage`: la llamada `exec` no llega a los clientes como item, por eso
+`provider.item.native` no la vio.
+
+Causa: el arnés de QA copia a la cuota sólo `bin/codex`, no su binario hermano
+`codex-code-mode-host` (65.643.072 B) que sí existe junto al Codex instalado y que
+`script/package_desktop_runtime.py` ya exige en el paquete autocontenido. Q
+presenta la misma firma y se atribuye a la misma causa sólo por analogía: su
+rollout no se leyó. Además, el modo de código mete las herramientas dinámicas
+dentro de un `exec` que Jarvis no observa ni autoriza como llamada propia hasta
+que el host la despacha.
+
+Siguiente paso propuesto, pendiente de decisión del dueño: desactivar el modo de
+código en el cliente (`features.code_mode_host=false`, con regresión de argumentos
+y comprobación de que el modelo vuelve a llamadas directas en un caso nativo
+nuevo) o, alternativamente, incluir el host en las copias de QA y validar el
+recorrido de aprobación e imagen dentro de `exec`.
+
 La documentación oficial consultada antes de pausar reconoce que
 `dynamicTools` y `item/tool/call` son experimentales y exige nombres de tools
 y namespaces compatibles con Responses. No se concluyó que esto explique Q:
