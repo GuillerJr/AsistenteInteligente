@@ -229,6 +229,51 @@ con limpieza confirmada. La causa de Q sigue **sin establecer**: la corrección
 sólo hace observable el próximo intento. Falta la CI del nuevo SHA y un caso
 nativo nuevo; la lectura del rollout Q sigue requiriendo autorización del dueño.
 
+La [CI completa de `613f210`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/42080268038)
+terminó en verde: 4165 Python en Ubuntu (47 omitidos), 4212 en macOS y 724 Swift
+(1 omitido, 0 fallos).
+
+## Caso nativo R: Q reproducido, cierre normal, no cualificado
+
+Caso nuevo en `/private/tmp/jarvis-media-visual-native-20261105-r`, encadenado a
+los recibos de Q y ligado a `613f210` y su artefacto nativo 13441410101. Fixture
+nuevo `visual-r.png` (2102 B, SHA-256
+`0dbdf66414de9d57c0b1f8bf6c99e9a5579ce56c39741dc01389d5f78c5206b2`) y oráculo
+oculto fijado antes del modelo; mismo prompt que Q. Admisión
+`d0d402e52096c6e2b4cf04a0fb00491cf7742a0baa3cef4a54ef9debd4d7b472`, preparación
+`24f1aff6d4f5b1129c8119fe56e3182d878212d32186ce50b8fffc693d9824b3`.
+Un primer comando de lanzamiento mal formado (entrada `prepare.py` con argumentos
+del supervisor) fue rechazado por `argparse` antes de cualquier efecto.
+
+Chat «Prueba visual R» renombrado por la interfaz (menú contextual, control de
+pantalla puntual), sesión `5ddfd29c91fb4529a5097afba5accace`, leída con un único
+`sessions.list` de sólo lectura. Un import, un `runs.start` y ninguna aprobación:
+`R_run_ended_before_observed_bound_approval` en 12,293 s, 43 RPC. Resultado
+`visual-result.json`, SHA-256
+`d6f987dccf811124e409c3ef57d668b13ccdd32fd0ad1fbd43144ab978bd72ef`.
+
+El run quedó completado/conocido/limpio, sin recibos. El modelo escribió que
+inspeccionaría el adjunto y después `{"figuras":[],"error":"No recibí la imagen
+porque falló la herramienta de inspección."}`; es texto del modelo. Diagnósticos
+recogidos: **ninguno** (`provider.request.rejected`, `provider.item.native` y
+`tool.reply.*` ausentes). Una lectura posterior de sólo lectura de todos los
+eventos del run sólo mostró `run_queued`, `media.references`, `run_status`,
+deltas, **dos `usage.update`** separados entre los dos mensajes, `usage.final` y
+`run_settled`. El segundo paso de inferencia indica que hubo una llamada de
+herramienta dentro de Codex cuyo resultado volvió al modelo sin `item/tool/call`
+hacia Jarvis ni item completado de tipo no conversacional. La causa sigue **sin
+establecer**. Hipótesis sin verificar: invocación dentro de un modo de código de
+Codex (`code_mode_host` sigue activo) o rechazo interno de argumentos antes del
+despacho. Establecerla requiere leer el rollout del thread sintético R, que
+necesita autorización del dueño.
+
+Cierre: intención GUI registrada y «Quit» del menú; `closed_after_GUI_intent`
+en 186,857 s, sin señales ni incidencias, cuatro identidades ausentes, mismo lease
+libre, cuota desmontada al primer intento sin fuerza; imagen física
+815.796.224 bytes; pico residual no atribuido 21.508.096 bytes. `closed.json`
+SHA-256 `f640ad9ecb823357e43abd71d0cb69ea1b83f2163ed7443458fdcf693faedd4a`.
+R no cualifica medios ni la fase A. No volver a ejecutar Q ni R.
+
 La documentación oficial consultada antes de pausar reconoce que
 `dynamicTools` y `item/tool/call` son experimentales y exige nombres de tools
 y namespaces compatibles con Responses. No se concluyó que esto explique Q:
