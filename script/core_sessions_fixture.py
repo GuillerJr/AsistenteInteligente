@@ -78,7 +78,7 @@ def propose_write(state):
         tool='workspace_write',arguments=arguments)
     emit({'id':request_number,'method':'item/tool/call','params':{
         'threadId':state['thread'],'turnId':state['turn'],'callId':'own-call-'+str(request_number),
-        'namespace':None,'tool':'workspace_write','arguments':arguments}})
+        'namespace':'jarvis_direct','tool':'workspace_write','arguments':arguments}})
 def consume(message):
     record('received',message=message)
     method,params=message.get('method'),message.get('params',{})
@@ -101,7 +101,8 @@ def consume(message):
     elif method=='thread/start':
         assert params['sandbox']=='read-only' and params['approvalPolicy']=='untrusted'
         identity='jarvis-fixture-thread-'+uuid4().hex
-        threads[identity]={'tools':[tool['name'] for tool in params.get('dynamicTools',[])],
+        threads[identity]={'tools':[tool['name'] for spec in params.get('dynamicTools',[])
+            for tool in (spec['tools'] if spec.get('type')=='namespace' else [spec])],
             'instructions':params.get('developerInstructions',''),'items':[]}
         save_threads(); result={'thread':{'id':identity}}
     elif method=='thread/resume':

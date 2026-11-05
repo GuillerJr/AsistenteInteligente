@@ -350,6 +350,21 @@ herramientas con imagen o aprobación. Desactivar el modo de código no basta;
 Jarvis necesita namespaces sólo directos, lo que exige aceptar llamadas con
 namespace en `item/tool/call`.
 
+Por decisión del dueño se implementó: `thread/start` ofrece todas las
+herramientas de Jarvis dentro de un único `{type: "namespace", name:
+"jarvis_direct"}` (forma `NamespaceDynamicToolSpec` del esquema de 0.163), y
+`CodexClient.start()` pasa `features.code_mode` como una sola tabla
+`{enabled=false, direct_only_tool_namespaces=["jarvis_direct"]}`. Se cambia el
+contrato: `item/tool/call` sólo se acepta con `namespace == "jarvis_direct"`
+(una llamada de raíz o de otro namespace se rechaza), y el acuse
+`dynamicToolCall` debe traer ese mismo namespace. Los dos fixtures de scripts
+que simulan Codex se adaptaron. Pruebas focales supervisadas verdes para
+`test_codex_tools.py`, `test_codex.py` y `test_codex_cleanup.py`; los tests de
+los fixtures no pueden escribir en `/private/tmp` bajo el guard local (falla
+igual sin el cambio) y dependen de CI. Falta un caso nativo nuevo (U) que
+acredite que Codex 0.163 ofrece `jarvis_direct` como llamada directa a un
+modelo `code_mode_only`.
+
 La documentación oficial consultada antes de pausar reconoce que
 `dynamicTools` y `item/tool/call` son experimentales y exige nombres de tools
 y namespaces compatibles con Responses. No se concluyó que esto explique Q:

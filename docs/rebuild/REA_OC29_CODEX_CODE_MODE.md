@@ -118,6 +118,9 @@ los modelos ofrecidos a la cuenta de prueba. La rama desactivada de OpenClaw no
 basta en ese caso; lo que sí aplica es el punto 2: herramientas dinámicas en un
 namespace listado en `features.code_mode.direct_only_tool_namespaces`.
 
+Jarvis adoptó después ese punto 2 con un namespace `jarvis_direct` que agrupa
+todas sus herramientas (todas pasan por la autoridad única de aprobación).
+
 Incógnitas: no se ha ejecutado ni verificado que `direct_only_tool_namespaces`
 exponga las herramientas como llamada directa con un modelo `code_mode_only`;
 las cadenas del binario y la guía de OpenClaw lo indican, sin ejecución. Las fuentes internas de Codex no se inspeccionaron. Las

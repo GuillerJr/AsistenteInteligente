@@ -42,9 +42,13 @@ assert all(settings.get(key) == 'false' for key in (
     'features.shell_tool', 'features.unified_exec', 'features.view_image',
     'features.computer_use', 'features.browser_use', 'features.browser_use_external',
     'features.in_app_browser', 'features.tool_suggest', 'features.sleep_tool',
-    'features.code_mode', 'features.code_mode_only', 'features.goals',
+    'features.code_mode_only', 'features.goals',
     'features.multi_agent', 'features.multi_agent_v2', 'agents.enabled',
 ))
+# A code_mode_only catalog model ignores `enabled`: Jarvis tools stay direct
+# only through this exact namespace table (one value, no child-path collision).
+assert settings.get('features.code_mode') == (
+    '{enabled=false,direct_only_tool_namespaces=["jarvis_direct"]}')
 home = Path(os.environ['HOME'])
 log = home / 'synthetic-wire.jsonl'
 threads = 0
@@ -91,7 +95,7 @@ def call(state, *, overrides=None, method='item/tool/call', call_id=None):
     identity = request_number
     params = {
         'threadId': state['thread'], 'turnId': state['turn'],
-        'callId': call_id or ('call-' + str(identity)), 'namespace': None,
+        'callId': call_id or ('call-' + str(identity)), 'namespace': 'jarvis_direct',
         'tool': 'fixture_write', 'arguments': {'value': str(identity)},
     }
     params.update(overrides or {})
@@ -113,6 +117,7 @@ for line in sys.stdin:
             if scenario.startswith('delivery-') and scenario != 'delivery-no-ack':
                 request = call_params[message['id']]
                 item = {'type': 'dynamicToolCall', 'id': request['callId'],
+                        'namespace': request['namespace'],
                         'tool': request['tool'], 'arguments': request['arguments'],
                         'status': 'completed' if message['result']['success'] else 'failed',
                         **message['result']}
@@ -135,6 +140,8 @@ for line in sys.stdin:
                     completed['turnId'] = 'different-turn'
                 elif scenario == 'delivery-namespace':
                     item['namespace'] = 'different_namespace'
+                elif scenario == 'delivery-root-namespace':
+                    item['namespace'] = None
                 elif scenario == 'delivery-success-mismatch':
                     item['success'] = not item['success']
                 elif scenario == 'delivery-bad-status':
@@ -240,6 +247,9 @@ for line in sys.stdin:
         call(state, overrides={'turnId': 'foreign-turn'})
     elif scenario == 'namespace':
         call(state, overrides={'namespace': 'foreign'})
+    elif scenario == 'no-namespace':
+        # A root-level call was never offered: every Jarvis tool is direct-only.
+        call(state, overrides={'namespace': None})
     elif scenario == 'invalid-arguments':
         call(state, overrides={'arguments': '{"value":"not-an-object"}'})
     elif scenario == 'missing-call-id':
@@ -315,7 +325,7 @@ async def test_jarvis_question_has_distinct_wire_name_and_canonical_host_receipt
         if calls:
             assert calls[0][0] == "request_user_input"
         start = next(row for row in wire(client) if row.get("method") == "thread/start")
-        assert start["params"]["dynamicTools"][0]["name"] == "jarvis_request_user_input"
+        assert start["params"]["dynamicTools"][0]["tools"][0]["name"] == "jarvis_request_user_input"
         assert "jarvis_request_user_input" in start["params"]["developerInstructions"]
         assert spec["name"] == "request_user_input"
         assert tool_replies(client)[0]["result"]["success"] is bool(expected_calls)
@@ -611,7 +621,12 @@ async def test_dynamic_tool_round_trip_has_official_shapes_and_one_real_fixture_
         assert calls == [("fixture_write", {"value": "10001"})]
         assert effect.read_text() == "10001"
         start = next(row for row in wire(client) if row.get("method") == "thread/start")
-        assert start["params"]["dynamicTools"] == [TOOL]
+        # Offered only inside the direct-only namespace, never as a root tool
+        # that a code_mode_only model would call from an `exec` cell.
+        assert start["params"]["dynamicTools"] == [{
+            "type": "namespace", "name": "jarvis_direct", "description": "",
+            "tools": [{**TOOL, "type": "function"}],
+        }]
         reply = tool_replies(client)
         assert len(reply) == 1 and reply[0]["result"]["success"] is True
         item = reply[0]["result"]["contentItems"][0]
@@ -630,6 +645,7 @@ async def test_dynamic_tool_round_trip_has_official_shapes_and_one_real_fixture_
     ("delivery-wrong-thread", "unconfirmed"), ("delivery-wrong-turn", "unconfirmed"),
     ("delivery-content-mismatch", "mismatch"), ("delivery-wrong-tool", "mismatch"),
     ("delivery-wrong-arguments", "mismatch"), ("delivery-namespace", "mismatch"),
+    ("delivery-root-namespace", "mismatch"),
     ("delivery-success-mismatch", "mismatch"),
 ])
 async def test_dynamic_tool_delivery_ack_is_correlated_hashed_and_never_replayed(
@@ -815,7 +831,7 @@ async def test_concurrent_server_calls_do_not_block_the_stdio_reader(tmp_path, t
 
 @pytest.mark.parametrize("scenario", [
     "unknown-method", "unknown-tool", "wrong-thread", "wrong-turn", "namespace",
-    "invalid-arguments", "missing-call-id",
+    "no-namespace", "invalid-arguments", "missing-call-id",
 ])
 async def test_unoffered_or_misbound_server_request_never_reaches_callback(
     tmp_path, tool_peer, scenario,

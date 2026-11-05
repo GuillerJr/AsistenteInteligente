@@ -51,6 +51,11 @@ _CONVERSATION_ITEMS = frozenset({
 })
 _WIRE_LABEL = re.compile(r"[A-Za-z][A-Za-z0-9_./-]{0,79}")
 _DIAGNOSTIC_REJECTED = "jarvis/serverRequestRejected"
+# Every Jarvis tool is offered in this namespace, which Codex exposes as a
+# direct model call even for catalog models declaring tool_mode=code_mode_only.
+# Inside a code-mode `exec` cell images are flattened to text and an approval
+# could be left pending after the model ends its turn (OC-29, native case T).
+_DIRECT_NAMESPACE = "jarvis_direct"
 
 
 def _wire_label(value) -> str:
@@ -206,8 +211,12 @@ class CodexClient:
                 # Code mode wraps dynamic tools in a JavaScript `exec` cell that
                 # needs a sibling host binary, flattens image results to text and
                 # can end the turn with an approval pending. Never leave it to the
-                # client default (OC-29).
-                "features.code_mode=false",
+                # client default (OC-29). A code_mode_only catalog model ignores
+                # `enabled`, so the direct-only namespace is what keeps Jarvis
+                # tools out of `exec`. One table value: a boolean plus a child
+                # path would collide.
+                'features.code_mode={enabled=false,direct_only_tool_namespaces=["'
+                + _DIRECT_NAMESPACE + '"]}',
                 "features.code_mode_only=false",
                 "features.goals=false",
                 "features.image_generation=false",
@@ -383,7 +392,7 @@ class CodexClient:
             if (
                 params.get("turnId") != turn.turn_id
                 or name not in turn.names
-                or params.get("namespace") is not None
+                or params.get("namespace") != _DIRECT_NAMESPACE
                 or not isinstance(call_id, str)
                 or not 1 <= len(call_id) <= 256
                 or call_id in turn.seen
@@ -712,7 +721,7 @@ class CodexClient:
             observed_hash = self._diagnostic_hash(items) if isinstance(items, list) else None
         except (TypeError, ValueError, RecursionError):
             identity, items, observed_hash = {}, None, None
-        identity_matches = (reply is not None and item.get("namespace") is None
+        identity_matches = (reply is not None and item.get("namespace") == _DIRECT_NAMESPACE
                             and all(identity.get(k) == expected.get(k) for k in (
                                 "thread_id_sha256", "turn_id_sha256", "call_id_sha256",
                                 "tool_sha256")))
@@ -916,7 +925,10 @@ class CodexClient:
                         if instructions
                         else ""
                     ),
-                    "dynamicTools": tools,
+                    "dynamicTools": [{
+                        "type": "namespace", "name": _DIRECT_NAMESPACE, "description": "",
+                        "tools": [{**spec, "type": "function"} for spec in tools],
+                    }] if tools else [],
                 },
             )
             thread_id = result.get("thread", {}).get("id")

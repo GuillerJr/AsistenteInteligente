@@ -168,7 +168,7 @@ def propose(state,prompt):
     emit({'id':request_number,'method':'item/tool/call','params':{
         'threadId':state['thread'],'turnId':state['turn'],
         'callId':'jarvis-mac-browser-call-'+str(request_number),
-        'namespace':None,'tool':name,'arguments':args}})
+        'namespace':'jarvis_direct','tool':name,'arguments':args}})
 def consume(message):
     method=message.get('method')
     params=message.get('params',{})
@@ -190,7 +190,8 @@ def consume(message):
     elif method=='thread/start':
         assert params['sandbox']=='read-only' and params['approvalPolicy']=='untrusted'
         identity='jarvis-mac-browser-thread-'+uuid4().hex
-        threads[identity]={'tools':[tool['name'] for tool in params.get('dynamicTools',[])]}
+        threads[identity]={'tools':[tool['name'] for spec in params.get('dynamicTools',[])
+            for tool in (spec['tools'] if spec.get('type')=='namespace' else [spec])]}
         save_threads(); result={'thread':{'id':identity}}
     elif method=='thread/resume':
         assert params['threadId'] in threads
