@@ -317,6 +317,39 @@ supervisadas verdes para `test_codex_tools.py`, `test_codex.py` y
 Queda sin acreditar que Codex 0.163 retire `exec` con estos valores: requiere un
 caso nativo nuevo (S) con la copia de QA actualizada. Q y R no se repiten.
 
+### Casos S y T (`ba82724`, CI completa 42094785019)
+
+S (`/private/tmp/jarvis-media-visual-native-20261105-s`, admisión `10ceff91…`)
+falló en la preparación por `preparation_deadline`: la descarga del ZIP nativo
+llevaba 2.948.036 de 7.931.686 B a los 300 s. No lanzó la app. Su recibo
+(`preparation-failed.json` `afe035da…`) conserva por error del arnés las
+etiquetas `prior_S_*` y `fresh_R_profile` con los hashes de R. La cuota se
+desmontó después sin forzar, con intent y recibo propios (`detach-result.json`
+`b50949ef…`); el ZIP parcial queda dentro de la imagen.
+
+T (`/private/tmp/jarvis-media-visual-native-20261105-t`, admisión `d1f2820b…`)
+repite S con el ZIP exacto descargado antes de la ventana (644 s, SHA-256
+`737429cf…`) y verificado otra vez al copiarlo. Preparado `ae7644fa…`; chat
+«Prueba visual T» creado por UI; sesión `4c0ff02717374f93a500c90e07a29de9`;
+resultado `visual-result.json` `7d2287af…` con
+`T_run_ended_before_observed_bound_approval` y sin diagnósticos del proveedor;
+cierre `closed_after_GUI_intent` (`bb948598…`) sin señales.
+
+El rollout del thread `01a1ad6b-429d-7881-9968-c9bf8dd574cd` (SHA-256
+`e7ef86e4…`, leído sobre un montaje de sólo lectura) muestra que el modelo
+volvió a llamar a `media_inspect` desde `exec` y que falló igual por falta de
+`codex-code-mode-host`. `multi_agent_version` sí pasó a `disabled`, de modo que
+los ajustes llegan a Codex. La causa: el catálogo de modelos cacheado declara
+`tool_mode: "code_mode_only"` para todos los modelos ofrecidos, incluido
+`gpt-6.1-sol`, y en 0.163 eso impone el modo de código aunque
+`features.code_mode=false`. El binario expone las superficies
+`code_mode_only`, `direct_model_only`, `deferred_model_only` y `hidden`, y la
+tabla `features.code_mode` acepta `direct_only_tool_namespaces`: es el
+mecanismo que usa OpenClaw (OC-29) para sacar del modo de código las
+herramientas con imagen o aprobación. Desactivar el modo de código no basta;
+Jarvis necesita namespaces sólo directos, lo que exige aceptar llamadas con
+namespace en `item/tool/call`.
+
 La documentación oficial consultada antes de pausar reconoce que
 `dynamicTools` y `item/tool/call` son experimentales y exige nombres de tools
 y namespaces compatibles con Responses. No se concluyó que esto explique Q:

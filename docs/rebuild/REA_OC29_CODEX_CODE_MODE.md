@@ -111,9 +111,16 @@ superficie nativa, es la rama desactivada: `features.code_mode=false`,
 dueño, en `CodexClient.start()` con regresión en el peer sintético; falta el
 caso nativo S.
 
-Incógnitas: no se ha verificado que `features.code_mode=false` retire `exec`
-en Codex 0.163 con `code_mode_host` activo; OpenClaw depende de ello pero esta
-lectura no lo ejecutó. Las fuentes internas de Codex no se inspeccionaron. Las
+Resultado posterior (caso nativo T, ver `PHASE_A_MEDIA_PAUSE_20261105.md`):
+`features.code_mode=false` **no** retira `exec` en Codex 0.163 cuando el
+catálogo de modelos declara `tool_mode: "code_mode_only"`, como ocurre con todos
+los modelos ofrecidos a la cuenta de prueba. La rama desactivada de OpenClaw no
+basta en ese caso; lo que sí aplica es el punto 2: herramientas dinámicas en un
+namespace listado en `features.code_mode.direct_only_tool_namespaces`.
+
+Incógnitas: no se ha ejecutado ni verificado que `direct_only_tool_namespaces`
+exponga las herramientas como llamada directa con un modelo `code_mode_only`;
+las cadenas del binario y la guía de OpenClaw lo indican, sin ejecución. Las fuentes internas de Codex no se inspeccionaron. Las
 2018 incógnitas semánticas, `dynamic-tool-profile.ts` y `native-tool-catalog.ts`
 quedan como lectura parcial. Esta partición no amplía la cobertura a todo el
 arnés Codex ni a OpenClaw.
