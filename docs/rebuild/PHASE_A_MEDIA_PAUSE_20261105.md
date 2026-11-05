@@ -302,6 +302,11 @@ rollout no se leyó. Además, el modo de código mete las herramientas dinámica
 dentro de un `exec` que Jarvis no observa ni autoriza como llamada propia hasta
 que el host la despacha.
 
+La [revisión REA OC-29](REA_OC29_CODEX_CODE_MODE.md) del arnés Codex de
+OpenClaw confirma que la referencia nunca deja el modo de código a su valor por
+defecto: lo desactiva en turnos acotados y de imagen y aparta del modo de código
+las herramientas con imagen o aprobación. Jarvis no portó esa parte.
+
 Siguiente paso propuesto, pendiente de decisión del dueño: desactivar el modo de
 código en el cliente (`features.code_mode_host=false`, con regresión de argumentos
 y comprobación de que el modelo vuelve a llamadas directas en un caso nativo

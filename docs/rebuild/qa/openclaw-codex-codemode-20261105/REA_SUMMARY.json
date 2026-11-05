@@ -1,0 +1,88 @@
+{
+  "source_revision": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "reference_tree": "197c70097790e30087bbef323b0f2cc5148ab9b7",
+  "input_kind": "inert selected source partition; not a shipped runtime",
+  "artifact_sha256": "bef39b862f37d9448a8f5769671ae24b0586eedb73f1f4bda33a2a414bd2082b",
+  "parent_evidence_id": "ev_e91b28823c4099e6398aa6fd7d3c9e790d4d95bb86bdbbe0254ed564a64c7b67",
+  "summary_evidence_id": "ev_afe3e3939b52ed15c01c19b088557f7452c823702c6a722af88b6f8ba0f7fded",
+  "trace_evidence_ids": {
+    "direct_only_tool_namespaces_property": "ev_375bf1316dcea8162871c3cdd5596001e72a095de28fb01e7407574d1e50ab99",
+    "features_code_mode_literal_no_match": "ev_ca5147d82b3947fe2dc746346234ddc0f73140ab296c72f4e101c0c76d7710e6",
+    "application_string_no_match": "ev_52569ff78328c2c03300233f93b5a193b762c8df3d4d569346508b7c1679f77a"
+  },
+  "source_files": [
+    {
+      "path": "extensions/codex/src/app-server/thread-requests.ts",
+      "bytes": 29100,
+      "sha256": "56c2399d53f4c58ddc6426de39e4f5a7a1ec6ee837f68e9562ea22ffb9b8d2ad"
+    },
+    {
+      "path": "extensions/codex/src/app-server/dynamic-tool-catalog.ts",
+      "bytes": 10115,
+      "sha256": "22a387612d6cc9b41440a5a229ff74b03bc1f4bee6f4963b7f609f513247863f"
+    },
+    {
+      "path": "extensions/codex/src/app-server/dynamic-tool-profile.ts",
+      "bytes": 4568,
+      "sha256": "6af47ae3f8fd64a43b06a4cf225e60c6cba4c8094168f9547751aea97b5833cf"
+    },
+    {
+      "path": "extensions/codex/src/app-server/native-tool-catalog.ts",
+      "bytes": 5012,
+      "sha256": "b7d3bcfd49819f1c3aa8debe589504c0fba613fc2dd5e6d7b535bd59e68f1077"
+    },
+    {
+      "path": "extensions/codex/src/app-server/event-projector-code-mode.ts",
+      "bytes": 4622,
+      "sha256": "aa1afe0491d9cd0834e6e0ceddbb0b3b07cc7ffe46ebf34eb01a18d5ecf62271"
+    },
+    {
+      "path": "extensions/codex/src/app-server/bounded-turn.ts",
+      "bytes": 21869,
+      "sha256": "e5e540ff31a7e5042f9c96b1870969dc7af3628f11ea73053c9f07f23c3b330b"
+    },
+    {
+      "path": "extensions/codex/src/app-server/client-notifications.ts",
+      "bytes": 3964,
+      "sha256": "6b0efa950c823fc26354df7bf6b0b0a3fd31bf49984c59878c848bf82befb368"
+    },
+    {
+      "path": "extensions/codex/src/app-server/attempt-startup.ts",
+      "bytes": 30179,
+      "sha256": "53626abe18f8fdebd157010e68d7ca05f4e905ef45fe5738bc055be7283c6f54"
+    },
+    {
+      "path": "extensions/codex/media-understanding-provider.ts",
+      "bytes": 6338,
+      "sha256": "d2d08777517e6b9e1cc1cde9582046b523d5310b9df6a3b45c3e107b4b205374"
+    },
+    {
+      "path": "extensions/codex/package.json",
+      "bytes": 1489,
+      "sha256": "474e0861c60715750fc241775daf85833aab6e47c80ed23aab39a6cc3b375193"
+    }
+  ],
+  "separately_read": [
+    {
+      "path": "docs/plugins/codex-harness-reference/dynamic-tools.md",
+      "bytes": 4911,
+      "sha256": "c2497cab489f32bd241ea7c5dd71f508aad74be5d95cd6114861c8de2b318756"
+    }
+  ],
+  "statistics": {
+    "relevant_files": 10,
+    "text_bytes_read": 117256,
+    "parsed_javascript_files": 9,
+    "visited_ast_nodes": 11560,
+    "findings": 300,
+    "parse_failures": 0
+  },
+  "coverage": {
+    "application": "complete",
+    "semantic": "partial",
+    "semantic_unknowns": 2018
+  },
+  "reference_executed": false,
+  "reference_sources_incorporated": false,
+  "conclusion_scope": "Static reading of selected Codex harness sources; does not execute OpenClaw or Codex and does not prove code_mode=false removes exec in Codex 0.163."
+}

@@ -36,7 +36,7 @@
     "implementation_complete": false,
     "runtime_validation_of_reference_performed": false,
     "initial_jarvis_state": "Línea base original: núcleo Python con pruebas sintéticas. Conservar como historia del inicio; el avance actual se registra separadamente en progress_snapshot y BASELINE_VERTICAL_SLICE.md, sin cerrar paridad.",
-    "rea": "E### son IDs locales de fuente estática con hashes, no ev_ de REA. El inventario inicial y los lotes posteriores se distinguen; cobertura efectiva de 48 lotes y 186 rutas TS/JS únicas en REA_COVERAGE.json, con semántica parcial e incógnitas y sin ejecución de la referencia.",
+    "rea": "E### son IDs locales de fuente estática con hashes, no ev_ de REA. El inventario inicial y los lotes posteriores se distinguen; cobertura efectiva de 49 lotes y 195 rutas TS/JS únicas en REA_COVERAGE.json, con semántica parcial e incógnitas y sin ejecución de la referencia.",
     "method": "Catálogos canónicos, registros/manifests, entradas de arquitectura y contratos documentales fijados. Catálogos generados se contrastan con manifest disponible; no son evidencia runtime.",
     "limits": [
       "Censo funcional no equivale a lectura semántica de 59.267 archivos o certificación de 554 APIs.",

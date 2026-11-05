@@ -56,7 +56,7 @@ La [plantilla G](qa/product-background-native-20261104-g-template/SNAPSHOT.json)
 permanece **NOEXEC**, sin cambios. Las suites completas siguen en CI y el dueño
 autorizó el fallback local focal. Falta la cualificación completa/nativa y
 resolver la dependencia OCR/visión. La fase A sigue abierta y B aplazada: **62 familias
-parciales, 18 sin implementar y ninguna completa; REA 48 lotes y 186 rutas**.
+parciales, 18 sin implementar y ninguna completa; REA 49 lotes y 195 rutas**.
 
 Se conservan los antecedentes de `e61c912`/`4d5c3e1`, la compilación fallida
 de tests de `e8bb033` y los intentos macOS 26 sin runner de `c41378a`. No se
@@ -84,7 +84,7 @@ acreditaba un clic OS. Clientes, Git, preguntas y paneles conservan sus recorrid
 finitos; la publicación real de GitHub sigue sin ejercitarse. La
 [revisión OC-28](REA_OC28_PRODUCT_COORDINATION.md) conserva sus fuentes y límites.
 La matriz mantiene **62 familias parciales, 18 sin implementar y ninguna
-completa**; REA conserva **48 lotes y 186 rutas TS/JS únicas** seleccionadas.
+completa**; REA conserva **49 lotes y 195 rutas TS/JS únicas** seleccionadas.
 La fase A sigue abierta y B aplazada.
 
 La reanudación del 4 de noviembre conserva tres preparaciones fallidas y cerradas
