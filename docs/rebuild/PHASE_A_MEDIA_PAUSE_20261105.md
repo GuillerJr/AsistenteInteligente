@@ -307,11 +307,15 @@ OpenClaw confirma que la referencia nunca deja el modo de código a su valor por
 defecto: lo desactiva en turnos acotados y de imagen y aparta del modo de código
 las herramientas con imagen o aprobación. Jarvis no portó esa parte.
 
-Siguiente paso propuesto, pendiente de decisión del dueño: desactivar el modo de
-código en el cliente (`features.code_mode_host=false`, con regresión de argumentos
-y comprobación de que el modelo vuelve a llamadas directas en un caso nativo
-nuevo) o, alternativamente, incluir el host en las copias de QA y validar el
-recorrido de aprobación e imagen dentro de `exec`.
+Por decisión del dueño se portó la rama desactivada de OpenClaw:
+`CodexClient.start()` fija `features.code_mode=false`,
+`features.code_mode_only=false`, `features.goals=false`,
+`features.multi_agent_v2=false` y `agents.enabled=false`, y el peer sintético
+de `tests/test_codex_tools.py` rechaza arrancar sin ellos. Pruebas focales
+supervisadas verdes para `test_codex_tools.py`, `test_codex.py` y
+`test_codex_cleanup.py`; la cualificación completa depende de la CI del commit.
+Queda sin acreditar que Codex 0.163 retire `exec` con estos valores: requiere un
+caso nativo nuevo (S) con la copia de QA actualizada. Q y R no se repiten.
 
 La documentación oficial consultada antes de pausar reconoce que
 `dynamicTools` y `item/tool/call` son experimentales y exige nombres de tools

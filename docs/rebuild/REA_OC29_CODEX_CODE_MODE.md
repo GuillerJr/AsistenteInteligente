@@ -107,7 +107,9 @@ aprobación. La corrección coherente con la referencia para Jarvis, que no expo
 superficie nativa, es la rama desactivada: `features.code_mode=false`,
 `features.code_mode_only=false` (con `shell_tool`/`unified_exec` ya en
 `false`), más `features.goals=false`, `features.multi_agent_v2=false` y
-`agents.enabled=false`. No está implementada.
+`agents.enabled=false`. Se implementó después de esta revisión, por decisión del
+dueño, en `CodexClient.start()` con regresión en el peer sintético; falta el
+caso nativo S.
 
 Incógnitas: no se ha verificado que `features.code_mode=false` retire `exec`
 en Codex 0.163 con `code_mode_host` activo; OpenClaw depende de ello pero esta

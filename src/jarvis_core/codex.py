@@ -201,6 +201,15 @@ class CodexClient:
                 "features.plugins=false",
                 "features.remote_plugin=false",
                 "features.multi_agent=false",
+                "features.multi_agent_v2=false",
+                "agents.enabled=false",
+                # Code mode wraps dynamic tools in a JavaScript `exec` cell that
+                # needs a sibling host binary, flattens image results to text and
+                # can end the turn with an approval pending. Never leave it to the
+                # client default (OC-29).
+                "features.code_mode=false",
+                "features.code_mode_only=false",
+                "features.goals=false",
                 "features.image_generation=false",
                 "features.view_image=false",
                 # Further native action tools enabled by default in 0.163.

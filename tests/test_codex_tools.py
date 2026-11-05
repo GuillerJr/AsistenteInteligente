@@ -42,6 +42,8 @@ assert all(settings.get(key) == 'false' for key in (
     'features.shell_tool', 'features.unified_exec', 'features.view_image',
     'features.computer_use', 'features.browser_use', 'features.browser_use_external',
     'features.in_app_browser', 'features.tool_suggest', 'features.sleep_tool',
+    'features.code_mode', 'features.code_mode_only', 'features.goals',
+    'features.multi_agent', 'features.multi_agent_v2', 'agents.enabled',
 ))
 home = Path(os.environ['HOME'])
 log = home / 'synthetic-wire.jsonl'
