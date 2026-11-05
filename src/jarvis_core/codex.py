@@ -32,6 +32,21 @@ _LOGGER = logging.getLogger(__name__)
 class CodexError(RuntimeError):
     """A stable public error code, never raw stderr, credentials or RPC error text."""
 
+
+# Items that are conversation text or Jarvis's own dynamic tools. Any other
+# completed item is a native Codex action that Jarvis neither offered nor ran.
+_CONVERSATION_ITEMS = frozenset({
+    "userMessage", "agentMessage", "dynamicToolCall", "reasoning", "plan",
+    "contextCompaction", "hookPrompt",
+})
+_WIRE_LABEL = re.compile(r"[A-Za-z][A-Za-z0-9_./-]{0,79}")
+_DIAGNOSTIC_REJECTED = "jarvis/serverRequestRejected"
+
+
+def _wire_label(value) -> str:
+    # Only a protocol name is kept, never parameters, commands or paths.
+    return value if isinstance(value, str) and _WIRE_LABEL.fullmatch(value) else "unknown"
+
     def __init__(self, code: str, *, cleanup_stage: str | None = None,
                  os_errno: int | None = None) -> None:
         super().__init__(code)
@@ -188,6 +203,14 @@ class CodexClient:
                 "features.multi_agent=false",
                 "features.image_generation=false",
                 "features.view_image=false",
+                # Further native action tools enabled by default in 0.163.
+                "features.unified_exec=false",
+                "features.computer_use=false",
+                "features.browser_use=false",
+                "features.browser_use_external=false",
+                "features.in_app_browser=false",
+                "features.tool_suggest=false",
+                "features.sleep_tool=false",
                 "features.skill_search=false",
                 "features.skill_mcp_dependency_install=false",
                 "features.skip_host_skill_discovery=true",
@@ -270,6 +293,7 @@ class CodexClient:
                         ):
                             continue
                         # Native Codex effects never bypass Jarvis's offered catalog.
+                        self._report_rejected_request(message)
                         await self._write(
                             {
                                 "id": message["id"],
@@ -306,6 +330,20 @@ class CodexClient:
                 if queue.full():
                     queue.get_nowait()
                 queue.put_nowait(("disconnected", {}))
+
+    def _report_rejected_request(self, message: dict) -> None:
+        # The chat loop records it in the run's own context; a full queue is
+        # already a failed stream and must not stop this reader.
+        params = message.get("params")
+        thread_id = params.get("threadId") if isinstance(params, dict) else None
+        queue = self._events.get(thread_id) if isinstance(thread_id, str) else None
+        if queue is None:
+            return
+        try:
+            queue.put_nowait((_DIAGNOSTIC_REJECTED, {
+                "method": _wire_label(message.get("method")), "reason": "not_offered"}))
+        except asyncio.QueueFull:
+            pass
 
     def _accept_tool_request(self, message: dict) -> bool:
         params, identity = message.get("params"), message["id"]
@@ -381,6 +419,12 @@ class CodexClient:
                     except asyncio.QueueFull:
                         pass  # The next dequeued item checks delivery_failure.
                 return
+            if not accepted:
+                # A misbound call never reaches the host; keep only its hashes.
+                self._tool_diagnostic(turn, "provider.request.rejected", {
+                    "method": "item/tool/call",
+                    "reason": self._tool_failure_metadata(error)["failure_code"],
+                    **self._tool_request_metadata(params)})
             # Once a reply may have reached app-server, a failed drain or task
             # cancellation must not send a contradictory second response.
             original = turn.replies.get(params.get("callId")) if accepted else None
@@ -963,6 +1007,11 @@ class CodexClient:
                         raise tool_turn.delivery_failure
                     if method == "disconnected":
                         raise CodexError("codex_disconnected")
+                    if method == _DIAGNOSTIC_REJECTED:
+                        if on_event:
+                            on_event("provider.request.rejected", {
+                                **params, "physical_verified": False})
+                        continue
                     turn = params.get("turn", {})
                     if not isinstance(turn, dict):
                         raise CodexError("codex_event_invalid")
@@ -1003,6 +1052,16 @@ class CodexClient:
                             text_parts[item.get("id", "final")] = item["text"]
                         elif item.get("type") == "dynamicToolCall" and tool_turn:
                             self._observe_tool_reply(params, item, tool_turn)
+                        elif item.get("type") not in _CONVERSATION_ITEMS and on_event:
+                            # Type and status only: native output can hold paths,
+                            # commands or private file content.
+                            status = item.get("status")
+                            on_event("provider.item.native", {
+                                "item_type": _wire_label(item.get("type")),
+                                "status": status if isinstance(status, str) and status in {
+                                    "completed", "failed", "inProgress", "declined"}
+                                else "unknown",
+                                "physical_verified": False})
                     elif method == "turn/completed":
                         if tool_turn and tool_turn.media_pending:
                             raise CodexError("media_delivery_unconfirmed")

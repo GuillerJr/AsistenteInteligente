@@ -39,6 +39,9 @@ settings = dict(sys.argv[index + 1].split('=', 1)
                 for index, argument in enumerate(sys.argv) if argument == '-c')
 assert all(settings.get(key) == 'false' for key in (
     'features.apps', 'features.plugins', 'features.remote_plugin',
+    'features.shell_tool', 'features.unified_exec', 'features.view_image',
+    'features.computer_use', 'features.browser_use', 'features.browser_use_external',
+    'features.in_app_browser', 'features.tool_suggest', 'features.sleep_tool',
 ))
 home = Path(os.environ['HOME'])
 log = home / 'synthetic-wire.jsonl'
@@ -239,6 +242,17 @@ for line in sys.stdin:
         call(state, overrides={'arguments': '{"value":"not-an-object"}'})
     elif scenario == 'missing-call-id':
         call(state, overrides={'callId': ''})
+    elif scenario in {'native-item', 'native-item-malformed'}:
+        native = {'type': 'commandExecution', 'id': 'native-1', 'status': 'declined',
+                  'command': 'cat /SYNTHETIC-PRIVATE-PATH',
+                  'aggregatedOutput': 'SYNTHETIC-PRIVATE-OUTPUT'}
+        if scenario == 'native-item-malformed':
+            native.update(type='bad type SYNTHETIC-PRIVATE', status={'x': 'SYNTHETIC-PRIVATE'})
+        for item in (native, {'type': 'reasoning', 'id': 'r-1'},
+                     {'type': 'userMessage', 'id': 'u-1'}):
+            emit({'method': 'item/completed', 'params': {
+                'threadId': state['thread'], 'turnId': state['turn'], 'item': item}})
+        finish(state)
     else:
         call(state)
 '''
@@ -805,14 +819,15 @@ async def test_unoffered_or_misbound_server_request_never_reaches_callback(
     tmp_path, tool_peer, scenario,
 ):
     client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
-    calls = []
+    calls, events = [], []
 
     async def callback(name, arguments):
         calls.append((name, arguments))
         return confirmed()
 
     try:
-        await client.chat(scenario, tool_specs=[TOOL], on_tool_call=callback)
+        await client.chat(scenario, tool_specs=[TOOL], on_tool_call=callback,
+                          on_event=lambda kind, data: events.append((kind, data)))
         assert calls == []
         replies = tool_replies(client)
         assert len(replies) == 1
@@ -821,6 +836,45 @@ async def test_unoffered_or_misbound_server_request_never_reaches_callback(
         else:
             assert replies[0]["result"]["success"] is False
         assert client._tool_turns == {} and client._server_requests == set()
+        # A rejection is visible in the run itself, without its arguments.
+        rejected = [data for kind, data in events if kind == "provider.request.rejected"]
+        if scenario == "wrong-thread":
+            assert rejected == []  # Never attributed to an unrelated live thread.
+        elif scenario == "unknown-method":
+            assert rejected == [{"method": "item/commandExecution/requestApproval",
+                                 "reason": "not_offered", "physical_verified": False}]
+        else:
+            assert len(rejected) == 1
+            assert rejected[0]["method"] == "item/tool/call"
+            assert rejected[0]["reason"] == "codex_tool_request_invalid"
+            assert rejected[0]["physical_verified"] is False
+            assert "arguments" not in rejected[0] and "tool" not in rejected[0]
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.parametrize("scenario,item_type,status", [
+    ("native-item", "commandExecution", "declined"),
+    ("native-item-malformed", "unknown", "unknown"),
+])
+async def test_native_codex_items_are_recorded_by_type_without_content(
+    tmp_path, tool_peer, scenario, item_type, status,
+):
+    client = CodexClient(tool_peer, tmp_path / "profile", timeout=PEER_RPC_TIMEOUT)
+    events = []
+
+    async def callback(name, arguments):
+        raise AssertionError("native items never reach the host callback")
+
+    try:
+        result = await client.chat(scenario, tool_specs=[TOOL], on_tool_call=callback,
+                                   on_event=lambda kind, data: events.append((kind, data)))
+        assert result["answer"] == "Recibido sintético"
+        native = [data for kind, data in events if kind == "provider.item.native"]
+        # Conversation items stay out; only the native action is recorded.
+        assert native == [{"item_type": item_type, "status": status,
+                           "physical_verified": False}]
+        assert "SYNTHETIC-PRIVATE" not in json.dumps(events)
     finally:
         await client.aclose()
 
