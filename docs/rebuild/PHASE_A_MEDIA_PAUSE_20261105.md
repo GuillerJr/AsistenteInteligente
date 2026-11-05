@@ -215,7 +215,17 @@ Selección focal: 100 casos de `tests/test_codex_tools.py` y `tests/test_codex.p
 aprobados en 30,492 s, pico 5.431.296 bytes, limpieza confirmada; recibo
 `/private/tmp/jarvis-test-resource-501-68a1d7e5af41/jarvis-test-evidence-vdng0vvv/receipt.json`,
 SHA-256 `5b2008880e42bdc7bfc9c99779aeb262434774fb0dd90aedccce79bb6ea962cf`.
-No es suite completa. La causa de Q sigue **sin establecer**: la corrección
+No es suite completa. La [CI completa de `8827301`](https://github.com/GuillerJr/AsistenteInteligente/actions/runs/42074833787)
+terminó **fallida**: 8 fallos en `tests/test_codex_cleanup.py` en Ubuntu
+(4157 aprobados, 47 omitidos) y macOS (4204 aprobados). Las constantes nuevas
+se insertaron entre el docstring de `CodexError` y su `__init__`, que dejó de
+aceptar `cleanup_stage`; la selección focal no incluía ese archivo. Corregido
+en el commit siguiente. Focales tras la corrección: 30 casos de
+`test_codex_cleanup.py` y `test_codex.py` en 10,228 s (recibo SHA-256
+`1387b1f7238f04a771df39f86f7a6fe692b797ac69e1c2f6d938b8fbb3e179fb`) y 84 de
+`test_codex_tools.py` en 22,226 s (recibo SHA-256
+`5f4468e8a726dccade510240443cbd3215a9bb3cd22e905d3a25fc0ae86f9af1`), ambos
+con limpieza confirmada. La causa de Q sigue **sin establecer**: la corrección
 sólo hace observable el próximo intento. Falta la CI del nuevo SHA y un caso
 nativo nuevo; la lectura del rollout Q sigue requiriendo autorización del dueño.
 

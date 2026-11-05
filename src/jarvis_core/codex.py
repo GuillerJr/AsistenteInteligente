@@ -32,6 +32,16 @@ _LOGGER = logging.getLogger(__name__)
 class CodexError(RuntimeError):
     """A stable public error code, never raw stderr, credentials or RPC error text."""
 
+    def __init__(self, code: str, *, cleanup_stage: str | None = None,
+                 os_errno: int | None = None) -> None:
+        super().__init__(code)
+        self.cleanup_stage = cleanup_stage
+        self.os_errno = os_errno
+        if cleanup_stage is not None:
+            # Numeric errno and a host-owned stage are sufficient to diagnose a
+            # lifecycle failure. Never attach the OS error's message or paths.
+            _LOGGER.warning("codex_cleanup_incomplete stage=%s errno=%s", cleanup_stage, os_errno)
+
 
 # Items that are conversation text or Jarvis's own dynamic tools. Any other
 # completed item is a native Codex action that Jarvis neither offered nor ran.
@@ -46,16 +56,6 @@ _DIAGNOSTIC_REJECTED = "jarvis/serverRequestRejected"
 def _wire_label(value) -> str:
     # Only a protocol name is kept, never parameters, commands or paths.
     return value if isinstance(value, str) and _WIRE_LABEL.fullmatch(value) else "unknown"
-
-    def __init__(self, code: str, *, cleanup_stage: str | None = None,
-                 os_errno: int | None = None) -> None:
-        super().__init__(code)
-        self.cleanup_stage = cleanup_stage
-        self.os_errno = os_errno
-        if cleanup_stage is not None:
-            # Numeric errno and a host-owned stage are sufficient to diagnose a
-            # lifecycle failure. Never attach the OS error's message or paths.
-            _LOGGER.warning("codex_cleanup_incomplete stage=%s errno=%s", cleanup_stage, os_errno)
 
 
 @dataclass
