@@ -54,7 +54,8 @@
     "excluido_por_instruccion": "Diferencia explícita con referencia; no cuenta como soporte.",
     "sin_cualificar": "Sólo registro estático; comportamiento/prueba aún pendientes.",
     "port_de_referencia_pendiente_de_decision": "No borrar por silencio; adoptar port o registrar explícitamente diferencia.",
-    "implementacion_parcial_contratos_probados": "Hay código propio y contratos probados con contenido/servicios de prueba. La capacidad amplia y su integración productiva siguen pendientes; CI y recorridos nativos se registran por checkpoint."
+    "implementacion_parcial_contratos_probados": "Hay código propio y contratos probados con contenido/servicios de prueba. La capacidad amplia y su integración productiva siguen pendientes; CI y recorridos nativos se registran por checkpoint.",
+    "completa_cualificada": "Implementación propia y recorrido real nativo cualificado sobre CI completa en verde, con límites declarados en la capacidad. No implica paridad universal ni de otras familias."
   },
   "closure_contract": {
     "complete_reference_variant_requires": [
@@ -946,7 +947,7 @@
       "family": "providers",
       "name": "Codex con ChatGPT oficial y aislado",
       "scope": "base_nativa_openclaw",
-      "current_status": "implementacion_parcial_contratos_probados",
+      "current_status": "completa_cualificada",
       "implementation_evidence": [
         {
           "progress_id": "P-CODEX",
@@ -959,6 +960,10 @@
         {
           "progress_id": "P-CODEX",
           "scope": "OC-30 (REA_OC30_A21_CODEX_CLOSURE.md) fija las brechas de cierre: G1 catálogo model/list y elección de modelo, G2 versión mínima de Codex en initialize, G3 validación de thread/resume; más cualificación nativa con login del dueño. No cierra la capacidad."
+        },
+        {
+          "progress_id": "P-CODEX",
+          "scope": "Cierre 06-11-2026 (PHASE_A_A21_QUALIFICATION_PLAN.md): G1–G4 implementados con CI completa en verde; casos nativos W1 (login oficial del dueño, catálogo de 8 modelos, herramienta ligada, cierre de sesión), W2a+W2c (continuidad tras reinicio con reanudación del binding propio) y W3a+W3c (versión no admitida, CLI ausente, desconexión a mitad de turno sin repetición). W2b y W3b se conservan como intentos fallidos por error del arnés."
         }
       ],
       "acceptance": {
@@ -974,7 +979,14 @@
         "E030",
         "ev_a0fafeb5ba6edcf4d0d3fb41361393f45391f9d76340139d1601269e1dc278b2"
       ],
-      "closure_status": "pendiente_equivalencia_productiva"
+      "closure_status": "equivalencia_productiva_acreditada_con_limites",
+      "closure_limits": [
+        "Una cuenta del dueño, un hogar Codex dedicado y un catálogo observado.",
+        "Cuenta vencida con la elección de proveedor vigente (codex_login_required) no se ejerció de forma nativa: el negativo elegido por el dueño fue el cierre de sesión, que revoca antes la elección.",
+        "El rechazo de un thread ajeno en thread/resume (G3) está probado con contratos propios; el recorrido nativo sólo acredita que no se usa thread/list ni se reanudan threads ajenos.",
+        "Versión no admitida y CLI ausente se ejercieron con un binario sintético propio; la desconexión, con un único SIGTERM a mitad de turno. No acredita cortes de red, renovación de tokens ni límites de uso (A-23).",
+        "No implica paridad completa del harness de referencia ni de A-32 (modo de código), que sigue sin implementar."
+      ]
     },
     {
       "id": "A-22",
@@ -14515,8 +14527,8 @@
   },
   "progress_snapshot": {
     "date": "2026-11-06",
-    "revision_scope": "CI 67fbd6b/run42223362660 completa en verde: 4170 Python Ubuntu (47 omitidas), 4217 macOS, 724 Swift (1 omitida, 0 fallos). Pausa de medios: catálogo Codex code_mode_only resuelto con namespace sólo directo jarvis_direct y respuesta sin commentary; caso nativo V pasó un PNG sintético con aprobación ligada y consumo de píxeles acreditado. H/I sigue sin cualificar. 62 familias parciales/18 sin implementar/0 completas; REA 50 lotes/216 rutas; A abierta/B aplazada.",
-    "complete_capability_count": 0,
+    "revision_scope": "A-21 cerrada el 06-11-2026 con límites declarados (W1, W2a+W2c, W3a+W3c sobre CI completa en verde; G1–G4 implementados). CI 67fbd6b/run42223362660 completa en verde: 4170 Python Ubuntu (47 omitidas), 4217 macOS, 724 Swift (1 omitida, 0 fallos). Pausa de medios: catálogo Codex code_mode_only resuelto con namespace sólo directo jarvis_direct y respuesta sin commentary; caso nativo V pasó un PNG sintético con aprobación ligada y consumo de píxeles acreditado. H/I sigue sin cualificar. 61 familias parciales/18 sin implementar/1 completa (A-21); REA 50 lotes/216 rutas; A abierta/B aplazada.",
+    "complete_capability_count": 1,
     "complete_reference_parity": false,
     "authenticated_inference_verified": true,
     "installed_previous_app_replaced": false,
@@ -14592,7 +14604,7 @@
           "A-21",
           "A-23"
         ],
-        "verified_scope": "Acceso oficial e inferencia autenticada del recorrido inicial, reinicio y contexto propios acreditados. DynamicTools conectadas a Runtime único, protocolo/turno/IDs validados y resultados separados; pruebas subprocess propias. No se importan hilos ajenos. 06-11-2026: con Codex 0.163 todos los modelos del catálogo declaran tool_mode=code_mode_only; features.code_mode=false no retira exec (caso nativo T). Desde d937e55 todas las herramientas de Jarvis se ofrecen en el namespace sólo directo jarvis_direct (features.code_mode.direct_only_tool_namespaces) y sólo se aceptan llamadas y acuses con ese namespace; desde 67fbd6b la respuesta del run excluye agentMessage phase=commentary. Caso nativo V (CI 42223362660) acreditó llamada directa, aprobación ligada y entrega de imagen; ver PHASE_A_MEDIA_PAUSE_20261105.md y REA_OC29_CODEX_CODE_MODE.md.",
+        "verified_scope": "Acceso oficial e inferencia autenticada del recorrido inicial, reinicio y contexto propios acreditados. DynamicTools conectadas a Runtime único, protocolo/turno/IDs validados y resultados separados; pruebas subprocess propias. No se importan hilos ajenos. 06-11-2026: con Codex 0.163 todos los modelos del catálogo declaran tool_mode=code_mode_only; features.code_mode=false no retira exec (caso nativo T). Desde d937e55 todas las herramientas de Jarvis se ofrecen en el namespace sólo directo jarvis_direct (features.code_mode.direct_only_tool_namespaces) y sólo se aceptan llamadas y acuses con ese namespace; desde 67fbd6b la respuesta del run excluye agentMessage phase=commentary. Caso nativo V (CI 42223362660) acreditó llamada directa, aprobación ligada y entrega de imagen; ver PHASE_A_MEDIA_PAUSE_20261105.md y REA_OC29_CODEX_CODE_MODE.md. 06-11-2026: A-21 cualificada en nativo (W1, W2a+W2c, W3a+W3c; ver PHASE_A_A21_QUALIFICATION_PLAN.md): login oficial del dueño, catálogo model/list, herramienta ligada, cierre de sesión, continuidad tras reinicio, versión mínima, CLI ausente y desconexión sin repetición; tras una desconexión el cliente reconecta en la siguiente lectura.",
         "remaining": "No paridad completa del harness, cuentas/uso/renovación completos ni todas las herramientas de referencia. Las herramientas builtin del proveedor permanecen desactivadas. El modo de código de Codex (A-32) queda desactivado, no implementado; codex-code-mode-host no se distribuye."
       },
       {
@@ -15919,8 +15931,9 @@
       "No cierra ninguna familia amplia ni revisión global de OpenClaw."
     ],
     "capability_status_counts": {
-      "implementacion_parcial_contratos_probados": 62,
-      "no_implementado": 18
+      "implementacion_parcial_contratos_probados": 61,
+      "no_implementado": 18,
+      "completa_cualificada": 1
     },
     "mac_browser_increment_file": "PHASE_A_MAC_BROWSER_CLOSEOUT.md",
     "mac_browser_contract_files": [

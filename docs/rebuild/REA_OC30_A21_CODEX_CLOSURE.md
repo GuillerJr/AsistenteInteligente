@@ -155,7 +155,15 @@ Estado de implementación:
 Diseño de la cualificación nativa (punto 4): [PHASE_A_A21_QUALIFICATION_PLAN.md](PHASE_A_A21_QUALIFICATION_PLAN.md).
 
 Sólo con los cuatro puntos y su CI completa, más el recorrido nativo, A-21
-pasaría a completa. Hasta entonces sigue en `implementacion_parcial_contratos_probados`.
+pasaría a completa.
+
+**Estado (06-11-2026): cerrada con límites.** G1–G4 están implementados con CI completa en verde y
+los casos nativos W1, W2a+W2c y W3a+W3c pasaron ([recibos](PHASE_A_A21_QUALIFICATION_PLAN.md)).
+La matriz la registra como `completa_cualificada` con estos límites: una cuenta y un hogar Codex;
+cuenta vencida con elección vigente sin ejercer en nativo (el negativo fue el cierre de sesión);
+thread ajeno en `thread/resume` sólo con pruebas de contrato; versión y ausencia con binario
+sintético; una única desconexión por SIGTERM. Tras desconectarse, el cliente reconecta en la
+siguiente lectura sin repetir el run. A-23 (uso y límites) y A-32 siguen abiertas.
 
 ## Límites
 

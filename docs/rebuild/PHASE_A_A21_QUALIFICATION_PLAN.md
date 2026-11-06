@@ -160,3 +160,6 @@ implementados (OC-30), se cumple la condición de cierre de A-21 de este plan. L
 cuenta, un hogar Codex, un binario sintético para versión y ausencia, una sola desconexión por
 SIGTERM a mitad de turno; no acredita reconexiones de red ni caducidad de sesión con elección
 vigente.
+
+Registrado en la matriz (06-11-2026) como `completa_cualificada` con
+`equivalencia_productiva_acreditada_con_limites` y estos límites en `closure_limits`.

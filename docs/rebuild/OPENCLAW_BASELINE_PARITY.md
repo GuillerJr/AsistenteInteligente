@@ -57,6 +57,16 @@ nativo V pasó un PNG sintético con aprobación ligada y consumo de píxeles
 acreditado. Ninguna familia cambia de estado: A-21 y A-56 siguen parciales y
 A-32 (modo de código) sigue sin implementar.
 
+Cierre de A-21 del 06-11-2026 ([plan y recibos](PHASE_A_A21_QUALIFICATION_PLAN.md),
+[OC-30](REA_OC30_A21_CODEX_CLOSURE.md)): con G1–G4 implementados y CI completa en verde,
+los casos nativos W1, W2a+W2c y W3a+W3c acreditaron login oficial del dueño, catálogo,
+herramienta ligada, cierre de sesión, continuidad tras reinicio, versión no admitida, CLI
+ausente y desconexión a mitad de turno sin repetición. A-21 pasa a **completa con límites**:
+una cuenta y un hogar Codex; la cuenta vencida con elección vigente no se ejerció en nativo
+(el negativo fue el cierre de sesión) y el thread ajeno sólo tiene pruebas de contrato. Desde
+aquí la matriz queda en **61 familias parciales, 18 sin implementar y una completa (A-21)**.
+La fase A sigue abierta y B aplazada.
+
 ## Alcance de «base completa»
 
 La petición vigente exige primero una variante propia funcional de la base completa de OpenClaw bajo nombre Jarvis y dentro de este repositorio. Mejoras adicionales y herramientas específicas del Jarvis anterior vienen después. Un kernel pequeño, un chat y contratos MCP no bastan.
@@ -115,7 +125,7 @@ El incremento de producto conserva los fallos y la custodia de cada intento: 57f
 
 La [continuación de recuperación](PHASE_A_RECOVERY_COMPLETION.md) implementa variantes WAL ausente/vacío/cabecera, journals compatibles, archivos/artefactos de workspace, reparaciones FTS/prefijo WAL y actualización/rollback locales. Conserva originales, usa una copia verificada actual y esquemas compatibles para versiones, y publica nuevos destinos para reparación/restauración. Los tests de motor y host usan decisiones sintéticas. Los recorridos GUI autorizados/delegados y la matriz finita de variantes y negativas están acreditados en PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md; quedan la distribución completa y los escenarios adicionales especificados en P-RECOVERY.remaining. A-71 no se declara cerrada.
 
-REA registra **50 lotes estáticos con 216 rutas TS/JS únicas** seleccionadas (214 TypeScript y dos MJS). [OC29](REA_OC29_CODEX_CODE_MODE.md) añade el modo de código del arnés Codex y [OC30](REA_OC30_A21_CODEX_CLOSURE.md) su login, cuenta, catálogo, versión y reanudación para cerrar A-21. La unión deduplica rutas, excluye manifiestos y no mide comprensión semántica ni comportamiento runtime. [OC28](REA_OC28_PRODUCT_COORDINATION.md) añade tres particiones de cinco fuentes, 15 blobs exactos y 182.916 bytes, con [manifiesto](REA_OC28_SOURCE_MANIFEST.json), hashes y Evidence IDs padre/resumen conservados en [REA_COVERAGE.json](REA_COVERAGE.json). El estado global sigue parcial y ninguna ejecución de OpenClaw fue observada. Los checkpoints históricos conservan sus cifras propias; el snapshot actual reconcilia las 80 filas en **62 familias parciales, 18 sin implementar y ninguna completa**. La fase A sigue abierta y B no se inicia.
+REA registra **50 lotes estáticos con 216 rutas TS/JS únicas** seleccionadas (214 TypeScript y dos MJS). [OC29](REA_OC29_CODEX_CODE_MODE.md) añade el modo de código del arnés Codex y [OC30](REA_OC30_A21_CODEX_CLOSURE.md) su login, cuenta, catálogo, versión y reanudación para cerrar A-21. La unión deduplica rutas, excluye manifiestos y no mide comprensión semántica ni comportamiento runtime. [OC28](REA_OC28_PRODUCT_COORDINATION.md) añade tres particiones de cinco fuentes, 15 blobs exactos y 182.916 bytes, con [manifiesto](REA_OC28_SOURCE_MANIFEST.json), hashes y Evidence IDs padre/resumen conservados en [REA_COVERAGE.json](REA_COVERAGE.json). El estado global sigue parcial y ninguna ejecución de OpenClaw fue observada. Los checkpoints históricos conservan sus cifras propias; el snapshot actual reconcilia las 80 filas en **61 familias parciales, 18 sin implementar y una completa (A-21, con límites)**. La fase A sigue abierta y B no se inicia.
 
 El [cierre integrado de núcleo y sesiones](PHASE_A_CORE_CLOSEOUT.md) reúne los
 contratos de [servicio](PHASE_A_CORE_SERVICE.md), [sesiones](PHASE_A_CORE_SESSIONS.md)
@@ -189,7 +199,7 @@ reabre como trabajo nuevo. A-71 y la distribución completa siguen pendientes.
 | A-18 | Decisiones, preguntas, progreso, presencia y sugerencias | Preguntas/progreso/sugerencias con recorrido A/B; familia parcial | Responder pregunta estructurada, actualizar progreso y aceptar/descartar sugerencia cambia el objeto previsto. |
 | A-19 | Múltiples agentes, workspaces e instrucciones | Avance contractual parcial; cierre pendiente | Crear dos agentes con espacios separados y verificar que cada conversación usa las instrucciones/ruta elegidas. |
 | A-20 | Subagentes, swarm, comunicación y objetivos | Avance contractual parcial; cierre pendiente | Padre delega dos tareas, recoge resultados correlacionados y registra objetivo con presupuesto. |
-| A-21 | Codex con ChatGPT oficial y aislado | Avance contractual parcial; cierre pendiente | El dueño completa login oficial en espacio dedicado; Jarvis obtiene catálogo, chatea, usa tool y continúa tras reinicio. |
+| A-21 | Codex con ChatGPT oficial y aislado | **Completa con límites** (06-11-2026, W1/W2/W3 nativos; ver plan de cualificación) | El dueño completa login oficial en espacio dedicado; Jarvis obtiene catálogo, chatea, usa tool y continúa tras reinicio. |
 | A-22 | Contratos de proveedores y elección de modelo | Pendiente; proveedores adicionales requieren eleccion | Mostrar proveedor/modelo efectivo y capacidades; un proveedor explícitamente elegido usa sólo su transporte. |
 | A-23 | Autenticación, renovación, cuentas, uso y límites | Avance contractual parcial; cierre pendiente | Completar login/logout oficial con el dueño y atribuir uso/límites al proveedor y sesión efectivos. |
 | A-24 | Memoria durable, procedencia y controles | Incremento CPU con recorrido real; paridad amplia pendiente | Guardar hecho sintético permitido y recuperarlo tras reinicio en sesión elegible con fuente/propietario. |

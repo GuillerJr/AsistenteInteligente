@@ -83,8 +83,8 @@ fallos `3c35fa0`/`c403ba7` y el intento `4686f25`, cuyo «Ver chat» interno no
 acreditaba un clic OS. Clientes, Git, preguntas y paneles conservan sus recorridos
 finitos; la publicación real de GitHub sigue sin ejercitarse. La
 [revisión OC-28](REA_OC28_PRODUCT_COORDINATION.md) conserva sus fuentes y límites.
-La matriz mantiene **62 familias parciales, 18 sin implementar y ninguna
-completa**; REA conserva **50 lotes y 216 rutas TS/JS únicas** seleccionadas.
+Desde el cierre de A-21 (06-11-2026, [plan](PHASE_A_A21_QUALIFICATION_PLAN.md)) la matriz
+queda en **61 familias parciales, 18 sin implementar y una completa (A-21, con límites)**; REA conserva **50 lotes y 216 rutas TS/JS únicas** seleccionadas.
 La fase A sigue abierta y B aplazada.
 
 La reanudación del 4 de noviembre conserva tres preparaciones fallidas y cerradas

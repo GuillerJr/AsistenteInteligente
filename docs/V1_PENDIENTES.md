@@ -96,8 +96,9 @@ seis etapas. El nuevo caso independiente E terminó sin pregunta canónica ni
 otra herramienta: observó A/B antes y después, pero no B mientras A espera.
 No se respondió ni repitió ese run; los datos RPC no sustituyen la UI.
 La navegación OS está cualificada en ese caso, el bloque completo aún no.
-La publicación real de GitHub sigue sin ejercitarse. La matriz mantiene
-**62 familias parciales, 18 sin implementar y ninguna completa**; REA registra
+La publicación real de GitHub sigue sin ejercitarse. Desde el cierre de A-21
+(06-11-2026, [plan](rebuild/PHASE_A_A21_QUALIFICATION_PLAN.md)) la matriz queda en
+**61 familias parciales, 18 sin implementar y una completa (A-21, con límites)**; REA registra
 **50 lotes y 216 rutas TS/JS únicas** seleccionadas. La fase A sigue abierta y B
 aplazada. Las cifras históricas siguientes pertenecen a sus propios checkpoints.
 
