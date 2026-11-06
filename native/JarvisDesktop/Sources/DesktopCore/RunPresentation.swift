@@ -13,6 +13,8 @@ public enum RunPresentation {
         case "codex_login_required": return "Inicia sesión con tu cuenta de ChatGPT para continuar."
         case "codex_thread_recovery_required", "thread_recovery_required":
             return "Codex no pudo recuperar el contexto. La ejecución no se repetirá; inicia otra conversación."
+        case "codex_version_unsupported":
+            return "La versión instalada del cliente oficial de Codex no es compatible. Se necesita la 0.163.0 o posterior."
         case "codex_thread_busy": return "Codex sigue trabajando en esta conversación. Espera a que termine."
         case "codex_request_timeout": return "Codex tardó demasiado en responder. Consulta el estado antes de volver a enviar."
         case "codex_answer_too_large", "codex_frame_too_large":

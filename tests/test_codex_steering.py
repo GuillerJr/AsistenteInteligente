@@ -22,7 +22,11 @@ for line in sys.stdin:
         stream.write(json.dumps(message) + '\n')
     method, params = message.get('method'), message.get('params', {})
     result = {}
-    if method == 'account/read':
+    if method == 'initialize':
+        result = {'userAgent': 'jarvis/0.163.0 (synthetic peer)'}
+    elif method == 'thread/resume':
+        result = {'thread': {'id': params['threadId']}}
+    elif method == 'account/read':
         result = {'account': {'type': 'chatgpt'}}
     elif method == 'thread/start':
         result = {'thread': {'id': thread}}

@@ -120,6 +120,19 @@ aparte.
    continuación; y negativos de cuenta cerrada, CLI ausente, desconexión y
    versión no admitida.
 
+Estado de implementación:
+
+- **G2 y G3 implementados** (06-11-2026). `CodexClient.start()` lee la versión
+  del `userAgent` de `initialize` (originador sin `/`, versión `x.y.z`, como en
+  OpenClaw), la registra en `codex_version` y rechaza con
+  `codex_version_unsupported` una versión ausente, ilegible, inferior a 0.163.0
+  o pre-release de 0.163.0, antes de cualquier otra petición; la app lo muestra
+  en español. `thread/resume` exige `thread.id` igual al binding pedido; si no,
+  el thread queda incierto y responde `codex_thread_recovery_required` sin
+  reanudarse otra vez. Diferencia con OpenClaw: Jarvis no intenta
+  `unsubscribe`; marca el binding y no lo reutiliza. Peers sintéticos de Codex
+  actualizados; regresiones en `tests/test_codex.py`.
+
 Sólo con los cuatro puntos y su CI completa, más el recorrido nativo, A-21
 pasaría a completa. Hasta entonces sigue en `implementacion_parcial_contratos_probados`.
 

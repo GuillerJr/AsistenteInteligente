@@ -20,6 +20,7 @@ final class RPCFrameTests: XCTestCase {
     func testKnownAndUnknownRunErrorsAreLocalizedWithoutExposingMachineData() {
         XCTAssertTrue(RunPresentation.errorMessage("codex_login_required").contains("Inicia sesión"))
         XCTAssertTrue(RunPresentation.errorMessage("codex_thread_recovery_required").contains("no se repetirá"))
+        XCTAssertTrue(RunPresentation.errorMessage("codex_version_unsupported").contains("0.163.0"))
         XCTAssertFalse(RunPresentation.errorMessage("PRIVATE-TEST-SENTINEL").contains("PRIVATE-TEST-SENTINEL"))
     }
 

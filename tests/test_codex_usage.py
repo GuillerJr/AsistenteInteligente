@@ -21,7 +21,7 @@ class CounterPeer(CodexClient):
         if method == "thread/start":
             return {"thread": {"id": "own-thread"}}
         if method == "thread/resume":
-            return {}
+            return {"thread": {"id": params["threadId"]}}
         assert method == "turn/start"
         self.turn += 1
         turn_id = str(self.turn)

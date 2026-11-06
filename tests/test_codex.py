@@ -33,6 +33,9 @@ for line in sys.stdin:
     result={}
     if method=='initialize':
         assert p['clientInfo']['name']=='jarvis'
+        result={'userAgent':'jarvis/0.163.0 (synthetic peer)'}
+    elif method=='thread/resume':
+        result={'thread':{'id':p['threadId']}}
     if method=='account/read':
         result={'account':{'type':'chatgpt','email':'private@example.invalid'}}
     elif method=='account/login/start':
@@ -207,3 +210,65 @@ def test_constructor_requires_explicit_executable(tmp_path):
         CodexClient(Path("codex"), tmp_path)
     with pytest.raises(ValueError):
         CodexClient(Path(sys.executable), tmp_path, timeout=31)
+
+
+def small_peer(path, *, user_agent, resumed_id=None):
+    """One-purpose peer: initialize identity and, optionally, a thread/resume reply."""
+    path.write_text(f"#!{sys.executable}\n" + f'''
+import json,sys
+for line in sys.stdin:
+    m=json.loads(line); method=m.get('method'); result={{}}
+    if method=='initialize':
+        result={{'userAgent':{user_agent!r}}} if {user_agent!r} is not None else {{}}
+    elif method=='account/read':
+        result={{'account':{{'type':'chatgpt'}}}}
+    elif method=='thread/resume':
+        result={{'thread':{{'id':{resumed_id!r}}}}}
+    if 'id' in m and method:
+        print(json.dumps({{'id':m['id'],'result':result}}),flush=True)
+''')
+    path.chmod(0o700)
+    return path
+
+
+@pytest.mark.parametrize("user_agent", [
+    None, "", "jarvis", "jarvis/0.162.9 (macOS)", "jarvis/0.163.0-alpha.1 (macOS)",
+    "jarvis/latest", "jarvis/1.x.0", "/0.163.0", "jarvis/0.163.0" + "x" * 600,
+])
+async def test_unreadable_or_older_codex_version_is_refused_before_any_request(
+        tmp_path, user_agent):
+    client = CodexClient(small_peer(tmp_path / "peer", user_agent=user_agent), tmp_path / "state")
+    try:
+        with pytest.raises(CodexError, match="codex_version_unsupported"):
+            await client.account_status()
+        assert client._process is None and client.codex_version is None
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.parametrize("user_agent,version", [
+    ("jarvis/0.163.0 (macOS 27; arm64)", "0.163.0"),
+    ("Codex Desktop/0.164.2", "0.164.2"),
+    ("jarvis/0.163.1-beta (x)", "0.163.1"),
+    ("jarvis/1.0.0+build.7", "1.0.0"),
+])
+async def test_supported_codex_version_is_recorded(tmp_path, user_agent, version):
+    client = CodexClient(small_peer(tmp_path / "peer", user_agent=user_agent), tmp_path / "state")
+    try:
+        assert (await client.account_status())["connected"]
+        assert client.codex_version == version
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.parametrize("resumed_id", ["other-thread", None])
+async def test_resume_that_subscribes_another_thread_is_never_reused(tmp_path, resumed_id):
+    peer = small_peer(tmp_path / "peer", user_agent="jarvis/0.163.0", resumed_id=resumed_id)
+    client = CodexClient(peer, tmp_path / "state")
+    try:
+        for _ in range(2):  # the binding stays blocked; no automatic second resume
+            with pytest.raises(CodexError, match="codex_thread_recovery_required"):
+                await client.chat("hola", thread_id="own-stored-thread")
+        assert "own-stored-thread" not in client._threads
+    finally:
+        await client.aclose()

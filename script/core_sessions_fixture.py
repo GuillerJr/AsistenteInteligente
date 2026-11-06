@@ -92,6 +92,7 @@ def consume(message):
     result={}
     if method=='initialize':
         assert params['clientInfo']['name']=='jarvis'
+        result={'userAgent':'jarvis/0.163.0 (synthetic peer)'}
     elif method=='account/read':
         result={'account':{'type':'chatgpt'},'authMode':'chatgpt'}
     elif method=='account/login/start':

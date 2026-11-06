@@ -170,6 +170,7 @@ for line in sys.stdin:
     if method == 'initialize':
         assert params['capabilities']['experimentalApi'] is True
         assert params['clientInfo']['name'] == 'jarvis'
+        result = {'userAgent': 'jarvis/0.163.0 (synthetic peer)'}
     elif method == 'account/read':
         result = {'account': {'type': 'chatgpt'}}
     elif method == 'thread/start':

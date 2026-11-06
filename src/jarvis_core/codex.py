@@ -56,6 +56,24 @@ _DIAGNOSTIC_REJECTED = "jarvis/serverRequestRejected"
 # Inside a code-mode `exec` cell images are flattened to text and an approval
 # could be left pending after the model ends its turn (OC-29, native case T).
 _DIRECT_NAMESPACE = "jarvis_direct"
+# jarvis_direct tool exposure and agentMessage phase were validated against
+# 0.163. initialize reports `<originator>/<version> ...` (OC-30); an older or
+# unreadable version is refused before any thread or login request.
+_MIN_CODEX_VERSION = (0, 163, 0)
+_USER_AGENT_VERSION = re.compile(
+    r"[^/]{1,64}/(\d{1,6})\.(\d{1,6})\.(\d{1,6})([-+][0-9A-Za-z.-]*)?(?:[\s(]|$)")
+
+
+def _codex_version(response) -> str:
+    agent = response.get("userAgent") if isinstance(response, dict) else None
+    match = (_USER_AGENT_VERSION.match(agent)
+             if isinstance(agent, str) and len(agent) <= 512 else None)
+    version = tuple(int(part) for part in match.groups()[:3]) if match else None
+    # A pre-release of the minimum (0.163.0-alpha) predates the validated build.
+    if (version is None or version < _MIN_CODEX_VERSION
+            or (version == _MIN_CODEX_VERSION and (match.group(4) or "").startswith("-"))):
+        raise CodexError("codex_version_unsupported")
+    return ".".join(str(part) for part in version)
 
 
 def _wire_label(value) -> str:
@@ -146,6 +164,7 @@ class CodexClient:
         self.directory = directory
         self.timeout = timeout
         self.certificate_bundle = certificate_bundle
+        self.codex_version: str | None = None
         self._process: asyncio.subprocess.Process | None = None
         self._reader: asyncio.Task | None = None
         self._stderr: asyncio.Task | None = None
@@ -248,13 +267,14 @@ class CodexClient:
                 )
                 self._reader = asyncio.create_task(self._read())
                 self._stderr = asyncio.create_task(self._drain_stderr())
-                await self.request(
+                initialized = await self.request(
                     "initialize",
                     {
                         "clientInfo": {"name": "jarvis", "title": "Jarvis", "version": "0.1.0"},
                         "capabilities": {"experimentalApi": True},
                     },
                 )
+                self.codex_version = _codex_version(initialized)
                 await self._write({"method": "initialized", "params": {}})
             except BaseException:
                 await self._stop_process_locked()
@@ -962,7 +982,7 @@ class CodexClient:
                 on_thread(thread_id)
         elif thread_id not in self._threads:
             # Only a binding supplied by our own session store can be resumed. No thread/list.
-            await self.request(
+            resumed = await self.request(
                 "thread/resume",
                 {
                     "threadId": thread_id,
@@ -972,6 +992,12 @@ class CodexClient:
                     "approvalsReviewer": "user",
                 },
             )
+            thread = resumed.get("thread") if isinstance(resumed, dict) else None
+            if not isinstance(thread, dict) or thread.get("id") != thread_id:
+                # Codex may have subscribed something other than our binding.
+                # Never send a turn there; the binding needs explicit recovery.
+                self._uncertain_threads.add(thread_id)
+                raise CodexError("codex_thread_recovery_required")
             self._threads.add(thread_id)
         if thread_id in self._events:
             raise CodexError("codex_thread_busy")

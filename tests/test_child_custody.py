@@ -49,7 +49,8 @@ import json,sys
 for line in sys.stdin:
     value=json.loads(line)
     if 'id' in value and value.get('method'):
-        result={'account':None} if value['method']=='account/read' else {}
+        result=({'account':None} if value['method']=='account/read' else
+            {'userAgent':'jarvis/0.163.0 (peer)'} if value['method']=='initialize' else {})
         print(json.dumps({'id':value['id'],'result':result}),flush=True)
 """
     )
