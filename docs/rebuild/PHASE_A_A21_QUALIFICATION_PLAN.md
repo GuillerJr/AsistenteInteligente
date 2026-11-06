@@ -50,3 +50,34 @@ leen `auth.json`, tokens o historial personal.
 
 W1, W2 y W3 pasados, sobre un commit con CI completa en verde, más G1–G3 ya
 implementados (OC-30). Sólo entonces A-21 pasa a completa en la matriz.
+
+## W1 ejecutado (06-11-2026): pasado
+
+Arnés `/private/tmp/jarvis-a21-native-20261106-w1`: preparación de cuota nueva tomada del
+caso E y comprobaciones de CI/ZIP predescargado de V; escenario de V ampliado. Binding
+`aecdaa12d9c150b51a5d894f362772adad257a62`, CI completa 42239927920 en verde (macOS
+127967201013, Ubuntu 127967200411), artefacto 13514757242 (7.947.984 B, SHA-256
+`a6cf082c…`) predescargado. Admisión `66d1eee9…`, preparado `bad2f858…` con cuota nueva
+`/private/tmp/jq-tqbfd_1m` y `provider/` vacío; cierre `closed_after_GUI_intent`
+(`8ec5da48…`) sin señales y cuota desmontada.
+
+Recorrido (recibo `w1-result.json` `57c4911b…`, `passed_A21_W1_case`):
+
+1. **Login del dueño.** Root pulsó «Conectar ChatGPT»; el dueño completó el login oficial
+   en el navegador. `service.status` pasó a conectado, modo `chatgpt`. Nadie leyó
+   `auth.json`.
+2. **Catálogo.** `provider.models` devolvió 8 modelos visibles con `gpt-6.1-sol` como
+   predeterminado; listar no eligió modelo.
+3. **Herramienta.** Una llamada directa a `media_inspect` con una aprobación ligada,
+   recibo `known`/`succeeded`, entrega CAS de la vista aprobada y respuesta igual al
+   oráculo oculto de la imagen nueva (triángulo azul a la izquierda, círculo rojo en el
+   centro, cuadrado verde a la derecha).
+4. **Cierre de sesión.** `provider.logout` confirmado; `service.status` desconectado;
+   `provider.models` vacío y desconectado; `runs.start` rechazado con
+   `-32037 provider_choice_required` y un único run en la conversación.
+
+Límites: un hogar Codex, un login, este catálogo, un PNG y un cierre de sesión. El
+proveedor de W1 queda sin sesión; W2 necesita que el dueño vuelva a iniciarla. El
+negativo de «cuenta vencida» con la elección de proveedor vigente (`codex_login_required`)
+no se ejerció: el cierre de sesión revoca antes la elección. Faltan W2 y W3; A-21 sigue
+parcial.
