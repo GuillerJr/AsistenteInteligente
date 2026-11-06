@@ -46,7 +46,16 @@ La [plantilla G](qa/product-background-native-20261104-g-template/SNAPSHOT.json)
 permanece **NOEXEC**, sin cambios. Las suites completas siguen en CI y el dueño
 autorizó el fallback local focal. Faltan la comparación remota 27.2 y la
 cualificación completa/nativa. La fase A sigue abierta y B aplazada: **62 familias
-parciales, 18 sin implementar y ninguna completa; REA 49 lotes y 195 rutas**.
+parciales, 18 sin implementar y ninguna completa; REA 50 lotes y 216 rutas**.
+
+Pausa de medios del 05/06-11-2026 ([checkpoint](PHASE_A_MEDIA_PAUSE_20261105.md),
+[OC-29](REA_OC29_CODEX_CODE_MODE.md)): con Codex 0.163 los modelos del catálogo
+imponen el modo de código y `media_inspect` acababa en `exec`. Desde `d937e55`
+las herramientas de Jarvis van en el namespace sólo directo `jarvis_direct`, y
+desde `67fbd6b` la respuesta del run excluye la narración `commentary`. El caso
+nativo V pasó un PNG sintético con aprobación ligada y consumo de píxeles
+acreditado. Ninguna familia cambia de estado: A-21 y A-56 siguen parciales y
+A-32 (modo de código) sigue sin implementar.
 
 ## Alcance de «base completa»
 
@@ -106,7 +115,7 @@ El incremento de producto conserva los fallos y la custodia de cada intento: 57f
 
 La [continuación de recuperación](PHASE_A_RECOVERY_COMPLETION.md) implementa variantes WAL ausente/vacío/cabecera, journals compatibles, archivos/artefactos de workspace, reparaciones FTS/prefijo WAL y actualización/rollback locales. Conserva originales, usa una copia verificada actual y esquemas compatibles para versiones, y publica nuevos destinos para reparación/restauración. Los tests de motor y host usan decisiones sintéticas. Los recorridos GUI autorizados/delegados y la matriz finita de variantes y negativas están acreditados en PHASE_A_RECOVERY_NATIVE_CLOSEOUT.md; quedan la distribución completa y los escenarios adicionales especificados en P-RECOVERY.remaining. A-71 no se declara cerrada.
 
-REA registra **49 lotes estáticos con 195 rutas TS/JS únicas** seleccionadas (193 TypeScript y dos MJS). [OC29](REA_OC29_CODEX_CODE_MODE.md) añade el modo de código del arnés Codex. La unión deduplica rutas, excluye manifiestos y no mide comprensión semántica ni comportamiento runtime. [OC28](REA_OC28_PRODUCT_COORDINATION.md) añade tres particiones de cinco fuentes, 15 blobs exactos y 182.916 bytes, con [manifiesto](REA_OC28_SOURCE_MANIFEST.json), hashes y Evidence IDs padre/resumen conservados en [REA_COVERAGE.json](REA_COVERAGE.json). El estado global sigue parcial y ninguna ejecución de OpenClaw fue observada. Los checkpoints históricos conservan sus cifras propias; el snapshot actual reconcilia las 80 filas en **62 familias parciales, 18 sin implementar y ninguna completa**. La fase A sigue abierta y B no se inicia.
+REA registra **50 lotes estáticos con 216 rutas TS/JS únicas** seleccionadas (214 TypeScript y dos MJS). [OC29](REA_OC29_CODEX_CODE_MODE.md) añade el modo de código del arnés Codex y [OC30](REA_OC30_A21_CODEX_CLOSURE.md) su login, cuenta, catálogo, versión y reanudación para cerrar A-21. La unión deduplica rutas, excluye manifiestos y no mide comprensión semántica ni comportamiento runtime. [OC28](REA_OC28_PRODUCT_COORDINATION.md) añade tres particiones de cinco fuentes, 15 blobs exactos y 182.916 bytes, con [manifiesto](REA_OC28_SOURCE_MANIFEST.json), hashes y Evidence IDs padre/resumen conservados en [REA_COVERAGE.json](REA_COVERAGE.json). El estado global sigue parcial y ninguna ejecución de OpenClaw fue observada. Los checkpoints históricos conservan sus cifras propias; el snapshot actual reconcilia las 80 filas en **62 familias parciales, 18 sin implementar y ninguna completa**. La fase A sigue abierta y B no se inicia.
 
 El [cierre integrado de núcleo y sesiones](PHASE_A_CORE_CLOSEOUT.md) reúne los
 contratos de [servicio](PHASE_A_CORE_SERVICE.md), [sesiones](PHASE_A_CORE_SESSIONS.md)

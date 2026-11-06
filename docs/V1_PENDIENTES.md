@@ -56,7 +56,7 @@ La [plantilla G](rebuild/qa/product-background-native-20261104-g-template/SNAPSH
 permanece **NOEXEC**, sin cambios. Las suites completas siguen en CI y el dueño
 autorizó el fallback local focal. Falta la cualificación completa/nativa y
 resolver la dependencia OCR/visión. La fase A sigue abierta y B aplazada: **62 familias
-parciales, 18 sin implementar y ninguna completa; REA 49 lotes y 195 rutas**.
+parciales, 18 sin implementar y ninguna completa; REA 50 lotes y 216 rutas**.
 
 Decisión del dueño, 24-10-2026: **primero construir la variante completa funcional
 de OpenClaw con el nombre Jarvis, mediante investigación con REA y código propio**.
@@ -98,7 +98,7 @@ No se respondió ni repitió ese run; los datos RPC no sustituyen la UI.
 La navegación OS está cualificada en ese caso, el bloque completo aún no.
 La publicación real de GitHub sigue sin ejercitarse. La matriz mantiene
 **62 familias parciales, 18 sin implementar y ninguna completa**; REA registra
-**49 lotes y 195 rutas TS/JS únicas** seleccionadas. La fase A sigue abierta y B
+**50 lotes y 216 rutas TS/JS únicas** seleccionadas. La fase A sigue abierta y B
 aplazada. Las cifras históricas siguientes pertenecen a sus propios checkpoints.
 
 La reanudación del 4 de noviembre conserva tres preparaciones fallidas y cerradas

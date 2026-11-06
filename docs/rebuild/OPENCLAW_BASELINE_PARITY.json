@@ -36,7 +36,7 @@
     "implementation_complete": false,
     "runtime_validation_of_reference_performed": false,
     "initial_jarvis_state": "Línea base original: núcleo Python con pruebas sintéticas. Conservar como historia del inicio; el avance actual se registra separadamente en progress_snapshot y BASELINE_VERTICAL_SLICE.md, sin cerrar paridad.",
-    "rea": "E### son IDs locales de fuente estática con hashes, no ev_ de REA. El inventario inicial y los lotes posteriores se distinguen; cobertura efectiva de 49 lotes y 195 rutas TS/JS únicas en REA_COVERAGE.json, con semántica parcial e incógnitas y sin ejecución de la referencia.",
+    "rea": "E### son IDs locales de fuente estática con hashes, no ev_ de REA. El inventario inicial y los lotes posteriores se distinguen; cobertura efectiva de 50 lotes y 216 rutas TS/JS únicas en REA_COVERAGE.json, con semántica parcial e incógnitas y sin ejecución de la referencia.",
     "method": "Catálogos canónicos, registros/manifests, entradas de arquitectura y contratos documentales fijados. Catálogos generados se contrastan con manifest disponible; no son evidencia runtime.",
     "limits": [
       "Censo funcional no equivale a lectura semántica de 59.267 archivos o certificación de 554 APIs.",
@@ -955,6 +955,10 @@
         {
           "progress_id": "P-CLEANUP-OWNERS",
           "scope": "Avance parcial y límites en PHASE_A_CHANNELS_VOICE_WEB.md; cualificación final integrada y recorrido real pendientes. No cierra la capacidad."
+        },
+        {
+          "progress_id": "P-CODEX",
+          "scope": "OC-30 (REA_OC30_A21_CODEX_CLOSURE.md) fija las brechas de cierre: G1 catálogo model/list y elección de modelo, G2 versión mínima de Codex en initialize, G3 validación de thread/resume; más cualificación nativa con login del dueño. No cierra la capacidad."
         }
       ],
       "acceptance": {
@@ -967,7 +971,8 @@
         "E027",
         "E028",
         "E029",
-        "E030"
+        "E030",
+        "ev_a0fafeb5ba6edcf4d0d3fb41361393f45391f9d76340139d1601269e1dc278b2"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -14509,8 +14514,8 @@
     ]
   },
   "progress_snapshot": {
-    "date": "2026-11-04",
-    "revision_scope": "CI46c10a1/run41890910372 fallida sólo en Swift:4062 Python Ubuntu(47 omitidas),4109macOS,725Swift(1omitida,7fallos/4métodos). Fast v3 reconoce en CI; precise v3 falla nilObjC0, causa remota no atribuida. Comparación local REA: mismo source_before completo,26 casos pasan host sin Seatbelt y control26 tiene8fallos; diferencia de aislamiento agregado local, sin regla concreta ni causaCI. Host mantiene cuota/plazo/recibo pero no confina filesystem/red/XPC.146 regresiones del guard y11 del selector pasaron por separado; selección remota Xcode27.2 aún sin ejecutar. H ejecutó un run y cerró normalmente, pero watcher263399>262144 y selección GUI inesperada impiden cualificarlo. GNOEXEC intacto; GitHub publicación real pendiente.62familias parciales/18sin implementar/0completas;REA48lotes/186rutas;Aabierta/Baplazada.",
+    "date": "2026-11-06",
+    "revision_scope": "CI 67fbd6b/run42223362660 completa en verde: 4170 Python Ubuntu (47 omitidas), 4217 macOS, 724 Swift (1 omitida, 0 fallos). Pausa de medios: catálogo Codex code_mode_only resuelto con namespace sólo directo jarvis_direct y respuesta sin commentary; caso nativo V pasó un PNG sintético con aprobación ligada y consumo de píxeles acreditado. H/I sigue sin cualificar. 62 familias parciales/18 sin implementar/0 completas; REA 50 lotes/216 rutas; A abierta/B aplazada.",
     "complete_capability_count": 0,
     "complete_reference_parity": false,
     "authenticated_inference_verified": true,
@@ -14587,8 +14592,8 @@
           "A-21",
           "A-23"
         ],
-        "verified_scope": "Acceso oficial e inferencia autenticada del recorrido inicial, reinicio y contexto propios acreditados. DynamicTools conectadas a Runtime único, protocolo/turno/IDs validados y resultados separados; pruebas subprocess propias. No se importan hilos ajenos.",
-        "remaining": "No paridad completa del harness, cuentas/uso/renovación completos ni todas las herramientas de referencia. Las herramientas builtin del proveedor permanecen desactivadas."
+        "verified_scope": "Acceso oficial e inferencia autenticada del recorrido inicial, reinicio y contexto propios acreditados. DynamicTools conectadas a Runtime único, protocolo/turno/IDs validados y resultados separados; pruebas subprocess propias. No se importan hilos ajenos. 06-11-2026: con Codex 0.163 todos los modelos del catálogo declaran tool_mode=code_mode_only; features.code_mode=false no retira exec (caso nativo T). Desde d937e55 todas las herramientas de Jarvis se ofrecen en el namespace sólo directo jarvis_direct (features.code_mode.direct_only_tool_namespaces) y sólo se aceptan llamadas y acuses con ese namespace; desde 67fbd6b la respuesta del run excluye agentMessage phase=commentary. Caso nativo V (CI 42223362660) acreditó llamada directa, aprobación ligada y entrega de imagen; ver PHASE_A_MEDIA_PAUSE_20261105.md y REA_OC29_CODEX_CODE_MODE.md.",
+        "remaining": "No paridad completa del harness, cuentas/uso/renovación completos ni todas las herramientas de referencia. Las herramientas builtin del proveedor permanecen desactivadas. El modo de código de Codex (A-32) queda desactivado, no implementado; codex-code-mode-host no se distribuye."
       },
       {
         "id": "P-NATIVE",
@@ -15462,7 +15467,7 @@
           "A-56",
           "A-58"
         ],
-        "verified_scope": "CI 450621f completa: 3526 Python Ubuntu / 46 omitidas, 3572 macOS y 628 Swift / una omisión/cero fallos, bundle/helper, paquetes y smoke. Recorridos reales anteriores conservados y relacionados en el registro integrado: corpus local con Codex real y fuentes/citas de texto/Markdown, PDF textual y escaneado, DOCX/XLSX/PPTX/RTF, HTML inerte, JSON/XML, CSV/TSV, imagen y vídeo muestreado; WAV/Ogg con transcripción local. El PDF cifrado y 16 MiB+1 fueron rechazados; el adjunto retirado quedó bloqueado antes del despacho con original/tombstone intactos. Reproductor nativo dbad498: pausa, búsqueda pausada, selección de auriculares conservando posición, reanudación explícita audible confirmada por el dueño y desconexión física sin fallback; cierre/reapertura pausada a cero. Ogg llegó a 3,80425 s y vídeo a 2 s con búsqueda a 1 s y colores/marcador observados. Originales, recibos y fallos históricos se conservan; no se presenta toda la GUI como ejecutada de nuevo en 450.",
+        "verified_scope": "CI 450621f completa: 3526 Python Ubuntu / 46 omitidas, 3572 macOS y 628 Swift / una omisión/cero fallos, bundle/helper, paquetes y smoke. Recorridos reales anteriores conservados y relacionados en el registro integrado: corpus local con Codex real y fuentes/citas de texto/Markdown, PDF textual y escaneado, DOCX/XLSX/PPTX/RTF, HTML inerte, JSON/XML, CSV/TSV, imagen y vídeo muestreado; WAV/Ogg con transcripción local. El PDF cifrado y 16 MiB+1 fueron rechazados; el adjunto retirado quedó bloqueado antes del despacho con original/tombstone intactos. Reproductor nativo dbad498: pausa, búsqueda pausada, selección de auriculares conservando posición, reanudación explícita audible confirmada por el dueño y desconexión física sin fallback; cierre/reapertura pausada a cero. Ogg llegó a 3,80425 s y vídeo a 2 s con búsqueda a 1 s y colores/marcador observados. Originales, recibos y fallos históricos se conservan; no se presenta toda la GUI como ejecutada de nuevo en 450. Pausa de medios 05/06-11-2026: Q, R, T y U fallaron sin efecto incierto y se conservan; S no lanzó. V (67fbd6b, recibo visual-result d8222494) pasó el recorrido de una imagen PNG sintética: una aprobación ligada, recibo media_inspect known/succeeded, entrega CAS de píxeles aceptada y respuesta igual al oráculo oculto. Sólo ese PNG y ese run.",
         "remaining": "Fuera de este incremento finito: cobertura universal de documentos, idiomas, códecs, salidas y recursos remotos/URLs caducadas. OCR sigue siendo falible: se conserva TARLIS Y2 en el bitmap segmentado y el OCR positivo MARCADOROCRZAFIRO3582/VALOR 76 del PDF legible. Vídeo sólo acredita sus muestras 0/1/1,5 s y alcance parcial. Los recorridos controlados privados de Telegram, wake local, Talk acotado y cierre se cualificaron por separado en el registro integrado; este resultado no reabre las pruebas locales agotadas ni completa A-56/A-58, la fase A o B.",
         "evidence": [
           "PHASE_A_DOCUMENTS_MEDIA.md",
@@ -15831,8 +15836,8 @@
     "detail_file": "PHASE_A_PRODUCT_COORDINATION.md",
     "rea": {
       "source_file": "REA_COVERAGE.json",
-      "static_batches": 48,
-      "unique_typescript_paths_in_completed_batches": 184,
+      "static_batches": 50,
+      "unique_typescript_paths_in_completed_batches": 214,
       "global_status": "partial",
       "runtime_executed": false,
       "semantic_unknowns_remain": true,
@@ -15884,10 +15889,12 @@
         "OC-26D",
         "OC-28A",
         "OC-28B",
-        "OC-28C"
+        "OC-28C",
+        "OC-29",
+        "OC-30"
       ],
       "limits": "Contar rutas examinadas no significa comprensión semántica ni revisión global. IDs y evidencias completos en REA_COVERAGE.json/provenance.",
-      "unique_ts_js_paths_in_completed_batches": 186,
+      "unique_ts_js_paths_in_completed_batches": 216,
       "source_count_note": "184 rutas TypeScript y dos MJS; unión de rutas únicas, no cobertura semántica o runtime. OC28 conserva 15 blobs/182916 bytes, manifiesto, EIDs y límites propios."
     },
     "previous_detail_file": "PHASE_A_AUTOMATION_CLOSEOUT.md",
@@ -15971,8 +15978,8 @@
     "product_coordination_latest_ci_status": "success",
     "product_coordination_latest_ci_run_id": 41842491175,
     "product_coordination_os_notification_click_verified": true,
-    "latest_ci_commit": "c41378acc0c1f24f6534011f1aab09691a9a6948",
-    "latest_ci_run": 41852070764
+    "latest_ci_commit": "67fbd6b0438c01ed8327452bcd72c101e4693273",
+    "latest_ci_run": 42223362660
   },
   "target_decisions": {
     "date": "2026-10-24",

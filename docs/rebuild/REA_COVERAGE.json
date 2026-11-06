@@ -6825,6 +6825,174 @@
           "unknowns": 2018
         }
       }
+    },
+    {
+      "id": "OC-30",
+      "topic": "Codex harness login, account, model catalog, version and thread resume for A-21",
+      "source_paths": [
+        "extensions/codex/client-version-api.ts",
+        "extensions/codex/package.json",
+        "extensions/codex/src/app-server/attempt-terminal.ts",
+        "extensions/codex/src/app-server/attempt-timeouts.ts",
+        "extensions/codex/src/app-server/auth-binding.ts",
+        "extensions/codex/src/app-server/auth-bridge.ts",
+        "extensions/codex/src/app-server/auth-profile-recovery.ts",
+        "extensions/codex/src/app-server/auth-profile-selection.ts",
+        "extensions/codex/src/app-server/auth-profile.ts",
+        "extensions/codex/src/app-server/auth-start-options.ts",
+        "extensions/codex/src/app-server/auth-types.ts",
+        "extensions/codex/src/app-server/client-initialize.ts",
+        "extensions/codex/src/app-server/client-startup-retry.ts",
+        "extensions/codex/src/app-server/client-thread-closure.ts",
+        "extensions/codex/src/app-server/client-thread-owner.ts",
+        "extensions/codex/src/app-server/model-catalog.ts",
+        "extensions/codex/src/app-server/models.ts",
+        "extensions/codex/src/app-server/native-auth.ts",
+        "extensions/codex/src/app-server/thread-binding-policy.ts",
+        "extensions/codex/src/app-server/thread-model-selection.ts",
+        "extensions/codex/src/app-server/thread-restricted-resume.ts",
+        "extensions/codex/src/app-server/thread-resume.ts"
+      ],
+      "parent_evidence_id": "ev_a0fafeb5ba6edcf4d0d3fb41361393f45391f9d76340139d1601269e1dc278b2",
+      "summary_evidence_id": "ev_6f05467244afd19daa8a97294c532838768c610dade2150a8382cb8cc0518c56",
+      "trace_evidence_ids": [
+        "ev_7ef984a5f066168ee606ed693eb013d0494603eb063328d13be996245d5c6ac2"
+      ],
+      "partition_sha256": "6ad100fc9cb723ed630d1b0fde7df28cecb48f7f8dfcbf58efd927b923427992",
+      "reference_commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "reference_tree": "197c70097790e30087bbef323b0f2cc5148ab9b7",
+      "report": "docs/rebuild/REA_OC30_A21_CODEX_CLOSURE.md",
+      "summary_file": "docs/rebuild/qa/openclaw-codex-a21-20261106/REA_SUMMARY.json",
+      "source_files": [
+        {
+          "path": "extensions/codex/client-version-api.ts",
+          "bytes": 1450,
+          "sha256": "95b1be2ed6cb90789638f303064e91f7bc192dfb8962f6a8bbec5976ab27d3a7"
+        },
+        {
+          "path": "extensions/codex/package.json",
+          "bytes": 1489,
+          "sha256": "474e0861c60715750fc241775daf85833aab6e47c80ed23aab39a6cc3b375193"
+        },
+        {
+          "path": "extensions/codex/src/app-server/attempt-terminal.ts",
+          "bytes": 795,
+          "sha256": "94a3ff4445c9d44690e84fd87aeb52547959865a35020d42d54dd391a5422509"
+        },
+        {
+          "path": "extensions/codex/src/app-server/attempt-timeouts.ts",
+          "bytes": 4306,
+          "sha256": "5274b1712b2be6a62a1a89f7c48dbc70c6a7fc8c32d36380479b2ca620561217"
+        },
+        {
+          "path": "extensions/codex/src/app-server/auth-binding.ts",
+          "bytes": 3528,
+          "sha256": "79489b7e1a8249227ee7ec2faca733698b35b3bbf06410aac6ba82fae071b456"
+        },
+        {
+          "path": "extensions/codex/src/app-server/auth-bridge.ts",
+          "bytes": 38579,
+          "sha256": "e8922d50001fb5afcca4b0bfc41e90aa1a7ae848706cf0cf40c5d207985f5c0f"
+        },
+        {
+          "path": "extensions/codex/src/app-server/auth-profile-recovery.ts",
+          "bytes": 872,
+          "sha256": "ea11f5f0129eafd96a371e6ff1adab011f3c0bdd631336154c6165cfaf389b9b"
+        },
+        {
+          "path": "extensions/codex/src/app-server/auth-profile-selection.ts",
+          "bytes": 3710,
+          "sha256": "e048d9f0c54a7c8b9598961d82d85cbf75f271043745d554cfc3117ccd45b5b9"
+        },
+        {
+          "path": "extensions/codex/src/app-server/auth-profile.ts",
+          "bytes": 3667,
+          "sha256": "c5acba78c54346640f8df87cbabe09783a23fe0da0f8ec154263d7884585f31d"
+        },
+        {
+          "path": "extensions/codex/src/app-server/auth-start-options.ts",
+          "bytes": 3362,
+          "sha256": "7897dea66005ad76690eeb2d487f9fcf5bc5549dab034e53b32be89e1c3a7c15"
+        },
+        {
+          "path": "extensions/codex/src/app-server/auth-types.ts",
+          "bytes": 1112,
+          "sha256": "590000c9745c3761e5254830431e4ff009ad76fc8c401f78c73f4d2634c63b6e"
+        },
+        {
+          "path": "extensions/codex/src/app-server/client-initialize.ts",
+          "bytes": 3698,
+          "sha256": "317a82bb89439186ebf5818c5e0a7ca40788c648de4128d86f06bed659fe31a1"
+        },
+        {
+          "path": "extensions/codex/src/app-server/client-startup-retry.ts",
+          "bytes": 2467,
+          "sha256": "3e89a55217c287b9e4b7dfd396d73bad385897363665a983274cc466b98022fc"
+        },
+        {
+          "path": "extensions/codex/src/app-server/client-thread-closure.ts",
+          "bytes": 1863,
+          "sha256": "6248adf5fe8cb6490d804abbf4b404ed5f475b1d00feec436225a2ad812f0b38"
+        },
+        {
+          "path": "extensions/codex/src/app-server/client-thread-owner.ts",
+          "bytes": 8168,
+          "sha256": "581c86f579492eb090bdd122fda7a2c95796e3ca01ebe2d1d2e5582f8b4f0290"
+        },
+        {
+          "path": "extensions/codex/src/app-server/model-catalog.ts",
+          "bytes": 9482,
+          "sha256": "1e0734894c21c2f3c2130071e20f74496907eb72359f77e6d871190b5b206fa6"
+        },
+        {
+          "path": "extensions/codex/src/app-server/models.ts",
+          "bytes": 5970,
+          "sha256": "759ad332abacfd4224fcaafe22a21129fb9e4b15abc810fd78152fef994a1bab"
+        },
+        {
+          "path": "extensions/codex/src/app-server/native-auth.ts",
+          "bytes": 3505,
+          "sha256": "16a23d1cc4fb51955d3c04892d1215e0366de96e8de963d5d2e810e80b08bf01"
+        },
+        {
+          "path": "extensions/codex/src/app-server/thread-binding-policy.ts",
+          "bytes": 4157,
+          "sha256": "3e12e7bd207439c16541fcfd6f2e4b091cf3658a1ee70eabf4ae0b4bf37ad35e"
+        },
+        {
+          "path": "extensions/codex/src/app-server/thread-model-selection.ts",
+          "bytes": 4717,
+          "sha256": "0fa7bedc7b382cac8e1e35e16a5171ecb0e656c5d45c81e7091c3f229853bdc2"
+        },
+        {
+          "path": "extensions/codex/src/app-server/thread-restricted-resume.ts",
+          "bytes": 3486,
+          "sha256": "f238aeb8080c9bbcb1cb869cb458a288d0ea1e611d9cd7753d369b8faab7c979"
+        },
+        {
+          "path": "extensions/codex/src/app-server/thread-resume.ts",
+          "bytes": 3828,
+          "sha256": "27a7de804df2f7e0a5f7f80a12c85dc362cec567dcd0f68ae236efa4181e4217"
+        }
+      ],
+      "statistics": {
+        "relevant_files": 22,
+        "parsed_javascript_files": 21,
+        "text_bytes_read": 114211,
+        "visited_ast_nodes": 12043,
+        "findings": 374,
+        "parse_failures": 0
+      },
+      "semantic_unknowns": 2051,
+      "coverage": "application graph complete for the 22 selected blobs; semantic coverage unknown/partial",
+      "execution_observed": false,
+      "limitations": [
+        "Static inert analysis only; OpenClaw was not executed, installed or built.",
+        "The account/ seed trace spans most of the graph; behaviour is cited from direct reading of the same blobs.",
+        "run-attempt-connection, startup-binding, session-binding*, rate-limits and account-usage-runtime were not selected."
+      ],
+      "full_evidence_path": null,
+      "provenance_file": "docs/rebuild/REA_OC30_A21_CODEX_CLOSURE.md"
     }
   ],
   "remaining_parts": [
@@ -6964,7 +7132,7 @@
       "original_plan_id": "OC-11"
     }
   ],
-  "rea_parsed_unique_source_files": 195,
+  "rea_parsed_unique_source_files": 216,
   "remaining_parts_id_note": "Los scopes restantes usan SCOPE para no confundir etiquetas del plan inicial con lotes OC completados. Un lote estático no cierra un scope.",
   "rea_parsed_unique_source_paths": [
     "cli-parent-lifetime.mjs",
@@ -6976,19 +7144,40 @@
     "extensions/browser/src/browser-tool.snapshot.ts",
     "extensions/browser/src/browser/cdp-target-filter.ts",
     "extensions/browser/src/browser/client-actions.ts",
+    "extensions/codex/client-version-api.ts",
     "extensions/codex/media-understanding-provider.ts",
     "extensions/codex/src/app-server/attempt-startup.ts",
+    "extensions/codex/src/app-server/attempt-terminal.ts",
+    "extensions/codex/src/app-server/attempt-timeouts.ts",
+    "extensions/codex/src/app-server/auth-binding.ts",
+    "extensions/codex/src/app-server/auth-bridge.ts",
+    "extensions/codex/src/app-server/auth-profile-recovery.ts",
+    "extensions/codex/src/app-server/auth-profile-selection.ts",
+    "extensions/codex/src/app-server/auth-profile.ts",
+    "extensions/codex/src/app-server/auth-start-options.ts",
+    "extensions/codex/src/app-server/auth-types.ts",
     "extensions/codex/src/app-server/bounded-turn.ts",
+    "extensions/codex/src/app-server/client-initialize.ts",
     "extensions/codex/src/app-server/client-notifications.ts",
+    "extensions/codex/src/app-server/client-startup-retry.ts",
+    "extensions/codex/src/app-server/client-thread-closure.ts",
+    "extensions/codex/src/app-server/client-thread-owner.ts",
     "extensions/codex/src/app-server/connection-health.ts",
     "extensions/codex/src/app-server/dynamic-tool-catalog.ts",
     "extensions/codex/src/app-server/dynamic-tool-profile.ts",
     "extensions/codex/src/app-server/dynamic-tool-response-state.ts",
     "extensions/codex/src/app-server/dynamic-tool-result-projection.ts",
     "extensions/codex/src/app-server/event-projector-code-mode.ts",
+    "extensions/codex/src/app-server/model-catalog.ts",
+    "extensions/codex/src/app-server/models.ts",
+    "extensions/codex/src/app-server/native-auth.ts",
     "extensions/codex/src/app-server/native-tool-catalog.ts",
+    "extensions/codex/src/app-server/thread-binding-policy.ts",
+    "extensions/codex/src/app-server/thread-model-selection.ts",
     "extensions/codex/src/app-server/thread-ownership.ts",
     "extensions/codex/src/app-server/thread-requests.ts",
+    "extensions/codex/src/app-server/thread-restricted-resume.ts",
+    "extensions/codex/src/app-server/thread-resume.ts",
     "extensions/cua-computer/src/action-targets.ts",
     "extensions/cua-computer/src/execution-state.ts",
     "extensions/cua-computer/src/frame.ts",
