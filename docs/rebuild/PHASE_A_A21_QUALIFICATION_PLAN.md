@@ -114,3 +114,49 @@ Comprobación final de sólo lectura (rollout `7140799f…`): el binding sigue e
 no se creó rollout nuevo y ese rollout contiene los dos turnos («Anotado.» y la palabra clave).
 Acredita sesión conservada, reanudación del binding propio y continuidad de contexto tras
 reinicio de la app, sin `thread/list` ni threads ajenos. Falta W3; A-21 sigue parcial.
+
+## W3 ejecutado (06-11-2026): pasado en W3a + W3c
+
+Tres casos encadenados de un lanzamiento cada uno sobre la cuota y el proveedor de W1, ligados a
+`d6564a3942a594dc15bb8667a7d26f5b4073fba7` (CI completa 42272800196 en verde: macOS
+128081586184, Ubuntu 128081586812; artefacto 13532206038, 7.947.655 B, SHA-256 `d8bfd269…`,
+predescargado y copiado sólo en W3a). Perfil `state-w2` reutilizado con la sesión del dueño.
+
+- **W3a** (admisión `a9ab80da…`, preparado `e502a6c2…`, cierre GUI `f2e8fce9…` sin señales,
+  recibo `57290903…`, `passed_A21_W3a_case`). App y código nuevos (`Jarvis-W3.app`,
+  `source-w3`) lanzados con un binario **sintético** propio como ruta de Codex
+  (`bin/codex-w3-shim`, SHA-256 `0c99b707…`) que anuncia `0.162.0` en `initialize`, sin red
+  ni lectura de archivos. `service.status` y un run dieron `codex_version_unsupported`; después
+  se renombró el shim dentro de la cuota (nunca borrado) y estado y otro run dieron
+  `codex_unavailable` (G4: el servicio arranca y lo diagnostica). El mensaje en español se vio
+  en pantalla. Sin inferencia.
+- **W3b fallido por expectativa del arnés** (admisión `0170ba8e…`, preparado `a4d53ec7…`,
+  cierre GUI `832ad538…` sin señales, recibo `34924cdb…`, `failed_or_unknown`,
+  `W3b_disconnected_client_reported_connected`). Misma app y copias con la copia oficial
+  `bin/codex`. Un run de texto largo sin herramientas y, tras 4,2 s en `running`, un SIGTERM al
+  hijo Codex exacto. El run terminó `failed` con `codex_disconnected`, `cleanup_confirmed`, sin
+  recibos de acción, y el proceso señalado desapareció. El arnés exigía además que el cliente
+  siguiera desconectado (suposición propia, no del producto): la siguiente lectura de
+  `service.status` arrancó un Codex nuevo y respondió conectado. Lectura de sólo lectura
+  posterior: un único run nuevo (`450d4663…`, `failed`), rollout con `turn_aborted`
+  (`interrupted`) y sin llamadas a herramientas. Los `zsh`/`sed` hijos del primer Codex no
+  aparecen como comandos en el rollout; por la carpeta `shell_snapshots` se infiere la captura
+  del entorno de shell de Codex al arrancar (inferencia, no observación). El turno usó un thread
+  nuevo con el historial propio acotado: los runs no completados de W3a limpiaron el binding
+  (`clear_provider_thread`), como está diseñado.
+- **W3c** (admisión `0680a392…`, preparado `0b706638…` con los mismos bytes de solicitud de
+  W3b, cierre GUI `1bd419f9…` sin señales ni incidencias, recibo `c5c833c9…`,
+  `passed_A21_W3c_case`). Mismo recorrido con la expectativa corregida: run `failed` con
+  `codex_disconnected`, sin recibos, proceso señalado ausente y nunca de vuelta; la lectura
+  posterior reconectó exactamente un Codex nuevo (se registra, no es repetición); tras 3 s el
+  conjunto de runs era el previo más uno, el run fallido no cambió y no apareció otro proceso.
+
+La nota de trabajo que suponía que, tras una desconexión, `start()` seguía devolviendo
+`codex_disconnected` hasta reiniciar la app era errónea y no se convierte en hueco: el cliente se
+recupera en la siguiente lectura sin repetir el run.
+
+Con W1, W2 (W2a + W2c) y W3 (W3a + W3c) pasados sobre commits con CI completa en verde, y G1–G4
+implementados (OC-30), se cumple la condición de cierre de A-21 de este plan. Límites: una
+cuenta, un hogar Codex, un binario sintético para versión y ausencia, una sola desconexión por
+SIGTERM a mitad de turno; no acredita reconexiones de red ni caducidad de sesión con elección
+vigente.
