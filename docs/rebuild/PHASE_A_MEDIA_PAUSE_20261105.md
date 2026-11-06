@@ -394,6 +394,14 @@ ni se repite U. Queda un defecto propio: `CodexClient.chat` ignora el campo
 `phase` de `agentMessage` (`commentary`, `partial_answer`, `final_answer`), que
 el esquema de 0.163 define y pide tratar como desconocido cuando falta.
 
+Corregido después por decisión del dueño: la respuesta del run excluye los
+`agentMessage` con `phase: "commentary"`; un mensaje sin fase se conserva y, si
+el turno sólo trajera narración, se usa ésta en lugar de una respuesta vacía.
+Los deltas en vivo (`answer.delta`) no cambian. Regresiones en el peer de
+`tests/test_codex.py`; pruebas focales verdes para `test_codex.py`,
+`test_codex_tools.py` y `test_codex_cleanup.py`. Hace falta un caso nativo
+nuevo (V) para acreditar el consumo de píxeles con el recibo del escenario.
+
 La documentación oficial consultada antes de pausar reconoce que
 `dynamicTools` y `item/tool/call` son experimentales y exige nombres de tools
 y namespaces compatibles con Responses. No se concluyó que esto explique Q:

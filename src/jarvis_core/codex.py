@@ -1018,6 +1018,7 @@ class CodexClient:
             if tool_turn:
                 tool_turn.turn_id = turn_id
             text_parts: dict[str, str] = {}
+            commentary: set[str] = set()
             async with asyncio.timeout(turn_timeout) as deadline:
                 if tool_turn:
                     tool_turn.budget = _InferenceBudget(deadline)
@@ -1071,6 +1072,10 @@ class CodexClient:
                             if not isinstance(item.get("text"), str):
                                 raise CodexError("codex_answer_invalid")
                             text_parts[item.get("id", "final")] = item["text"]
+                            # Mid-turn narration before a tool call is not the
+                            # answer. A missing phase stays unknown and is kept.
+                            if item.get("phase") == "commentary":
+                                commentary.add(item.get("id", "final"))
                         elif item.get("type") == "dynamicToolCall" and tool_turn:
                             self._observe_tool_reply(params, item, tool_turn)
                         elif item.get("type") not in _CONVERSATION_ITEMS and on_event:
@@ -1098,7 +1103,9 @@ class CodexClient:
                         settled = True
                         if params.get("turn", {}).get("status") != "completed":
                             raise CodexError("codex_turn_failed")
-                        answer = "\n\n".join(text_parts.values()).strip()
+                        answer = "\n\n".join(
+                            text for key, text in text_parts.items() if key not in commentary
+                        ).strip() or "\n\n".join(text_parts.values()).strip()
                         if not answer or len(answer.encode()) > 32000:
                             raise CodexError("codex_answer_invalid")
                         if usage_total is not None:

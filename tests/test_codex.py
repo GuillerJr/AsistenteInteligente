@@ -59,9 +59,18 @@ for line in sys.stdin:
             print(json.dumps({'method':'turn/completed','params':{'threadId':thread,
                 'turn':{'id':turn,'status':'failed','error':{'message':'SECRET'}}}}),flush=True)
             continue
-        for method2,extra in [
+        # Phase-labelled narration, as gpt-6 models send around tool calls.
+        phases = {'commentary': ['commentary', 'final_answer'],
+                  'commentary-only': ['commentary'],
+                  'unknown-phase': [None, 'final_answer']}.get(text)
+        items = ([('item/completed',{'item':{'type':'agentMessage','id':'m'+str(n),
+                   'text':'Narración '+str(n) if phase=='commentary' else 'Texto '+str(n),
+                   'phase':phase}}) for n, phase in enumerate(phases)]
+                 if phases else [
             ('item/agentMessage/delta',{'itemId':'a','delta':'Hola'}),
-            ('item/completed',{'item':{'type':'agentMessage','id':'a','text':'Hola'}}),
+            ('item/completed',{'item':{'type':'agentMessage','id':'a','text':'Hola'}})])
+        for method2,extra in [
+            *items,
             ('turn/completed',{'turn':{'id':turn,'status':'completed'}}),
         ]:
             print(json.dumps({'method':method2,'params':{'threadId':thread,
@@ -90,6 +99,20 @@ async def test_official_protocol_handshake_streaming_and_no_secret_metadata(tmp_
         await client.aclose()
     assert client._process is None
     await client.aclose()
+
+
+@pytest.mark.parametrize("message,answer", [
+    ("commentary", "Texto 1"),  # narration before a tool call is not the answer
+    ("commentary-only", "Narración 0"),  # nothing else: kept, never an empty answer
+    ("unknown-phase", "Texto 0\n\nTexto 1"),  # a missing phase stays unknown
+])
+async def test_commentary_phase_is_excluded_from_the_run_answer(
+        tmp_path, executable, message, answer):
+    client = CodexClient(executable, tmp_path / "state")
+    try:
+        assert (await client.chat(message))["answer"] == answer
+    finally:
+        await client.aclose()
 
 
 async def test_child_never_inherits_provider_keys(tmp_path, executable, monkeypatch):
