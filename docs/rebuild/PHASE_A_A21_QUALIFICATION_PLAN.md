@@ -81,3 +81,36 @@ proveedor de W1 queda sin sesión; W2 necesita que el dueño vuelva a iniciarla.
 negativo de «cuenta vencida» con la elección de proveedor vigente (`codex_login_required`)
 no se ejerció: el cierre de sesión revoca antes la elección. Faltan W2 y W3; A-21 sigue
 parcial.
+
+## W2 ejecutado (06-11-2026): pasado en W2a + W2c
+
+W2 se dividió en dos casos encadenados de un lanzamiento cada uno, sobre la cuota y el
+proveedor de W1 (`/private/tmp/jq-tqbfd_1m`) y ligados a `bdfd7434085a1c6ebf2aa94e5470e3fe263f059e`
+(CI completa 42245415425 en verde; artefacto 13518505833 predescargado, SHA-256 `1260d839…`).
+
+- **W2a** (admisión `7261b18b…`, preparado `139bf0ff…`, cierre GUI `3dc9c806…`, recibo
+  `d04e288b…`, `passed_A21_W2a_case`). Perfil, código y app nuevos (`state-w2`, `source-w2`,
+  `Jarvis-W2.app`). Root renombró «Prueba A-21 W2» antes del login; el dueño volvió a iniciar
+  sesión. Un run de texto sin herramientas dio una palabra clave aleatoria y el modelo respondió
+  exactamente «Anotado». Cierre sin logout. Lectura de sólo lectura posterior: la conversación
+  quedó ligada al thread `01a1b19a-0bc5-7332-b15b-fb8829cd3ac6`. Un primer arranque se paró
+  antes de cualquier efecto porque el bootstrap heredado exigía un campo visual; se corrigió y
+  se volvió a congelar.
+- **W2b quemado sin efectos** (admisión `33fb488a…`, preparado `446595a1…`, cierre
+  `1ea187a5…`). Relanzó la misma app y perfil con la sesión conservada, pero su escenario leyó
+  `reused_W2b_app_profile_and_copies` (clave renombrada por error del generador; la real es
+  `reused_W2a_…`) y se detuvo sin intención ni recibo. Mientras se investigaba venció el plazo:
+  un SIGTERM `native_active_deadline` a la app admitida, primer desmontaje fallido y segundo
+  confirmado. No se envió ningún mensaje.
+- **W2c** (admisión `50a4d79c…`, preparado `ae04258a…`, cierre GUI `1219e0f1…` sin señales ni
+  incidencias, recibo `b2407b0f…`, `passed_A21_W2c_case`). Se encadenó al cierre por plazo de
+  W2b y relanzó la **misma** app y el **mismo** perfil sin copias ni login: `service.status`
+  conectado sin nuevo inicio de sesión. En la misma conversación se pidió la palabra clave sin
+  repetirla; la respuesta fue la palabra exacta, sin herramientas. Antes de congelar, la
+  validación en copia detectó otro renombrado indebido (`keyword_hidden_from_W2b_prompt`) y se
+  comprobaron con los recibos reales todas las claves y condiciones de cadena.
+
+Comprobación final de sólo lectura (rollout `7140799f…`): el binding sigue en el mismo thread,
+no se creó rollout nuevo y ese rollout contiene los dos turnos («Anotado.» y la palabra clave).
+Acredita sesión conservada, reanudación del binding propio y continuidad de contexto tras
+reinicio de la app, sin `thread/list` ni threads ajenos. Falta W3; A-21 sigue parcial.
