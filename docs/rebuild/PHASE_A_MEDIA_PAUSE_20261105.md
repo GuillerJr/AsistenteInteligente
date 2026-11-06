@@ -402,6 +402,26 @@ Los deltas en vivo (`answer.delta`) no cambian. Regresiones en el peer de
 `test_codex_tools.py` y `test_codex_cleanup.py`. Hace falta un caso nativo
 nuevo (V) para acreditar el consumo de píxeles con el recibo del escenario.
 
+### Caso V (`67fbd6b`, CI completa 42223362660)
+
+V (`/private/tmp/jarvis-media-visual-native-20261106-v`, admisión `c91b4020…`)
+se encadenó a U y preparó a tiempo con el ZIP predescargado (`abb8c09b…`).
+Chat «Prueba visual V»; sesión `865b92bda4564edd9490ef7cb31b2d5f`; cierre
+`closed_after_GUI_intent` (`014c1f18…`) sin señales; cuota desmontada.
+
+Resultado (`visual-result.json` `d8222494…`): `passed_selected_visual_case`
+con `synthetic_pixel_consumption_evidence=true`. Una única aprobación ligada,
+recibo `media_inspect` con efecto `known` y `succeeded`, entrega CAS de la
+vista aprobada aceptada (`pixel_image_sha256` `50be3166…`), respuesta de la
+herramienta escrita y acuse `matched`. La respuesta del run fue sólo el JSON
+final y coincidió con el oráculo oculto (triángulo rojo a la izquierda, círculo
+verde en el centro, cuadrado azul a la derecha), que no se envió al modelo.
+
+Alcance: acredita este PNG sintético en este run, con este perfil y este
+binario Codex; `qualified=false` y
+`product_diagnostic_model_consumption_verified=false`. No es cobertura visual
+general ni cualificación de la fase A, y no sustituye el caso H/I pendiente.
+
 La documentación oficial consultada antes de pausar reconoce que
 `dynamicTools` y `item/tool/call` son experimentales y exige nombres de tools
 y namespaces compatibles con Responses. No se concluyó que esto explique Q:
