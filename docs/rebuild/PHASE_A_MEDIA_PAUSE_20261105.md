@@ -365,6 +365,35 @@ igual sin el cambio) y dependen de CI. Falta un caso nativo nuevo (U) que
 acredite que Codex 0.163 ofrece `jarvis_direct` como llamada directa a un
 modelo `code_mode_only`.
 
+### Caso U (`d937e55`, CI completa 42106136789)
+
+U (`/private/tmp/jarvis-media-visual-native-20261106-u`, admisión `76ab4d0c…`)
+se encadenó a T, copió el ZIP predescargado (4 s de descarga, SHA-256
+`b7499749…`) y preparó a tiempo (`f30e1cfc…`). Chat «Prueba visual U»
+creado por UI; sesión `866e3cfd87f4449396fe75a6cf01a215`; cierre
+`closed_after_GUI_intent` (`d723362a…`) sin señales; la cuota quedó
+desmontada.
+
+El rollout del thread `01a1b0f7-71c7-7ec2-90e8-33ea0f9cd097` (SHA-256
+`10180d1f…`, leído sobre un montaje de sólo lectura) muestra lo que Q, R y T
+no lograron: una `function_call` directa a `media_inspect` con
+`namespace: "jarvis_direct"` (sin `exec`), la aprobación ligada decidida una
+vez, la respuesta de la herramienta y la vista aprobada entregada como
+`input_image`. La respuesta final del modelo (fase `final_answer`) es el JSON
+exacto de las tres figuras y coincide con el oráculo oculto: triángulo rojo a la
+izquierda, círculo verde en el centro y cuadrado azul a la derecha. Los
+diagnósticos registran `tool.reply.sent` con escritura confirmada y el acuse
+`matched`.
+
+Aun así el recibo del escenario (`visual-result.json` `e18bf157…`) es
+`failed_or_unknown` con `JSONDecodeError` y
+`synthetic_pixel_consumption_evidence=false`: Jarvis compuso la respuesta del
+run uniendo el mensaje de fase `commentary` («Inspeccionaré el adjunto…») con
+la respuesta final, y el oráculo exige JSON puro. No se reinterpreta el recibo
+ni se repite U. Queda un defecto propio: `CodexClient.chat` ignora el campo
+`phase` de `agentMessage` (`commentary`, `partial_answer`, `final_answer`), que
+el esquema de 0.163 define y pide tratar como desconocido cuando falta.
+
 La documentación oficial consultada antes de pausar reconoce que
 `dynamicTools` y `item/tool/call` son experimentales y exige nombres de tools
 y namespaces compatibles con Responses. No se concluyó que esto explique Q:
