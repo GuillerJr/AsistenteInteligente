@@ -22,6 +22,9 @@ final class ChatStore {
     /// Read on demand from the official provider; informative, never a model choice.
     var providerModels: [ProviderModel] = []
     var providerModelsLoading = false
+    var providerLimits: [ProviderLimit] = []
+    var providerLimitsLoading = false
+    var providerLimitsLoaded = false
     var ready = false
     var busy = false
     var starting = false
@@ -1425,10 +1428,23 @@ final class ChatStore {
         } catch { report(error) }
     }
 
+    func loadProviderLimits() async {
+        guard !isRecoveryOnly, connected, !providerLimitsLoading, runtime.isActive else { return }
+        providerLimitsLoading = true
+        defer { providerLimitsLoading = false }
+        do {
+            let result = try await rpc("provider.limits")
+            try runtime.check()
+            guard !stopping else { throw CancellationError() }
+            guard let limits = ProviderLimit.snapshot(result) else { throw RPCFailure.invalidResponse }
+            providerLimits = limits; providerLimitsLoaded = true
+        } catch { report(error) }
+    }
+
     func logout() async {
         guard !isRecoveryOnly, activeRunID == nil, !runTracker.hasActiveRuns, !coreBlocksHost, !maintenance.blocksInteraction, !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction else { return }
         stopVoice(); dictationNotice = nil
-        providerModels = []
+        providerModels = []; providerLimits = []; providerLimitsLoaded = false
         do { _ = try await rpc("provider.logout"); try await refreshStatus() }
         catch { report(error) }
     }

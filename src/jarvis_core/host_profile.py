@@ -1108,7 +1108,7 @@ READ_RPCS = frozenset({
     "sessions.context", "sessions.operation", "sessions.operations",
     "delegations.get", "delegations.lookup",
     "delegations.wait", "delegations.list", "clients.status",
-    "service.status", "service.local_status", "provider.models", "sessions.list",
+    "service.status", "service.local_status", "provider.models", "provider.limits", "sessions.list",
     "sessions.messages",
     "runs.get", "events.poll",
     "runs.list", "tools.list", "workspace.get", "approvals.list", "memory.list",

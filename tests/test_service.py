@@ -15,6 +15,8 @@ from jarvis_core.service import JarvisService
 
 
 class ModelPeer:
+    provider_id = "synthetic_provider"
+
     def __init__(self):
         self.calls = []
         self.entered = asyncio.Event()
@@ -32,6 +34,13 @@ class ModelPeer:
         return [{"id": "synthetic-model", "display_name": "Modelo sintético",
                  "is_default": True, "accepts_images": True}]
 
+    async def read_limits(self):
+        return {"connected": True, "updated_at": 1800000000, "limits": [{
+            "limit_id": "codex", "name": None, "plan": "plus", "reached": None,
+            "windows": {"primary": {"used_percent": None, "resets_at": None,
+                                    "window_minutes": 300}, "secondary": None},
+            "credits": None}]}
+
     async def logout(self):
         return {"connected": False, "mode": None}
 
@@ -48,6 +57,8 @@ class ModelPeer:
             finally:
                 self.cleaning.set()
                 await self.release.wait()
+        if message == "medido":
+            on_event("usage.final", {"run_total_tokens": 1234})
         on_event("answer.delta", {"text": "Respuesta"})
         return {"thread_id": thread_id, "answer": "Respuesta " + message}
 
@@ -221,6 +232,7 @@ async def test_durable_session_continuation_survives_service_restart(connection)
     ("service.status", {"token": "untrusted"}),
     ("provider.login", {"provider": "nvidia"}),
     ("provider.models", {"model": "synthetic-model"}),
+    ("provider.limits", {"account": "other"}),
 ])
 async def test_rejects_unknown_or_mistyped_parameters(connection, method, params):
     _, client, _, _ = connection
@@ -235,6 +247,30 @@ async def test_model_catalog_is_read_from_the_selected_provider_without_choosing
         "id": "synthetic-model", "display_name": "Modelo sintético",
         "is_default": True, "accepts_images": True}]}
     assert provider.calls == []  # listing is not a run or a model choice
+
+
+async def test_account_limits_are_read_from_the_selected_provider_as_data(connection):
+    _, client, provider, _ = connection
+    limits = await client.call("provider.limits")
+    assert limits["connected"] is True and limits["limits"][0]["plan"] == "plus"
+    # Unknown usage stays null across the wire; it is never rewritten as zero.
+    assert limits["limits"][0]["windows"]["primary"]["used_percent"] is None
+    assert provider.calls == []
+
+
+async def test_run_usage_is_attributed_to_provider_and_session_and_absent_stays_null(connection):
+    _, client, _, _ = connection
+    ref = await session(client)
+    measured = await client.call("runs.start", {**ref, "message": "medido"})
+    await settled(client, ref, measured["run_id"])
+    plain = await client.call("runs.start", {**ref, "message": "sin medida"})
+    await settled(client, ref, plain["run_id"])
+    first = (await client.call("runs.get", {**ref, "run_id": measured["run_id"]}))["run"]
+    second = (await client.call("runs.get", {**ref, "run_id": plain["run_id"]}))["run"]
+    assert first["usage"] == {"provider": "synthetic_provider", "session_id": ref["session_id"],
+                              "total_tokens": 1234, "partial_tokens": None}
+    assert second["usage"] == {"provider": "synthetic_provider", "session_id": ref["session_id"],
+                               "total_tokens": None, "partial_tokens": None}
 
 
 async def test_shutdown_cancels_then_waits_for_cleanup_before_closing_provider(connection):

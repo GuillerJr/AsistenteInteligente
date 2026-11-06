@@ -62,6 +62,20 @@ for line in sys.stdin:
             print(json.dumps({'method':'turn/completed','params':{'threadId':thread,
                 'turn':{'id':turn,'status':'failed','error':{'message':'SECRET'}}}}),flush=True)
             continue
+        if text.startswith(('error:','retry:','turnerror:')):
+            kind, info = text.split(':', 1)
+            if kind != 'turnerror':
+                print(json.dumps({'method':'error','params':{'threadId':thread,'turnId':turn,
+                    'willRetry':kind=='retry','error':{'message':'SECRET','codexErrorInfo':info}}}),
+                    flush=True)
+            status = 'completed' if kind=='retry' else 'failed'
+            if status == 'completed':
+                print(json.dumps({'method':'item/completed','params':{'threadId':thread,
+                    'turnId':turn,'item':{'type':'agentMessage','id':'a','text':'Hola'}}}),flush=True)
+            error = {'message':'SECRET','codexErrorInfo':info} if kind=='turnerror' else None
+            print(json.dumps({'method':'turn/completed','params':{'threadId':thread,
+                'turn':{'id':turn,'status':status,'error':error}}}),flush=True)
+            continue
         # Phase-labelled narration, as gpt-6 models send around tool calls.
         phases = {'commentary': ['commentary', 'final_answer'],
                   'commentary-only': ['commentary'],
@@ -346,6 +360,122 @@ async def test_endless_model_catalog_is_bounded(tmp_path):
     try:
         with pytest.raises(CodexError, match="codex_models_too_many"):
             await client.list_models()
+    finally:
+        await client.aclose()
+
+
+def limits_peer(path, *, account_type, result, update=None):
+    """Peer answering account/rateLimits/read, then optionally one rolling update."""
+    path.write_text(f"#!{sys.executable}\n" + f'''
+import json,os,sys
+result={result!r}; update={update!r}; account_type={account_type!r}
+log=os.path.join(os.environ['HOME'],'limits-wire.jsonl')
+for line in sys.stdin:
+    m=json.loads(line); method=m.get('method'); reply={{}}
+    with open(log,'a') as stream:
+        stream.write(json.dumps(method)+'\\n')
+    if method=='initialize':
+        reply={{'userAgent':'jarvis/0.163.0'}}
+    elif method=='account/read':
+        reply={{'account':{{'type':account_type}} if account_type else None}}
+    elif method=='account/rateLimits/read':
+        reply=result
+    if 'id' in m and method:
+        print(json.dumps({{'id':m['id'],'result':reply}}),flush=True)
+    if method=='account/rateLimits/read' and update is not None:
+        print(json.dumps({{'method':'account/rateLimits/updated','params':{{'rateLimits':update}}}}),
+              flush=True)
+''')
+    path.chmod(0o700)
+    return path
+
+
+async def test_account_limits_are_read_validated_and_never_invented(tmp_path):
+    result = {"rateLimits": {"limitId": "codex", "planType": "plus",
+                             "primary": {"usedPercent": 42.5, "resetsAt": 1800003600,
+                                         "windowDurationMins": 300},
+                             "secondary": {"windowDurationMins": 10080},
+                             "credits": {"hasCredits": True, "unlimited": False,
+                                         "balance": "12.5"}},
+              "rateLimitsByLimitId": {"other": {"limitId": "other", "limitName": "Otro",
+                                                "primary": {"usedPercent": -3, "resetsAt": "x"}}}}
+    client = CodexClient(limits_peer(tmp_path / "peer", account_type="chatgpt", result=result),
+                         tmp_path / "state")
+    try:
+        value = await client.read_limits()
+        assert value["connected"] is True and type(value["updated_at"]) is int
+        codex, other = value["limits"]
+        assert codex == {"limit_id": "codex", "name": None, "plan": "plus", "reached": None,
+                         "windows": {"primary": {"used_percent": 42.5, "resets_at": 1800003600,
+                                                 "window_minutes": 300},
+                                     # Absent usage is unknown, never zero.
+                                     "secondary": {"used_percent": None, "resets_at": None,
+                                                   "window_minutes": 10080}},
+                         "credits": {"balance": 12.5, "unlimited": False, "has_credits": True}}
+        # Invalid numbers are dropped rather than clamped or zero-filled.
+        assert other["limit_id"] == "other"
+        assert other["windows"] == {"primary": None, "secondary": None}
+    finally:
+        await client.aclose()
+
+
+async def test_rolling_limit_update_merges_after_a_read_and_keeps_sparse_metadata(tmp_path):
+    result = {"rateLimits": {"planType": "pro", "credits": {"balance": 5},
+                             "primary": {"usedPercent": 10, "windowDurationMins": 300}}}
+    update = {"limitId": "codex", "planType": None, "credits": None,
+              "primary": {"usedPercent": 97, "windowDurationMins": 300},
+              "rateLimitReachedType": "primary"}
+    client = CodexClient(limits_peer(tmp_path / "peer", account_type="chatgpt",
+                                     result=result, update=update), tmp_path / "state")
+    try:
+        await client.read_limits()
+        for _ in range(100):
+            row = client.limits_snapshot()["limits"][0]
+            if row["reached"] == "primary":
+                break
+            await asyncio.sleep(0.01)
+        assert row["windows"]["primary"]["used_percent"] == 97
+        assert row["plan"] == "pro" and row["credits"]["balance"] == 5
+        await client.logout()
+        assert client.limits_snapshot() == {"connected": False, "limits": [], "updated_at": None}
+    finally:
+        await client.aclose()
+
+
+async def test_limits_without_a_chatgpt_account_are_not_read(tmp_path):
+    client = CodexClient(limits_peer(tmp_path / "peer", account_type=None, result={}),
+                         tmp_path / "state")
+    try:
+        assert await client.read_limits() == {"connected": False, "limits": [], "updated_at": None}
+        wire = (tmp_path / "state" / "home" / "limits-wire.jsonl").read_text()
+        assert "account/rateLimits/read" not in wire
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.parametrize("message,code", [
+    ("error:usageLimitExceeded", "codex_usage_limit_reached"),
+    ("error:rateLimitExceeded", "codex_rate_limited"),
+    ("error:serverOverloaded", "codex_server_overloaded"),
+    ("error:unauthorized", "codex_login_required"),
+    ("turnerror:usageLimitExceeded", "codex_usage_limit_reached"),
+    ("error:contextWindowExceeded", "codex_turn_failed"),
+])
+async def test_terminal_turn_error_is_classified_without_leaking_its_message(
+        tmp_path, executable, message, code):
+    client = CodexClient(executable, tmp_path / "state")
+    try:
+        with pytest.raises(CodexError) as error:
+            await client.chat(message)
+        assert str(error.value) == code and "SECRET" not in str(error.value)
+    finally:
+        await client.aclose()
+
+
+async def test_retried_turn_error_only_informs_and_the_turn_can_complete(tmp_path, executable):
+    client = CodexClient(executable, tmp_path / "state")
+    try:
+        assert (await client.chat("retry:serverOverloaded"))["answer"] == "Hola"
     finally:
         await client.aclose()
 

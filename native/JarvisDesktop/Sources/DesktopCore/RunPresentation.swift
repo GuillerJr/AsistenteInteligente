@@ -17,6 +17,12 @@ public enum RunPresentation {
             return "No se encuentra el cliente oficial de Codex o no se puede ejecutar. Reinstálalo y vuelve a abrir Jarvis."
         case "codex_version_unsupported":
             return "La versión instalada del cliente oficial de Codex no es compatible. Se necesita la 0.163.0 o posterior."
+        case "codex_usage_limit_reached":
+            return "Alcanzaste el límite de uso de tu suscripción de ChatGPT. Consulta en Ajustes cuándo se renueva; la consulta no se repetirá automáticamente."
+        case "codex_rate_limited":
+            return "Codex recibió demasiadas solicitudes en poco tiempo. Espera un momento antes de volver a enviar."
+        case "codex_server_overloaded":
+            return "El servicio de Codex está saturado. Inténtalo de nuevo más tarde; la consulta no se repetirá automáticamente."
         case "codex_thread_busy": return "Codex sigue trabajando en esta conversación. Espera a que termine."
         case "codex_request_timeout": return "Codex tardó demasiado en responder. Consulta el estado antes de volver a enviar."
         case "codex_answer_too_large", "codex_frame_too_large":

@@ -328,7 +328,8 @@ class JarvisService(SessionWorkspaceMixin, ProductManagementAPI,
             directory, self.handlers(), max_frame_bytes=1024 * 1024,
             client_authority=self.client_authority,
             # Owner-only: these reach the provider SDK even though they mutate nothing.
-            read_methods=READ_RPCS - {"service.status", "provider.models", "clients.status"},
+            read_methods=READ_RPCS - {"service.status", "provider.models", "provider.limits",
+                                      "clients.status"},
             recover_stale=self.profile_lease.assert_current,
             client_control_guard=self._client_control_guard)
 
@@ -682,6 +683,7 @@ class JarvisService(SessionWorkspaceMixin, ProductManagementAPI,
             "provider.login": self.login,
             "provider.logout": self.logout,
             "provider.models": self.list_models,
+            "provider.limits": self.read_limits,
             "sessions.create": self.create_session,
             "sessions.list": self.list_sessions,
             "sessions.update": self.update_session,
@@ -1292,6 +1294,24 @@ class JarvisService(SessionWorkspaceMixin, ProductManagementAPI,
             self._provider_context.reset(token)
         return {"connected": True, "models": models}
 
+    async def read_limits(self, params: dict) -> dict:
+        """The selected official account's usage limits (A-23 G1). Absent data stays null."""
+        _params(params, set())
+        if self._provider_transition is not None or not self.provider_choice.allowed:
+            return {"connected": False, "limits": [], "updated_at": None}
+        reader = getattr(self.provider, "read_limits", None)
+        if reader is None:
+            raise CodexError("codex_limits_unavailable")
+        epoch = self.provider_choice.epoch()
+        token = self._provider_context.set(epoch)
+        try:
+            value = await reader()
+            # Limits read before a revocation are never released after it.
+            self.provider_choice.assert_current(epoch)
+        finally:
+            self._provider_context.reset(token)
+        return value
+
     async def login(self, params: dict) -> dict:
         _params(params, set())
         if self._handles or self._provider_transition is not None:
@@ -1655,6 +1675,7 @@ class JarvisService(SessionWorkspaceMixin, ProductManagementAPI,
                 "error_type": result.error_type,
                 "action_receipts": [self._receipt(item) for item in result.action_receipts],
                 "cleanup_confirmed": result.cleanup_confirmed,
+                "usage": self._run_usage(ref, result.run_id),
             }
             known_denial = (
                 not error_overridden and result.known_approval_denial
@@ -1703,6 +1724,8 @@ class JarvisService(SessionWorkspaceMixin, ProductManagementAPI,
             self._provider_epochs.pop(handle.run_id, None)
             self._run_clients.pop(handle.run_id, None)
             self._run_workspaces.pop(handle.run_id, None)
+            self.product.usage.pop(handle.run_id, None)
+            self.product.final_usage.discard(handle.run_id)
             self.product.ephemeral = {key: row for key, row in self.product.ephemeral.items()
                                       if row[0] != handle.run_id}
             self._memory_leases.pop(handle.run_id, None)
@@ -1724,7 +1747,21 @@ class JarvisService(SessionWorkspaceMixin, ProductManagementAPI,
             "answer_source": receipt.get("answer_source"),
             "action_receipts": receipt.get("action_receipts", []),
             "cleanup_confirmed": receipt.get("cleanup_confirmed") is True,
+            "usage": receipt.get("usage"),
         }
+
+    def _run_usage(self, ref: SessionRef, run_id: str) -> dict:
+        """Provider-measured tokens attributed to this run's provider and session (A-23 G5).
+
+        Tokens come only from the provider's own counters; without a final count
+        they stay null and are never estimated or reported as zero.
+        """
+        tokens = self.product.usage.get(run_id)
+        final = run_id in self.product.final_usage
+        return {"provider": getattr(self.provider, "provider_id", None),
+                "session_id": ref.session_id,
+                "total_tokens": tokens if final and type(tokens) is int else None,
+                "partial_tokens": tokens if not final and type(tokens) is int else None}
 
     async def get_run(self, params: dict) -> dict:
         _params(params, _BASE | {"run_id"}, {"session_id", "run_id"})

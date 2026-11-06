@@ -51,6 +51,24 @@ import SwiftUI
                     Text("Catálogo de tu cuenta oficial. Jarvis usa el modelo predeterminado de Codex; elegir otro modelo aún no está disponible.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                Button(store.providerLimitsLoading ? "Consultando límites…" : "Ver límites de uso") {
+                    Task { await store.loadProviderLimits() }
+                }.disabled(store.isRecoveryOnly || !store.connected || store.providerLimitsLoading || profiles.isOpening)
+                ForEach(store.connected ? store.providerLimits : []) { limit in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(limit.name ?? (limit.id == "codex" ? "Codex" : limit.id))
+                        if let plan = limit.plan { Text("Plan: \(plan)").font(.caption).foregroundStyle(.secondary) }
+                        if let window = limit.primary { Text(ProviderLimit.describe(window)).font(.caption) }
+                        if let window = limit.secondary { Text(ProviderLimit.describe(window)).font(.caption) }
+                        if limit.reached != nil { Text("Límite alcanzado").font(.caption).foregroundStyle(.orange) }
+                        if limit.unlimitedCredits == true { Text("Créditos ilimitados").font(.caption).foregroundStyle(.secondary) }
+                        else if let balance = limit.creditBalance { Text("Créditos: \(balance.formatted())").font(.caption).foregroundStyle(.secondary) }
+                    }
+                }
+                if store.connected && store.providerLimitsLoaded && store.providerLimits.isEmpty {
+                    Text("Tu cuenta no informó límites. Un dato ausente no significa uso cero.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             Section("Perfil actual") {
                 if let path = store.launchOptions?.state { Text(path).font(.caption).textSelection(.enabled) }

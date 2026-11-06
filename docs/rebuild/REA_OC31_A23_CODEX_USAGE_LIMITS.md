@@ -88,6 +88,37 @@ blob en [REA_SUMMARY.json](qa/openclaw-codex-a23-20261106/REA_SUMMARY.json).
 - Después, cualificación nativa con la cuenta del dueño: lectura real de límites y,
   si el dueño lo aprueba, un negativo de revocación.
 
+## Estado de implementación (06-11-2026)
+
+- **G1 implementado.** `CodexClient.read_limits` lee `account/rateLimits/read` sólo con
+  cuenta ChatGPT, valida y acota cada campo (texto, porcentaje, renovación, ventana,
+  créditos) y deja `null` todo dato ausente o inválido. RPC de sólo lectura del dueño
+  `provider.limits`, con las mismas guardas de elección de proveedor que
+  `provider.models`. La app muestra «Ver límites de uso» en Ajustes, y una cuenta sin
+  límites informa que un dato ausente no significa uso cero.
+- **G2 implementado.** `account/rateLimits/updated` se funde en la caché del proceso
+  actual: ventanas y estado alcanzado del update mandan; plan, créditos y nombre nulos
+  conservan la última lectura. Las actualizaciones que llegan tras la respuesta de una
+  lectura se aplican encima (gancho `on_reply` del lector, en orden de cable); las
+  anteriores quedan superadas. La caché se vacía al arrancar otro proceso y al cerrar
+  sesión.
+- **G3 implementado.** La notificación `error` del turno clasifica `usageLimitExceeded`,
+  `rateLimitExceeded`, `serverOverloaded` y `unauthorized` en códigos propios
+  (`codex_usage_limit_reached`, `codex_rate_limited`, `codex_server_overloaded`,
+  `codex_login_required`), también desde `turn.error`; `willRetry` no es terminal y el
+  mensaje del proveedor nunca se copia. Mensajes en español sin repetición automática.
+- **G5 implementado.** Cada run guarda `usage` con proveedor, sesión y tokens medidos por
+  el proveedor: `total_tokens` sólo con cuenta final, `partial_tokens` si no la hubo, y
+  `null` sin medición.
+- **G4 pendiente** de revisar `client.ts` con REA.
+
+Pruebas focales supervisadas: `tests/test_codex.py`, `tests/test_service.py`,
+`tests/test_codex_usage.py` y las de perfil, puente, revisión, herramientas y custodia
+pasan; `test_service_capabilities.py` no puede crear su temporal bajo el guard local
+(limitación conocida, cubierta por CI). Las pruebas Swift (`ProviderLimitsTests`,
+`RPCFrameTests`) no compilan su manifiesto dentro del sandbox local y quedan para CI. La
+cualificación completa depende de CI y del recorrido nativo con la cuenta del dueño.
+
 ## Límites
 
 Lectura estática parcial: no entran `client.ts`, `run-attempt-connection.ts`, el

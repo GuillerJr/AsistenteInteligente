@@ -17,6 +17,7 @@ import math
 import os
 import re
 import signal
+import time
 from collections.abc import Awaitable, Callable, Sequence
 from contextvars import Context, copy_context
 from dataclasses import dataclass, field
@@ -74,6 +75,106 @@ def _codex_version(response) -> str:
             or (version == _MIN_CODEX_VERSION and (match.group(4) or "").startswith("-"))):
         raise CodexError("codex_version_unsupported")
     return ".".join(str(part) for part in version)
+
+
+# A-23 (OC-31): a terminal turn error's codexErrorInfo, mapped to bounded own codes.
+# Anything else stays the generic codex_turn_failed; nothing here retries a turn.
+_TURN_ERROR_CODES = {
+    "usageLimitExceeded": "codex_usage_limit_reached",
+    "rateLimitExceeded": "codex_rate_limited",
+    "serverOverloaded": "codex_server_overloaded",
+    "unauthorized": "codex_login_required",
+}
+_LIMIT_TEXT = re.compile(r"[A-Za-z0-9][A-Za-z0-9 _.:/()+-]{0,79}")
+_MAX_LIMITS = 8
+
+
+def _turn_error_code(error) -> str | None:
+    info = error.get("codexErrorInfo") if isinstance(error, dict) else None
+    return _TURN_ERROR_CODES.get(info) if isinstance(info, str) else None
+
+
+def _limit_text(value) -> str | None:
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    return value if _LIMIT_TEXT.fullmatch(value) else None
+
+
+def _limit_number(value, low: float, high: float) -> float | int | None:
+    # Absent or invalid limit data stays None; it is never reported as zero.
+    if type(value) not in (int, float) or not math.isfinite(value) or not low <= value <= high:
+        return None
+    return value
+
+
+def _limit_window(value) -> dict | None:
+    if not isinstance(value, dict):
+        return None
+    used = _limit_number(value.get("usedPercent"), 0, 1000)
+    resets = _limit_number(value.get("resetsAt"), 1, 2**37)
+    minutes = _limit_number(value.get("windowDurationMins"), 1, 10**7)
+    if used is None and resets is None and minutes is None:
+        return None
+    return {"used_percent": used, "resets_at": int(resets) if resets is not None else None,
+            "window_minutes": int(minutes) if minutes is not None else None}
+
+
+def _limit_credits(value) -> dict | None:
+    if not isinstance(value, dict):
+        return None
+    balance = value.get("balance")
+    if isinstance(balance, str):
+        balance = float(balance) if re.fullmatch(r"[0-9]{1,15}(\.[0-9]{1,6})?", balance) else None
+    balance = _limit_number(balance, 0, 10**15)
+    unlimited = value.get("unlimited") if type(value.get("unlimited")) is bool else None
+    has_credits = value.get("hasCredits") if type(value.get("hasCredits")) is bool else None
+    if balance is None and unlimited is None and has_credits is None:
+        return None
+    return {"balance": balance, "unlimited": unlimited, "has_credits": has_credits}
+
+
+def _limit_snapshot(value) -> dict | None:
+    if not isinstance(value, dict) or not any(
+            key in value for key in ("primary", "secondary", "rateLimitReachedType", "limitId")):
+        return None
+    limit_id = _limit_text(value.get("limitId")) or "codex"
+    return {"limit_id": limit_id, "name": _limit_text(value.get("limitName")),
+            "plan": _limit_text(value.get("planType")),
+            "reached": _limit_text(value.get("rateLimitReachedType")),
+            "windows": {key: _limit_window(value.get(key)) for key in ("primary", "secondary")},
+            "credits": _limit_credits(value.get("credits"))}
+
+
+def _limit_snapshots(result) -> dict[str, dict]:
+    """Validated limit snapshots keyed by limit id, the main ``codex`` limit included."""
+    if not isinstance(result, dict):
+        raise CodexError("codex_limits_invalid")
+    rows = []
+    by_id = result.get("rateLimitsByLimitId")
+    if isinstance(by_id, dict):
+        if len(by_id) > _MAX_LIMITS:
+            raise CodexError("codex_limits_invalid")
+        rows.extend(by_id.values())
+    rows.append(result.get("rateLimits"))
+    snapshots: dict[str, dict] = {}
+    for row in rows:
+        snapshot = _limit_snapshot(row)
+        if snapshot is not None:
+            snapshots.setdefault(snapshot["limit_id"], snapshot)
+    return snapshots
+
+
+def _merge_limit_update(current: dict | None, update: dict) -> dict:
+    # A rolling update is authoritative for windows and reached state; it may omit
+    # (null) account metadata, which then keeps the last read value.
+    if current is None:
+        return update
+    merged = dict(update)
+    for key in ("plan", "credits", "name"):
+        if merged[key] is None:
+            merged[key] = current[key]
+    return merged
 
 
 def _wire_label(value) -> str:
@@ -153,6 +254,7 @@ class _ToolTurn:
 
 class CodexClient:
     supports_approved_media_handoff = True
+    provider_id = "codex_chatgpt"
 
     def __init__(self, executable: Path, directory: Path, *, timeout: float = 20,
                  certificate_bundle: Path | None = None) -> None:
@@ -178,6 +280,12 @@ class CodexClient:
         self._tool_turns: dict[str, _ToolTurn] = {}
         self._active_turn_ids: dict[str, str] = {}
         self._server_requests: set[int | str] = set()
+        # Limit snapshots of the current app-server process only (A-23 G1/G2).
+        self._limits: dict[str, dict] = {}
+        self._limits_at: float | None = None
+        self._limit_buffer: list[dict] | None = None
+        self._limits_lock = asyncio.Lock()
+        self._reply_hooks: dict[int, Callable[[], None]] = {}
         self._next_id = 0
         self._start_lock = asyncio.Lock()
         self._write_lock = asyncio.Lock()
@@ -273,6 +381,8 @@ class CodexClient:
                 except (FileNotFoundError, PermissionError):
                     # Removed or made non-executable after the check above.
                     raise CodexError("codex_unavailable") from None
+                # Limits belong to one process's account session, never a later one.
+                self._limits, self._limits_at = {}, None
                 self._reader = asyncio.create_task(self._read())
                 self._stderr = asyncio.create_task(self._drain_stderr())
                 initialized = await self.request(
@@ -311,11 +421,15 @@ class CodexClient:
                 raise CodexError("codex_disconnected") from error
 
     async def request(self, method: str, params: dict, *,
-                      on_dispatch: Callable[[], None] | None = None) -> dict:
+                      on_dispatch: Callable[[], None] | None = None,
+                      on_reply: Callable[[], None] | None = None) -> dict:
         self._next_id += 1
         request_id = self._next_id
         future = asyncio.get_running_loop().create_future()
         self._pending[request_id] = future
+        if on_reply is not None:
+            # Runs in the reader, in wire order, just before the reply resolves.
+            self._reply_hooks[request_id] = on_reply
         try:
             await self._write({"id": request_id, "method": method, "params": params},
                               on_dispatch=on_dispatch)
@@ -324,6 +438,7 @@ class CodexClient:
             raise CodexError("codex_request_timeout") from error
         finally:
             self._pending.pop(request_id, None)
+            self._reply_hooks.pop(request_id, None)
 
     async def _read(self) -> None:
         assert self._process is not None and self._process.stdout is not None
@@ -353,12 +468,18 @@ class CodexClient:
                     params = message.get("params", {})
                     if not isinstance(params, dict):
                         raise ValueError
+                    if message["method"] == "account/rateLimits/updated":
+                        self._observe_limit_update(params)
+                        continue
                     queue = self._events.get(params.get("threadId"))
                     if queue is not None:
                         queue.put_nowait((message["method"], params))
                 elif type(message.get("id")) is int:
                     future = self._pending.get(message["id"])
                     if future is not None and not future.done():
+                        hook = self._reply_hooks.pop(message["id"], None)
+                        if hook is not None and "error" not in message:
+                            hook()
                         if "error" in message:
                             future.set_exception(CodexError("codex_rpc_error"))
                         elif isinstance(message.get("result"), dict):
@@ -878,9 +999,59 @@ class CodexClient:
             raise CodexError("codex_login_url_invalid")
         return {"url": url}
 
+    async def read_limits(self) -> dict:
+        """The signed-in ChatGPT account's usage limits (A-23 G1); data, never a choice."""
+        status = await self.account_status()
+        if not status["connected"]:
+            # Limits belong to a ChatGPT subscription; no account means no data, not zero.
+            self._limits, self._limits_at = {}, None
+            return {"connected": False, "limits": [], "updated_at": None}
+        async with self._limits_lock:
+            # Updates read after the reply are newer than it and are applied on top;
+            # updates read before it are older and stay superseded by the read.
+            def buffer_newer() -> None:
+                self._limit_buffer = []
+            try:
+                result = await self.request("account/rateLimits/read", {}, on_reply=buffer_newer)
+                snapshots = _limit_snapshots(result)
+                for update in self._limit_buffer or ():
+                    if update["limit_id"] in snapshots or len(snapshots) < _MAX_LIMITS:
+                        snapshots[update["limit_id"]] = _merge_limit_update(
+                            snapshots.get(update["limit_id"]), update)
+                self._limits, self._limits_at = snapshots, time.time()
+            finally:
+                self._limit_buffer = None
+        return self.limits_snapshot()
+
+    def limits_snapshot(self) -> dict:
+        """The last read merged with later rolling updates; empty until a read."""
+        rows = sorted(self._limits.values(),
+                      key=lambda row: (row["limit_id"] != "codex", row["limit_id"]))
+        return {"connected": self._limits_at is not None, "limits": rows,
+                "updated_at": int(self._limits_at) if self._limits_at is not None else None}
+
+    def _observe_limit_update(self, params: dict) -> None:
+        # Sparse rolling update (A-23 G2): only after an authoritative read, so an
+        # update can never invent a limit for an account that was not read.
+        update = _limit_snapshot(params.get("rateLimits"))
+        if update is None:
+            return
+        if self._limit_buffer is not None:
+            if len(self._limit_buffer) < 32:
+                self._limit_buffer.append(update)
+            return
+        if self._limits_at is None:
+            return
+        if update["limit_id"] not in self._limits and len(self._limits) >= _MAX_LIMITS:
+            return
+        self._limits[update["limit_id"]] = _merge_limit_update(
+            self._limits.get(update["limit_id"]), update)
+        self._limits_at = time.time()
+
     async def logout(self) -> dict:
         await self.start()
         await self.request("account/logout", {})
+        self._limits, self._limits_at = {}, None
         return {"connected": False, "mode": None}
 
     async def chat(
@@ -1091,6 +1262,7 @@ class CodexClient:
                 tool_turn.turn_id = turn_id
             text_parts: dict[str, str] = {}
             commentary: set[str] = set()
+            turn_error: str | None = None
             async with asyncio.timeout(turn_timeout) as deadline:
                 if tool_turn:
                     tool_turn.budget = _InferenceBudget(deadline)
@@ -1110,6 +1282,13 @@ class CodexClient:
                     if not isinstance(turn, dict):
                         raise CodexError("codex_event_invalid")
                     if params.get("turnId", turn.get("id")) != turn_id:
+                        continue
+                    if method == "error":
+                        # A-23 G3: classify the terminal cause; a retried error only
+                        # informs and nothing here repeats the turn.
+                        if params.get("willRetry") is True:
+                            continue
+                        turn_error = _turn_error_code(params.get("error")) or turn_error
                         continue
                     if method == "thread/tokenUsage/updated":
                         usage = params.get("tokenUsage")
@@ -1174,7 +1353,8 @@ class CodexClient:
                                 raise tool_turn.delivery_failure
                         settled = True
                         if params.get("turn", {}).get("status") != "completed":
-                            raise CodexError("codex_turn_failed")
+                            raise CodexError(turn_error or _turn_error_code(turn.get("error"))
+                                             or "codex_turn_failed")
                         answer = "\n\n".join(
                             text for key, text in text_parts.items() if key not in commentary
                         ).strip() or "\n\n".join(text_parts.values()).strip()
