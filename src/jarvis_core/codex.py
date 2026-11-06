@@ -812,6 +812,44 @@ class CodexClient:
         mode = account.get("type") if isinstance(account, dict) else None
         return {"connected": mode == "chatgpt", "mode": "chatgpt" if mode == "chatgpt" else None}
 
+    async def list_models(self) -> list[dict]:
+        """The official account's visible model catalog (OC-30); data, not a choice."""
+        await self.start()
+        # Drain login's deferred account update before reading the catalog.
+        await self.request("account/read", {"refreshToken": False})
+        models: list[dict] = []
+        seen: set[str] = set()
+        cursor = None
+        for _ in range(8):
+            page = await self.request("model/list", {
+                "limit": 100, "cursor": cursor, "includeHidden": False})
+            data = page.get("data") if isinstance(page, dict) else None
+            if not isinstance(data, list) or len(data) > 100:
+                raise CodexError("codex_models_invalid")
+            for row in data:
+                if not isinstance(row, dict):
+                    raise CodexError("codex_models_invalid")
+                model_id, name = row.get("id"), row.get("displayName")
+                modalities = row.get("inputModalities", ["text", "image"])
+                if (not isinstance(model_id, str) or _WIRE_LABEL.fullmatch(model_id) is None
+                        or model_id in seen or not isinstance(name, str)
+                        or not 1 <= len(name) <= 128 or type(row.get("isDefault")) is not bool
+                        or not isinstance(modalities, list)
+                        or not all(isinstance(item, str) for item in modalities)):
+                    raise CodexError("codex_models_invalid")
+                if row.get("hidden") is True:
+                    continue
+                seen.add(model_id)
+                models.append({"id": model_id, "display_name": name,
+                               "is_default": row["isDefault"],
+                               "accepts_images": "image" in modalities})
+            cursor = page.get("nextCursor")
+            if cursor is None:
+                return models
+            if not isinstance(cursor, str) or not 1 <= len(cursor) <= 1024:
+                raise CodexError("codex_models_invalid")
+        raise CodexError("codex_models_too_many")
+
     async def login(self) -> dict:
         await self.start()
         result = await self.request("account/login/start", {"type": "chatgpt"})

@@ -19,6 +19,9 @@ final class ChatStore {
     var errorMessage: String?
     var statusText = "Iniciando servicio local…"
     var connected = false
+    /// Read on demand from the official provider; informative, never a model choice.
+    var providerModels: [ProviderModel] = []
+    var providerModelsLoading = false
     var ready = false
     var busy = false
     var starting = false
@@ -1409,9 +1412,23 @@ final class ChatStore {
         } catch { report(error) }
     }
 
+    func loadProviderModels() async {
+        guard !isRecoveryOnly, connected, !providerModelsLoading, runtime.isActive else { return }
+        providerModelsLoading = true
+        defer { providerModelsLoading = false }
+        do {
+            let result = try await rpc("provider.models")
+            try runtime.check()
+            guard !stopping else { throw CancellationError() }
+            guard let models = ProviderModel.catalog(result) else { throw RPCFailure.invalidResponse }
+            providerModels = models
+        } catch { report(error) }
+    }
+
     func logout() async {
         guard !isRecoveryOnly, activeRunID == nil, !runTracker.hasActiveRuns, !coreBlocksHost, !maintenance.blocksInteraction, !channelRestoration.blocksInteraction && !memoryRestoration.blocksInteraction && !memoryIntelligence.blocksInteraction && !recovery.blocksInteraction else { return }
         stopVoice(); dictationNotice = nil
+        providerModels = []
         do { _ = try await rpc("provider.logout"); try await refreshStatus() }
         catch { report(error) }
     }

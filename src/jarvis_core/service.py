@@ -327,7 +327,8 @@ class JarvisService(SessionWorkspaceMixin, ProductManagementAPI,
         self.server = LocalRpcServer(
             directory, self.handlers(), max_frame_bytes=1024 * 1024,
             client_authority=self.client_authority,
-            read_methods=READ_RPCS - {"service.status", "clients.status"},
+            # Owner-only: these reach the provider SDK even though they mutate nothing.
+            read_methods=READ_RPCS - {"service.status", "provider.models", "clients.status"},
             recover_stale=self.profile_lease.assert_current,
             client_control_guard=self._client_control_guard)
 
@@ -680,6 +681,7 @@ class JarvisService(SessionWorkspaceMixin, ProductManagementAPI,
             "service.local_status": self.local_status,
             "provider.login": self.login,
             "provider.logout": self.logout,
+            "provider.models": self.list_models,
             "sessions.create": self.create_session,
             "sessions.list": self.list_sessions,
             "sessions.update": self.update_session,
@@ -1271,6 +1273,24 @@ class JarvisService(SessionWorkspaceMixin, ProductManagementAPI,
                 "root_identity": wire(self.profile_lease.identity),
                 "restore_admission": wire(self.profile_lease.admission),
                 "provider_choice": self.provider_choice.local_status()}
+
+    async def list_models(self, params: dict) -> dict:
+        """The selected official provider's catalog. Listing never selects a model."""
+        _params(params, set())
+        if self._provider_transition is not None or not self.provider_choice.allowed:
+            return {"connected": False, "models": []}
+        lister = getattr(self.provider, "list_models", None)
+        if lister is None:
+            raise CodexError("codex_models_unavailable")
+        epoch = self.provider_choice.epoch()
+        token = self._provider_context.set(epoch)
+        try:
+            models = await lister()
+            # A catalog read before a revocation is never released after it.
+            self.provider_choice.assert_current(epoch)
+        finally:
+            self._provider_context.reset(token)
+        return {"connected": True, "models": models}
 
     async def login(self, params: dict) -> dict:
         _params(params, set())

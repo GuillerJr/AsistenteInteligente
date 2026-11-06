@@ -37,6 +37,20 @@ import SwiftUI
                     Button("Cerrar sesión") { Task { await store.logout() } }
                         .disabled(store.isRecoveryOnly || !store.connected || store.activeRunID != nil || store.coreBlocksHost || store.maintenance.blocksInteraction || store.channelRestoration.blocksInteraction || store.memoryRestoration.blocksInteraction || store.recovery.blocksInteraction || store.restored.blocksInteraction || profiles.isOpening)
                 }
+                Button(store.providerModelsLoading ? "Consultando modelos…" : "Ver modelos disponibles") {
+                    Task { await store.loadProviderModels() }
+                }.disabled(store.isRecoveryOnly || !store.connected || store.providerModelsLoading || profiles.isOpening)
+                ForEach(store.connected ? store.providerModels : []) { model in
+                    HStack {
+                        Text(model.displayName)
+                        if model.isDefault { Text("Predeterminado").font(.caption).foregroundStyle(.secondary) }
+                        if !model.acceptsImages { Text("Sin imágenes").font(.caption).foregroundStyle(.secondary) }
+                    }
+                }
+                if store.connected && !store.providerModels.isEmpty {
+                    Text("Catálogo de tu cuenta oficial. Jarvis usa el modelo predeterminado de Codex; elegir otro modelo aún no está disponible.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             Section("Perfil actual") {
                 if let path = store.launchOptions?.state { Text(path).font(.caption).textSelection(.enabled) }

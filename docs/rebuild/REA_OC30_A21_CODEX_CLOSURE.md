@@ -132,6 +132,16 @@ Estado de implementación:
   reanudarse otra vez. Diferencia con OpenClaw: Jarvis no intenta
   `unsubscribe`; marca el binding y no lo reutiliza. Peers sintéticos de Codex
   actualizados; regresiones en `tests/test_codex.py`.
+- **G1, catálogo, implementado** (06-11-2026). `CodexClient.list_models()`
+  lee `account/read` y luego pagina `model/list` (100 por página, sin ocultos,
+  como máximo 8 páginas), valida id, nombre visible, `isDefault` y modalidades,
+  rechaza duplicados y cursores inválidos, y omite los modelos `hidden`. El
+  servicio lo expone como `provider.models` de lectura, sólo para el dueño
+  (como `service.status`, porque consulta al SDK) y bajo la elección de
+  proveedor vigente. La app lo muestra a demanda en Ajustes › Cuenta de ChatGPT
+  con el predeterminado marcado. Listar no elige modelo: Jarvis sigue usando el
+  predeterminado de Codex y la elección pertenece a A-22. La compilación Swift
+  se valida en CI.
 
 Sólo con los cuatro puntos y su CI completa, más el recorrido nativo, A-21
 pasaría a completa. Hasta entonces sigue en `implementacion_parcial_contratos_probados`.

@@ -272,3 +272,79 @@ async def test_resume_that_subscribes_another_thread_is_never_reused(tmp_path, r
         assert "own-stored-thread" not in client._threads
     finally:
         await client.aclose()
+
+
+def catalog_peer(path, pages):
+    """Peer serving fixed model/list pages and recording every request."""
+    path.write_text(f"#!{sys.executable}\n" + f'''
+import json,os,sys
+pages={pages!r}
+log=os.path.join(os.environ['HOME'],'catalog-wire.jsonl')
+for line in sys.stdin:
+    m=json.loads(line); method=m.get('method'); p=m.get('params',{{}}); result={{}}
+    with open(log,'a') as stream:
+        stream.write(json.dumps(m)+'\\n')
+    if method=='initialize':
+        result={{'userAgent':'jarvis/0.163.0'}}
+    elif method=='account/read':
+        result={{'account':{{'type':'chatgpt'}}}}
+    elif method=='model/list':
+        result=pages[p.get('cursor') or '']
+    if 'id' in m and method:
+        print(json.dumps({{'id':m['id'],'result':result}}),flush=True)
+''')
+    path.chmod(0o700)
+    return path
+
+
+def model(model_id, **extra):
+    return {"id": model_id, "model": model_id, "displayName": model_id.upper(),
+            "isDefault": False, "hidden": False, "inputModalities": ["text"], **extra}
+
+
+async def test_model_catalog_pages_hides_hidden_and_reads_account_first(tmp_path):
+    pages = {"": {"data": [model("gpt-a", isDefault=True, inputModalities=["text", "image"]),
+                           model("gpt-hidden", hidden=True)], "nextCursor": "c2"},
+             "c2": {"data": [model("gpt-b")], "nextCursor": None}}
+    client = CodexClient(catalog_peer(tmp_path / "peer", pages), tmp_path / "state")
+    try:
+        assert await client.list_models() == [
+            {"id": "gpt-a", "display_name": "GPT-A", "is_default": True, "accepts_images": True},
+            {"id": "gpt-b", "display_name": "GPT-B", "is_default": False, "accepts_images": False},
+        ]
+        import json
+        wire = [json.loads(row) for row in
+                (tmp_path / "state" / "home" / "catalog-wire.jsonl").read_text().splitlines()]
+        methods = [row.get("method") for row in wire]
+        assert methods.index("account/read") < methods.index("model/list")
+        assert [row["params"] for row in wire if row.get("method") == "model/list"] == [
+            {"limit": 100, "cursor": None, "includeHidden": False},
+            {"limit": 100, "cursor": "c2", "includeHidden": False}]
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.parametrize("page", [
+    {}, {"data": "x"}, {"data": [model("gpt-a"), model("gpt-a")]},
+    {"data": [model("bad id")]}, {"data": [{**model("gpt-a"), "displayName": ""}]},
+    {"data": [{**model("gpt-a"), "isDefault": "yes"}]},
+    {"data": [model("gpt-a")], "nextCursor": ""},
+])
+async def test_malformed_model_catalog_is_refused(tmp_path, page):
+    client = CodexClient(catalog_peer(tmp_path / "peer", {"": page}), tmp_path / "state")
+    try:
+        with pytest.raises(CodexError, match="codex_models_invalid"):
+            await client.list_models()
+    finally:
+        await client.aclose()
+
+
+async def test_endless_model_catalog_is_bounded(tmp_path):
+    pages = {"": {"data": [], "nextCursor": "c1"},
+             **{f"c{n}": {"data": [], "nextCursor": f"c{n + 1}"} for n in range(1, 12)}}
+    client = CodexClient(catalog_peer(tmp_path / "peer", pages), tmp_path / "state")
+    try:
+        with pytest.raises(CodexError, match="codex_models_too_many"):
+            await client.list_models()
+    finally:
+        await client.aclose()

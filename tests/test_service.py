@@ -28,6 +28,10 @@ class ModelPeer:
     async def login(self):
         return {"url": "https://auth.openai.com/fixture"}
 
+    async def list_models(self):
+        return [{"id": "synthetic-model", "display_name": "Modelo sintético",
+                 "is_default": True, "accepts_images": True}]
+
     async def logout(self):
         return {"connected": False, "mode": None}
 
@@ -216,11 +220,21 @@ async def test_durable_session_continuation_survives_service_restart(connection)
     ("sessions.list", {"include_archived": 1}),
     ("service.status", {"token": "untrusted"}),
     ("provider.login", {"provider": "nvidia"}),
+    ("provider.models", {"model": "synthetic-model"}),
 ])
 async def test_rejects_unknown_or_mistyped_parameters(connection, method, params):
     _, client, _, _ = connection
     with pytest.raises(RpcError):
         await client.call(method, params)
+
+
+async def test_model_catalog_is_read_from_the_selected_provider_without_choosing(connection):
+    _, client, provider, _ = connection
+    listed = await client.call("provider.models")
+    assert listed == {"connected": True, "models": [{
+        "id": "synthetic-model", "display_name": "Modelo sintético",
+        "is_default": True, "accepts_images": True}]}
+    assert provider.calls == []  # listing is not a run or a model choice
 
 
 async def test_shutdown_cancels_then_waits_for_cleanup_before_closing_provider(connection):
