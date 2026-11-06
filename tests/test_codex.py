@@ -348,3 +348,20 @@ async def test_endless_model_catalog_is_bounded(tmp_path):
             await client.list_models()
     finally:
         await client.aclose()
+
+
+@pytest.mark.parametrize("kind", ["absent", "not-executable"])
+async def test_absent_or_unusable_cli_is_a_bounded_diagnostic_not_a_start_crash(tmp_path, kind):
+    path = tmp_path / "bin" / "codex"
+    if kind == "not-executable":
+        path.parent.mkdir()
+        path.write_text("#!/bin/sh\nexit 0\n")
+        path.chmod(0o600)
+    client = CodexClient(path, tmp_path / "state")  # the service can still start
+    try:
+        for _ in range(2):  # stable, never a retry with another binary
+            with pytest.raises(CodexError, match="codex_unavailable"):
+                await client.account_status()
+        assert client._process is None and not (tmp_path / "state").exists()
+    finally:
+        await client.aclose()

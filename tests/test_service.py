@@ -271,3 +271,24 @@ async def test_duplicate_cli_start_fails_cleanly_without_replacing_socket(connec
         if process.returncode is None:
             process.kill()
         await asyncio.wait_for(process.wait(), 5)
+
+
+async def test_service_starts_and_reports_an_absent_official_cli():
+    from jarvis_core.codex import CodexClient
+    directory = Path(tempfile.mkdtemp(prefix="jvs-", dir=tempfile.gettempdir())).resolve()
+    provider = CodexClient(directory / "missing" / "codex", directory / "provider")
+    service = JarvisService(directory, provider)
+    client = LocalRpcClient(directory, max_frame_bytes=1024 * 1024)
+    await service.start()
+    await client.connect()
+    try:
+        status = await client.call("service.status")
+        assert status["ready"] is True
+        assert status["provider"] == {"connected": False, "mode": None,
+                                      "error_code": "codex_unavailable"}
+        with pytest.raises(RpcError):
+            await client.call("provider.models")
+    finally:
+        await client.aclose()
+        await service.aclose()
+        shutil.rmtree(directory)

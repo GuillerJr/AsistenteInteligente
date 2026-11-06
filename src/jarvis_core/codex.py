@@ -156,7 +156,9 @@ class CodexClient:
 
     def __init__(self, executable: Path, directory: Path, *, timeout: float = 20,
                  certificate_bundle: Path | None = None) -> None:
-        if not executable.is_absolute() or not executable.is_file():
+        # An absent or removed CLI is a diagnosable provider state, checked at
+        # start(), not a reason the whole service cannot start (A-21 G4).
+        if not executable.is_absolute():
             raise ValueError("codex_executable_invalid")
         if not 0 < timeout <= 30:
             raise ValueError("codex_timeout_invalid")
@@ -202,6 +204,8 @@ class CodexClient:
                 return
             if self.before_io is not None:
                 self.before_io("start")
+            if not self.executable.is_file() or not os.access(self.executable, os.X_OK):
+                raise CodexError("codex_unavailable")
             directory = ensure_private_directory(self.directory)
             home = ensure_private_directory(directory / "home")
             codex_home = ensure_private_directory(directory / "client")
@@ -254,17 +258,21 @@ class CodexClient:
             ):
                 arguments.extend(("-c", setting))
             try:
-                self._process = await asyncio.create_subprocess_exec(
-                    *arguments,
-                    stdin=asyncio.subprocess.PIPE,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    env=environment,
-                    cwd=workspace,
-                    limit=1024 * 1024,
-                    start_new_session=True,
-                    pass_fds=self.child_custody() if self.child_custody else (),
-                )
+                try:
+                    self._process = await asyncio.create_subprocess_exec(
+                        *arguments,
+                        stdin=asyncio.subprocess.PIPE,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                        env=environment,
+                        cwd=workspace,
+                        limit=1024 * 1024,
+                        start_new_session=True,
+                        pass_fds=self.child_custody() if self.child_custody else (),
+                    )
+                except (FileNotFoundError, PermissionError):
+                    # Removed or made non-executable after the check above.
+                    raise CodexError("codex_unavailable") from None
                 self._reader = asyncio.create_task(self._read())
                 self._stderr = asyncio.create_task(self._drain_stderr())
                 initialized = await self.request(

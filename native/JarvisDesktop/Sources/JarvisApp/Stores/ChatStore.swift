@@ -673,7 +673,7 @@ final class ChatStore {
         talk.validateContext()
         capabilities = result["capabilities"]
         access.refreshCapabilities(capabilities)
-        statusText = !local.providerQueryAllowed ? "Perfil local abierto · elige conectar tu cuenta de ChatGPT" : accountConnected ? "Codex con ChatGPT conectado" : "Inicia sesión con ChatGPT"
+        statusText = !local.providerQueryAllowed ? "Perfil local abierto · elige conectar tu cuenta de ChatGPT" : accountConnected ? "Codex con ChatGPT conectado" : RunPresentation.providerDiagnostic(result["provider"]["error_code"].string) ?? "Inicia sesión con ChatGPT"
     }
 
     private func refreshSessions() async throws {

@@ -143,6 +143,15 @@ Estado de implementación:
   predeterminado de Codex y la elección pertenece a A-22. La compilación Swift
   se valida en CI.
 
+- **G4, CLI ausente, implementado** (06-11-2026; hallado al preparar W3). Antes,
+  `CodexClient` exigía el binario al construirse y un Codex ausente impedía arrancar el
+  servicio. Ahora sólo exige ruta absoluta; `start()` comprueba que exista y sea
+  ejecutable (y cubre su retirada entre esa comprobación y el `exec`) y responde
+  `codex_unavailable` sin crear directorios ni probar otro binario. `service.status`
+  queda `ready` con `error_code: codex_unavailable`, y la app muestra el diagnóstico en
+  español (también para `codex_version_unsupported`) en lugar de «Inicia sesión».
+  Regresiones en `tests/test_codex.py`, `tests/test_service.py` y `RPCFrameTests`.
+
 Diseño de la cualificación nativa (punto 4): [PHASE_A_A21_QUALIFICATION_PLAN.md](PHASE_A_A21_QUALIFICATION_PLAN.md).
 
 Sólo con los cuatro puntos y su CI completa, más el recorrido nativo, A-21

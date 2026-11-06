@@ -21,6 +21,10 @@ final class RPCFrameTests: XCTestCase {
         XCTAssertTrue(RunPresentation.errorMessage("codex_login_required").contains("Inicia sesión"))
         XCTAssertTrue(RunPresentation.errorMessage("codex_thread_recovery_required").contains("no se repetirá"))
         XCTAssertTrue(RunPresentation.errorMessage("codex_version_unsupported").contains("0.163.0"))
+        XCTAssertTrue(RunPresentation.errorMessage("codex_unavailable").contains("cliente oficial de Codex"))
+        XCTAssertEqual(RunPresentation.providerDiagnostic("codex_unavailable"), RunPresentation.errorMessage("codex_unavailable"))
+        XCTAssertNil(RunPresentation.providerDiagnostic("codex_turn_failed"))
+        XCTAssertNil(RunPresentation.providerDiagnostic(nil))
         XCTAssertFalse(RunPresentation.errorMessage("PRIVATE-TEST-SENTINEL").contains("PRIVATE-TEST-SENTINEL"))
     }
 

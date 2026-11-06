@@ -13,6 +13,8 @@ public enum RunPresentation {
         case "codex_login_required": return "Inicia sesión con tu cuenta de ChatGPT para continuar."
         case "codex_thread_recovery_required", "thread_recovery_required":
             return "Codex no pudo recuperar el contexto. La ejecución no se repetirá; inicia otra conversación."
+        case "codex_unavailable":
+            return "No se encuentra el cliente oficial de Codex o no se puede ejecutar. Reinstálalo y vuelve a abrir Jarvis."
         case "codex_version_unsupported":
             return "La versión instalada del cliente oficial de Codex no es compatible. Se necesita la 0.163.0 o posterior."
         case "codex_thread_busy": return "Codex sigue trabajando en esta conversación. Espera a que termine."
@@ -28,6 +30,12 @@ public enum RunPresentation {
         case "codex_turn_failed", "turn_failed": return "Codex no pudo completar esta consulta."
         default: return "La ejecución no pudo completarse. Consulta su estado antes de volver a enviar."
         }
+    }
+
+    /// A provider state the owner can act on, shown instead of the generic sign-in prompt.
+    public static func providerDiagnostic(_ code: String?) -> String? {
+        guard let code, ["codex_unavailable", "codex_version_unsupported"].contains(code) else { return nil }
+        return errorMessage(code)
     }
 
     public static func appendDelta(_ value: String, to current: String) throws -> String {
