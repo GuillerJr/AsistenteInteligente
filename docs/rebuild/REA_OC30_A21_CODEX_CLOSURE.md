@@ -143,6 +143,8 @@ Estado de implementación:
   predeterminado de Codex y la elección pertenece a A-22. La compilación Swift
   se valida en CI.
 
+Diseño de la cualificación nativa (punto 4): [PHASE_A_A21_QUALIFICATION_PLAN.md](PHASE_A_A21_QUALIFICATION_PLAN.md).
+
 Sólo con los cuatro puntos y su CI completa, más el recorrido nativo, A-21
 pasaría a completa. Hasta entonces sigue en `implementacion_parcial_contratos_probados`.
 
