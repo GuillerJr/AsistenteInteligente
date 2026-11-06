@@ -1,0 +1,117 @@
+{
+  "schema": "jarvis.rea-batch-summary/1",
+  "batch_id": "OC-31",
+  "capability_id": "A-23",
+  "reference_commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+  "reference_tree": "197c70097790e30087bbef323b0f2cc5148ab9b7",
+  "partition_sha256": "1fc0af67b5cc7a57fffb504462917bb7539b00e08f734330d05176978eb584ed",
+  "parent_evidence_id": "ev_d6cf3649a8a66ecaf1594273aee9d9f72dc7788498cdda6b3543a9e8580ae008",
+  "summary_evidence_id": "ev_1150914f61f623631a88dc1c41cc92d27fee5d6bde0a978f24745a62d15654a8",
+  "trace_evidence_ids": [
+    "ev_da02aedb66d03c49a806665c6e205a43d102638af9e54841b4ded5d937c1d63d",
+    "ev_4df01647c628e5527722082aeedc3ad6b8ba938d8ca4d8691f52be7c179fb578"
+  ],
+  "statistics": {
+    "relevant_files": 16,
+    "parsed_javascript_files": 15,
+    "text_bytes_read": 129043,
+    "visited_ast_nodes": 15167,
+    "findings": 323,
+    "parse_failures": 0
+  },
+  "semantic_unknowns": 2788,
+  "execution_observed": false,
+  "side_reading": {
+    "path": "extensions/codex/src/app-server/protocol-generated/json/v2/CodexAppServerProtocolDefinitions.json (TurnError, CodexErrorInfo); event-projector.ts error case; capabilities.ts rateLimits method name",
+    "note": "Read directly with git cat-file, not part of the REA partition."
+  },
+  "gaps": {
+    "G1": "No account/rateLimits/read: plan, limit windows and credits are not read or shown; absent data must stay null, never zero",
+    "G2": "account/rateLimits/updated notifications are ignored; no per-client cache merged from sparse updates",
+    "G3": "Turn error notifications (error with codexErrorInfo) are ignored: usage limit, rate limit, overload and unauthorized all end as generic codex_turn_failed",
+    "G4": "account/updated during a session is not observed; external revocation is only seen on the next account/read (client.ts handling not yet reviewed)",
+    "G5": "Measured run tokens feed budgets but are not exposed per run with provider and session attribution"
+  },
+  "source_files": [
+    {
+      "path": "extensions/codex/src/account-usage-runtime.ts",
+      "bytes": 5049,
+      "sha256": "095693dba277f8b799125239fbb14ff3ab4f8894c3079fe32f03690cb9f2ef08"
+    },
+    {
+      "path": "extensions/codex/src/app-server/auth-cache-key.ts",
+      "bytes": 4076,
+      "sha256": "d77f1c24cb0df9792f00f3f7b9da5bb05db55693358a215f2657c35f4fea7e13"
+    },
+    {
+      "path": "extensions/codex/src/app-server/client-runtime.ts",
+      "bytes": 30570,
+      "sha256": "f6ee4a48e6f532c078829a2f407e533504174071d04448d1d7f5cc936f48fded"
+    },
+    {
+      "path": "extensions/codex/src/app-server/event-projector-usage.ts",
+      "bytes": 8076,
+      "sha256": "fb32ecd286e27f897f31ee9cdcba9d555f83d57c1ff7e7c89cfaf17f5197ef04"
+    },
+    {
+      "path": "extensions/codex/src/app-server/protocol-generated/json/v2/GetAccountResponse.json",
+      "bytes": 449,
+      "sha256": "7179a8363a67638f070848387b5a1f073c1745518f02cfb6423f3da5e15633cc"
+    },
+    {
+      "path": "extensions/codex/src/app-server/rate-limit-cache.ts",
+      "bytes": 5047,
+      "sha256": "8f5c151260fda40edcc83bd88d740951456c5ee59a4c062e3d15124d9536efd7"
+    },
+    {
+      "path": "extensions/codex/src/app-server/rate-limit-time.ts",
+      "bytes": 2490,
+      "sha256": "17166ceb3a35c85d6c92c91dc42dd9702ff434959aedd26c46c959426dd9ca09"
+    },
+    {
+      "path": "extensions/codex/src/app-server/rate-limits.ts",
+      "bytes": 22439,
+      "sha256": "7bf94be89cd78201a88cfd623f8758783f1e0d1fe84ca6a919f2ba3cb9bfe094"
+    },
+    {
+      "path": "extensions/codex/src/app-server/request.ts",
+      "bytes": 21758,
+      "sha256": "9213770e191b355db934270def9962d009545a9afa21f0c1083f7eb4ba43f5c0"
+    },
+    {
+      "path": "extensions/codex/src/app-server/shared-client-usage.ts",
+      "bytes": 3639,
+      "sha256": "60b8636b9ec79a4abb28234399e7530021f3c2a3fe3404393cc9e3945892bfea"
+    },
+    {
+      "path": "extensions/codex/src/app-server/usage-limit-error.ts",
+      "bytes": 9492,
+      "sha256": "13e0efbc4b2657da38fb8154f0bbe32bb9a3605a7062e581e2a82e00ff4581eb"
+    },
+    {
+      "path": "extensions/codex/src/app-server/usage.ts",
+      "bytes": 1422,
+      "sha256": "e80e141becad54912ef9ba89d90bbc996a88c698cc2266b53637abb027c89c48"
+    },
+    {
+      "path": "extensions/codex/src/auth-profile-health.ts",
+      "bytes": 2841,
+      "sha256": "45903add7fd28619f2b7a1fc4437e67169549b379fd8acbfc3eb5051679b3515"
+    },
+    {
+      "path": "extensions/codex/src/command-account-email.ts",
+      "bytes": 140,
+      "sha256": "6d4c0af7719783235a99396e69f6d80ae3de917533ace05eb009324e5ca6f400"
+    },
+    {
+      "path": "extensions/codex/src/command-account.ts",
+      "bytes": 10833,
+      "sha256": "7ec635641c898970f4330f1adb0c1718f5b6e69d32e0c3d716cb62abddc84b32"
+    },
+    {
+      "path": "extensions/codex/src/session-catalog-limits.ts",
+      "bytes": 722,
+      "sha256": "48a26933820dc9531cb6778975a980947b9e563e8b7d744422b0f0474ae80832"
+    }
+  ]
+}

@@ -36,7 +36,7 @@
     "implementation_complete": false,
     "runtime_validation_of_reference_performed": false,
     "initial_jarvis_state": "Línea base original: núcleo Python con pruebas sintéticas. Conservar como historia del inicio; el avance actual se registra separadamente en progress_snapshot y BASELINE_VERTICAL_SLICE.md, sin cerrar paridad.",
-    "rea": "E### son IDs locales de fuente estática con hashes, no ev_ de REA. El inventario inicial y los lotes posteriores se distinguen; cobertura efectiva de 50 lotes y 216 rutas TS/JS únicas en REA_COVERAGE.json, con semántica parcial e incógnitas y sin ejecución de la referencia.",
+    "rea": "E### son IDs locales de fuente estática con hashes, no ev_ de REA. El inventario inicial y los lotes posteriores se distinguen; cobertura efectiva de 51 lotes y 231 rutas TS/JS únicas en REA_COVERAGE.json, con semántica parcial e incógnitas y sin ejecución de la referencia.",
     "method": "Catálogos canónicos, registros/manifests, entradas de arquitectura y contratos documentales fijados. Catálogos generados se contrastan con manifest disponible; no son evidencia runtime.",
     "limits": [
       "Censo funcional no equivale a lectura semántica de 59.267 archivos o certificación de 554 APIs.",
@@ -1019,6 +1019,10 @@
         {
           "progress_id": "P-CODEX",
           "scope": "Ver avance parcial; no cierra la capacidad."
+        },
+        {
+          "progress_id": "P-CODEX",
+          "scope": "OC-31 (REA_OC31_A23_CODEX_USAGE_LIMITS.md) fija las brechas de cierre: G1 lectura de límites account/rateLimits/read sin convertir ausencias en cero, G2 actualizaciones account/rateLimits/updated, G3 errores de turno por codexErrorInfo (límite de uso, 429, sobrecarga, no autorizado), G4 revocación por account/updated pendiente de revisar, G5 uso por run con proveedor y sesión. No cierra la capacidad."
         }
       ],
       "acceptance": {
@@ -1031,7 +1035,8 @@
         "E027",
         "E028",
         "E029",
-        "E030"
+        "E030",
+        "ev_d6cf3649a8a66ecaf1594273aee9d9f72dc7788498cdda6b3543a9e8580ae008"
       ],
       "closure_status": "pendiente_equivalencia_productiva"
     },
@@ -15848,8 +15853,8 @@
     "detail_file": "PHASE_A_PRODUCT_COORDINATION.md",
     "rea": {
       "source_file": "REA_COVERAGE.json",
-      "static_batches": 50,
-      "unique_typescript_paths_in_completed_batches": 214,
+      "static_batches": 51,
+      "unique_typescript_paths_in_completed_batches": 229,
       "global_status": "partial",
       "runtime_executed": false,
       "semantic_unknowns_remain": true,
@@ -15903,10 +15908,11 @@
         "OC-28B",
         "OC-28C",
         "OC-29",
-        "OC-30"
+        "OC-30",
+        "OC-31"
       ],
       "limits": "Contar rutas examinadas no significa comprensión semántica ni revisión global. IDs y evidencias completos en REA_COVERAGE.json/provenance.",
-      "unique_ts_js_paths_in_completed_batches": 216,
+      "unique_ts_js_paths_in_completed_batches": 231,
       "source_count_note": "184 rutas TypeScript y dos MJS; unión de rutas únicas, no cobertura semántica o runtime. OC28 conserva 15 blobs/182916 bytes, manifiesto, EIDs y límites propios."
     },
     "previous_detail_file": "PHASE_A_AUTOMATION_CLOSEOUT.md",

@@ -84,7 +84,7 @@ acreditaba un clic OS. Clientes, Git, preguntas y paneles conservan sus recorrid
 finitos; la publicación real de GitHub sigue sin ejercitarse. La
 [revisión OC-28](REA_OC28_PRODUCT_COORDINATION.md) conserva sus fuentes y límites.
 Desde el cierre de A-21 (06-11-2026, [plan](PHASE_A_A21_QUALIFICATION_PLAN.md)) la matriz
-queda en **61 familias parciales, 18 sin implementar y una completa (A-21, con límites)**; REA conserva **50 lotes y 216 rutas TS/JS únicas** seleccionadas.
+queda en **61 familias parciales, 18 sin implementar y una completa (A-21, con límites)**; REA conserva **51 lotes y 231 rutas TS/JS únicas** seleccionadas; [OC-31](REA_OC31_A23_CODEX_USAGE_LIMITS.md) abre A-23.
 La fase A sigue abierta y B aplazada.
 
 La reanudación del 4 de noviembre conserva tres preparaciones fallidas y cerradas

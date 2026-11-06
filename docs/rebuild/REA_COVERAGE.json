@@ -6993,6 +6993,139 @@
       ],
       "full_evidence_path": null,
       "provenance_file": "docs/rebuild/REA_OC30_A21_CODEX_CLOSURE.md"
+    },
+    {
+      "id": "OC-31",
+      "topic": "Codex account usage, rate limits, usage-limit errors and account commands for A-23",
+      "source_paths": [
+        "extensions/codex/src/account-usage-runtime.ts",
+        "extensions/codex/src/app-server/auth-cache-key.ts",
+        "extensions/codex/src/app-server/client-runtime.ts",
+        "extensions/codex/src/app-server/event-projector-usage.ts",
+        "extensions/codex/src/app-server/protocol-generated/json/v2/GetAccountResponse.json",
+        "extensions/codex/src/app-server/rate-limit-cache.ts",
+        "extensions/codex/src/app-server/rate-limit-time.ts",
+        "extensions/codex/src/app-server/rate-limits.ts",
+        "extensions/codex/src/app-server/request.ts",
+        "extensions/codex/src/app-server/shared-client-usage.ts",
+        "extensions/codex/src/app-server/usage-limit-error.ts",
+        "extensions/codex/src/app-server/usage.ts",
+        "extensions/codex/src/auth-profile-health.ts",
+        "extensions/codex/src/command-account-email.ts",
+        "extensions/codex/src/command-account.ts",
+        "extensions/codex/src/session-catalog-limits.ts"
+      ],
+      "parent_evidence_id": "ev_d6cf3649a8a66ecaf1594273aee9d9f72dc7788498cdda6b3543a9e8580ae008",
+      "summary_evidence_id": "ev_1150914f61f623631a88dc1c41cc92d27fee5d6bde0a978f24745a62d15654a8",
+      "trace_evidence_ids": [
+        "ev_da02aedb66d03c49a806665c6e205a43d102638af9e54841b4ded5d937c1d63d",
+        "ev_4df01647c628e5527722082aeedc3ad6b8ba938d8ca4d8691f52be7c179fb578"
+      ],
+      "partition_sha256": "1fc0af67b5cc7a57fffb504462917bb7539b00e08f734330d05176978eb584ed",
+      "reference_commit": "1e3ff306abaff29f03e7668d53b01c07f10294ac",
+      "reference_tree": "197c70097790e30087bbef323b0f2cc5148ab9b7",
+      "report": "docs/rebuild/REA_OC31_A23_CODEX_USAGE_LIMITS.md",
+      "summary_file": "docs/rebuild/qa/openclaw-codex-a23-20261106/REA_SUMMARY.json",
+      "source_files": [
+        {
+          "path": "extensions/codex/src/account-usage-runtime.ts",
+          "bytes": 5049,
+          "sha256": "095693dba277f8b799125239fbb14ff3ab4f8894c3079fe32f03690cb9f2ef08"
+        },
+        {
+          "path": "extensions/codex/src/app-server/auth-cache-key.ts",
+          "bytes": 4076,
+          "sha256": "d77f1c24cb0df9792f00f3f7b9da5bb05db55693358a215f2657c35f4fea7e13"
+        },
+        {
+          "path": "extensions/codex/src/app-server/client-runtime.ts",
+          "bytes": 30570,
+          "sha256": "f6ee4a48e6f532c078829a2f407e533504174071d04448d1d7f5cc936f48fded"
+        },
+        {
+          "path": "extensions/codex/src/app-server/event-projector-usage.ts",
+          "bytes": 8076,
+          "sha256": "fb32ecd286e27f897f31ee9cdcba9d555f83d57c1ff7e7c89cfaf17f5197ef04"
+        },
+        {
+          "path": "extensions/codex/src/app-server/protocol-generated/json/v2/GetAccountResponse.json",
+          "bytes": 449,
+          "sha256": "7179a8363a67638f070848387b5a1f073c1745518f02cfb6423f3da5e15633cc"
+        },
+        {
+          "path": "extensions/codex/src/app-server/rate-limit-cache.ts",
+          "bytes": 5047,
+          "sha256": "8f5c151260fda40edcc83bd88d740951456c5ee59a4c062e3d15124d9536efd7"
+        },
+        {
+          "path": "extensions/codex/src/app-server/rate-limit-time.ts",
+          "bytes": 2490,
+          "sha256": "17166ceb3a35c85d6c92c91dc42dd9702ff434959aedd26c46c959426dd9ca09"
+        },
+        {
+          "path": "extensions/codex/src/app-server/rate-limits.ts",
+          "bytes": 22439,
+          "sha256": "7bf94be89cd78201a88cfd623f8758783f1e0d1fe84ca6a919f2ba3cb9bfe094"
+        },
+        {
+          "path": "extensions/codex/src/app-server/request.ts",
+          "bytes": 21758,
+          "sha256": "9213770e191b355db934270def9962d009545a9afa21f0c1083f7eb4ba43f5c0"
+        },
+        {
+          "path": "extensions/codex/src/app-server/shared-client-usage.ts",
+          "bytes": 3639,
+          "sha256": "60b8636b9ec79a4abb28234399e7530021f3c2a3fe3404393cc9e3945892bfea"
+        },
+        {
+          "path": "extensions/codex/src/app-server/usage-limit-error.ts",
+          "bytes": 9492,
+          "sha256": "13e0efbc4b2657da38fb8154f0bbe32bb9a3605a7062e581e2a82e00ff4581eb"
+        },
+        {
+          "path": "extensions/codex/src/app-server/usage.ts",
+          "bytes": 1422,
+          "sha256": "e80e141becad54912ef9ba89d90bbc996a88c698cc2266b53637abb027c89c48"
+        },
+        {
+          "path": "extensions/codex/src/auth-profile-health.ts",
+          "bytes": 2841,
+          "sha256": "45903add7fd28619f2b7a1fc4437e67169549b379fd8acbfc3eb5051679b3515"
+        },
+        {
+          "path": "extensions/codex/src/command-account-email.ts",
+          "bytes": 140,
+          "sha256": "6d4c0af7719783235a99396e69f6d80ae3de917533ace05eb009324e5ca6f400"
+        },
+        {
+          "path": "extensions/codex/src/command-account.ts",
+          "bytes": 10833,
+          "sha256": "7ec635641c898970f4330f1adb0c1718f5b6e69d32e0c3d716cb62abddc84b32"
+        },
+        {
+          "path": "extensions/codex/src/session-catalog-limits.ts",
+          "bytes": 722,
+          "sha256": "48a26933820dc9531cb6778975a980947b9e563e8b7d744422b0f0474ae80832"
+        }
+      ],
+      "statistics": {
+        "relevant_files": 16,
+        "parsed_javascript_files": 15,
+        "text_bytes_read": 129043,
+        "visited_ast_nodes": 15167,
+        "findings": 323,
+        "parse_failures": 0
+      },
+      "semantic_unknowns": 2788,
+      "execution_observed": false,
+      "coverage": "Static subset only; graph and semantic coverage partial; no runtime execution of the reference.",
+      "limitations": [
+        "Static inert parse; OpenClaw was not executed.",
+        "client.ts account/updated handling and run-attempt usage paths were not in the partition.",
+        "The account/rateLimits seed trace matched no node; the rateLimits seed reached 51 nodes and 63 edges."
+      ],
+      "full_evidence_path": null,
+      "provenance_file": null
     }
   ],
   "remaining_parts": [
@@ -7030,9 +7163,12 @@
       "original_plan_id": "OC-03",
       "reviewed_subsets": [
         "OC-21A",
-        "OC-21C"
+        "OC-21C",
+        "OC-29",
+        "OC-30",
+        "OC-31"
       ],
-      "remaining_note": "OC-21A/21C inform local identity and exact steering/restart ownership only. No new reference provider or authenticated harness execution was observed; accounts, renewal, usage and remaining harness dependencies remain unqualified."
+      "remaining_note": "OC-21A/21C inform local identity and exact steering/restart ownership only. No new reference provider or authenticated harness execution was observed; accounts, renewal, usage and remaining harness dependencies remain unqualified. OC-29 adds code-mode and namespace sources; OC-30 adds login, account binding, model catalog, version and thread resume sources (A-21 closed natively with limits); OC-31 adds account usage, rate limits, usage-limit errors and account commands for A-23. Renewal inside the official client, client.ts account/updated handling, run-attempt connection and remaining harness dependencies stay unreviewed or unqualified."
     },
     {
       "id": "SCOPE-04",
@@ -7132,7 +7268,7 @@
       "original_plan_id": "OC-11"
     }
   ],
-  "rea_parsed_unique_source_files": 216,
+  "rea_parsed_unique_source_files": 231,
   "remaining_parts_id_note": "Los scopes restantes usan SCOPE para no confundir etiquetas del plan inicial con lotes OC completados. Un lote estático no cierra un scope.",
   "rea_parsed_unique_source_paths": [
     "cli-parent-lifetime.mjs",
@@ -7146,11 +7282,13 @@
     "extensions/browser/src/browser/client-actions.ts",
     "extensions/codex/client-version-api.ts",
     "extensions/codex/media-understanding-provider.ts",
+    "extensions/codex/src/account-usage-runtime.ts",
     "extensions/codex/src/app-server/attempt-startup.ts",
     "extensions/codex/src/app-server/attempt-terminal.ts",
     "extensions/codex/src/app-server/attempt-timeouts.ts",
     "extensions/codex/src/app-server/auth-binding.ts",
     "extensions/codex/src/app-server/auth-bridge.ts",
+    "extensions/codex/src/app-server/auth-cache-key.ts",
     "extensions/codex/src/app-server/auth-profile-recovery.ts",
     "extensions/codex/src/app-server/auth-profile-selection.ts",
     "extensions/codex/src/app-server/auth-profile.ts",
@@ -7159,6 +7297,7 @@
     "extensions/codex/src/app-server/bounded-turn.ts",
     "extensions/codex/src/app-server/client-initialize.ts",
     "extensions/codex/src/app-server/client-notifications.ts",
+    "extensions/codex/src/app-server/client-runtime.ts",
     "extensions/codex/src/app-server/client-startup-retry.ts",
     "extensions/codex/src/app-server/client-thread-closure.ts",
     "extensions/codex/src/app-server/client-thread-owner.ts",
@@ -7168,16 +7307,28 @@
     "extensions/codex/src/app-server/dynamic-tool-response-state.ts",
     "extensions/codex/src/app-server/dynamic-tool-result-projection.ts",
     "extensions/codex/src/app-server/event-projector-code-mode.ts",
+    "extensions/codex/src/app-server/event-projector-usage.ts",
     "extensions/codex/src/app-server/model-catalog.ts",
     "extensions/codex/src/app-server/models.ts",
     "extensions/codex/src/app-server/native-auth.ts",
     "extensions/codex/src/app-server/native-tool-catalog.ts",
+    "extensions/codex/src/app-server/rate-limit-cache.ts",
+    "extensions/codex/src/app-server/rate-limit-time.ts",
+    "extensions/codex/src/app-server/rate-limits.ts",
+    "extensions/codex/src/app-server/request.ts",
+    "extensions/codex/src/app-server/shared-client-usage.ts",
     "extensions/codex/src/app-server/thread-binding-policy.ts",
     "extensions/codex/src/app-server/thread-model-selection.ts",
     "extensions/codex/src/app-server/thread-ownership.ts",
     "extensions/codex/src/app-server/thread-requests.ts",
     "extensions/codex/src/app-server/thread-restricted-resume.ts",
     "extensions/codex/src/app-server/thread-resume.ts",
+    "extensions/codex/src/app-server/usage-limit-error.ts",
+    "extensions/codex/src/app-server/usage.ts",
+    "extensions/codex/src/auth-profile-health.ts",
+    "extensions/codex/src/command-account-email.ts",
+    "extensions/codex/src/command-account.ts",
+    "extensions/codex/src/session-catalog-limits.ts",
     "extensions/cua-computer/src/action-targets.ts",
     "extensions/cua-computer/src/execution-state.ts",
     "extensions/cua-computer/src/frame.ts",

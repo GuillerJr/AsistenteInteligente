@@ -99,7 +99,7 @@ La navegación OS está cualificada en ese caso, el bloque completo aún no.
 La publicación real de GitHub sigue sin ejercitarse. Desde el cierre de A-21
 (06-11-2026, [plan](rebuild/PHASE_A_A21_QUALIFICATION_PLAN.md)) la matriz queda en
 **61 familias parciales, 18 sin implementar y una completa (A-21, con límites)**; REA registra
-**50 lotes y 216 rutas TS/JS únicas** seleccionadas. La fase A sigue abierta y B
+**51 lotes y 231 rutas TS/JS únicas** seleccionadas (OC-31 añade A-23). La fase A sigue abierta y B
 aplazada. Las cifras históricas siguientes pertenecen a sus propios checkpoints.
 
 La reanudación del 4 de noviembre conserva tres preparaciones fallidas y cerradas
